@@ -298,7 +298,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                         <select
                             value={selectedOrgId || ''}
                             onChange={(e) => setSelectedOrgId(e.target.value)}
-                            className="text-xs font-bold text-slate-600 outline-none bg-transparent min-w-[180px]"
+                            className="text-form-input font-bold text-slate-600 outline-none bg-transparent min-w-[180px]"
                         >
                             <option value="">Todas as Organizações</option>
                             {organizations.map(org => (
@@ -343,7 +343,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                 <div className="mt-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-amber-800 text-sm">
                     <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                     <p className="font-bold">{buildPartialFailureMessage(failedLabels)}</p>
-                    <button onClick={refetchAll} className="ml-auto shrink-0 text-xs font-black uppercase text-amber-600 hover:text-amber-800 underline">Tentar novamente</button>
+                    <button onClick={refetchAll} className="ml-auto shrink-0 text-button font-black uppercase text-amber-600 hover:text-amber-800 underline">Tentar novamente</button>
                 </div>
             )}
 
@@ -363,7 +363,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                         {!showConfirmMigrate ? (
                             <button
                                 onClick={() => setShowConfirmMigrate(true)}
-                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-all shadow-md"
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-button font-bold hover:bg-indigo-700 transition-all shadow-md"
                             >
                                 Importar Agora
                             </button>

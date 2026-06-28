@@ -407,14 +407,14 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                 {/* ── Formulário de interesse ── */}
                 {formStep === 'form' && (
                     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 max-w-lg">
-                        <button onClick={() => setFormStep('view')} className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 mb-5">
+                        <button onClick={() => setFormStep('view')} className="text-button font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 mb-5">
                             ← Voltar
                         </button>
                         <h3 className="text-2xl font-black text-gray-900 mb-1">Manifestar Interesse</h3>
                         <p className="text-sm text-gray-500 mb-6">{op.title}</p>
                         <form onSubmit={handleInterestSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Nome completo *</label>
+                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Nome completo *</label>
                                 <input
                                     type="text" required
                                     value={interest.contact_name}
@@ -425,7 +425,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">E-mail</label>
+                                    <label className="block text-form-label font-bold text-gray-600 mb-1.5">E-mail</label>
                                     <input
                                         type="email"
                                         value={interest.contact_email}
@@ -435,7 +435,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Telefone / WhatsApp</label>
+                                    <label className="block text-form-label font-bold text-gray-600 mb-1.5">Telefone / WhatsApp</label>
                                     <input
                                         type="tel"
                                         value={interest.contact_phone}
@@ -446,12 +446,12 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Perfil</label>
+                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Perfil</label>
                                 <div className="flex flex-wrap gap-2">
                                     {ROLES.map(r => (
                                         <button key={r} type="button"
                                             onClick={() => setInterest(p => ({ ...p, role: r }))}
-                                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${interest.role === r ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                            className={`px-3 py-1.5 rounded-xl text-button font-bold transition-all ${interest.role === r ? 'bg-blue-600 text-white shadow-md shadow-blue-600/25' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                                         >
                                             {INTEREST_ROLE_LABELS[r]}
                                         </button>
@@ -459,7 +459,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Mensagem (opcional)</label>
+                                <label className="block text-button font-bold text-gray-600 mb-1.5">Mensagem (opcional)</label>
                                 <textarea rows={3}
                                     value={interest.message}
                                     onChange={e => setInterest(p => ({ ...p, message: e.target.value }))}

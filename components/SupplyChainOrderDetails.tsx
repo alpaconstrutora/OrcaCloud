@@ -492,8 +492,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200">
                         <p className="text-sm font-bold text-gray-800 text-center mb-6 leading-relaxed">{pendingConfirm.message}</p>
                         <div className="flex gap-3">
-                            <button onClick={() => setPendingConfirm(null)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all">Cancelar</button>
-                            <button onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }} className="flex-1 py-3 bg-red-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-600 transition-all">Confirmar</button>
+                            <button onClick={() => setPendingConfirm(null)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-gray-200 transition-all">Cancelar</button>
+                            <button onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }} className="flex-1 py-3 bg-red-500 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-red-600 transition-all">Confirmar</button>
                         </div>
                     </div>
                 </div>
@@ -538,7 +538,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 <div className="flex items-center gap-2 flex-wrap md:justify-end">
                     <button
                         onClick={() => setViewMode('logistics')}
-                        className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-100 transition-all border border-indigo-100/50 shadow-sm active:scale-95"
+                        className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-5 py-2.5 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-indigo-100 transition-all border border-indigo-100/50 shadow-sm active:scale-95"
                     >
                         <Truck className="w-4 h-4" />
                         Rastreio
@@ -547,7 +547,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     {onEdit && (
                         <button
                             onClick={() => onEdit(orderId)}
-                            className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all shadow-sm active:scale-95"
+                            className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-5 py-2.5 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all shadow-sm active:scale-95"
                         >
                             <Pencil className="w-4 h-4 text-indigo-500" />
                             Editar
@@ -557,7 +557,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     {order.status === 'Entregue' && currentUser?.email !== supplierEmail && (
                         <button
                             onClick={() => setShowReceiptModal(true)}
-                            className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 active:scale-95"
+                            className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 active:scale-95"
                         >
                             <CheckCircle2 className="w-4 h-4" />
                             Receber
@@ -566,7 +566,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
                     <button
                         onClick={() => setShowNegotiation(true)}
-                        className="flex items-center gap-2 bg-amber-50 text-amber-600 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-amber-100 transition-all border border-amber-100 active:scale-95"
+                        className="flex items-center gap-2 bg-amber-50 text-amber-600 px-5 py-2.5 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-amber-100 transition-all border border-amber-100 active:scale-95"
                     >
                         <Gavel className="w-4 h-4" />
                         Negociar
@@ -575,7 +575,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     <button
                         onClick={handleSendWebhook}
                         disabled={loading}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 text-xs font-black uppercase tracking-widest disabled:opacity-50 active:scale-95"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 text-button font-black uppercase tracking-widest disabled:opacity-50 active:scale-95"
                         title="Enviar para Automação (Make.com)"
                     >
                         <Zap className="w-4 h-4" />
@@ -767,7 +767,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                         type="text"
                                                         value={editUnit}
                                                         onChange={(e) => setEditUnit(e.target.value)}
-                                                        className="w-16 text-center border border-gray-300 rounded px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-indigo-500"
+                                                        className="w-16 text-center border border-gray-300 rounded px-2 py-1 text-form-input outline-none focus:ring-2 focus:ring-indigo-500"
                                                     />
                                                 ) : item.unit}
                                             </td>
@@ -1001,7 +1001,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                         placeholder="Observação da resolução (opcional)"
                                                         value={resolutionInputs[d.id] || ''}
                                                         onChange={e => setResolutionInputs(prev => ({ ...prev, [d.id]: e.target.value }))}
-                                                        className="w-full text-xs rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                                                        className="w-full text-form-input rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-amber-300 bg-white"
                                                     />
                                                     <div className="flex gap-2">
                                                         {(['Resolvida', 'Aceita', 'Devolvida'] as DiscrepancyStatus[]).map(s => (
@@ -1277,8 +1277,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200">
                     <p className="text-sm font-bold text-gray-800 text-center mb-6 leading-relaxed">{pendingConfirm.message}</p>
                     <div className="flex gap-3">
-                        <button onClick={() => setPendingConfirm(null)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all">Cancelar</button>
-                        <button onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }} className="flex-1 py-3 bg-red-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-600 transition-all">Confirmar</button>
+                        <button onClick={() => setPendingConfirm(null)} className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-gray-200 transition-all">Cancelar</button>
+                        <button onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }} className="flex-1 py-3 bg-red-500 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-red-600 transition-all">Confirmar</button>
                     </div>
                 </div>
             </div>

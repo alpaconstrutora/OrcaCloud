@@ -227,7 +227,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                     <div className="border-t border-gray-100 mt-1 pt-1 px-3">
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleSplitterDblClick(); setIsColMenuOpen(false); }}
-                                                            className="w-full text-center text-xs font-medium text-blue-600 hover:text-blue-700 py-1.5 rounded-md hover:bg-blue-50 transition-colors"
+                                                            className="w-full text-center text-button font-medium text-blue-600 hover:text-blue-700 py-1.5 rounded-md hover:bg-blue-50 transition-colors"
                                                         >
                                                             Exibir todas ({collapsedCols.size} ocultas)
                                                         </button>
@@ -241,7 +241,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                     <div className="relative ml-auto" ref={levelsMenuRef}>
                                         <button
                                             onClick={(e) => { e.stopPropagation(); setShowLevelsDropdown(!showLevelsDropdown); }}
-                                            className={`px-2 py-1 flex items-center gap-1.5 rounded-lg border transition-all text-xs font-medium ${showLevelsDropdown ? 'bg-blue-600 border-blue-700 text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600 shadow-sm'}`}
+                                            className={`px-2 py-1 flex items-center gap-1.5 rounded-lg border transition-all text-button font-medium ${showLevelsDropdown ? 'bg-blue-600 border-blue-700 text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600 shadow-sm'}`}
                                             title="Filtrar níveis de resumo"
                                         >
                                             <Filter className={`w-3 h-3 ${showLevelsDropdown ? 'fill-white/20' : ''}`} />
@@ -262,7 +262,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                         onClick={() => onToggleSummaryLevel(level.id)}
                                                         className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors group/levelitem"
                                                     >
-                                                        <span className={`text-xs font-medium ${visibleSummaryLevels.has(level.id) ? 'text-blue-600' : 'text-gray-500'}`}>{level.label}</span>
+                                                        <span className={`text-button font-medium ${visibleSummaryLevels.has(level.id) ? 'text-blue-600' : 'text-gray-500'}`}>{level.label}</span>
                                                         {visibleSummaryLevels.has(level.id) && <Check className="w-3 h-3 text-blue-600" />}
                                                     </button>
                                                 ))}
@@ -278,7 +278,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                                 >
                                                                     <span className="flex items-center gap-1.5">
                                                                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: meta.color }} />
-                                                                        <span className={`text-xs font-medium ${visibleNatures.has(key) ? 'text-gray-700' : 'text-gray-400'}`}>{meta.label}</span>
+                                                                        <span className={`text-button font-medium ${visibleNatures.has(key) ? 'text-gray-700' : 'text-gray-400'}`}>{meta.label}</span>
                                                                     </span>
                                                                     {visibleNatures.has(key) && <Check className="w-3 h-3 text-blue-600" />}
                                                                 </button>
@@ -287,7 +287,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                                 onClick={() => onToggleNature('__none__')}
                                                                 className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors"
                                                             >
-                                                                <span className={`text-xs font-medium ${visibleNatures.has('__none__') ? 'text-gray-700' : 'text-gray-400'}`}>Sem natureza</span>
+                                                                <span className={`text-button font-medium ${visibleNatures.has('__none__') ? 'text-gray-700' : 'text-gray-400'}`}>Sem natureza</span>
                                                                 {visibleNatures.has('__none__') && <Check className="w-3 h-3 text-blue-600" />}
                                                             </button>
                                                         </div>
@@ -313,7 +313,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                         <th className="px-4 py-3 text-right relative">Plan. (C)<ResizeHandle colKey="planned" /></th>
                         <th className="px-4 py-3 text-right relative">Real<ResizeHandle colKey="realized" /></th>
                         <th className="px-4 py-3 text-right relative">Var.<ResizeHandle colKey="variation" /></th>
-                        <th className="px-4 py-3 text-left relative text-xs text-gray-400 uppercase tracking-widest font-medium">Recursos</th>
+                        <th className="px-4 py-3 text-left relative text-table-header text-gray-400 uppercase tracking-widest font-medium">Recursos</th>
                         <th className="px-4 py-3 text-center border-l border-gray-200 relative">Real %<ResizeHandle colKey="realPct" /></th>
                         <th
                             className="relative p-0 cursor-col-resize select-none group/splitter"
@@ -422,9 +422,9 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 )}
                                             </div>
                                             <div className="flex items-center gap-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => handleDistributeEvenly(item.id)} className="text-xs text-blue-500 hover:underline cursor-pointer flex items-center gap-1">Distribuir Igual</button>
+                                                <button onClick={() => handleDistributeEvenly(item.id)} className="text-button text-blue-500 hover:underline cursor-pointer flex items-center gap-1">Distribuir Igual</button>
                                                 <span className="text-gray-300">|</span>
-                                                <button onClick={() => handleClearItem(item.id)} className="text-xs text-red-400 hover:text-red-500 hover:underline cursor-pointer">Limpar</button>
+                                                <button onClick={() => handleClearItem(item.id)} className="text-button text-red-400 hover:text-red-500 hover:underline cursor-pointer">Limpar</button>
                                             </div>
                                         </td>
                                         <td className="px-1 py-2 text-center text-[11px] font-medium text-gray-500">{node.wbsCode || ''}</td>
@@ -437,7 +437,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                         <td className="px-1 py-1 text-center group/pred relative">
                                             <input
                                                 type="text"
-                                                className="w-full bg-transparent border-none rounded text-center text-xs p-1 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
+                                                className="w-full bg-transparent border-none rounded text-center text-form-input p-1 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
                                                 value={itemSchedule.predecessors?.map(p => idToUid[p.id] || '').join(', ') || ''}
                                                 onChange={(e) => handleUpdatePredecessorField(item.id, 'uid', e.target.value)}
                                                 placeholder="-"
@@ -463,7 +463,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 <div className="flex items-center gap-0.5">
                                                     <input
                                                         type="number" min="0"
-                                                        className="w-16 bg-gray-50 border border-gray-200 rounded text-center text-xs p-1"
+                                                        className="w-16 bg-gray-50 border border-gray-200 rounded text-center text-form-input p-1"
                                                         value={itemSchedule.duration ?? ''}
                                                         onChange={(e) => handleUpdateItemSchedule(item.id, 'duration', parseInt(e.target.value, 10) || 0)}
                                                         placeholder="dias"
@@ -483,7 +483,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                             {(crewPopoverItem === item.id || itemSchedule.autoDuration) && (
                                                 <button
                                                     onClick={() => setCrewPopoverItem(crewPopoverItem === item.id ? null : item.id)}
-                                                    className={`absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-xs px-1.5 py-0 rounded-b-md border border-t-0 border-gray-200 z-20 transition-colors ${crewPopoverItem === item.id ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400 hover:bg-blue-50 hover:text-blue-500'}`}
+                                                    className={`absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-table-body px-1.5 py-0 rounded-b-md border border-t-0 border-gray-200 z-20 transition-colors ${crewPopoverItem === item.id ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-400 hover:bg-blue-50 hover:text-blue-500'}`}
                                                 >
                                                     ▾ equipe
                                                 </button>
@@ -500,27 +500,27 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                         <td className="px-1 py-2 text-center">
                                             <div className="text-xs font-medium text-gray-500">{formatDateDisplay(itemSchedule.endDate)}</div>
                                         </td>
-                                        <td className={`px-1 py-2 text-center bg-blue-50/20 text-xs font-medium ${node.isCritical ? 'text-red-500' : 'text-blue-600'}`}>
+                                        <td className={`px-1 py-2 text-center bg-blue-50/20 text-table-body font-medium ${node.isCritical ? 'text-red-500' : 'text-blue-600'}`}>
                                             <div>{formatDateDisplay(node.earlyStart)}</div>
                                             <div>{formatDateDisplay(node.earlyFinish)}</div>
                                         </td>
-                                        <td className="px-1 py-2 text-center bg-orange-50/20 text-xs font-medium text-orange-600">
+                                        <td className="px-1 py-2 text-center bg-orange-50/20 text-table-body font-medium text-orange-600">
                                             <div>{formatDateDisplay(node.lateStart)}</div>
                                             <div>{formatDateDisplay(node.lateFinish)}</div>
                                         </td>
-                                        <td className="px-1 py-2 text-center font-medium text-xs text-indigo-600">
+                                        <td className="px-1 py-2 text-center font-medium text-table-body text-indigo-600">
                                             {node.totalFloat !== undefined ? `${node.totalFloat}d` : '-'}
                                         </td>
-                                        <td className="px-1 py-2 text-right text-xs text-gray-500">
+                                        <td className="px-1 py-2 text-right text-table-body text-gray-500">
                                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.budgetedTotal)}
                                         </td>
-                                        <td className="px-1 py-2 text-right text-xs font-medium text-blue-700">
+                                        <td className="px-1 py-2 text-right text-table-body font-medium text-blue-700">
                                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.plannedTotal)}
                                         </td>
-                                        <td className="px-1 py-2 text-right text-xs text-green-700">
+                                        <td className="px-1 py-2 text-right text-table-body text-green-700">
                                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.realizedTotal)}
                                         </td>
-                                        <td className={`px-1 py-2 text-right text-xs font-medium ${node.variation && node.variation > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                                        <td className={`px-1 py-2 text-right text-table-body font-medium ${node.variation && node.variation > 0 ? 'text-red-500' : 'text-green-600'}`}>
                                             {node.variation ? new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2, signDisplay: 'always' }).format(node.variation) : '-'}
                                         </td>
                                         <td className="px-2 py-2">
@@ -530,7 +530,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                     const worker = alloc.resourceType === 'WORKER' ? schedule.resources?.workers.find(w => w.id === alloc.resourceId) : null;
                                                     const name = role?.name || worker?.name || 'Recurso';
                                                     return (
-                                                        <span key={alloc.id} className={`px-1.5 py-0.5 rounded text-xs font-medium uppercase tracking-tighter ${alloc.resourceType === 'ROLE' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}`} title={name}>
+                                                        <span key={alloc.id} className={`px-1.5 py-0.5 rounded text-table-body font-medium uppercase tracking-tighter ${alloc.resourceType === 'ROLE' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}`} title={name}>
                                                             {name.substring(0, 10)}{name.length > 10 ? '...' : ''}
                                                         </span>
                                                     );
@@ -548,7 +548,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                                 min="0"
                                                                 max="100"
                                                                 step="1"
-                                                                className={`w-10 bg-transparent border-none p-0 text-xs font-medium focus:ring-1 focus:ring-blue-300 rounded ${itemSchedule.manualRealPct !== undefined ? 'text-orange-500' : 'text-blue-600'}`}
+                                                                className={`w-10 bg-transparent border-none p-0 text-table-body font-medium focus:ring-1 focus:ring-blue-300 rounded ${itemSchedule.manualRealPct !== undefined ? 'text-orange-500' : 'text-blue-600'}`}
                                                                 value={(() => {
                                                                     const calculatedPct = node.total > 0 ? (node.realizedTotal / node.total * 100) : 0;
                                                                     // If we have manualPct, show it. But if diary showed more (already factored in node.realizedTotal), 
@@ -562,7 +562,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                             {itemSchedule.manualRealPct !== undefined && (
                                                                 <button
                                                                     onClick={() => handleUpdateRealPct(item.id, '')}
-                                                                    className="ml-1 text-xs text-gray-400 hover:text-red-500 uppercase tracking-tighter"
+                                                                    className="ml-1 text-form-input text-gray-400 hover:text-red-500 uppercase tracking-tighter"
                                                                     title="Voltar ao automático"
                                                                 >
                                                                     Limpar
@@ -599,10 +599,10 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                                     const val = Math.max(0, Math.min(100, parseFloat(e.target.value) || 0));
                                                                     handleUpdateDistribution(item.id, column.id, val.toString());
                                                                 }}
-                                                                className={`relative z-10 w-full text-center bg-transparent outline-none text-xs font-medium py-1 rounded-md focus:bg-white focus:ring-1 focus:ring-blue-300 transition-all ${pct > 0 ? 'text-blue-700 font-medium' : 'text-gray-400'}`}
+                                                                className={`relative z-10 w-full text-center bg-transparent outline-none text-table-body font-medium py-1 rounded-md focus:bg-white focus:ring-1 focus:ring-blue-300 transition-all ${pct > 0 ? 'text-blue-700 font-medium' : 'text-gray-400'}`}
                                                             />
                                                         </div>
-                                                        <div className="flex flex-col text-xs leading-tight px-1">
+                                                        <div className="flex flex-col text-form-input leading-tight px-1">
                                                             {plannedVal > 0 && <span className="text-blue-500 font-medium">O: {new Intl.NumberFormat('pt-BR').format(plannedVal)}</span>}
                                                             {realizedVal > 0 && <span className="text-green-600 font-medium">E: {new Intl.NumberFormat('pt-BR').format(realizedVal)}</span>}
                                                         </div>
@@ -611,7 +611,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                             );
                                         })}
                                         <td className="px-4 py-2 text-center border-l border-gray-100">
-                                            <div className={`flex items-center justify-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${isFullyDistributed ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            <div className={`flex items-center justify-center gap-1.5 px-2 py-1 rounded-full text-table-body font-medium ${isFullyDistributed ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
                                                 {isFullyDistributed ? <span>100%</span> : <span>{totalDistributed.toFixed(0)}%</span>}
                                             </div>
                                         </td>
@@ -647,7 +647,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                         <td className="px-1 py-1 text-center group/pred relative" onClick={(e) => e.stopPropagation()}>
                                             <input
                                                 type="text"
-                                                className="w-full bg-transparent border-none rounded text-center text-xs p-1 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
+                                                className="w-full bg-transparent border-none rounded text-center text-form-input p-1 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
                                                 value={nodeSchedule?.predecessors?.map(p => idToUid[p.id] || '').filter(Boolean).join(', ') || ''}
                                                 onChange={(e) => handleUpdatePredecessorField(node.id, 'uid', e.target.value)}
                                                 placeholder="-"
@@ -661,7 +661,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 <Link2 className="w-3 h-3" />
                                             </button>
                                         </td>
-                                        <td className="px-1 py-3 text-center text-xs text-gray-400">—</td>
+                                        <td className="px-1 py-3 text-center text-table-body text-gray-400">—</td>
                                         <td className="px-1 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                                             {schedule.autoRollupParentDates ? (
                                                 <div className="text-xs font-medium text-gray-700">{formatDateDisplay(node.earlyStart)}</div>
@@ -673,7 +673,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                     // A edição manual segue funcionando via cascata no onChange.
                                                     value={node.earlyStart || ''}
                                                     onChange={(e) => handleUpdateItemSchedule(node.id, 'startDate', e.target.value)}
-                                                    className="w-full bg-transparent border-none text-center text-xs font-medium text-gray-700 outline-none focus:bg-white focus:ring-1 focus:ring-blue-300 rounded px-1"
+                                                    className="w-full bg-transparent border-none text-center text-form-input font-medium text-gray-700 outline-none focus:bg-white focus:ring-1 focus:ring-blue-300 rounded px-1"
                                                 />
                                             )}
                                         </td>
@@ -684,10 +684,10 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                         <td className="px-1 py-3"></td>
                                         <td className="px-1 py-3"></td>
                                         <td className="px-1 py-3"></td>
-                                        <td className="px-4 py-3 text-right font-medium text-gray-900 text-xs">{new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.budgetedTotal)}</td>
-                                        <td className="px-2 py-3 text-right font-medium text-blue-700 text-xs">{new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.plannedTotal)}</td>
-                                        <td className="px-2 py-3 text-right font-medium text-green-700 text-xs">{new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.realizedTotal)}</td>
-                                        <td className={`px-2 py-3 text-right font-medium text-xs ${node.variation && node.variation > 0 ? 'text-red-500' : 'text-green-600'}`}>{node.variation ? new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2, signDisplay: 'always' }).format(node.variation) : '-'}</td>
+                                        <td className="px-4 py-3 text-right font-medium text-gray-900 text-table-body">{new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.budgetedTotal)}</td>
+                                        <td className="px-2 py-3 text-right font-medium text-blue-700 text-table-body">{new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.plannedTotal)}</td>
+                                        <td className="px-2 py-3 text-right font-medium text-green-700 text-table-body">{new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.realizedTotal)}</td>
+                                        <td className={`px-2 py-3 text-right font-medium text-table-body ${node.variation && node.variation > 0 ? 'text-red-500' : 'text-green-600'}`}>{node.variation ? new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2, signDisplay: 'always' }).format(node.variation) : '-'}</td>
                                         <td className="px-2 py-3"></td>
                                         <td className="px-4 py-3 border-l border-gray-200">
                                             <div className="overflow-hidden w-full">
@@ -707,7 +707,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                             const plannedVal = nodePeriodPlanned[node.id]?.[column.id] || 0;
                                             const realizedVal = nodePeriodRealized[node.id]?.[column.id] || 0;
                                             return (
-                                                <td key={column.id} className="px-2 py-3 border-l border-gray-100 bg-gray-50/30 text-xs text-center">
+                                                <td key={column.id} className="px-2 py-3 border-l border-gray-100 bg-gray-50/30 text-table-body text-center">
                                                     <div className="flex flex-col gap-0.5 font-medium">
                                                         {plannedVal > 0 && <span className="text-blue-600">O: {new Intl.NumberFormat('pt-BR').format(plannedVal)}</span>}
                                                         {realizedVal > 0 && <span className="text-green-700">E: {new Intl.NumberFormat('pt-BR').format(realizedVal)}</span>}
@@ -728,7 +728,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                             <td colSpan={99} className="px-4 py-2">
                                 <button
                                     onClick={onAddRootGroup}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-button font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 >
                                     <Plus className="w-3.5 h-3.5" /> Novo Grupo
                                 </button>
@@ -770,7 +770,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                         {timelineColumns.map(column => {
                             const pData = periodTotals[column.id] || { planned: 0, realized: 0 };
                             return (
-                                <td key={column.id} className="px-2 py-3 text-center border-l border-gray-100 text-xs">
+                                <td key={column.id} className="px-2 py-3 text-center border-l border-gray-100 text-table-body">
                                     <div className="flex flex-col">
                                         <span className="text-blue-700">O: {new Intl.NumberFormat('pt-BR').format(pData.planned)}</span>
                                         <span className="text-green-700">E: {new Intl.NumberFormat('pt-BR').format(pData.realized)}</span>

@@ -275,7 +275,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
 
         <button
           onClick={() => setOverdueOnly(v => !v)}
-          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${
+          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-form-input font-black uppercase tracking-widest border transition-all ${
             overdueOnly ? 'bg-red-600 text-white border-red-600' : 'bg-white text-slate-500 border-slate-200 hover:border-red-300'
           }`}
         >
@@ -288,7 +288,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
           <button
             onClick={() => setViewMode('cards')}
             title="Visualização em cards"
-            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-black transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-button font-black transition-all ${
               viewMode === 'cards' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'
             }`}
           >
@@ -297,7 +297,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
           <button
             onClick={() => setViewMode('list')}
             title="Visualização em linha"
-            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-black transition-all border-l border-slate-200 ${
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-button font-black transition-all border-l border-slate-200 ${
               viewMode === 'list' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:text-slate-700'
             }`}
           >
@@ -318,7 +318,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
 
         <button
           onClick={onCreateNew}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/20 active:scale-95"
+          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/20 active:scale-95"
         >
           <Plus className="w-4 h-4" />
           Nova OE
@@ -336,7 +336,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
             <button
               key={f.value}
               onClick={() => setStatusFilter(f.value)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all border ${
+              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-button font-black uppercase tracking-widest transition-all border ${
                 statusFilter === f.value
                   ? 'bg-slate-900 text-white border-slate-900'
                   : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
@@ -359,7 +359,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
           {workOrders.length === 0 && (
             <button
               onClick={onCreateNew}
-              className="mt-3 flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700"
+              className="mt-3 flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700"
             >
               <Plus className="w-3 h-3" />
               Criar primeira OE
@@ -509,7 +509,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
                       )}
                       {tableColumns.visibleColumns.includes('deadline') && (
                         <td className="px-4 py-3 hidden lg:table-cell">
-                          <div className={`text-xs font-bold ${overdue ? 'text-red-600' : 'text-slate-600'}`}>
+                          <div className={`text-table-body font-bold ${overdue ? 'text-red-600' : 'text-slate-600'}`}>
                             {overdue && <AlertTriangle className="w-3 h-3 inline mr-1" />}
                             {fmtDate(wo.planned_end_date)}
                           </div>

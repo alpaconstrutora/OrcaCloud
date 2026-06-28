@@ -227,7 +227,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                             <button
                                 key={id}
                                 onClick={() => setActiveTab(id)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === id ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all ${activeTab === id ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
                             >
                                 <Icon className="w-3.5 h-3.5" />{label}
                             </button>
@@ -271,14 +271,14 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                         </div>
                                     </div>
                                     <div className="flex gap-2 pt-1">
-                                        <button onClick={createReq} disabled={saving || !newReq.title.trim()} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all">
+                                        <button onClick={createReq} disabled={saving || !newReq.title.trim()} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all">
                                             {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Criar Chamado'}
                                         </button>
-                                        <button onClick={() => setShowNewReq(false)} className="px-4 py-2.5 border border-gray-200 text-gray-500 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
+                                        <button onClick={() => setShowNewReq(false)} className="px-4 py-2.5 border border-gray-200 text-gray-500 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
                                     </div>
                                 </div>
                             ) : (
-                                <button onClick={() => setShowNewReq(true)} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-blue-200 text-blue-500 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-blue-400 hover:bg-blue-50/30 transition-all">
+                                <button onClick={() => setShowNewReq(true)} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-blue-200 text-blue-500 rounded-2xl text-button font-black uppercase tracking-widest hover:border-blue-400 hover:bg-blue-50/30 transition-all">
                                     <Plus className="w-4 h-4" /> Novo Chamado
                                 </button>
                             )}
@@ -332,10 +332,10 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1"><Bell className="w-3 h-3" /> Notificar cliente</span>
                                                 </label>
                                                 <div className="flex gap-2">
-                                                    <button onClick={() => saveReq(req.id)} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all">
+                                                    <button onClick={() => saveReq(req.id)} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all">
                                                         <Save className="w-3.5 h-3.5" />{saving ? 'Salvando...' : 'Salvar'}
                                                     </button>
-                                                    <button onClick={() => { setEditingReqId(null); setNotifyClient(false); }} className="px-4 py-2 border border-gray-200 text-gray-500 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
+                                                    <button onClick={() => { setEditingReqId(null); setNotifyClient(false); }} className="px-4 py-2 border border-gray-200 text-gray-500 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
                                                 </div>
                                             </div>
                                         </div>
@@ -379,14 +379,14 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                         </div>
                                     </div>
                                     <div className="flex gap-2 pt-1">
-                                        <button onClick={createOs} disabled={saving || !newOs.title.trim() || !newOs.number.trim()} className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all">
+                                        <button onClick={createOs} disabled={saving || !newOs.title.trim() || !newOs.number.trim()} className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all">
                                             {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Criar OS'}
                                         </button>
-                                        <button onClick={() => setShowNewOs(false)} className="px-4 py-2.5 border border-gray-200 text-gray-500 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
+                                        <button onClick={() => setShowNewOs(false)} className="px-4 py-2.5 border border-gray-200 text-gray-500 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
                                     </div>
                                 </div>
                             ) : (
-                                <button onClick={() => setShowNewOs(true)} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-indigo-200 text-indigo-500 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-indigo-400 hover:bg-indigo-50/30 transition-all">
+                                <button onClick={() => setShowNewOs(true)} className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-indigo-200 text-indigo-500 rounded-2xl text-button font-black uppercase tracking-widest hover:border-indigo-400 hover:bg-indigo-50/30 transition-all">
                                     <Plus className="w-4 h-4" /> Nova Ordem de Serviço
                                 </button>
                             )}
@@ -446,10 +446,10 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1"><Bell className="w-3 h-3" /> Notificar cliente</span>
                                                 </label>
                                                 <div className="flex gap-2">
-                                                    <button onClick={() => saveOs(os.id)} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all">
+                                                    <button onClick={() => saveOs(os.id)} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all">
                                                         <Save className="w-3.5 h-3.5" />{saving ? 'Salvando...' : 'Salvar'}
                                                     </button>
-                                                    <button onClick={() => { setEditingOsId(null); setNotifyClient(false); }} className="px-4 py-2 border border-gray-200 text-gray-500 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
+                                                    <button onClick={() => { setEditingOsId(null); setNotifyClient(false); }} className="px-4 py-2 border border-gray-200 text-gray-500 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
                                                 </div>
                                             </div>
                                         </div>
@@ -470,7 +470,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                     <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">
                         {activeTab === 'requests' ? `${requests.length} chamado${requests.length !== 1 ? 's' : ''}` : `${orders.length} OS`}
                     </span>
-                    <button onClick={onClose} className="px-5 py-2 border border-gray-200 text-gray-500 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Fechar</button>
+                    <button onClick={onClose} className="px-5 py-2 border border-gray-200 text-gray-500 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Fechar</button>
                 </div>
             </div>
         </div>

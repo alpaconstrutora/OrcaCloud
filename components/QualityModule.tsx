@@ -196,7 +196,7 @@ const QualityModule: React.FC<QualityModuleProps> = ({
         {(stateFilter !== 'all' || severityFilter !== 'all') && (
           <button
             onClick={() => { setStateFilter('all'); setSeverityFilter('all'); }}
-            className="text-xs text-gray-500 hover:text-gray-700 underline"
+            className="text-button text-gray-500 hover:text-gray-700 underline"
           >
             Limpar filtros
           </button>
@@ -239,11 +239,11 @@ const QualityModule: React.FC<QualityModuleProps> = ({
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Condição</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Estado</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Severidade</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs w-32">Qualidade</th>
-                    <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-xs">Detectada</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-table-header">Condição</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-table-header">Estado</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-table-header">Severidade</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-table-header w-32">Qualidade</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-gray-500 text-table-header">Detectada</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -348,7 +348,7 @@ function ConditionRow({
       <td className="px-4 py-3">
         <QualityScoreBar score={condition.qualityScore?.value} />
       </td>
-      <td className="px-4 py-3 text-xs text-gray-500">{date}</td>
+      <td className="px-4 py-3 text-table-body text-gray-500">{date}</td>
     </tr>
   );
 }

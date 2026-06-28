@@ -124,7 +124,7 @@ const BrokerRanking: React.FC<BrokerRankingProps> = ({ brokerEmail }) => {
                 <div className="flex bg-gray-100 rounded-xl p-1">
                     {(['mes', 'trimestre', 'ano'] as const).map(p => (
                         <button key={p} onClick={() => setPeriod(p)}
-                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all capitalize ${period === p ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>
+                            className={`px-4 py-1.5 rounded-lg text-button font-bold transition-all capitalize ${period === p ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>
                             {p === 'mes' ? 'Mês' : p === 'trimestre' ? 'Trimestre' : 'Ano'}
                         </button>
                     ))}

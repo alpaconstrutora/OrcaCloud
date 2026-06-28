@@ -123,7 +123,7 @@ const BrokerTraining: React.FC<BrokerTrainingProps> = ({ brokerEmail }) => {
                                                 </div>
                                             )}
                                             <button onClick={() => handleStartModule(mod)}
-                                                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-button font-black uppercase tracking-wider hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
                                                 {mod.type === 'QUIZ' ? <Star className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                                                 {mod.progress_pct > 0 ? 'Continuar' : 'Iniciar'}
                                             </button>
@@ -146,7 +146,7 @@ const BrokerTraining: React.FC<BrokerTrainingProps> = ({ brokerEmail }) => {
                                                     return (
                                                         <button key={oi} onClick={() => !quizSubmitted && setQuizAnswers(p => ({ ...p, [qi]: oi }))}
                                                             disabled={quizSubmitted}
-                                                            className={`p-3 rounded-lg text-xs font-bold text-left border-2 transition-all ${isCorrect ? 'border-emerald-400 bg-emerald-50 text-emerald-700' :
+                                                            className={`p-3 rounded-lg text-button font-bold text-left border-2 transition-all ${isCorrect ? 'border-emerald-400 bg-emerald-50 text-emerald-700' :
                                                                 isWrong ? 'border-red-400 bg-red-50 text-red-700' :
                                                                     selected ? 'border-indigo-400 bg-indigo-50 text-indigo-700' :
                                                                         'border-gray-200 hover:border-gray-300 text-gray-700'}`}>
@@ -159,18 +159,18 @@ const BrokerTraining: React.FC<BrokerTrainingProps> = ({ brokerEmail }) => {
                                     ))}
                                     <div className="flex justify-end gap-3">
                                         <button onClick={() => { setActiveQuiz(null); setQuizSubmitted(false); }}
-                                            className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-200 transition-all">
+                                            className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-button font-bold hover:bg-gray-200 transition-all">
                                             Fechar
                                         </button>
                                         {!quizSubmitted && (
                                             <button onClick={() => handleSubmitQuiz(mod.id)}
                                                 disabled={Object.keys(quizAnswers).length < (mod.questions?.length || 0)}
-                                                className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-lg shadow-indigo-500/20">
+                                                className="px-6 py-2 bg-indigo-600 text-white rounded-xl text-button font-black uppercase tracking-wider hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-lg shadow-indigo-500/20">
                                                 Enviar Respostas
                                             </button>
                                         )}
                                         {quizSubmitted && (
-                                            <span className={`px-4 py-2 rounded-xl text-xs font-black ${modules.find(m => m.id === mod.id)?.is_completed ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                                            <span className={`px-4 py-2 rounded-xl text-button font-black ${modules.find(m => m.id === mod.id)?.is_completed ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
                                                 {modules.find(m => m.id === mod.id)?.is_completed ? '✓ Aprovado!' : '✗ Tente novamente (mínimo 70%)'}
                                             </span>
                                         )}

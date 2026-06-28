@@ -395,13 +395,13 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                                     const subtype = (document.getElementById('payroll_subtype') as HTMLSelectElement).value;
                                     handleCreateRun(start, end, type, type === 'decimo_terceiro' ? subtype : undefined);
                                 }}
-                                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-200"
+                                className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-button uppercase tracking-widest shadow-lg shadow-indigo-200"
                             >
                                 {!orgId || orgId === 'all' ? 'Processar Todas as Empresas' : 'Iniciar Cálculo'}
                             </button>
                             <button
                                 onClick={() => setShowNewRunModal(false)}
-                                className="w-full py-3 text-slate-400 font-bold text-xs uppercase hover:text-slate-600 transition-colors"
+                                className="w-full py-3 text-slate-400 font-bold text-button uppercase hover:text-slate-600 transition-colors"
                             >
                                 Cancelar
                             </button>

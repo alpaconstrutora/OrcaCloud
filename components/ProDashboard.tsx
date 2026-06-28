@@ -162,7 +162,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
         </div>
         <button
           onClick={fetchData}
-          className="w-8 h-8 rounded-xl bg-white border border-slate-200/60 shadow-sm flex items-center justify-center text-xs active:scale-95 transition-transform hover:bg-slate-50"
+          className="w-8 h-8 rounded-xl bg-white border border-slate-200/60 shadow-sm flex items-center justify-center text-button active:scale-95 transition-transform hover:bg-slate-50"
           title="Recarregar"
         >
           🔄
@@ -272,7 +272,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
                 </div>
                 <button
                   onClick={() => handleWhatsAppRecorrencia(s)}
-                  className="bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md shadow-teal-500/10 active:scale-95"
+                  className="bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white px-3.5 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all shadow-md shadow-teal-500/10 active:scale-95"
                 >
                   💬 Oferecer
                 </button>

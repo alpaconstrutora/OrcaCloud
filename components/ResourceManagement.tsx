@@ -863,7 +863,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                 <select 
                                     value={selectedResourceId} 
                                     onChange={(e) => setSelectedResourceId(e.target.value)}
-                                    className="text-xs font-bold text-gray-500 border rounded-lg px-2 py-1 outline-none"
+                                    className="text-form-input font-bold text-gray-500 border rounded-lg px-2 py-1 outline-none"
                                 >
                                     <option value="all">Visão Geral</option>
                                     {resources.roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}

@@ -119,7 +119,7 @@ const SinapiRebaseModal: React.FC<SinapiRebaseProps> = ({
         {!isLocked && (
           <button
             onClick={loadDiff}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors shrink-0 shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-button font-bold hover:bg-amber-700 transition-colors shrink-0 shadow-sm"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             Revisar atualização
@@ -188,7 +188,7 @@ const SinapiRebaseModal: React.FC<SinapiRebaseProps> = ({
                       const pct = !orphan && r.oldPrice > 0 ? ((r.newPrice! - r.oldPrice) / r.oldPrice) * 100 : 0;
                       return (
                         <tr key={r.id} className={orphan ? 'bg-amber-50/40' : 'hover:bg-gray-50'}>
-                          <td className="px-4 py-2 font-mono text-xs text-gray-500">{r.code}</td>
+                          <td className="px-4 py-2 font-mono text-table-body text-gray-500">{r.code}</td>
                           <td className="px-4 py-2 text-gray-700 truncate max-w-[320px]">{r.description}</td>
                           <td className="px-4 py-2 text-right text-gray-500">{r.quantity}</td>
                           <td className="px-4 py-2 text-right text-gray-600">R$ {fmt(r.oldPrice)}</td>

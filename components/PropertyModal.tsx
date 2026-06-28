@@ -477,7 +477,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <button
                                         type="button"
                                         onClick={() => setEnableMatrix(true)}
-                                        className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all text-xs shadow-md active:scale-95"
+                                        className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all text-button shadow-md active:scale-95"
                                     >
                                         Ativar Gerador
                                     </button>
@@ -554,7 +554,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                 };
                                                 setTowerMatrix(prev => updateTowersGridCells([...prev, newTower as TowerMatrixConfig], connectedTowers));
                                             }}
-                                            className="px-4 py-2 bg-white text-blue-600 rounded-xl font-bold flex items-center gap-2 border border-blue-200 hover:bg-blue-50 transition-all text-xs shadow-sm active:scale-95"
+                                            className="px-4 py-2 bg-white text-blue-600 rounded-xl font-bold flex items-center gap-2 border border-blue-200 hover:bg-blue-50 transition-all text-button shadow-sm active:scale-95"
                                         >
                                             <Plus className="w-4 h-4" />
                                             Nova Torre
@@ -1130,7 +1130,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <select
                                         value={formData.position_type}
                                         onChange={(e) => update({ position_type: e.target.value as Property['position_type'] })}
-                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-xs"
+                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-form-input"
                                     >
                                         <option value="LATERAL">Lateral</option>
                                         <option value="FRONT">Frente (+)</option>
@@ -1142,7 +1142,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <select
                                         value={formData.view_type}
                                         onChange={(e) => update({ view_type: e.target.value as Property['view_type'] })}
-                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-xs"
+                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-form-input"
                                     >
                                         <option value="NONE">Sem Vista (Base)</option>
                                         <option value="PARTIAL">Vista Parcial (+)</option>
@@ -1154,7 +1154,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <select
                                         value={formData.sun_orientation}
                                         onChange={(e) => update({ sun_orientation: e.target.value as Property['sun_orientation'] })}
-                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-xs"
+                                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-form-input"
                                     >
                                         <option value="NORTH">Norte (Melhor)</option>
                                         <option value="EAST">Leste (Manhã)</option>

@@ -115,7 +115,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
           <select
             value={selectedCompanyId}
             onChange={(e) => handleCompanyChange(e.target.value)}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-slate-500"
+            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-slate-500"
           >
             {companies.map(c => (
               <option key={c.id} value={c.id}>{c.razao_social} ({c.cnpj ? c.cnpj.substring(0, 5) + '...' : 'Filial'})</option>
@@ -124,7 +124,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
 
           <button
             onClick={fetchData}
-            className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-xs active:scale-95 transition-transform hover:bg-slate-50"
+            className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-button active:scale-95 transition-transform hover:bg-slate-50"
             title="Sincronizar"
           >
             🔄
@@ -218,7 +218,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
 
           <button
             onClick={() => onNavigate('compliance-checklists')}
-            className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-95"
+            className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-button font-bold uppercase tracking-wider transition-all active:scale-95"
           >
             Ver Obrigações
           </button>

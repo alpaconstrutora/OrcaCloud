@@ -173,7 +173,7 @@ function PreferencesTab() {
             <div className="mt-4 flex items-center gap-3">
                 <button
                     onClick={save}
-                    className="px-4 py-2 bg-indigo-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-colors"
+                    className="px-4 py-2 bg-indigo-600 text-white text-button font-black uppercase tracking-widest rounded-xl hover:bg-indigo-700 transition-colors"
                 >
                     Salvar preferências
                 </button>
@@ -365,7 +365,7 @@ const NotificationsCenter: React.FC<NotificationsCenterProps> = ({ profile, onNa
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === tab.id ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${activeTab === tab.id ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             <tab.icon className="w-3.5 h-3.5" />
                             {tab.label}
@@ -545,10 +545,10 @@ function AlertsTab({
             {selectedIds.size > 0 ? (
                 <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 flex items-center gap-3 flex-wrap">
                     <span className="text-xs font-black text-indigo-700 uppercase tracking-widest">{selectedIds.size} selecionada(s)</span>
-                    <button onClick={onMarkSelectedRead} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors">
+                    <button onClick={onMarkSelectedRead} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-indigo-200 text-indigo-700 rounded-lg text-button font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors">
                         <Check className="w-3 h-3" /> Marcar como lida
                     </button>
-                    <button onClick={onDeleteSelected} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-red-50 transition-colors">
+                    <button onClick={onDeleteSelected} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-lg text-button font-black uppercase tracking-widest hover:bg-red-50 transition-colors">
                         <Trash2 className="w-3 h-3" /> Excluir
                     </button>
                     <button onClick={onClearSelection} className="ml-auto p-1.5 hover:bg-indigo-100 rounded-lg transition-colors">
@@ -603,7 +603,7 @@ function AlertsTab({
                             {/* Conteúdo */}
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                                    <h3 className={`text-xs font-black uppercase tracking-tight ${!n.isRead ? 'text-gray-900' : 'text-gray-600'}`}>{n.title}</h3>
+                                    <h3 className={`text-form-input font-black uppercase tracking-tight ${!n.isRead ? 'text-gray-900' : 'text-gray-600'}`}>{n.title}</h3>
                                     <NotifTypeBadge type={n.type} />
                                     {!n.isRead && (
                                         <span className="px-1.5 py-0.5 bg-indigo-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest">Nova</span>
@@ -817,7 +817,7 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
         <div className="p-16 text-center">
             <AlertTriangle className="w-10 h-10 text-red-300 mx-auto mb-3" />
             <p className="text-sm font-bold text-red-500 mb-3">{message}</p>
-            <button onClick={onRetry} className="text-xs font-black text-indigo-600 uppercase tracking-widest hover:underline">Tentar novamente</button>
+            <button onClick={onRetry} className="text-button font-black text-indigo-600 uppercase tracking-widest hover:underline">Tentar novamente</button>
         </div>
     );
 }

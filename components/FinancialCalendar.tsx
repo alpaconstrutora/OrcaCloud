@@ -369,7 +369,7 @@ function AgendaView({
                                 'shrink-0 w-9 h-9 rounded-full flex flex-col items-center justify-center text-center',
                                 isToday ? 'bg-blue-600 text-white' : isPast ? 'bg-gray-100 text-gray-400' : 'bg-gray-100 text-gray-700',
                             ].join(' ')}>
-                                <span className="text-xs font-bold leading-none">{day}</span>
+                                <span className="text-button font-bold leading-none">{day}</span>
                                 <span className="text-[8px] leading-none capitalize">
                                     {new Date(year, month - 1, day).toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}
                                 </span>
@@ -563,7 +563,7 @@ export default function FinancialCalendar({ organizationId }: Props) {
                             {h === 7 ? '7 dias' : h === 30 ? '30 dias' : h === 60 ? '60 dias' : h === 90 ? '90 dias' : h === 180 ? '6 meses' : '1 ano'}
                         </button>
                     ))}
-                    <span className="text-xs text-gray-400 ml-1">
+                    <span className="text-button text-gray-400 ml-1">
                         {new Date(...(rangeFrom.split('-').map(Number) as [number, number, number])).toLocaleDateString('pt-BR')}
                         {' → '}
                         {new Date(...(rangeTo.split('-').map(Number) as [number, number, number])).toLocaleDateString('pt-BR')}

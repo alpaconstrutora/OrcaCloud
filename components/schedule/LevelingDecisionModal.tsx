@@ -77,7 +77,7 @@ export const LevelingDecisionModal: React.FC<LevelingDecisionModalProps> = ({ is
 
                     <button
                         onClick={onClose}
-                        className="col-span-2 mt-2 py-3 text-xs font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-colors"
+                        className="col-span-2 mt-2 py-3 text-button font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-colors"
                     >
                         Ignorar por enquanto
                     </button>

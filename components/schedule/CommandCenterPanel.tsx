@@ -413,7 +413,7 @@ const DelaySimulator: React.FC<{
                                     <select
                                         value={selectedId}
                                         onChange={e => setSelectedId(e.target.value)}
-                                        className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white"
+                                        className="w-full text-form-input border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none bg-white"
                                     >
                                         <option value="">Selecione…</option>
                                         {criticalItems.map(item => {
@@ -432,7 +432,7 @@ const DelaySimulator: React.FC<{
                                     <input
                                         type="number" min={1} max={365} value={delayDays}
                                         onChange={e => setDelayDays(Math.max(1, parseInt(e.target.value) || 1))}
-                                        className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none"
+                                        className="w-full text-form-input border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none"
                                     />
                                 </div>
                             </div>

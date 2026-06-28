@@ -127,7 +127,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                     </div>
                     <button
                         onClick={onCreateNew}
-                        className="flex items-center gap-3 bg-blue-600 text-white px-6 py-3 rounded-[1.25rem] font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                        className="flex items-center gap-3 bg-blue-600 text-white px-6 py-3 rounded-[1.25rem] font-black text-button uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-900/20 active:scale-95"
                     >
                         <Plus className="w-4 h-4" />
                         <span>Nova Cotação</span>
@@ -294,13 +294,13 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                             <td className="px-6 py-2.5 text-right flex items-center justify-end gap-2">
                                                 <button
                                                     onClick={() => onViewDetails(req.id)}
-                                                    className="text-gray-500 hover:text-gray-700 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-gray-100 rounded-lg transition-all"
+                                                    className="text-gray-500 hover:text-gray-700 text-button font-black uppercase tracking-widest p-1.5 hover:bg-gray-100 rounded-lg transition-all"
                                                 >
                                                     Ver Detalhes
                                                 </button>
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); onViewComparison(req.id); }}
-                                                    className="text-blue-600 hover:text-blue-800 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1"
+                                                    className="text-blue-600 hover:text-blue-800 text-button font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1"
                                                 >
                                                     <Table2 className="w-3.5 h-3.5" />
                                                     Mapa
@@ -346,13 +346,13 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                     <div className="flex gap-2">
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onViewComparison(req.id); }}
-                                            className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95"
+                                            className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95"
                                         >
                                             <Table2 className="w-3.5 h-3.5" /> Mapa
                                         </button>
                                         <button
                                             onClick={() => onViewDetails(req.id)}
-                                            className="flex items-center gap-2 bg-gray-50 text-gray-900 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all shadow-sm active:scale-95"
+                                            className="flex items-center gap-2 bg-gray-50 text-gray-900 px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-200 transition-all shadow-sm active:scale-95"
                                         >
                                             Detalhes <ArrowRight className="w-3.5 h-3.5" />
                                         </button>

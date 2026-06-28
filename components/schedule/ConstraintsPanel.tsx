@@ -393,7 +393,7 @@ const NewConstraintForm: React.FC<{
                 <select
                     value={form.scheduleItemId}
                     onChange={e => onChange({ scheduleItemId: e.target.value })}
-                    className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    className="w-full text-form-input border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 >
                     <option value="">Selecione…</option>
                     {items.map(i => (
@@ -408,7 +408,7 @@ const NewConstraintForm: React.FC<{
                     <select
                         value={form.category}
                         onChange={e => onChange({ category: e.target.value as ConstraintCategory })}
-                        className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                        className="w-full text-form-input border border-gray-200 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                     >
                         {CATEGORIES.map(c => (
                             <option key={c} value={c}>{CATEGORY_CONFIG[c].label}</option>
@@ -424,7 +424,7 @@ const NewConstraintForm: React.FC<{
                     value={form.responsible}
                     onChange={e => onChange({ responsible: e.target.value })}
                     placeholder="Nome do responsável"
-                    className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    className="w-full text-form-input border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
             </div>
 
@@ -435,7 +435,7 @@ const NewConstraintForm: React.FC<{
                     value={form.description}
                     onChange={e => onChange({ description: e.target.value })}
                     placeholder="Descreva a restrição…"
-                    className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    className="w-full text-form-input border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                     onKeyDown={e => e.key === 'Enter' && onSave()}
                 />
             </div>
@@ -446,7 +446,7 @@ const NewConstraintForm: React.FC<{
                     type="date"
                     value={form.dueDate}
                     onChange={e => onChange({ dueDate: e.target.value })}
-                    className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    className="w-full text-form-input border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
             </div>
         </div>

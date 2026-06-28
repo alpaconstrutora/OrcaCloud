@@ -725,7 +725,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
                                                                     />
                                                                 </td>
-                                                                <td className="px-4 py-3 text-xs font-mono text-gray-400">
+                                                                <td className="px-4 py-3 text-table-body font-mono text-gray-400">
                                                                     <div className="flex items-center gap-2">
                                                                         {item.sinapiItem?.type === SinapiType.COMPOSITION && (
                                                                             <Layers className="w-3 h-3 text-blue-500" />
@@ -752,7 +752,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                                                 step="any"
                                                                                 value={customPrices.get(code) ?? item.sinapiItem!.price ?? 0}
                                                                                 onChange={(e) => updateItemPrice(code, parseFloat(e.target.value) || 0)}
-                                                                                className="w-24 text-right rounded border border-emerald-300 p-1 text-xs font-bold text-emerald-700 bg-emerald-50 outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+                                                                                className="w-24 text-right rounded border border-emerald-300 p-1 text-form-input font-bold text-emerald-700 bg-emerald-50 outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
                                                                             />
                                                                         </div>
                                                                     ) : (
@@ -797,7 +797,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                     <button
                                         type="button"
                                         onClick={handleAddItem}
-                                        className="text-blue-600 hover:text-blue-800 text-xs font-bold flex items-center gap-1"
+                                        className="text-blue-600 hover:text-blue-800 text-button font-bold flex items-center gap-1"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                         Adicionar Item Manual
@@ -823,7 +823,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                             type="text"
                                                             value={item.code}
                                                             onChange={e => handleUpdateItem(idx, 'code', e.target.value)}
-                                                            className="w-20 bg-transparent border-none p-0 text-xs font-mono text-gray-500 focus:ring-0"
+                                                            className="w-20 bg-transparent border-none p-0 text-form-input font-mono text-gray-500 focus:ring-0"
                                                             placeholder="Cód."
                                                         />
                                                     </td>

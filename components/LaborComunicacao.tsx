@@ -393,12 +393,12 @@ const CommDetail: React.FC<CommDetailProps> = ({ comm, onBack, onDispatch, dispa
                                 {receipts.map(r => (
                                     <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                                         <td className="px-4 py-3 font-bold text-slate-800">{r.employee_nome || '–'}</td>
-                                        <td className="px-4 py-3 text-slate-500 text-xs">
+                                        <td className="px-4 py-3 text-slate-500 text-table-body">
                                             {r.lido_em ? new Date(r.lido_em).toLocaleString('pt-BR') : (
                                                 <span className="text-amber-500 font-bold">Pendente</span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-slate-500 text-xs">
+                                        <td className="px-4 py-3 text-slate-500 text-table-body">
                                             {r.assinado_em ? new Date(r.assinado_em).toLocaleString('pt-BR') : '–'}
                                         </td>
                                         <td className="px-4 py-3">
@@ -660,7 +660,7 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
                 {([['comunicados', 'Comunicados'], ['config', 'WhatsApp']] as [MainTab, string][]).map(([v, label]) => (
                     <button key={v} onClick={() => setMainTab(v)}
-                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${mainTab === v ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                        className={`px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all ${mainTab === v ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                         {label}
                     </button>
                 ))}

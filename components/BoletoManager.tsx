@@ -315,7 +315,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 ref={orgSelectRef}
                                 value={selectedOrgId}
                                 onChange={(e) => handleOrgChange(e.target.value)}
-                                className="w-full bg-transparent text-xs font-bold text-gray-700 outline-none cursor-pointer appearance-none pr-5"
+                                className="w-full bg-transparent text-form-input font-bold text-gray-700 outline-none cursor-pointer appearance-none pr-5"
                             >
                                 <option value="ALL">Todas as Organizações</option>
                                 {organizations.map(org => (
@@ -330,7 +330,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                             <button
                                 onClick={() => handleExport('excel')}
                                 disabled={exporting}
-                                className="flex items-center gap-2 px-4 py-3 bg-white text-emerald-700 border border-emerald-200 rounded-[1.25rem] hover:bg-emerald-50 font-bold text-xs uppercase tracking-widest disabled:opacity-50"
+                                className="flex items-center gap-2 px-4 py-3 bg-white text-emerald-700 border border-emerald-200 rounded-[1.25rem] hover:bg-emerald-50 font-bold text-button uppercase tracking-widest disabled:opacity-50"
                                 title="Exportar lista filtrada para Excel"
                             >
                                 {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
@@ -339,7 +339,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                             <button
                                 onClick={() => handleExport('pdf')}
                                 disabled={exporting}
-                                className="flex items-center gap-2 px-4 py-3 bg-white text-red-600 border border-red-200 rounded-[1.25rem] hover:bg-red-50 font-bold text-xs uppercase tracking-widest disabled:opacity-50"
+                                className="flex items-center gap-2 px-4 py-3 bg-white text-red-600 border border-red-200 rounded-[1.25rem] hover:bg-red-50 font-bold text-button uppercase tracking-widest disabled:opacity-50"
                                 title="Exportar lista filtrada para PDF"
                             >
                                 {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
@@ -349,21 +349,21 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     )}
                     <button
                         onClick={() => carregar(effectiveOrgId)}
-                        className="flex items-center gap-2 px-4 py-3 bg-white text-gray-700 border border-gray-100 rounded-[1.25rem] hover:bg-gray-50 font-bold text-xs uppercase tracking-widest"
+                        className="flex items-center gap-2 px-4 py-3 bg-white text-gray-700 border border-gray-100 rounded-[1.25rem] hover:bg-gray-50 font-bold text-button uppercase tracking-widest"
                     >
                         <RefreshCw className="w-4 h-4" />
                         Atualizar
                     </button>
                     <button
                         onClick={() => setIsLoteOpen(true)}
-                        className="flex items-center gap-2 px-4 py-3 bg-white text-blue-600 border border-blue-200 rounded-[1.25rem] hover:bg-blue-50 font-bold text-xs uppercase tracking-widest transition-all"
+                        className="flex items-center gap-2 px-4 py-3 bg-white text-blue-600 border border-blue-200 rounded-[1.25rem] hover:bg-blue-50 font-bold text-button uppercase tracking-widest transition-all"
                     >
                         <Upload className="w-4 h-4" />
                         Importar em Lote
                     </button>
                     <button
                         onClick={abrirNovo}
-                        className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                        className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
                     >
                         <Plus className="w-4 h-4" />
                         Novo Boleto
@@ -430,7 +430,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     <button
                         key={s}
                         onClick={() => setFiltroStatus(s as BoletoStatus | 'todos')}
-                        className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest border transition-colors ${
+                        className={`px-4 py-2 rounded-full text-button font-bold uppercase tracking-widest border transition-colors ${
                             filtroStatus === s
                                 ? 'bg-gray-900 text-white border-gray-900'
                                 : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
@@ -456,7 +456,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
                 <button
                     onClick={() => setShowFiltros(v => !v)}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-2xl border font-bold text-xs uppercase tracking-widest transition-colors ${
+                    className={`flex items-center gap-2 px-4 py-3 rounded-2xl border font-bold text-form-input uppercase tracking-widest transition-colors ${
                         showFiltros || temFiltroAtivo
                             ? 'bg-gray-900 text-white border-gray-900'
                             : 'bg-white text-gray-700 border-gray-100 hover:bg-gray-50'
@@ -503,7 +503,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     <div className="flex items-center justify-between">
                         <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Filtros avançados</span>
                         {temFiltroAtivo && (
-                            <button onClick={limparFiltros} className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-bold">
+                            <button onClick={limparFiltros} className="flex items-center gap-1 text-button text-red-500 hover:text-red-700 font-bold">
                                 <X className="w-3 h-3" /> Limpar filtros
                             </button>
                         )}
@@ -565,7 +565,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         <select
                             value={ordenarPor}
                             onChange={(e) => setOrdenarPor(e.target.value as typeof ordenarPor)}
-                            className="px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold"
+                            className="px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-form-input font-bold"
                         >
                             <option value="numero">Código</option>
                             <option value="created_at">Data de captura</option>
@@ -578,7 +578,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </select>
                         <button
                             onClick={() => setOrdenarDir(d => d === 'asc' ? 'desc' : 'asc')}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-50"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-button font-bold hover:bg-gray-50"
                         >
                             {ordenarDir === 'asc' ? '↑ Crescente' : '↓ Decrescente'}
                         </button>
@@ -605,14 +605,14 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     </span>
                     <button
                         onClick={() => setIsLoteEditOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-white text-blue-700 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-50 transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-white text-blue-700 rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-50 transition-colors"
                     >
                         <Pencil className="w-3.5 h-3.5" />
                         Editar em Lote
                     </button>
                     <button
                         onClick={clearSelection}
-                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-400 transition-colors"
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-400 transition-colors"
                     >
                         <X className="w-3.5 h-3.5" />
                         Desmarcar
@@ -845,12 +845,12 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('obra') && (
-                                            <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px]">
+                                            <td className="px-4 py-3 text-table-body text-gray-500 max-w-[160px]">
                                                 <p className="truncate">{b.project_id ? (projectMap[b.project_id] ?? '—') : '—'}</p>
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('centro_custo') && (
-                                            <td className="px-4 py-3 text-xs text-gray-500 max-w-[140px]">
+                                            <td className="px-4 py-3 text-table-body text-gray-500 max-w-[140px]">
                                                 <p className="truncate">{b.cost_center_id ? (ccMap[b.cost_center_id] ?? '—') : '—'}</p>
                                             </td>
                                         )}
@@ -883,11 +883,11 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </tbody>
                         <tfoot>
                             <tr className="bg-gray-50 border-t border-gray-100">
-                                <td colSpan={5} className="px-4 py-2 text-xs text-gray-400">{filtered.length} boleto{filtered.length !== 1 ? 's' : ''}</td>
+                                <td colSpan={5} className="px-4 py-2 text-table-body text-gray-400">{filtered.length} boleto{filtered.length !== 1 ? 's' : ''}</td>
                                 <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
                                     {formatBRL(filtered.filter(b => !['pago','cancelado'].includes(b.status)).reduce((s, b) => s + (b.valor ?? 0), 0))}
                                 </td>
-                                <td colSpan={2} className="px-4 py-2 text-xs text-gray-400 text-right">total pendente</td>
+                                <td colSpan={2} className="px-4 py-2 text-table-body text-gray-400 text-right">total pendente</td>
                             </tr>
                         </tfoot>
                     </table>

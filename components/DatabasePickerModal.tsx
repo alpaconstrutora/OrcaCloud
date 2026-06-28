@@ -208,7 +208,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                                     />
                                 </div>
                                 <select
-                                    className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 text-gray-600 cursor-pointer min-w-[100px]"
+                                    className="rounded-lg border border-gray-200 px-3 py-2 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 text-gray-600 cursor-pointer min-w-[100px]"
                                     value={searchScope}
                                     onChange={(e) => setSearchScope(e.target.value as any)}
                                 >
@@ -217,7 +217,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                                     <option value="both">Ambos</option>
                                 </select>
                                 <select
-                                    className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-blue-50 text-blue-700 border-blue-100 cursor-pointer min-w-[100px]"
+                                    className="rounded-lg border border-gray-200 px-3 py-2 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-blue-50 text-blue-700 border-blue-100 cursor-pointer min-w-[100px]"
                                     value={searchMode}
                                     onChange={(e) => setSearchMode(e.target.value as any)}
                                 >

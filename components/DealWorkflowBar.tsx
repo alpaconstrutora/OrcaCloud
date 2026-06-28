@@ -56,7 +56,7 @@ const DealWorkflowBar: React.FC<DealWorkflowBarProps> = ({ currentStatus, deal, 
                     {!disabled && (
                         <button
                             onClick={handleReopen}
-                            className="px-4 py-1.5 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-xl hover:bg-red-100 transition-all"
+                            className="px-4 py-1.5 bg-white border border-red-200 text-red-600 text-button font-bold rounded-xl hover:bg-red-100 transition-all"
                         >
                             Reabrir
                         </button>
@@ -115,7 +115,7 @@ const DealWorkflowBar: React.FC<DealWorkflowBarProps> = ({ currentStatus, deal, 
                         {canTransition(currentStatus, 'CANCELLED') && (
                             <button
                                 onClick={handleCancel}
-                                className="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 text-xs font-bold rounded-xl hover:bg-red-100 transition-all"
+                                className="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 text-button font-bold rounded-xl hover:bg-red-100 transition-all"
                             >
                                 Cancelar
                             </button>
@@ -123,7 +123,7 @@ const DealWorkflowBar: React.FC<DealWorkflowBarProps> = ({ currentStatus, deal, 
                         {canAdvance && (
                             <button
                                 onClick={handleAdvance}
-                                className={`px-4 py-1.5 text-xs font-bold rounded-xl border transition-all
+                                className={`px-4 py-1.5 text-button font-bold rounded-xl border transition-all
                                     ${nextStep.bgColor} ${nextStep.color} ${nextStep.borderColor}
                                     hover:brightness-95`}
                             >

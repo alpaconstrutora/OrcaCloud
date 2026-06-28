@@ -195,7 +195,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                 </div>
                 <button
                     onClick={() => handleOpenModal()}
-                    className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                    className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
                 >
                     <Plus className="w-4 h-4" />
                     Novo Corretor
@@ -466,21 +466,21 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                 <div className="flex gap-3">
                                     <button
                                         onClick={handleCopyLink}
-                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
+                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
                                     >
                                         {tokenCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                         {tokenCopied ? 'Copiado!' : 'Copiar Link'}
                                     </button>
                                     <button
                                         onClick={handleGenerateToken}
-                                        className="flex items-center justify-center gap-2 px-4 py-3 border border-gray-200 text-gray-500 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-gray-300 hover:text-gray-700 transition-all"
+                                        className="flex items-center justify-center gap-2 px-4 py-3 border border-gray-200 text-gray-500 rounded-2xl text-button font-black uppercase tracking-widest hover:border-gray-300 hover:text-gray-700 transition-all"
                                         title="Regenerar link"
                                     >
                                         <RefreshCw className="w-4 h-4" />
                                     </button>
                                     <button
                                         onClick={handleRevokeToken}
-                                        className="flex items-center justify-center gap-2 px-4 py-3 border border-red-100 text-red-400 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-red-300 hover:text-red-600 transition-all"
+                                        className="flex items-center justify-center gap-2 px-4 py-3 border border-red-100 text-red-400 rounded-2xl text-button font-black uppercase tracking-widest hover:border-red-300 hover:text-red-600 transition-all"
                                         title="Revogar acesso"
                                     >
                                         <Trash2 className="w-4 h-4" />
@@ -496,7 +496,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                 </div>
                                 <button
                                     onClick={handleGenerateToken}
-                                    className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
+                                    className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
                                 >
                                     <Link2 className="w-4 h-4" />
                                     Gerar Link de Acesso

@@ -125,7 +125,7 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
                 {isAdmin && (
                     <button
                         onClick={() => setShowForm(v => !v)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-bold hover:bg-blue-700"
                     >
                         <Plus className="w-4 h-4" />
                         Novo Comunicado
@@ -246,7 +246,7 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
                                         {isAdmin && isDraft && (
                                             <button
                                                 onClick={e => { e.stopPropagation(); handlePublish(item); }}
-                                                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700"
+                                                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-button font-bold hover:bg-blue-700"
                                             >
                                                 <Send className="w-3.5 h-3.5" /> Publicar
                                             </button>
@@ -268,7 +268,7 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
                                                         key={v}
                                                         disabled={ackPending === item.id}
                                                         onClick={() => handleAck(item, v)}
-                                                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-60 ${
+                                                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-button font-bold transition-all disabled:opacity-60 ${
                                                             v === 'sim' ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                                                             : v === 'nao' ? 'bg-red-50 text-red-700 hover:bg-red-100'
                                                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'

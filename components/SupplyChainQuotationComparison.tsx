@@ -298,7 +298,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                     <button
                         onClick={handleSendWebhook}
                         disabled={loading}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 text-xs font-black uppercase tracking-widest disabled:opacity-50 active:scale-95"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 text-button font-black uppercase tracking-widest disabled:opacity-50 active:scale-95"
                         title="Enviar para Automação (Make.com)"
                     >
                         <Zap className="w-4 h-4" />
@@ -392,7 +392,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
 
                             {/* Totals Row */}
                             <tr className="bg-gray-900 text-white">
-                                <td className="px-6 py-6 text-right text-xs font-black uppercase tracking-widest opacity-60">Valor Total da Proposta</td>
+                                <td className="px-6 py-6 text-right text-table-body font-black uppercase tracking-widest opacity-60">Valor Total da Proposta</td>
                                 {responses.map(resp => {
                                     const total = resp.items.reduce((acc, item) => acc + (getEffectiveItem(resp, item.code)?.total || 0), 0);
                                     const pm = resp.counterProposal?.paymentMethod || resp.paymentMethod || 'A combinar';
@@ -613,13 +613,13 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                         <div className="flex bg-indigo-50/20 px-8 border-b border-gray-100">
                             <button
                                 onClick={() => setNegotiationTab('form')}
-                                className={`px-6 py-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${negotiationTab === 'form' ? 'border-indigo-600 text-indigo-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                                className={`px-6 py-4 text-button font-black uppercase tracking-widest border-b-2 transition-all ${negotiationTab === 'form' ? 'border-indigo-600 text-indigo-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
                             >
                                 Nova Proposta
                             </button>
                             <button
                                 onClick={() => setNegotiationTab('history')}
-                                className={`px-6 py-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${negotiationTab === 'history' ? 'border-indigo-600 text-indigo-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                                className={`px-6 py-4 text-button font-black uppercase tracking-widest border-b-2 transition-all ${negotiationTab === 'history' ? 'border-indigo-600 text-indigo-900' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
                             >
                                 Histórico ({responses.find(r => r.id === negotiatingId)?.negotiationHistory?.length || 0})
                             </button>
@@ -869,13 +869,13 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                     <div className="flex justify-end gap-3">
                         <button
                             onClick={() => setPendingConfirm(null)}
-                            className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-all"
+                            className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-button font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-all"
                         >
                             Cancelar
                         </button>
                         <button
                             onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }}
-                            className="px-6 py-3 bg-gray-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-600 transition-all"
+                            className="px-6 py-3 bg-gray-900 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-blue-600 transition-all"
                         >
                             Confirmar
                         </button>

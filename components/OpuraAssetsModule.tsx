@@ -809,7 +809,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
             onClick={() => setIsImportModalOpen(true)}
             disabled={isWriteDisabled}
             title={isWriteDisabled ? "Selecione uma organização específica para importar ativos" : "Importar ativos via Excel"}
-            className="px-6 py-3 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[1.25rem] font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all shadow-sm active:scale-95"
+            className="px-6 py-3 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[1.25rem] font-black text-button uppercase tracking-widest flex items-center gap-2 transition-all shadow-sm active:scale-95"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Importar Planilha
@@ -819,7 +819,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
             onClick={() => setIsNewAssetModalOpen(true)}
             disabled={isWriteDisabled}
             title={isWriteDisabled ? "Selecione uma organização específica para cadastrar ativos" : "Cadastrar novo ativo"}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 text-white rounded-[1.25rem] font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-blue-900/10 active:scale-95"
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 text-white rounded-[1.25rem] font-black text-button uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-blue-900/10 active:scale-95"
           >
             <Plus className="w-4 h-4" />
             Cadastrar Ativo
@@ -833,7 +833,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-3 font-black text-xs uppercase tracking-widest transition-colors border-b-2
+            className={`pb-3 font-black text-button uppercase tracking-widest transition-colors border-b-2
               ${activeTab === tab 
                 ? 'border-blue-600 text-blue-600' 
                 : 'border-transparent text-gray-400 hover:text-gray-600'}`}
@@ -997,7 +997,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     <select
                       value={filterCategory}
                       onChange={(e) => setFilterCategory(e.target.value)}
-                      className="px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 bg-white"
+                      className="px-3 py-2 border border-gray-200 rounded-xl text-form-input font-bold text-gray-600 bg-white"
                     >
                       <option value="todos">Todas Categorias</option>
                       <option value="equipamento">Equipamento</option>
@@ -1011,7 +1011,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     <select
                       value={filterStatus}
                       onChange={(e) => setFilterStatus(e.target.value)}
-                      className="px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 bg-white"
+                      className="px-3 py-2 border border-gray-200 rounded-xl text-form-input font-bold text-gray-600 bg-white"
                     >
                       <option value="todos">Todos Status</option>
                       <option value="disponivel">Disponível</option>
@@ -1602,7 +1602,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     <select
                       value={filterMaintType}
                       onChange={(e) => setFilterMaintType(e.target.value)}
-                      className="px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 bg-white"
+                      className="px-3 py-2 border border-gray-200 rounded-xl text-form-input font-bold text-gray-600 bg-white"
                     >
                       <option value="todos">Todos Tipos</option>
                       <option value="preventiva">Preventiva</option>
@@ -1613,7 +1613,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     <select
                       value={filterMaintStatus}
                       onChange={(e) => setFilterMaintStatus(e.target.value)}
-                      className="px-3 py-2 border border-gray-200 rounded-xl text-xs font-bold text-gray-600 bg-white"
+                      className="px-3 py-2 border border-gray-200 rounded-xl text-form-input font-bold text-gray-600 bg-white"
                     >
                       <option value="todos">Todos Status</option>
                       <option value="agendada">Agendada</option>
@@ -1636,7 +1636,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         });
                         setIsNewMaintModalOpen(true);
                       }}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition-colors shadow-lg shadow-blue-900/10 active:scale-95"
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-button uppercase tracking-wider flex items-center gap-1.5 transition-colors shadow-lg shadow-blue-900/10 active:scale-95"
                     >
                       <Plus className="w-4 h-4" />
                       Agendar Manutenção
@@ -1782,14 +1782,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       type="date"
                       value={rateioStartDate}
                       onChange={(e) => setRateioStartDate(e.target.value)}
-                      className="px-3 py-1.5 border border-gray-250 rounded-xl text-xs font-bold text-gray-600 bg-white"
+                      className="px-3 py-1.5 border border-gray-250 rounded-xl text-form-input font-bold text-gray-600 bg-white"
                     />
                     <span className="text-gray-400 text-xs font-bold">até</span>
                     <input
                       type="date"
                       value={rateioEndDate}
                       onChange={(e) => setRateioEndDate(e.target.value)}
-                      className="px-3 py-1.5 border border-gray-250 rounded-xl text-xs font-bold text-gray-600 bg-white"
+                      className="px-3 py-1.5 border border-gray-250 rounded-xl text-form-input font-bold text-gray-600 bg-white"
                     />
                   </div>
                   {(rateioStartDate || rateioEndDate) && (
@@ -1798,7 +1798,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         setRateioStartDate('');
                         setRateioEndDate('');
                       }}
-                      className="text-xs text-rose-600 hover:text-rose-700 font-bold underline"
+                      className="text-button text-rose-600 hover:text-rose-700 font-bold underline"
                     >
                       Limpar Filtros
                     </button>
@@ -2326,7 +2326,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               onClick={() => {
                 window.print();
               }}
-              className="px-6 py-2.5 bg-gray-900 hover:bg-gray-850 text-white w-full rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-colors shadow-lg active:scale-95"
+              className="px-6 py-2.5 bg-gray-900 hover:bg-gray-850 text-white w-full rounded-2xl font-black text-button uppercase tracking-widest flex items-center justify-center gap-2 transition-colors shadow-lg active:scale-95"
             >
               <FileText className="w-4 h-4" />
               Imprimir Código

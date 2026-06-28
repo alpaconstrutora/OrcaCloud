@@ -85,7 +85,7 @@ const HierarchicalSelect: React.FC<Props> = ({
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             placeholder="Buscar..."
-                            className="w-full text-xs px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 outline-none focus:border-slate-300 placeholder-slate-400 font-medium text-slate-700"
+                            className="w-full text-form-input px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 outline-none focus:border-slate-300 placeholder-slate-400 font-medium text-slate-700"
                         />
                     </div>
                     {filtered.length === 0 ? (
@@ -95,7 +95,7 @@ const HierarchicalSelect: React.FC<Props> = ({
                             <button
                                 type="button"
                                 onMouseDown={() => { onChange(''); setOpen(false); setSearch(''); }}
-                                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs font-medium text-slate-400 transition-colors ${hoverCls}`}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-form-input font-medium text-slate-400 transition-colors ${hoverCls}`}
                             >
                                 {placeholder}
                             </button>

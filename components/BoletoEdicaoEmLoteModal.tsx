@@ -217,7 +217,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                     <button
                         onClick={onClose}
                         disabled={saving}
-                        className="flex-1 px-4 py-3 rounded-2xl bg-gray-100 text-gray-700 font-bold text-xs uppercase tracking-widest hover:bg-gray-200 transition-colors disabled:opacity-50"
+                        className="flex-1 px-4 py-3 rounded-2xl bg-gray-100 text-gray-700 font-bold text-button uppercase tracking-widest hover:bg-gray-200 transition-colors disabled:opacity-50"
                     >
                         {allDone ? 'Fechar' : 'Cancelar'}
                     </button>
@@ -226,7 +226,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             <button
                                 onClick={handleSalvarRascunho}
                                 disabled={saving || noneChanged}
-                                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gray-900 text-white font-bold text-xs uppercase tracking-widest hover:bg-gray-800 transition-colors disabled:opacity-40"
+                                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gray-900 text-white font-bold text-button uppercase tracking-widest hover:bg-gray-800 transition-colors disabled:opacity-40"
                             >
                                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                                 Salvar Rascunho
@@ -234,7 +234,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             <button
                                 onClick={handleAprovarELancar}
                                 disabled={saving || noneChanged}
-                                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-blue-600 text-white font-bold text-xs uppercase tracking-widest hover:bg-blue-700 transition-colors disabled:opacity-40 shadow-lg shadow-blue-900/20"
+                                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-blue-600 text-white font-bold text-button uppercase tracking-widest hover:bg-blue-700 transition-colors disabled:opacity-40 shadow-lg shadow-blue-900/20"
                             >
                                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                                 Aprovar e Lançar

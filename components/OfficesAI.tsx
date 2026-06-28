@@ -389,7 +389,7 @@ Com base na sua solicitação sobre **"${text}"**, recomendo estruturar os segui
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             disabled={isTyping}
-            className="flex-1 bg-[#121315] border border-white/5 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:border-[#D47A55] placeholder-slate-500 disabled:opacity-50"
+            className="flex-1 bg-[#121315] border border-white/5 rounded-xl px-3.5 py-2 text-form-input text-white outline-none focus:border-[#D47A55] placeholder-slate-500 disabled:opacity-50"
           />
           <button
             type="submit"

@@ -147,7 +147,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-xs active:scale-95 transition-transform hover:bg-slate-50"
+            className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-button active:scale-95 transition-transform hover:bg-slate-50"
           >
             ⬅
           </button>
@@ -159,7 +159,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
 
         <button
           onClick={handleOpenCreate}
-          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95"
+          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95"
         >
           + Adicionar Posição
         </button>
@@ -271,7 +271,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-xs active:scale-95"
+                className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-button active:scale-95"
               >
                 ✕
               </button>
@@ -286,7 +286,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Ex: Rua C - Box 04"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                 />
               </div>
 
@@ -295,7 +295,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                 >
                   <option value="posicao_logistica">Posição de Estoque (Galpão)</option>
                   <option value="locker">Locker Compartilhado / Lockbox</option>
@@ -309,7 +309,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
                 <select
                   value={companyId}
                   onChange={(e) => setCompanyId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                 >
                   <option value="">Nenhuma (Livre / Disponível)</option>
                   {companies.map(c => (
@@ -323,7 +323,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                 >
                   <option value="disponivel">Disponível</option>
                   <option value="ocupado">Reservado / Ocupado</option>
@@ -336,14 +336,14 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
                   <button
                     type="button"
                     onClick={() => handleDelete(selectedLocation.id)}
-                    className="flex-1 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                    className="flex-1 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl text-button font-black uppercase tracking-wider transition-all"
                   >
                     Excluir
                   </button>
                 )}
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95"
+                  className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95"
                 >
                   Salvar
                 </button>

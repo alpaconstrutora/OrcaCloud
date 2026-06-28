@@ -80,7 +80,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                     </p>
                     <button 
                         onClick={onMigrate}
-                        className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg"
+                        className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-button uppercase tracking-widest hover:bg-slate-800 transition-all shadow-lg"
                     >
                         Importar Colaboradores
                     </button>
@@ -104,7 +104,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                     <select 
                         value={selectedRun?.id || ''}
                         onChange={(e) => setSelectedRun(runs.find(r => r.id === e.target.value) || null)}
-                        className="text-xs font-black text-slate-700 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl outline-none"
+                        className="text-form-input font-black text-slate-700 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl outline-none"
                     >
                         {runs.map(r => (
                             <option key={r.id} value={r.id}>
@@ -225,7 +225,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, legacyCo
                                                         <span className="text-xs font-bold text-slate-700">{w.name}</span>
                                                     </div>
                                                 </td>
-                                                <td className="py-4 text-right text-xs font-black text-slate-900">
+                                                <td className="py-4 text-right text-table-body font-black text-slate-900">
                                                     R$ {w.cost.toLocaleString()}
                                                 </td>
                                                 <td className="py-4 text-right">

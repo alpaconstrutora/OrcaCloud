@@ -174,7 +174,7 @@ const ItemRow: React.FC<{
         <button
           disabled={saving || !draft.description.trim()}
           onClick={handleSave}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 disabled:opacity-50"
         >
           {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
           Salvar
@@ -440,14 +440,14 @@ const TemplateCard: React.FC<{
               <div className="flex items-center gap-2 justify-end">
                 <button
                   onClick={() => setShowAddItem(false)}
-                  className="px-3 py-1.5 text-slate-500 hover:bg-slate-100 rounded-xl text-xs font-bold"
+                  className="px-3 py-1.5 text-slate-500 hover:bg-slate-100 rounded-xl text-button font-bold"
                 >
                   Cancelar
                 </button>
                 <button
                   disabled={savingNew || !newItem.description.trim()}
                   onClick={handleAddItem}
-                  className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 disabled:opacity-50"
                 >
                   {savingNew ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                   Adicionar
@@ -458,7 +458,7 @@ const TemplateCard: React.FC<{
             <div className="px-3 pb-3 pt-1">
               <button
                 onClick={() => setShowAddItem(true)}
-                className="flex items-center gap-2 px-3 py-2 w-full border-2 border-dashed border-slate-200 rounded-xl text-xs font-bold text-slate-400 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                className="flex items-center gap-2 px-3 py-2 w-full border-2 border-dashed border-slate-200 rounded-xl text-button font-bold text-slate-400 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Adicionar item
@@ -806,7 +806,7 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
           <button
             onClick={() => importInputRef.current?.click()}
             disabled={importing}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-button font-black uppercase tracking-widest hover:bg-slate-50 transition-colors"
           >
             {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
             Importar
@@ -814,14 +814,14 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
           <button
             onClick={() => importXlsxRef.current?.click()}
             disabled={importing}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-50 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-emerald-200 text-emerald-700 rounded-xl text-button font-black uppercase tracking-widest hover:bg-emerald-50 transition-colors"
           >
             {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             Importar Excel
           </button>
           <button
             onClick={() => setShowNewForm(s => !s)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20"
           >
             <Plus className="w-4 h-4" />
             Novo template
@@ -835,7 +835,7 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
           <p className="text-xs font-black text-blue-700 uppercase tracking-widest">Novo Template</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-bold text-slate-500">Nome *</label>
+              <label className="text-form-label font-bold text-slate-500">Nome *</label>
               <input
                 type="text"
                 value={newName}
@@ -847,7 +847,7 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-500">Tipo de serviço</label>
+              <label className="text-form-input font-bold text-slate-500">Tipo de serviço</label>
               <input
                 type="text"
                 value={newServiceType}
@@ -860,14 +860,14 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
           <div className="flex items-center gap-2 justify-end">
             <button
               onClick={() => { setShowNewForm(false); setNewName(''); setNewServiceType('') }}
-              className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded-xl text-xs font-bold"
+              className="px-4 py-2 text-slate-500 hover:bg-slate-100 rounded-xl text-button font-bold"
             >
               Cancelar
             </button>
             <button
               disabled={savingNew || !newName.trim()}
               onClick={handleCreateTemplate}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 disabled:opacity-50"
             >
               {savingNew ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
               Criar

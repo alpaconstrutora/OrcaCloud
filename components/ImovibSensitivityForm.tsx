@@ -231,7 +231,7 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
                         <div className="flex justify-center">
                             <button
                                 onClick={() => { setScenarioVgvDelta(0); setScenarioCostDelta(0); }}
-                                className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors underline"
+                                className="text-button font-bold text-slate-400 hover:text-slate-600 transition-colors underline"
                             >
                                 Restaurar Base
                             </button>

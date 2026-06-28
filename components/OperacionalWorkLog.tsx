@@ -166,7 +166,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
       {/* Add button */}
       <button
         onClick={() => setShowForm(s => !s)}
-        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-colors"
+        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 transition-colors"
       >
         {showForm ? <ChevronUp className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
         {showForm ? 'Cancelar' : 'Novo Apontamento'}
@@ -177,7 +177,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
         <form onSubmit={handleSubmit} className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-100">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wide">Data</label>
+              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Data</label>
               <input
                 type="date"
                 value={form.logDate}
@@ -187,7 +187,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
               />
             </div>
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wide">Equipe</label>
+              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Equipe</label>
               <select
                 value={form.teamId}
                 onChange={e => setForm(f => ({ ...f, teamId: e.target.value }))}
@@ -198,7 +198,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
               </select>
             </div>
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wide">Horas</label>
+              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Horas</label>
               <input
                 type="number"
                 min="0"
@@ -211,7 +211,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
             </div>
             {measurementUnit && (
               <div>
-                <label className="text-xs font-black text-slate-500 uppercase tracking-wide">{measurementUnit}</label>
+                <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">{measurementUnit}</label>
                 <input
                   type="number"
                   min="0"
@@ -224,7 +224,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
               </div>
             )}
             <div className="col-span-2 md:col-span-3">
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wide">Observações</label>
+              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Observações</label>
               <textarea
                 value={form.notes}
                 onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
@@ -238,7 +238,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-60 transition-colors"
+              className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-60 transition-colors"
             >
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
               Salvar
@@ -287,7 +287,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
               </div>
               <button
                 onClick={() => handleDelete(log.id)}
-                className="text-xs text-red-400 hover:text-red-600 font-bold ml-4 shrink-0"
+                className="text-button text-red-400 hover:text-red-600 font-bold ml-4 shrink-0"
               >
                 Remover
               </button>

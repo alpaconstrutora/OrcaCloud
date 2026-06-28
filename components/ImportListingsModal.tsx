@@ -419,13 +419,13 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
           <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 py-2.5 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+              className="flex-1 py-2.5 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-button font-black uppercase tracking-wider transition-all"
             >
               Cancelar
             </button>
             <button
               onClick={handleImport}
-              className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-98"
+              className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all shadow-md active:scale-98"
             >
               🚀 Importar e Geocodificar
             </button>

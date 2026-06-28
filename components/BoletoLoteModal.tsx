@@ -333,7 +333,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {/* Fornecedor */}
                             <div className="space-y-1">
-                                <label className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+                                <label className="text-form-label font-semibold text-gray-600 flex items-center gap-1">
                                     <Users className="w-3 h-3" /> Fornecedor
                                 </label>
                                 <select
@@ -350,7 +350,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
 
                             {/* Centro de custo */}
                             <div className="space-y-1">
-                                <label className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+                                <label className="text-form-label font-semibold text-gray-600 flex items-center gap-1">
                                     <FolderOpen className="w-3 h-3" /> Centro de custo
                                 </label>
                                 <select
@@ -367,7 +367,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
 
                             {/* Projeto */}
                             <div className="space-y-1">
-                                <label className="text-xs font-semibold text-gray-600">Projeto / Obra</label>
+                                <label className="text-form-label font-semibold text-gray-600">Projeto / Obra</label>
                                 <select
                                     value={selectedProjectId}
                                     onChange={e => { setSelectedProjectId(e.target.value); setCommonApplied(false); }}
@@ -382,7 +382,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
 
                             {/* Observações */}
                             <div className="space-y-1">
-                                <label className="text-xs font-semibold text-gray-600">Observações</label>
+                                <label className="text-form-label font-semibold text-gray-600">Observações</label>
                                 <input
                                     type="text"
                                     value={observacoes}
@@ -397,7 +397,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
                             <button
                                 onClick={aplicarCamposComuns}
                                 disabled={applyingCommon || !temCamposComuns || pendCount > 0}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                             >
                                 {applyingCommon && <Loader2 className="w-3 h-3 animate-spin" />}
                                 Aplicar campos comuns

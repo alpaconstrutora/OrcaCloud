@@ -256,7 +256,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 onClick={card.onClick}
                                 className={`bg-white rounded-xl border border-gray-200 p-4 text-left hover:border-${card.color}-300 hover:shadow-sm transition-all`}
                             >
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{card.label}</p>
+                                <p className="text-button font-semibold text-gray-500 uppercase tracking-wide mb-1">{card.label}</p>
                                 <p className={`text-xl font-bold text-${card.color}-600`}>{fmt(card.value)}</p>
                             </button>
                         ))}
@@ -286,7 +286,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                     <button
                                         key={s}
                                         onClick={() => setStatusFilter(s)}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${statusFilter === s ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                        className={`px-3 py-1.5 rounded-lg text-form-input font-semibold transition-colors ${statusFilter === s ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                                     >
                                         {s === 'all' ? 'Todos' : s === 'overdue' ? 'Atrasado' : STATUS_PT[s]}
                                     </button>
@@ -295,7 +295,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
 
                             <button
                                 onClick={() => setShowFilters(v => !v)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                                className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-button font-semibold text-gray-600 hover:bg-gray-50"
                             >
                                 {showFilters ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                 Filtros
@@ -315,10 +315,10 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 <div className="flex items-center gap-2 text-xs text-gray-500">
                                     <span>Vencimento:</span>
                                     <input type="date" value={vencDe} onChange={e => setVencDe(e.target.value)}
-                                        className="border border-gray-200 rounded-lg px-2 py-1 text-xs outline-none focus:border-red-400" />
+                                        className="border border-gray-200 rounded-lg px-2 py-1 text-form-input outline-none focus:border-red-400" />
                                     <span>até</span>
                                     <input type="date" value={vencAte} onChange={e => setVencAte(e.target.value)}
-                                        className="border border-gray-200 rounded-lg px-2 py-1 text-xs outline-none focus:border-red-400" />
+                                        className="border border-gray-200 rounded-lg px-2 py-1 text-form-input outline-none focus:border-red-400" />
                                     {(vencDe || vencAte) && (
                                         <button onClick={() => { setVencDe(''); setVencAte(''); }} className="text-red-500 hover:text-red-700">
                                             <X className="w-3.5 h-3.5" />
@@ -442,7 +442,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                     </td>
                                                 )}
                                                 {tableColumns.visibleColumns.includes('vencimento') && (
-                                                    <td className={`px-4 py-3 text-center text-xs font-medium ${overdue ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+                                                    <td className={`px-4 py-3 text-center text-table-body font-medium ${overdue ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
                                                         {fmtDate(inv.dueDate)}
                                                         {overdue && dueDate && (
                                                             <div className="text-[10px] text-red-500">
@@ -476,7 +476,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                             <button
                                                                 onClick={() => handleMarcarPago(inv)}
                                                                 disabled={marcandoPago === inv.id}
-                                                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 text-xs font-semibold border border-green-200 disabled:opacity-50 transition-colors"
+                                                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 text-button font-semibold border border-green-200 disabled:opacity-50 transition-colors"
                                                                 title="Marcar como pago"
                                                             >
                                                                 {marcandoPago === inv.id ? (
@@ -500,13 +500,13 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 </tbody>
                                 <tfoot>
                                     <tr className="bg-gray-50 border-t border-gray-200">
-                                        <td colSpan={2} className="px-4 py-2 text-xs text-gray-500">
+                                        <td colSpan={2} className="px-4 py-2 text-table-body text-gray-500">
                                             {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
                                         </td>
                                         <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
                                             {fmt(filtered.filter(i => !['paid', 'rejected'].includes(i.status)).reduce((s, i) => s + (i.amount ?? 0), 0))}
                                         </td>
-                                        <td colSpan={3} className="px-4 py-2 text-xs text-gray-400 text-right">total a pagar (filtrado)</td>
+                                        <td colSpan={3} className="px-4 py-2 text-table-body text-gray-400 text-right">total a pagar (filtrado)</td>
                                     </tr>
                                 </tfoot>
                             </table>

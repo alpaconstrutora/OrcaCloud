@@ -222,7 +222,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
             <div className="flex flex-wrap gap-3">
                 <button
                     onClick={() => setStatusFilter('all')}
-                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider border transition-all ${statusFilter === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
+                    className={`px-4 py-2 rounded-xl text-button font-black uppercase tracking-wider border transition-all ${statusFilter === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'}`}
                 >
                     Todas ({units.length})
                 </button>

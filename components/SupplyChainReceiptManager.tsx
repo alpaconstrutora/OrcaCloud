@@ -111,19 +111,19 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                     <div className="bg-white p-1 rounded-xl border border-gray-100 shadow-sm flex">
                         <button
                             onClick={() => setFilterStatus('all')}
-                            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${filterStatus === 'all' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-gray-400 hover:text-gray-600'}`}
+                            className={`px-4 py-2 rounded-lg text-button font-bold transition-all ${filterStatus === 'all' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-gray-400 hover:text-gray-600'}`}
                         >
                             Todos
                         </button>
                         <button
                             onClick={() => setFilterStatus('pending')}
-                            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${filterStatus === 'pending' ? 'bg-amber-600 text-white shadow-lg shadow-amber-200' : 'text-gray-400 hover:text-gray-600'}`}
+                            className={`px-4 py-2 rounded-lg text-button font-bold transition-all ${filterStatus === 'pending' ? 'bg-amber-600 text-white shadow-lg shadow-amber-200' : 'text-gray-400 hover:text-gray-600'}`}
                         >
                             Pendentes
                         </button>
                         <button
                             onClick={() => setFilterStatus('received')}
-                            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${filterStatus === 'received' ? 'bg-green-600 text-white shadow-lg shadow-green-200' : 'text-gray-400 hover:text-gray-600'}`}
+                            className={`px-4 py-2 rounded-lg text-button font-bold transition-all ${filterStatus === 'received' ? 'bg-green-600 text-white shadow-lg shadow-green-200' : 'text-gray-400 hover:text-gray-600'}`}
                         >
                             Recebidos
                         </button>
@@ -234,15 +234,15 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                                     className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                                     onClick={() => onViewOrder(order.id)}
                                 >
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-mono text-xs font-bold text-gray-700">
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-mono text-table-body font-bold text-gray-700">
                                         #{order.number || order.id.slice(0, 8)}
                                     </td>
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-medium text-gray-700">
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-table-body font-medium text-gray-700">
                                         {order.projectClassification === 'ORCAMENTO'
                                             ? (order.linkedProjectName || '-')
                                             : order.projectName}
                                     </td>
-                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-medium text-blue-600">
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-table-body font-medium text-blue-600">
                                         {order.projectClassification === 'ORCAMENTO' ? order.projectName : '-'}
                                     </td>
                                     <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-gray-700 text-sm font-medium">
@@ -276,7 +276,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                                                         setSelectedOrder(order);
                                                         setShowReceiptModal(true);
                                                     }}
-                                                    className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-green-700 hover:scale-105 transition-all shadow-lg shadow-green-900/10 active:scale-95"
+                                                    className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl text-button font-black uppercase tracking-widest hover:bg-green-700 hover:scale-105 transition-all shadow-lg shadow-green-900/10 active:scale-95"
                                                 >
                                                     <Camera className="w-4 h-4" />
                                                     Fazer Checkout

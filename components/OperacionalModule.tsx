@@ -32,7 +32,7 @@ const TabBtn: React.FC<{
 }> = ({ active, icon: Icon, label, onClick }) => (
   <button
     onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all
+    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-button font-black uppercase tracking-widest transition-all
       ${active
         ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
         : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}

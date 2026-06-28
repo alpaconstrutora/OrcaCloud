@@ -174,7 +174,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
 
           {/* Dados Gerais / Regularização */}
           <div>
-            <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-3">Dados Gerais</h3>
+            <h3 className="text-form-label font-black uppercase tracking-widest text-gray-500 mb-3">Dados Gerais</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className={labelCls}>Matrícula</label>
@@ -201,7 +201,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
 
           {/* SPE */}
           <div>
-            <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-3">SPE</h3>
+            <h3 className="text-form-label font-black uppercase tracking-widest text-gray-500 mb-3">SPE</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Razão Social</label>
@@ -230,7 +230,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
 
           {/* Endereço de divulgação / oficial */}
           <div>
-            <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-3">Endereço do Empreendimento</h3>
+            <h3 className="text-form-label font-black uppercase tracking-widest text-gray-500 mb-3">Endereço do Empreendimento</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2">
                 <label className={labelCls}>Logradouro</label>
@@ -313,8 +313,8 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="px-5 py-2.5 text-gray-600 font-bold text-xs uppercase tracking-widest hover:bg-gray-100 rounded-xl">Cancelar</button>
-            <button type="submit" disabled={saving} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2">
+            <button type="button" onClick={onClose} className="px-5 py-2.5 text-gray-600 font-bold text-button uppercase tracking-widest hover:bg-gray-100 rounded-xl">Cancelar</button>
+            <button type="submit" disabled={saving} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-button uppercase tracking-widest flex items-center gap-2">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               {editing ? 'Salvar' : 'Criar'}
             </button>

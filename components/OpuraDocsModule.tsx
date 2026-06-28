@@ -737,7 +737,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setCreateFolderModalOpen(true)}
-                className="flex items-center gap-2 px-5 py-3 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-[1.25rem] font-black text-xs uppercase tracking-widest transition-all shadow-sm active:scale-95"
+                className="flex items-center gap-2 px-5 py-3 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-[1.25rem] font-black text-button uppercase tracking-widest transition-all shadow-sm active:scale-95"
               >
                 <FolderPlus className="w-4 h-4 text-blue-600" />
                 Nova Pasta
@@ -747,7 +747,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   setNewDocCategory(activeTab);
                   setUploadModalOpen(true);
                 }}
-                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-500/10 active:scale-95"
+                className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-lg shadow-blue-500/10 active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 Novo Documento
@@ -768,7 +768,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <button
               key={cat.id}
               onClick={() => setActiveTab(cat.id)}
-              className={`px-5 py-4 font-black text-xs uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
+              className={`px-5 py-4 font-black text-form-input uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
                 isActive
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -782,7 +782,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         {pendingApprovals.length > 0 && (
           <button
             onClick={() => setShowPendingOnly(!showPendingOnly)}
-            className={`ml-auto flex items-center gap-1.5 px-4 py-2 my-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all border ${
+            className={`ml-auto flex items-center gap-1.5 px-4 py-2 my-2 rounded-xl text-button font-black uppercase tracking-wider transition-all border ${
               showPendingOnly
                 ? 'bg-blue-600 border-blue-600 text-white shadow-md'
                 : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 animate-pulse'
@@ -865,7 +865,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </div>
               <button
                 onClick={() => setShowPendingOnly(false)}
-                className="text-xs font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+                className="text-button font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
               >
                 Voltar ao Acervo
               </button>
@@ -902,7 +902,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             placeholder={approvingId === app.id ? "Comentários da aprovação (opcional)..." : "Justificativa da rejeição (obrigatório)..."}
                             value={feedbackText}
                             onChange={(e) => setFeedbackText(e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50"
+                            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-form-input font-medium focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50"
                             rows={2}
                             autoFocus
                           />
@@ -933,7 +933,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           {app.document?.active_version?.storage_path && (
                             <button
                               onClick={() => handleDownload(app.document.active_version.storage_path, app.document.nome, app.document.id)}
-                              className="px-3.5 py-2 border border-slate-200 text-slate-600 hover:text-blue-600 rounded-xl text-xs font-bold bg-white active:scale-95 transition-all shadow-sm"
+                              className="px-3.5 py-2 border border-slate-200 text-slate-600 hover:text-blue-600 rounded-xl text-button font-bold bg-white active:scale-95 transition-all shadow-sm"
                               title="Visualizar arquivo"
                             >
                               Visualizar
@@ -941,13 +941,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           )}
                           <button
                             onClick={() => setRejectingId(app.id)}
-                            className="px-3.5 py-2 border border-rose-100 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 transition-all"
+                            className="px-3.5 py-2 border border-rose-100 text-rose-600 hover:bg-rose-50 rounded-xl text-button font-black uppercase tracking-wider active:scale-95 transition-all"
                           >
                             Rejeitar
                           </button>
                           <button
                             onClick={() => setApprovingId(app.id)}
-                            className="px-3.5 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl text-xs font-black uppercase tracking-wider active:scale-95 transition-all shadow-md shadow-emerald-500/10"
+                            className="px-3.5 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl text-button font-black uppercase tracking-wider active:scale-95 transition-all shadow-md shadow-emerald-500/10"
                           >
                             Aprovar
                           </button>
@@ -1126,7 +1126,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                               }
                             }}
                             title="Histórico de versões"
-                            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm text-xs font-bold active:scale-95"
+                            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm text-button font-bold active:scale-95"
                           >
                             <History className="w-4 h-4" />
                             Histórico
@@ -1171,7 +1171,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <form onSubmit={handleUploadSubmit} className="p-6 space-y-5">
               {/* Arquivo (Drag and Drop Simples) */}
               <div className="space-y-1.5">
-                <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Arquivo Físico (PDF, DOCX, XLSX, DWG, Imagens — Max 50MB)</label>
+                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Arquivo Físico (PDF, DOCX, XLSX, DWG, Imagens — Max 50MB)</label>
                 <div className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center hover:border-blue-400 transition-colors bg-slate-50/50 relative">
                   <input
                     type="file"
@@ -1200,7 +1200,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Linha 1: Nome e Tipo de Doc */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Nome do Documento</label>
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Nome do Documento</label>
                   <input
                     type="text"
                     required
@@ -1211,7 +1211,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Tipo de Documento</label>
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Tipo de Documento</label>
                   <input
                     type="text"
                     required
@@ -1225,7 +1225,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
               {/* Descrição */}
               <div className="space-y-1.5">
-                <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Descrição / Notas</label>
+                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Descrição / Notas</label>
                 <textarea
                   placeholder="Observações ou detalhes importantes..."
                   value={newDocDesc}
@@ -1238,7 +1238,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Emissão, Validade e Dias Alerta */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Data de Emissão</label>
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Data de Emissão</label>
                   <input
                     type="date"
                     value={newDocEmissao}
@@ -1247,7 +1247,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Data de Vencimento</label>
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Data de Vencimento</label>
                   <input
                     type="date"
                     value={newDocValidade}
@@ -1256,7 +1256,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Alerta de Vencimento</label>
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Alerta de Vencimento</label>
                   <select
                     value={newDocAlertaDias}
                     onChange={(e) => setNewDocAlertaDias(parseInt(e.target.value))}
@@ -1274,7 +1274,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Tags e Vínculos adicionais */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Tags (Separadas por vírgula)</label>
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Tags (Separadas por vírgula)</label>
                   <input
                     type="text"
                     placeholder="obra, fundação, AVCB, fiscal"
@@ -1286,7 +1286,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
                 {/* Vínculo de Obra/Empreendimento (Opcional) */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Obra/Empreendimento (Opcional)</label>
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Obra/Empreendimento (Opcional)</label>
                   <select
                     value={selectedProjectId !== 'all' ? selectedProjectId : newDocProjectId}
                     onChange={(e) => setNewDocProjectId(e.target.value)}
@@ -1304,7 +1304,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
                 {/* Vínculo de Empresa (Sócio/Filial/Holding) */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Empresa Vinculada (Opcional)</label>
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Empresa Vinculada (Opcional)</label>
                   <select
                     value={newDocCompanyId}
                     onChange={(e) => setNewDocCompanyId(e.target.value)}
@@ -1325,14 +1325,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setUploadModalOpen(false)}
-                  className="px-5 py-3 border border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors"
+                  className="px-5 py-3 border border-slate-200 text-slate-500 font-bold text-button uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={uploading}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/10 disabled:opacity-50"
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-black text-button uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/10 disabled:opacity-50"
                 >
                   {uploading ? (
                     <>
@@ -1399,7 +1399,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <button
                       type="submit"
                       disabled={uploadingVersion || !newVersionFile}
-                      className="px-6 py-3 bg-blue-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="px-6 py-3 bg-blue-600 text-white font-black text-button uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {uploadingVersion ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -1462,7 +1462,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         required
                         value={selectedApproverEmail}
                         onChange={(e) => setSelectedApproverEmail(e.target.value)}
-                        className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-bold bg-white focus:outline-none"
+                        className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-form-input font-bold bg-white focus:outline-none"
                       >
                         <option value="">Selecione um Revisor...</option>
                         {orgMembers.map((member) => (
@@ -1475,7 +1475,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <button
                       type="submit"
                       disabled={submittingApproval || !selectedApproverEmail}
-                      className="px-6 py-2.5 bg-blue-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="px-6 py-2.5 bg-blue-600 text-white font-black text-button uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {submittingApproval ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -1608,7 +1608,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
             <form onSubmit={handleCreateFolderSubmit} className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Nome da Pasta</label>
+                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Nome da Pasta</label>
                 <input
                   type="text"
                   required
@@ -1624,14 +1624,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 <button
                   type="button"
                   onClick={() => setCreateFolderModalOpen(false)}
-                  className="px-4 py-2.5 border border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors"
+                  className="px-4 py-2.5 border border-slate-200 text-slate-500 font-bold text-button uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={creatingFolder || !newFolderName.trim()}
-                  className="px-5 py-2.5 bg-blue-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-5 py-2.5 bg-blue-600 text-white font-black text-button uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {creatingFolder ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -1667,7 +1667,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
             <form onSubmit={handleMoveDocumentSubmit} className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Selecione a Pasta de Destino</label>
+                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Selecione a Pasta de Destino</label>
                 <select
                   value={targetFolderId || ''}
                   onChange={(e) => setTargetFolderId(e.target.value || null)}
@@ -1689,13 +1689,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     setMoveModalOpen(false);
                     setMovingDocId(null);
                   }}
-                  className="px-4 py-2.5 border border-slate-200 text-slate-500 font-bold text-xs uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors"
+                  className="px-4 py-2.5 border border-slate-200 text-slate-500 font-bold text-button uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 bg-blue-600 text-white font-black text-xs uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md"
+                  className="px-5 py-2.5 bg-blue-600 text-white font-black text-button uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md"
                 >
                   Confirmar Mudança
                 </button>

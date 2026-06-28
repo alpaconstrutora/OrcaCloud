@@ -145,7 +145,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                 <p className="text-sm font-bold text-slate-400 uppercase leading-relaxed">{error || 'Não foi possível gerar o documento.'}</p>
                 <button
                     onClick={onClose}
-                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-colors"
+                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-button uppercase tracking-widest hover:bg-slate-800 transition-colors"
                 >
                     Fechar
                 </button>

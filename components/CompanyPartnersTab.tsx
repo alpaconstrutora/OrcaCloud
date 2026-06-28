@@ -35,7 +35,7 @@ const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ou
 
 const Field: React.FC<{ label: string; children: React.ReactNode; required?: boolean }> = ({ label, children, required }) => (
     <div>
-        <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-1">
+        <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">
             {label}{required && <span className="text-red-500 ml-1">*</span>}
         </label>
         {children}
@@ -148,7 +148,7 @@ const CompanyPartnersTab: React.FC<Props> = ({ companyId, companies }) => {
                         Quadro Societário
                     </p>
                     {!loading && partners.length > 0 && (
-                        <span className={`text-xs font-black px-2 py-0.5 rounded-full ${
+                        <span className={`text-form-label font-black px-2 py-0.5 rounded-full ${
                             Math.abs(totalPct - 100) < 0.01
                                 ? 'bg-green-100 text-green-700'
                                 : 'bg-amber-100 text-amber-700'
@@ -159,7 +159,7 @@ const CompanyPartnersTab: React.FC<Props> = ({ companyId, companies }) => {
                 </div>
                 {!showForm && (
                     <button onClick={openNew}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
+                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
                         <Plus className="w-3.5 h-3.5" />
                         Adicionar Sócio
                     </button>
@@ -242,11 +242,11 @@ const CompanyPartnersTab: React.FC<Props> = ({ companyId, companies }) => {
 
                     <div className="flex justify-end gap-2 pt-1 border-t border-gray-200">
                         <button type="button" onClick={cancel}
-                            className="px-4 py-2 text-xs font-black uppercase tracking-wide text-gray-500 hover:text-gray-700">
+                            className="px-4 py-2 text-button font-black uppercase tracking-wide text-gray-500 hover:text-gray-700">
                             Cancelar
                         </button>
                         <button type="submit" disabled={saving}
-                            className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
+                            className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
                             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                             Salvar
                         </button>

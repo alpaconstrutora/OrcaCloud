@@ -171,7 +171,7 @@ function RuleModal({
                                 <span className={['absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform',
                                     form.is_active ? 'translate-x-5' : 'translate-x-0.5'].join(' ')} />
                             </button>
-                            <span className="text-xs text-gray-700">{form.is_active ? 'Ativa' : 'Inativa'}</span>
+                            <span className="text-button text-gray-700">{form.is_active ? 'Ativa' : 'Inativa'}</span>
                         </div>
                     </div>
 
@@ -221,7 +221,7 @@ function RuleModal({
                                     value={form.body_template}
                                     onChange={e => patch({ body_template: e.target.value })}
                                     rows={6}
-                                    className="w-full text-xs font-mono border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                    className="w-full text-button font-mono border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                                 />
                                 <div className="flex flex-wrap gap-1 mt-1.5">
                                     {DUNNING_VARS.map(v => (
@@ -348,7 +348,7 @@ function ReguaTab({ organizationId }: { organizationId: string }) {
                     <button
                         onClick={handleRun}
                         disabled={running}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg disabled:opacity-50 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-button font-medium rounded-lg disabled:opacity-50 transition-colors"
                         title="Dispara a régua agora (ignora horário configurado)"
                     >
                         {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
@@ -356,7 +356,7 @@ function ReguaTab({ organizationId }: { organizationId: string }) {
                     </button>
                     <button
                         onClick={() => setEditing({} as DunningRule)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-button font-medium rounded-lg"
                     >
                         <Plus className="w-3.5 h-3.5" />
                         Nova regra
@@ -396,7 +396,7 @@ function ReguaTab({ organizationId }: { organizationId: string }) {
                     <button
                         onClick={handleSeed}
                         disabled={seeding}
-                        className="flex items-center gap-1.5 mx-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg disabled:opacity-50"
+                        className="flex items-center gap-1.5 mx-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-button font-medium rounded-lg disabled:opacity-50"
                     >
                         {seeding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                         Carregar regras padrão
@@ -526,7 +526,7 @@ function HistoricoTab({ organizationId }: { organizationId: string }) {
                     <select
                         value={filterStatus}
                         onChange={e => setFilterStatus(e.target.value)}
-                        className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="text-form-input border border-gray-200 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none"
                     >
                         <option value="">Todos os status</option>
                         <option value="sent">Enviados</option>

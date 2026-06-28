@@ -275,7 +275,7 @@ const MiniCalendar: React.FC<{
             <button
               key={i}
               onClick={() => onChange(isSel ? '' : iso)}
-              className={`w-8 h-8 mx-auto rounded-full text-xs font-bold transition-all flex items-center justify-center
+              className={`w-8 h-8 mx-auto rounded-full text-button font-bold transition-all flex items-center justify-center
                 ${isSel
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
                   : isToday_
@@ -358,7 +358,7 @@ const TaskEditSheet: React.FC<{
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setCalFor(active ? null : field)}
-            className={`flex-1 flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-bold transition-all
+            className={`flex-1 flex items-center justify-between px-3 py-2 rounded-xl border text-button font-bold transition-all
               ${active
                 ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200'
                 : value
@@ -565,7 +565,7 @@ const AddTaskModal: React.FC<{
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setCalFor(active ? null : field)}
-            className={`flex-1 flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-bold transition-all
+            className={`flex-1 flex items-center justify-between px-3 py-2 rounded-xl border text-button font-bold transition-all
               ${active ? 'bg-blue-600 text-white border-blue-600' : value ? 'bg-slate-50 text-slate-700 border-slate-200' : 'bg-white text-slate-400 border-slate-100'}`}
           >
             <span>{value ? fmtShort(value) : 'Definir'}</span>
@@ -602,7 +602,7 @@ const AddTaskModal: React.FC<{
           <textarea
             value={desc} onChange={e => setDesc(e.target.value)}
             placeholder="Descrição..." rows={2}
-            className="w-full text-xs text-slate-500 border-b border-slate-100 pb-2 outline-none resize-none placeholder:text-slate-300 bg-transparent focus:border-blue-300 transition-colors"
+            className="w-full text-form-input text-slate-500 border-b border-slate-100 pb-2 outline-none resize-none placeholder:text-slate-300 bg-transparent focus:border-blue-300 transition-colors"
           />
           <div className="space-y-2">
             <div className="flex gap-3">
@@ -624,7 +624,7 @@ const AddTaskModal: React.FC<{
               <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${highPrio ? 'left-7' : 'left-1'}`} />
             </button>
           </div>
-          {error && <p className="text-xs font-bold text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+          {error && <p className="text-button font-bold text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
           <button onClick={save} disabled={saving}
             className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-blue-200 disabled:opacity-50 active:scale-[0.98] transition-all"
           >
@@ -873,7 +873,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
                 <button
                   key={key}
                   onClick={() => setFilterTab(key)}
-                  className={`flex items-center gap-1.5 px-1 py-2.5 mr-5 text-xs font-black border-b-2 -mb-px transition-colors
+                  className={`flex items-center gap-1.5 px-1 py-2.5 mr-5 text-button font-black border-b-2 -mb-px transition-colors
                     ${filterTab === key ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400'}`}
                 >
                   {label}

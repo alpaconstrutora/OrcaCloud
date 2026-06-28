@@ -2378,7 +2378,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                             placeholder="Ex: Cliente Alpha..." 
                                             value={newRule.clientName || ''}
                                             onChange={(e) => setNewRule({ ...newRule, clientName: e.target.value, supplierName: '' })}
-                                            className="w-full pl-14 pr-4 py-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl text-xs font-bold transition-all outline-none"
+                                            className="w-full pl-14 pr-4 py-4 bg-gray-50 border-2 border-transparent focus:border-blue-500 focus:bg-white rounded-2xl text-form-input font-bold transition-all outline-none"
                                         />
                                         <datalist id="client-suggestions">
                                             {uniqueClients.map(ent => (
@@ -2400,7 +2400,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                             placeholder="Ex: Posto Shell..." 
                                             value={newRule.supplierName || ''}
                                             onChange={(e) => setNewRule({ ...newRule, supplierName: e.target.value, clientName: '' })}
-                                            className="w-full pl-14 pr-4 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl text-xs font-bold transition-all outline-none"
+                                            className="w-full pl-14 pr-4 py-4 bg-gray-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-2xl text-form-input font-bold transition-all outline-none"
                                         />
                                         <datalist id="supplier-suggestions">
                                             {uniqueSuppliers.map(ent => (
@@ -2700,7 +2700,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 <div className="flex flex-wrap items-center gap-3">
                     <select 
                         value={selectedAccountId || ''}
-                        className="pl-4 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-xs uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
+                        className="pl-4 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-form-input uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
                         onChange={(e) => setSelectedAccountId(e.target.value)}
                     >
                         <option value="">Selecione uma conta...</option>

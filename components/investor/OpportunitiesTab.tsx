@@ -96,14 +96,14 @@ const OpportunitiesTab: React.FC<Props> = ({
                         <div className="flex bg-gray-100 p-1 rounded-lg">
                             <button
                                 onClick={() => setAdminTab('opportunities')}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${adminTab === 'opportunities' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-button font-bold transition-all ${adminTab === 'opportunities' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 <Building2 className="w-3.5 h-3.5" />
                                 Oportunidades
                             </button>
                             <button
                                 onClick={() => setAdminTab('interests')}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${adminTab === 'interests' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-button font-bold transition-all ${adminTab === 'interests' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                             >
                                 <Users className="w-3.5 h-3.5" />
                                 Interesses
@@ -134,7 +134,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                 {isAdmin && adminTab === 'opportunities' && organizationId && (
                     <button
                         onClick={() => setEditing('new')}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md hover:bg-blue-700 transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-bold shadow-md hover:bg-blue-700 transition-colors"
                     >
                         <Plus className="w-4 h-4" />
                         Nova Oportunidade
@@ -167,7 +167,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {statusCounts.length > 0 ? statusCounts.map(({ status, count }) => (
-                                <span key={status} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold ${OPPORTUNITY_STATUS_COLORS[status]}`}>
+                                <span key={status} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-bold ${OPPORTUNITY_STATUS_COLORS[status]}`}>
                                     {OPPORTUNITY_STATUS_LABELS[status]}
                                     <span className="font-black">{count}</span>
                                 </span>
@@ -199,7 +199,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                             {isAdmin && organizationId && (
                                 <button
                                     onClick={() => setEditing('new')}
-                                    className="mt-4 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors"
+                                    className="mt-4 px-4 py-2 bg-blue-600 text-white text-button font-bold rounded-xl hover:bg-blue-700 transition-colors"
                                 >
                                     Criar primeira oportunidade
                                 </button>
@@ -282,7 +282,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                         <div className="flex items-center justify-between">
                                             <button
                                                 onClick={e => { e.stopPropagation(); setDetail(op); }}
-                                                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition-all border border-white/10"
+                                                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-button font-bold rounded-xl transition-all border border-white/10"
                                             >
                                                 Ver detalhes
                                             </button>
@@ -369,7 +369,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                 <div className="flex justify-end gap-1">
                                                     <button
                                                         onClick={() => setDetail(op)}
-                                                        className="text-xs font-bold text-blue-600 hover:text-blue-700 px-3 py-1.5 hover:bg-blue-50 rounded-lg transition-colors"
+                                                        className="text-button font-bold text-blue-600 hover:text-blue-700 px-3 py-1.5 hover:bg-blue-50 rounded-lg transition-colors"
                                                     >
                                                         Ver
                                                     </button>

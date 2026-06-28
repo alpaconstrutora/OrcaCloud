@@ -573,7 +573,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                     {!showForm && (
                         <button
                             onClick={startAdd}
-                            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-blue-700 transition-all shadow-sm active:scale-95"
+                            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-button font-black uppercase tracking-wider rounded-xl hover:bg-blue-700 transition-all shadow-sm active:scale-95"
                         >
                             <Plus className="w-3.5 h-3.5" />
                             Adicionar
@@ -604,7 +604,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                         <p className="text-xs text-gray-300 mt-1">Adicione contas para agilizar pagamentos</p>
                         <button
                             onClick={startAdd}
-                            className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-600 text-xs font-black uppercase tracking-wider rounded-xl hover:bg-blue-100 transition-all"
+                            className="mt-4 flex items-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-600 text-button font-black uppercase tracking-wider rounded-xl hover:bg-blue-100 transition-all"
                         >
                             <Plus className="w-3.5 h-3.5" />
                             Adicionar primeira conta

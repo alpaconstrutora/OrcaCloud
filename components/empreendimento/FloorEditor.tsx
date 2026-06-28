@@ -202,7 +202,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
             onChange={e => setForm(p => ({ ...p, units_per_floor: e.target.value }))} />
         </div>
         <button type="submit" disabled={saving}
-          className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5">
+          className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-form-input uppercase tracking-wider flex items-center justify-center gap-1.5">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Add
         </button>

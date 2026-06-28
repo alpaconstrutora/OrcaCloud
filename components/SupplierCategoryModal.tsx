@@ -134,7 +134,7 @@ export const SupplierCategoryModal: React.FC<SupplierCategoryModalProps> = ({ is
                         {!isAdding && (
                             <button
                                 onClick={() => { setIsAdding(true); setEditingId(null); setFormData({ name: '' }); }}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-200"
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold text-button uppercase tracking-widest transition-all shadow-lg shadow-blue-200"
                             >
                                 <Plus className="w-4 h-4" />
                                 Adicionar
@@ -207,7 +207,7 @@ export const SupplierCategoryModal: React.FC<SupplierCategoryModalProps> = ({ is
                                 <p className="opacity-50 italic">Nenhuma categoria personalizada encontrada.</p>
                                 <button
                                     onClick={handleImportDefaults}
-                                    className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 font-bold text-xs uppercase tracking-widest transition-all"
+                                    className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 font-bold text-button uppercase tracking-widest transition-all"
                                 >
                                     Carregar Categorias Padrão
                                 </button>

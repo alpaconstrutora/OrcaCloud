@@ -973,7 +973,7 @@ const Layout: React.FC<LayoutProps> = ({
                 className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition-colors ${t.signOut}`}
                 title="Alternar tema (claro → escuro → escuro total)"
               >
-                <span className="flex items-center gap-2 text-xs font-medium">
+                <span className="flex items-center gap-2 text-button font-medium">
                   {themeMode === 'light' ? <Sun className="w-4 h-4" /> : themeMode === 'dark' ? <Moon className="w-4 h-4" /> : <MoonStar className="w-4 h-4" />}
                   {themeLabel}
                 </span>

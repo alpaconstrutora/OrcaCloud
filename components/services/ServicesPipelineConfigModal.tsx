@@ -139,7 +139,7 @@ const ServicesPipelineConfigModal: React.FC<Props> = ({ organizationId, onClose,
                       value={s}
                       onChange={e => setSubStatus(r.stage, idx, e.target.value)}
                       placeholder="Ex: 1º contato, Em análise…"
-                      className="flex-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1 text-xs text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      className="flex-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1 text-form-input text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
                     />
                     <button onClick={() => removeSubStatus(r.stage, idx)} className="text-gray-300 hover:text-red-500">
                       <Trash2 size={13} />
@@ -148,7 +148,7 @@ const ServicesPipelineConfigModal: React.FC<Props> = ({ organizationId, onClose,
                 ))}
                 <button
                   onClick={() => addSubStatus(r.stage)}
-                  className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                  className="flex items-center gap-1 text-button text-blue-600 hover:underline"
                 >
                   <Plus size={12} /> Adicionar etapa
                 </button>

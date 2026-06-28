@@ -101,7 +101,7 @@ const EmployeeCombobox: React.FC<{
 
   return (
     <div ref={ref} className="relative">
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label className="block text-form-label font-medium text-gray-600 mb-1">{label}</label>
       <div className="relative">
         <input
           type="text"
@@ -1065,7 +1065,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       {/* Residencial Multifamiliar */}
                       {formData.tipoObra === 'residencial_multifamiliar' && (<>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Nº Pavimentos</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Nº Pavimentos</label>
                           <input type="number" min={1} placeholder="Ex: 12"
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             value={(formData.technicalConfig as any)?.numeroPavimentos || ''}
@@ -1073,7 +1073,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Nº Torres</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Nº Torres</label>
                           <input type="number" min={1} placeholder="Ex: 2"
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             value={(formData.technicalConfig as any)?.numeroTorres || ''}
@@ -1081,7 +1081,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Nº Unidades</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Nº Unidades</label>
                           <input type="number" min={1} placeholder="Ex: 48"
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             value={(formData.technicalConfig as any)?.numeroUnidades || ''}
@@ -1089,7 +1089,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Área Construída Total (m²)</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Área Construída Total (m²)</label>
                           <input type="number" min={0} placeholder="Ex: 4200"
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             value={(formData.technicalConfig as any)?.areaConstruidaTotal || ''}
@@ -1097,7 +1097,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           />
                         </div>
                         <div className="col-span-2">
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Tipo Estrutural</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Tipo Estrutural</label>
                           <select
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                             value={(formData.technicalConfig as any)?.tipoEstrutural || ''}
@@ -1114,7 +1114,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       {/* Casa Residencial */}
                       {formData.tipoObra === 'casa' && (<>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Área do Terreno (m²)</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Área do Terreno (m²)</label>
                           <input type="number" min={0} placeholder="Ex: 360"
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             value={(formData.technicalConfig as any)?.areaTerreno || ''}
@@ -1122,7 +1122,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Área Construída (m²)</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Área Construída (m²)</label>
                           <input type="number" min={0} placeholder="Ex: 180"
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             value={(formData.technicalConfig as any)?.areaConstruida || ''}
@@ -1130,7 +1130,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Nº Pavimentos</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Nº Pavimentos</label>
                           <input type="number" min={1} placeholder="Ex: 2"
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             value={(formData.technicalConfig as any)?.numeroPavimentos || ''}
@@ -1168,7 +1168,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       {/* Loja Comercial */}
                       {formData.tipoObra === 'loja' && (<>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Localidade</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Localidade</label>
                           <select
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                             value={(formData.technicalConfig as any)?.localidade || ''}
@@ -1180,7 +1180,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Data de Inauguração</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Data de Inauguração</label>
                           <input type="date"
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             value={(formData.technicalConfig as any)?.dataInauguracao || ''}
@@ -1210,7 +1210,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       {/* Sala Comercial */}
                       {formData.tipoObra === 'sala' && (<>
                         <div className="col-span-2">
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Tipo de Ocupação</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Tipo de Ocupação</label>
                           <select
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                             value={(formData.technicalConfig as any)?.tipoOcupacao || ''}
@@ -1245,7 +1245,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       {/* Galpão */}
                       {formData.tipoObra === 'galpao' && (<>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Área Total (m²)</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Área Total (m²)</label>
                           <input type="number" min={0} placeholder="Ex: 5000"
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             value={(formData.technicalConfig as any)?.areaTotal || ''}
@@ -1253,7 +1253,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Pé Direito (m)</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Pé Direito (m)</label>
                           <input type="number" min={0} step={0.5} placeholder="Ex: 8"
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             value={(formData.technicalConfig as any)?.peDireito || ''}
@@ -1261,7 +1261,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Tipo de Estrutura</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Tipo de Estrutura</label>
                           <select
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                             value={(formData.technicalConfig as any)?.tipoEstrutura || ''}
@@ -1274,7 +1274,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Docas</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Nº de Docas</label>
                           <input type="number" min={0} placeholder="Ex: 4"
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             value={(formData.technicalConfig as any)?.numeroDOcas || ''}
@@ -1302,7 +1302,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       {/* Reforma */}
                       {formData.tipoObra === 'reforma' && (
                         <div className="col-span-2">
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Descrição do Escopo</label>
+                          <label className="block text-form-label font-medium text-gray-600 mb-1">Descrição do Escopo</label>
                           <textarea rows={2} placeholder="Descreva o escopo principal da reforma..."
                             className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                             value={(formData.technicalConfig as any)?.descricao || ''}
@@ -1323,25 +1323,25 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Início Previsto</label>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">Início Previsto</label>
                       <input type="date" className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                         value={formData.startDate || ''}
                         onChange={(e) => setFormData({ ...formData, startDate: e.target.value })} />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Término Previsto</label>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">Término Previsto</label>
                       <input type="date" className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                         value={formData.endDate || ''}
                         onChange={(e) => setFormData({ ...formData, endDate: e.target.value })} />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Início Real</label>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">Início Real</label>
                       <input type="date" className="w-full rounded-lg border border-emerald-300 bg-emerald-50/30 p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                         value={formData.startDateReal || ''}
                         onChange={(e) => setFormData({ ...formData, startDateReal: e.target.value })} />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Término Real</label>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">Término Real</label>
                       <input type="date" className="w-full rounded-lg border border-emerald-300 bg-emerald-50/30 p-2.5 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                         value={formData.endDateReal || ''}
                         onChange={(e) => setFormData({ ...formData, endDateReal: e.target.value })} />
@@ -1357,7 +1357,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Modalidade</label>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">Modalidade</label>
                       <select
                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                         value={formData.modalidade || ''}
@@ -1369,7 +1369,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Margem Alvo (%)</label>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">Margem Alvo (%)</label>
                       <input
                         type="number" min={0} max={100} step={0.5} placeholder="Ex: 18"
                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
@@ -1378,7 +1378,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Valor Estimado (R$)</label>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">Valor Estimado (R$)</label>
                       <input
                         type="number" min={0} step={1000} placeholder="Ex: 2500000"
                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
@@ -1387,7 +1387,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Valor Contratado (R$)</label>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">Valor Contratado (R$)</label>
                       <input
                         type="number" min={0} step={1000} placeholder="Ex: 2350000"
                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
@@ -1430,7 +1430,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </h3>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">ART/RRT nº</label>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">ART/RRT nº</label>
                       <input
                         type="text" placeholder="Número da ART"
                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
@@ -1439,7 +1439,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Alvará nº</label>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">Alvará nº</label>
                       <input
                         type="text" placeholder="Número do Alvará"
                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
@@ -1448,7 +1448,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Matrícula CNO</label>
+                      <label className="block text-form-label font-medium text-gray-600 mb-1">Matrícula CNO</label>
                       <input
                         type="text" placeholder="Número CNO"
                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
@@ -1551,7 +1551,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                                     {p.settings?.classification === 'OBRA' ? 'Obra' : 'Orçamento'}
                                   </span>
                                 </td>
-                                <td className="px-4 py-3 text-xs text-gray-500">
+                                <td className="px-4 py-3 text-table-body text-gray-500">
                                   {p.settings?.client || '-'}
                                 </td>
                                 <td className="px-4 py-3">
@@ -1566,7 +1566,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                                           linkedProjectName: undefined
                                         }));
                                       }}
-                                      className="text-xs font-black uppercase px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 transition-all border border-red-200 shadow-sm"
+                                      className="text-button font-black uppercase px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 transition-all border border-red-200 shadow-sm"
                                     >
                                       Desvincular
                                     </button>
@@ -1615,7 +1615,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                                         setLinkedProjectId(p.id);
                                         setActiveTab('technical');
                                       }}
-                                      className="text-xs font-black uppercase px-2 py-1 rounded text-blue-600 hover:bg-blue-100 transition-all"
+                                      className="text-button font-black uppercase px-2 py-1 rounded text-blue-600 hover:bg-blue-100 transition-all"
                                     >
                                       Vincular
                                     </button>

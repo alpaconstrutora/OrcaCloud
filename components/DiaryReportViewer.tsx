@@ -70,7 +70,7 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
                 <div className="flex items-center gap-3">
                     <button
                         onClick={handlePrint}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                        className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
                     >
                         <Printer className="w-4 h-4" />
                         Imprimir / PDF

@@ -482,7 +482,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 </div>
                 <button
                     onClick={(e) => { e.stopPropagation(); onRegisterDeal(); }}
-                    className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-600 transition-all active:scale-95 shadow-xl shadow-gray-900/10 hover:shadow-blue-600/20"
+                    className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-button uppercase tracking-[0.2em] hover:bg-blue-600 transition-all active:scale-95 shadow-xl shadow-gray-900/10 hover:shadow-blue-600/20"
                 >
                     Registrar Negócio
                 </button>
@@ -1001,7 +1001,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                     <td className="px-8 py-6 font-mono font-black text-gray-900">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value)}
                                                     </td>
-                                                    <td className="px-8 py-6 text-xs font-bold text-gray-400 uppercase tracking-tighter">
+                                                    <td className="px-8 py-6 text-table-body font-bold text-gray-400 uppercase tracking-tighter">
                                                         {new Date(deal.date).toLocaleDateString('pt-BR')}
                                                     </td>
                                                     <td className="px-8 py-6">
@@ -1025,7 +1025,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                         setEditingDeal({ type: 'RENTAL' } as any);
                                         setIsDealModalOpen(true);
                                     }}
-                                    className="w-full py-8 bg-gray-50/50 hover:bg-gray-50 text-gray-400 font-black uppercase tracking-[0.3em] text-xs transition-all border-t border-gray-100 flex items-center justify-center gap-3 group"
+                                    className="w-full py-8 bg-gray-50/50 hover:bg-gray-50 text-gray-400 font-black uppercase tracking-[0.3em] text-button transition-all border-t border-gray-100 flex items-center justify-center gap-3 group"
                                 >
                                     <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
                                     Registrar Novo Contrato

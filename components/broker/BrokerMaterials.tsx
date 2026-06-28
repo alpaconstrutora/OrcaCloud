@@ -122,8 +122,8 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
                     </div>
                     <div className="flex bg-gray-100 rounded-xl p-1">
-                        <button onClick={() => setViewMode('grid')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Grid</button>
-                        <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Lista</button>
+                        <button onClick={() => setViewMode('grid')} className={`px-3 py-1.5 rounded-lg text-form-input font-bold transition-all ${viewMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Grid</button>
+                        <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded-lg text-button font-bold transition-all ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Lista</button>
                     </div>
                 </div>
                 <button
@@ -141,7 +141,7 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
             {/* Type Filters */}
             <div className="flex flex-wrap gap-2">
                 <button onClick={() => setTypeFilter('all')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${typeFilter === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
+                    className={`px-4 py-2 rounded-xl text-button font-bold border transition-all ${typeFilter === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'}`}>
                     Todos ({materials.length})
                 </button>
                 {Object.entries(TYPE_CONFIG).map(([type, cfg]) => {

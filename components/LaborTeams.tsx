@@ -190,7 +190,7 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
 
                                 {/* Members */}
                                 <div className="p-4">
-                                    <button onClick={() => setExpandedTeam(isExpanded ? null : team.id)} className="w-full flex items-center justify-between text-xs font-black text-slate-500 uppercase tracking-widest hover:text-slate-700 transition-colors mb-3">
+                                    <button onClick={() => setExpandedTeam(isExpanded ? null : team.id)} className="w-full flex items-center justify-between text-button font-black text-slate-500 uppercase tracking-widest hover:text-slate-700 transition-colors mb-3">
                                         <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5" />{(team.members || []).length} membros</span>
                                         <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                     </button>
@@ -218,7 +218,7 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
                                             {addingMemberTo === team.id ? (
                                                 <div className="flex gap-2 mt-2">
                                                     <select
-                                                        className="flex-1 px-2 py-1.5 text-xs bg-white border border-indigo-200 rounded-lg outline-none"
+                                                        className="flex-1 px-2 py-1.5 text-form-input bg-white border border-indigo-200 rounded-lg outline-none"
                                                         id={`add-member-${team.id}`}
                                                         defaultValue=""
                                                     >
@@ -230,13 +230,13 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
                                                             const sel = document.getElementById(`add-member-${team.id}`) as HTMLSelectElement;
                                                             handleAddMember(team.id, sel.value);
                                                         }}
-                                                        className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-colors"
+                                                        className="px-3 py-1.5 bg-indigo-600 text-white text-button font-bold rounded-lg hover:bg-indigo-700 transition-colors"
                                                     >Adicionar</button>
                                                     <button onClick={() => setAddingMemberTo(null)} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg"><X className="w-3.5 h-3.5" /></button>
                                                 </div>
                                             ) : (
                                                 availableToAdd.length > 0 && (
-                                                    <button onClick={() => setAddingMemberTo(team.id)} className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all mt-2">
+                                                    <button onClick={() => setAddingMemberTo(team.id)} className="w-full flex items-center justify-center gap-1.5 py-2 text-button font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all mt-2">
                                                         <UserPlus className="w-3.5 h-3.5" /> Adicionar Membro
                                                     </button>
                                                 )

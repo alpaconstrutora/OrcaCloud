@@ -151,10 +151,10 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                     </div>
                     
                     <div className="flex gap-4">
-                        <button onClick={onClose} className="px-8 py-4 bg-white border border-gray-200 rounded-2xl font-black text-xs uppercase tracking-widest text-gray-600 hover:bg-gray-100 transition-all">Cancelar</button>
+                        <button onClick={onClose} className="px-8 py-4 bg-white border border-gray-200 rounded-2xl font-black text-button uppercase tracking-widest text-gray-600 hover:bg-gray-100 transition-all">Cancelar</button>
                         <button 
                             onClick={() => onApply(config)}
-                            className="flex items-center gap-3 px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/30 group"
+                            className="flex items-center gap-3 px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-button uppercase tracking-[0.2em] hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/30 group"
                         >
                             Aplicar Inteligência
                             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />

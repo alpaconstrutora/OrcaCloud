@@ -493,7 +493,7 @@ const TaskForm: React.FC<Props> = ({
                   <button
                     key={s.id}
                     onClick={() => setStatusId(s.id)}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-black border transition-all
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-form-label font-black border transition-all
                       ${statusId === s.id
                         ? 'ring-2 ring-offset-1 ring-slate-300 border-transparent'
                         : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200'}`}
@@ -513,15 +513,15 @@ const TaskForm: React.FC<Props> = ({
         <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-100 flex-shrink-0">
           <div>
             {task?.id && (
-              <button onClick={remove} disabled={saving} className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-red-600 hover:text-red-700">
+              <button onClick={remove} disabled={saving} className="flex items-center gap-1.5 text-button font-black uppercase tracking-wider text-red-600 hover:text-red-700">
                 <Trash2 className="w-3.5 h-3.5" /> Excluir
               </button>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-slate-500 hover:bg-slate-100">Cancelar</button>
+            <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-xl text-button font-black uppercase tracking-wider text-slate-500 hover:bg-slate-100">Cancelar</button>
             <button onClick={save} disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+              className="flex items-center gap-2 px-5 py-2 rounded-xl text-button font-black uppercase tracking-wider bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Salvar
             </button>

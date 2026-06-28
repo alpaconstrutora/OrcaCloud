@@ -254,7 +254,7 @@ const checkboxRowCls = "flex items-center gap-2 text-sm text-gray-700 cursor-poi
 
 const Field: React.FC<{ label: string; children: React.ReactNode; required?: boolean }> = ({ label, children, required }) => (
     <div>
-        <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-1">
+        <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">
             {label}{required && <span className="text-red-500 ml-1">*</span>}
         </label>
         {children}
@@ -381,7 +381,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
     const SaveButton: React.FC = () => (
         <div className="flex justify-end pt-2 border-t border-gray-100">
             <button type="submit" disabled={saving}
-                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
+                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Salvar
             </button>
@@ -414,7 +414,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
             <div className="flex gap-1 bg-gray-100 rounded-2xl p-1 overflow-x-auto">
                 {TABS.map(t => (
                     <button key={t.id} onClick={() => setTab(t.id)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wide transition-all whitespace-nowrap flex-shrink-0 ${
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-form-label uppercase tracking-wide transition-all whitespace-nowrap flex-shrink-0 ${
                             tab === t.id
                                 ? 'bg-white text-blue-600 shadow-sm'
                                 : 'text-gray-500 hover:text-gray-700'
@@ -672,7 +672,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                             </Field>
                         </div>
                         {(form.limite_aprovacao_compras || form.limite_aprovacao_pagamentos) && (
-                            <p className="mt-2 text-xs text-gray-400">
+                            <p className="mt-2 text-form-input text-gray-400">
                                 Valores acima desses limites exigirão aprovação de nível superior no workflow de compras/pagamentos.
                             </p>
                         )}
@@ -690,7 +690,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                                 </select>
                             </Field>
                         </div>
-                        <p className="mt-2 text-xs text-gray-400">
+                        <p className="mt-2 text-form-input text-gray-400">
                             Define qual empresa agrega os relatórios financeiros desta no DRE e fluxo de caixa consolidado.
                         </p>
                     </Section>
@@ -722,7 +722,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                         </div>
                     </Section>
 
-                    <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl text-xs text-blue-600">
+                    <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl text-form-input text-blue-600">
                         <p className="font-black uppercase tracking-wide mb-1">Plano de Contas e Centro de Custo Padrão</p>
                         <p>Configuração disponível após o módulo Financeiro ser ativado para esta empresa.</p>
                     </div>
@@ -749,7 +749,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                                 </p>
                             </div>
                             <button type="button" onClick={aplicarSugestaoRetencao}
-                                className="flex-shrink-0 px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
+                                className="flex-shrink-0 px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
                                 Aplicar sugestão
                             </button>
                         </div>
@@ -849,7 +849,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                                     <button type="button"
                                         disabled={uploadingCert}
                                         onClick={() => certInputRef.current?.click()}
-                                        className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 text-gray-500 rounded-xl font-black text-xs uppercase tracking-wide hover:border-blue-400 hover:text-blue-600 transition-all disabled:opacity-60">
+                                        className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 text-gray-500 rounded-xl font-black text-button uppercase tracking-wide hover:border-blue-400 hover:text-blue-600 transition-all disabled:opacity-60">
                                         {uploadingCert
                                             ? <Loader2 className="w-4 h-4 animate-spin" />
                                             : <Upload className="w-4 h-4" />}
@@ -857,7 +857,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                                     </button>
                                     {certUrl && (
                                         <button type="button" onClick={handleCertDownload}
-                                            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl font-black text-xs uppercase tracking-wide hover:bg-gray-50 transition-all">
+                                            className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl font-black text-button uppercase tracking-wide hover:bg-gray-50 transition-all">
                                             <Download className="w-4 h-4" />
                                             Baixar
                                         </button>
@@ -921,7 +921,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                                 </select>
                             </Field>
                         </div>
-                        <p className="mt-2 text-xs text-gray-400">
+                        <p className="mt-2 text-form-input text-gray-400">
                             Define os defaults ao criar novas obras vinculadas a esta empresa.
                         </p>
                     </Section>
@@ -948,7 +948,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                                 </select>
                             </Field>
                         </div>
-                        <p className="mt-2 text-xs text-gray-400">
+                        <p className="mt-2 text-form-input text-gray-400">
                             Valores pré-preenchidos ao criar orçamentos. Podem ser ajustados por obra.
                         </p>
                     </Section>

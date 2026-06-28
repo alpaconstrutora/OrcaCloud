@@ -227,7 +227,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     </div>
                     <button
                         onClick={onCreateNew}
-                        className="flex items-center gap-3 bg-blue-600 text-white px-6 py-3 rounded-[1.25rem] font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                        className="flex items-center gap-3 bg-blue-600 text-white px-6 py-3 rounded-[1.25rem] font-black text-button uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-900/20 active:scale-95"
                     >
                         <Plus className="w-4 h-4" />
                         <span>Novo Pedido</span>
@@ -397,7 +397,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                 <button
                     onClick={() => setNfFilter(f => f === 'sem-nf' ? 'all' : 'sem-nf')}
                     title={nfFilter === 'sem-nf' ? 'Mostrando apenas pedidos sem NF-e — clique para ver todos' : 'Filtrar pedidos sem NF-e vinculada'}
-                    className={`flex items-center gap-2 px-4 py-4 rounded-[1.25rem] transition-all active:scale-95 shadow-sm text-xs font-black uppercase tracking-wider whitespace-nowrap ${
+                    className={`flex items-center gap-2 px-4 py-4 rounded-[1.25rem] transition-all active:scale-95 shadow-sm text-form-input font-black uppercase tracking-wider whitespace-nowrap ${
                         nfFilter === 'sem-nf'
                             ? 'bg-amber-500 text-white'
                             : 'bg-amber-50 text-amber-600 hover:bg-amber-500 hover:text-white'
@@ -468,14 +468,14 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('obra') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-medium text-gray-700">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-table-body font-medium text-gray-700">
                                                 {order.projectClassification === 'ORCAMENTO'
                                                     ? (order.linkedProjectName || '-')
                                                     : order.projectName}
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('orcamento') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-medium text-blue-600">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-table-body font-medium text-blue-600">
                                                 {order.projectClassification === 'ORCAMENTO' ? order.projectName : '-'}
                                             </td>
                                         )}
@@ -518,7 +518,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                                 <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); onViewDetails(order.id); }}
-                                                        className="text-blue-600 hover:text-blue-800 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                                                        className="text-blue-600 hover:text-blue-800 text-button font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all"
                                                     >
                                                         Ver Detalhes
                                                     </button>
@@ -628,7 +628,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                                         <button
                                             onClick={() => onViewDetails(order.id)}
-                                            className="flex items-center gap-2 bg-gray-50 text-gray-900 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95"
+                                            className="flex items-center gap-2 bg-gray-50 text-gray-900 px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95"
                                         >
                                             Detalhes <ArrowRight className="w-3.5 h-3.5" />
                                         </button>
@@ -699,13 +699,13 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     <div className="flex justify-end gap-3">
                         <button
                             onClick={() => setPendingConfirm(null)}
-                            className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-all"
+                            className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-button font-black uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-all"
                         >
                             Cancelar
                         </button>
                         <button
                             onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }}
-                            className="px-6 py-3 bg-red-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-700 transition-all"
+                            className="px-6 py-3 bg-red-600 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-red-700 transition-all"
                         >
                             Confirmar
                         </button>

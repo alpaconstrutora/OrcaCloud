@@ -163,7 +163,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                         className={`w-full text-center text-sm border rounded py-0.5 focus:ring-1 focus:ring-blue-500 ${isLocked ? 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed' : 'border-gray-200'}`}
                     />
                 </div>
-                <div className="text-center text-xs text-gray-500">{item.sinapiItem?.unit || '---'}</div>
+                <div className="text-center text-form-input text-gray-500">{item.sinapiItem?.unit || '---'}</div>
 
                 <div className="text-center text-[13px] text-gray-600">
                     <div className={`flex items-center justify-center gap-1 bg-white border rounded px-1 transition-colors ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : ''} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>

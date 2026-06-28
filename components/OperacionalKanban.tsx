@@ -396,7 +396,7 @@ const OperacionalKanban: React.FC<Props> = ({
           <select
             value={phaseFilter}
             onChange={e => setPhaseFilter(e.target.value)}
-            className="text-xs font-medium text-slate-700 bg-transparent outline-none pr-1 cursor-pointer"
+            className="text-form-input font-medium text-slate-700 bg-transparent outline-none pr-1 cursor-pointer"
           >
             <option value="all">Todas as etapas</option>
             {phases.map(p => <option key={p} value={p}>{p}</option>)}
@@ -408,7 +408,7 @@ const OperacionalKanban: React.FC<Props> = ({
           <select
             value={priorityFilter}
             onChange={e => setPriorityFilter(e.target.value)}
-            className="text-xs font-medium text-slate-700 bg-transparent outline-none pr-1 cursor-pointer"
+            className="text-form-input font-medium text-slate-700 bg-transparent outline-none pr-1 cursor-pointer"
           >
             <option value="all">Todas as prioridades</option>
             <option value="normal">Normal</option>
@@ -421,7 +421,7 @@ const OperacionalKanban: React.FC<Props> = ({
         <div className="ml-auto">
           <button
             onClick={onCreateNew}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" />
             Nova OE

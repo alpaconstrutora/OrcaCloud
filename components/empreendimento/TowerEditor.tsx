@@ -146,7 +146,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
         <input className={inputCls} placeholder="Nome (ex: Torre A)" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
         <input className={inputCls} placeholder="Nº pavimentos" type="number" value={form.floors_count} onChange={e => setForm(p => ({ ...p, floors_count: e.target.value }))} />
         <input className={inputCls} placeholder="Unid./pavimento" type="number" value={form.units_per_floor} onChange={e => setForm(p => ({ ...p, units_per_floor: e.target.value }))} />
-        <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5">
+        <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-form-input uppercase tracking-wider flex items-center justify-center gap-1.5">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           Add Torre
         </button>

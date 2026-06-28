@@ -147,7 +147,7 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
                 <div className="p-6 space-y-4">
                     {err && <p className="text-xs text-red-600 font-semibold bg-red-50 rounded-lg p-3">{err}</p>}
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Cliente / Parte</label>
+                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Cliente / Parte</label>
                         <input
                             type="text"
                             list="contas-receber-clientes"
@@ -161,7 +161,7 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
                         </datalist>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Descrição *</label>
+                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Descrição *</label>
                         <input
                             type="text"
                             placeholder="Descrição do recebível"
@@ -172,7 +172,7 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Valor (R$) *</label>
+                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Valor (R$) *</label>
                             <input
                                 type="number"
                                 placeholder="0,00"
@@ -184,7 +184,7 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Vencimento *</label>
+                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Vencimento *</label>
                             <input
                                 type="date"
                                 value={form.due_date}
@@ -194,7 +194,7 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
                         </div>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Categoria</label>
+                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Categoria</label>
                         <input
                             type="text"
                             placeholder="Ex: Medição, Parcela, Locação..."
@@ -405,7 +405,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                     {!result && (
                         <>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Forma de cobrança</label>
+                                <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-2">Forma de cobrança</label>
                                 <div className="grid grid-cols-3 gap-2">
                                     {([
                                         { v: 'BOLETO' as BillingType, label: 'Boleto', icon: FileText },
@@ -415,7 +415,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                         <button
                                             key={opt.v}
                                             onClick={() => setBillingType(opt.v)}
-                                            className={`flex flex-col items-center gap-1 py-3 rounded-xl border text-xs font-bold transition-all ${
+                                            className={`flex flex-col items-center gap-1 py-3 rounded-xl border text-button font-bold transition-all ${
                                                 billingType === opt.v
                                                     ? 'border-green-500 bg-green-50 text-green-700'
                                                     : 'border-gray-200 text-gray-500 hover:bg-gray-50'
@@ -430,7 +430,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
 
                             {/* Multa, juros e desconto */}
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Encargos por atraso</label>
+                                <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-2">Encargos por atraso</label>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <span className="text-[10px] text-gray-400 font-bold">Multa (%)</span>
@@ -447,7 +447,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Desconto p/ pagamento antecipado</label>
+                                <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-2">Desconto p/ pagamento antecipado</label>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <span className="text-[10px] text-gray-400 font-bold">Desconto (%)</span>
@@ -463,7 +463,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                     </div>
                                 </div>
                             </div>
-                            <label className="flex items-center gap-2 text-xs text-gray-600 font-semibold cursor-pointer">
+                            <label className="flex items-center gap-2 text-form-label text-gray-600 font-semibold cursor-pointer">
                                 <input type="checkbox" checked={saveDefault} onChange={e => setSaveDefault(e.target.checked)}
                                     className="rounded border-gray-300 text-green-600 focus:ring-green-500" />
                                 Salvar como padrão da empresa
@@ -517,7 +517,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                         {err && <p className="text-xs text-red-600 font-semibold bg-red-50 rounded-lg p-3">{err}</p>}
                                         <div className="grid grid-cols-2 gap-3">
                                             <div>
-                                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Valor (R$)</label>
+                                                <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Valor (R$)</label>
                                                 <input
                                                     type="number" min={0} step="0.01"
                                                     value={editAmount}
@@ -526,7 +526,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Vencimento</label>
+                                                <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Vencimento</label>
                                                 <input
                                                     type="date"
                                                     value={editDue}
@@ -536,7 +536,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Descrição</label>
+                                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Descrição</label>
                                             <input
                                                 type="text"
                                                 value={editDesc}
@@ -545,7 +545,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Forma de cobrança</label>
+                                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Forma de cobrança</label>
                                             <div className="grid grid-cols-3 gap-2">
                                                 {([
                                                     { v: 'BOLETO' as BillingType, label: 'Boleto', icon: FileText },
@@ -555,7 +555,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                                     <button
                                                         key={opt.v}
                                                         onClick={() => setBillingType(opt.v)}
-                                                        className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                                                        className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border text-form-label font-bold transition-all ${
                                                             billingType === opt.v
                                                                 ? 'border-amber-500 bg-amber-50 text-amber-700'
                                                                 : 'border-gray-200 text-gray-500 hover:bg-gray-50'
@@ -802,7 +802,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                 <div className="bg-red-50 border-b border-red-100 px-6 py-3 flex-shrink-0">
                     <button
                         onClick={() => setShowInad(v => !v)}
-                        className="flex items-center gap-2 text-xs font-black text-red-700 uppercase tracking-widest"
+                        className="flex items-center gap-2 text-button font-black text-red-700 uppercase tracking-widest"
                     >
                         <AlertCircle className="w-3.5 h-3.5" />
                         Inadimplência
@@ -855,7 +855,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
 
                     <button
                         onClick={() => setShowFilters(v => !v)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${showFilters ? 'border-blue-400 text-blue-700 bg-blue-50' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-bold border transition-all ${showFilters ? 'border-blue-400 text-blue-700 bg-blue-50' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
                     >
                         <Filter className="w-3.5 h-3.5" /> Filtros
                     </button>
@@ -866,16 +866,16 @@ export default function ContasReceberManager({ organizationId, organizations, on
                         <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-500 font-semibold">Venc. de</span>
                             <input type="date" value={dueFrom} onChange={e => setDueFrom(e.target.value)}
-                                className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                className="border border-gray-200 rounded-lg px-2 py-1.5 text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500" />
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-500 font-semibold">até</span>
                             <input type="date" value={dueTo} onChange={e => setDueTo(e.target.value)}
-                                className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                className="border border-gray-200 rounded-lg px-2 py-1.5 text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500" />
                         </div>
                         {(dueFrom || dueTo) && (
                             <button onClick={() => { setDueFrom(''); setDueTo(''); }}
-                                className="text-xs text-blue-600 font-bold hover:underline flex items-center gap-1">
+                                className="text-button text-blue-600 font-bold hover:underline flex items-center gap-1">
                                 <X className="w-3 h-3" /> Limpar datas
                             </button>
                         )}
@@ -936,10 +936,10 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                         <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">
                                             {r.description ?? '—'}
                                         </td>
-                                        <td className="px-4 py-3 text-gray-500 text-xs max-w-[140px] truncate">
+                                        <td className="px-4 py-3 text-gray-500 text-table-body max-w-[140px] truncate">
                                             {r.project_name ?? '—'}
                                         </td>
-                                        <td className={`px-4 py-3 font-mono text-xs whitespace-nowrap ${isVencido ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+                                        <td className={`px-4 py-3 font-mono text-table-body whitespace-nowrap ${isVencido ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
                                             {fmtDate(r.due_date)}
                                         </td>
                                         <td className="px-4 py-3 font-black text-gray-900 whitespace-nowrap">

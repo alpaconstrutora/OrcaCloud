@@ -61,25 +61,25 @@ const ElementForm: React.FC<{
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <label className="flex flex-col gap-1 text-xs font-bold text-slate-500">
+        <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Tipo
           <select value={f.tipo} onChange={e => onTipoChange(e.target.value as ElementType)}
             className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white">
             {ELEMENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs font-bold text-slate-500">
+        <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Nome / código *
           <input autoFocus value={f.nome} onChange={e => set('nome', e.target.value)}
             placeholder="Ex.: V1, P3, S-01"
             className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white" />
         </label>
-        <label className="flex flex-col gap-1 text-xs font-bold text-slate-500">
+        <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Qtd. de peças iguais
           <input type="number" min="1" value={f.quantidade} onChange={e => set('quantidade', e.target.value)}
             className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white" />
         </label>
-        <label className="flex flex-col gap-1 text-xs font-bold text-slate-500">
+        <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Cobrimento (cm)
           <input type="number" step="0.5" value={f.cobrimentoCm} onChange={e => set('cobrimentoCm', e.target.value)}
             className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white" />
@@ -90,7 +90,7 @@ const ElementForm: React.FC<{
         <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Geometria</p>
         <div className="grid grid-cols-3 gap-3">
           {GEO_FIELDS[f.tipo].map(field => (
-            <label key={field.key} className="flex flex-col gap-1 text-xs font-bold text-slate-500">
+            <label key={field.key} className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
               {field.label}
               <input
                 type="number" step="0.1"
@@ -105,11 +105,11 @@ const ElementForm: React.FC<{
 
       <div className="flex items-center gap-2 pt-1">
         <button onClick={() => onSubmit(f)} disabled={!valid || saving}
-          className="flex items-center gap-2 bg-blue-600 disabled:bg-slate-300 text-white rounded-xl px-4 py-2 text-xs font-black uppercase tracking-widest">
+          className="flex items-center gap-2 bg-blue-600 disabled:bg-slate-300 text-white rounded-xl px-4 py-2 text-button font-black uppercase tracking-widest">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Salvar elemento
         </button>
-        <button onClick={onCancel} className="flex items-center gap-1.5 text-slate-500 text-xs font-bold hover:text-slate-800">
+        <button onClick={onCancel} className="flex items-center gap-1.5 text-slate-500 text-button font-bold hover:text-slate-800">
           <X className="w-4 h-4" /> Cancelar
         </button>
       </div>
@@ -177,7 +177,7 @@ const StructuralElements: React.FC<Props> = ({ orgId, assembly, selected, onSele
           <p className="text-[11px] text-slate-400 font-medium">{assembly.nome}</p>
         </div>
         <button onClick={startNew}
-          className="flex items-center gap-1 text-xs font-black text-blue-600 hover:text-blue-700">
+          className="flex items-center gap-1 text-button font-black text-blue-600 hover:text-blue-700">
           <Plus className="w-3.5 h-3.5" /> Novo
         </button>
       </div>

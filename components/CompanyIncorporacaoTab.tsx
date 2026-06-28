@@ -74,7 +74,7 @@ const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ou
 
 const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string }> = ({ label, children, hint }) => (
     <div>
-        <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-1">{label}</label>
+        <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">{label}</label>
         {children}
         {hint && <p className="text-[10px] text-gray-400 mt-1">{hint}</p>}
     </div>
@@ -282,7 +282,7 @@ const CompanyIncorporacaoTab: React.FC<Props> = ({ companyId, orgId }) => {
                         </Field>
                     )}
                     {bankAccounts.length === 0 && (
-                        <p className="text-xs text-gray-400 col-span-2">
+                        <p className="text-form-input text-gray-400 col-span-2">
                             Cadastre contas bancárias na aba <strong>Contas Bancárias</strong> para vincular uma conta segregada.
                         </p>
                     )}
@@ -291,7 +291,7 @@ const CompanyIncorporacaoTab: React.FC<Props> = ({ companyId, orgId }) => {
 
             <div className="flex justify-end pt-2 border-t border-gray-100">
                 <button type="submit" disabled={saving}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
+                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     Salvar Incorporação
                 </button>

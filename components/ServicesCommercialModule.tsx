@@ -139,7 +139,7 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
           </button>
         ))}
         {selectedOpportunityId && ['opportunity', 'visit', 'budget', 'proposal'].includes(view) && (
-          <span className="ml-2 text-xs text-gray-400 truncate">
+          <span className="ml-2 text-button text-gray-400 truncate">
             / {view === 'opportunity' ? 'Oportunidade' : view === 'visit' ? 'Visita' : view === 'budget' ? 'Orçamento' : 'Proposta'}
           </span>
         )}

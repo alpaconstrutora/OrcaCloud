@@ -157,7 +157,7 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId })
                     <div className="flex gap-2">
                         {(['acumulado', 'periodo'] as const).map(m => (
                             <button key={m} onClick={() => setChartMode(m)}
-                                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+                                className={`px-4 py-1.5 rounded-full text-form-input font-bold transition-all ${
                                     chartMode === m ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-500 hover:border-blue-300'
                                 }`}
                             >
@@ -225,11 +225,11 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId })
                             <table className="w-full">
                                 <thead>
                                     <tr className="border-b border-gray-100">
-                                        <th className="px-4 py-2.5 text-left text-xs font-black text-gray-400 uppercase tracking-wider">Período</th>
-                                        <th className="px-4 py-2.5 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Entradas</th>
-                                        <th className="px-4 py-2.5 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Saídas</th>
-                                        <th className="px-4 py-2.5 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Saldo</th>
-                                        <th className="px-4 py-2.5 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Acumulado</th>
+                                        <th className="px-4 py-2.5 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Período</th>
+                                        <th className="px-4 py-2.5 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Entradas</th>
+                                        <th className="px-4 py-2.5 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Saídas</th>
+                                        <th className="px-4 py-2.5 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Saldo</th>
+                                        <th className="px-4 py-2.5 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Acumulado</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">

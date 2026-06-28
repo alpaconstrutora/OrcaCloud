@@ -224,14 +224,14 @@ const InvestmentSimulator: React.FC = () => {
                         <>
                             {/* RENT MODE INPUTS */}
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Valor do Imóvel</label>
+                                <label className="block text-form-label font-bold text-gray-500 mb-1">Valor do Imóvel</label>
                                 <div className="relative">
                                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input type="number" value={propertyValue} onChange={(e) => setPropertyValue(Number(e.target.value))} className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-gray-900" />
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Entrada</label>
+                                <label className="block text-form-label font-bold text-gray-500 mb-1">Entrada</label>
                                 <div className="relative">
                                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input type="number" value={downPayment} onChange={(e) => setDownPayment(Number(e.target.value))} className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-gray-900" />
@@ -239,11 +239,11 @@ const InvestmentSimulator: React.FC = () => {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Juros (a.a.)</label>
+                                    <label className="block text-form-label font-bold text-gray-500 mb-1">Juros (a.a.)</label>
                                     <input type="number" value={interestRate} onChange={(e) => setInterestRate(Number(e.target.value))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-gray-900" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Aluguel</label>
+                                    <label className="block text-form-label font-bold text-gray-500 mb-1">Aluguel</label>
                                     <input type="number" value={monthlyRent} onChange={(e) => setMonthlyRent(Number(e.target.value))} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-gray-900" />
                                 </div>
                             </div>
@@ -252,14 +252,14 @@ const InvestmentSimulator: React.FC = () => {
                         <>
                             {/* CONSTRUCTION MODE INPUTS */}
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Valor por Cota</label>
+                                <label className="block text-form-label font-bold text-gray-500 mb-1">Valor por Cota</label>
                                 <div className="relative">
                                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input type="number" value={quotaValue} onChange={(e) => setQuotaValue(Number(e.target.value))} className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-gray-900" />
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Quantidade de Cotas</label>
+                                <label className="block text-form-label font-bold text-gray-500 mb-1">Quantidade de Cotas</label>
                                 <div className="relative">
                                     <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input type="number" value={numQuotas} onChange={(e) => setNumQuotas(Number(e.target.value))} className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-gray-900" />
@@ -267,14 +267,14 @@ const InvestmentSimulator: React.FC = () => {
                                 <p className="text-xs text-right text-indigo-500 font-bold mt-1">Total: {formatCurrency(quotaValue * numQuotas)}</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Prazo Estimado (Meses)</label>
+                                <label className="block text-form-label font-bold text-gray-500 mb-1">Prazo Estimado (Meses)</label>
                                 <div className="relative">
                                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input type="number" value={constructionTerm} onChange={(e) => setConstructionTerm(Number(e.target.value))} className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-gray-900" />
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Rentabilidade Alvo (% Total)</label>
+                                <label className="block text-form-label font-bold text-gray-500 mb-1">Rentabilidade Alvo (% Total)</label>
                                 <div className="relative">
                                     <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input type="number" value={projectedProfit} onChange={(e) => setProjectedProfit(Number(e.target.value))} className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-gray-900" />

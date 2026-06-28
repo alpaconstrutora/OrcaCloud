@@ -125,7 +125,7 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
                         <button
                             onClick={() => run(`b2t-${g.bank.id}-${i}`, () => reconciliationGroupService.confirmBankToTitles(g.bank.id, g.titles.map(t => t.id)))}
                             disabled={busy === `b2t-${g.bank.id}-${i}`}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-black hover:bg-indigo-700 disabled:opacity-50"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-button font-black hover:bg-indigo-700 disabled:opacity-50"
                         >
                             <Check className="w-3.5 h-3.5" /> Conciliar grupo
                         </button>
@@ -174,7 +174,7 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
                         <button
                             onClick={() => run(`t2b-${g.title.id}-${i}`, () => reconciliationGroupService.confirmTitleToBanks(g.title.id, g.banks.map(b => b.id)))}
                             disabled={busy === `t2b-${g.title.id}-${i}`}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-black hover:bg-purple-700 disabled:opacity-50"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-button font-black hover:bg-purple-700 disabled:opacity-50"
                         >
                             <Check className="w-3.5 h-3.5" /> Conciliar grupo
                         </button>

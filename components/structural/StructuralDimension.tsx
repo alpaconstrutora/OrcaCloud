@@ -447,7 +447,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
             </div>
             <button
               onClick={() => setIsNewProjectModalOpen(true)}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md"
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md"
             >
               <Plus className="w-4 h-4" /> Novo Projeto
             </button>
@@ -463,7 +463,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
               <p className="text-sm font-bold text-slate-400">Nenhum cálculo cadastrado nesta organização.</p>
               <button
                 onClick={() => setIsNewProjectModalOpen(true)}
-                className="mt-3 text-xs font-black text-blue-600 hover:underline uppercase tracking-wider"
+                className="mt-3 text-button font-black text-blue-600 hover:underline uppercase tracking-wider"
               >
                 Criar o primeiro projeto estrutural
               </button>
@@ -544,7 +544,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
               <button
                 onClick={handleExportConsolidatedPDF}
                 disabled={exportingPDF || elements.length === 0}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-50 disabled:text-slate-300 text-slate-700 rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
+                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-50 disabled:text-slate-300 text-slate-700 rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
               >
                 {exportingPDF ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <FileText className="w-4.5 h-4.5" />}
                 Caderno PDF
@@ -553,7 +553,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
               <button
                 onClick={handleExportConsolidatedExcel}
                 disabled={exportingExcel || elements.length === 0}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
               >
                 {exportingExcel ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <FileSpreadsheet className="w-4.5 h-4.5" />}
                 Planilha (.xlsx)
@@ -561,7 +561,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
 
               <button
                 onClick={() => setIsNewElementModalOpen(true)}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
               >
                 <Plus className="w-4 h-4" /> Novo Elemento
               </button>
@@ -577,7 +577,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                 <button
                   key={pav}
                   onClick={() => setActivePavimento(pav)}
-                  className={`px-4 py-2 text-xs font-black uppercase tracking-wider rounded-xl transition-all ${
+                  className={`px-4 py-2 text-button font-black uppercase tracking-wider rounded-xl transition-all ${
                     activePavimento === pav
                       ? 'bg-slate-800 text-white shadow-md'
                       : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
@@ -596,7 +596,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
               <p className="text-sm font-bold text-slate-400">Nenhum elemento adicionado para cálculo.</p>
               <button
                 onClick={() => setIsNewElementModalOpen(true)}
-                className="mt-3 text-xs font-black text-blue-600 hover:underline uppercase tracking-wider"
+                className="mt-3 text-button font-black text-blue-600 hover:underline uppercase tracking-wider"
               >
                 Cadastrar primeiro elemento
               </button>
@@ -643,14 +643,14 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                             {el.tipo}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-xs font-semibold text-slate-500">{detailSecao}</td>
-                        <td className="px-6 py-4 text-xs text-slate-400">{detailCarga}</td>
+                        <td className="px-6 py-4 text-table-body font-semibold text-slate-500">{detailSecao}</td>
+                        <td className="px-6 py-4 text-table-body text-slate-400">{detailCarga}</td>
                         <td className="px-6 py-4">{getSemaforoPill(el.status_verificacao)}</td>
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => setEditingElement(el)}
-                              className="px-3 py-1.5 text-xs font-black uppercase bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg transition-all"
+                              className="px-3 py-1.5 text-button font-black uppercase bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-lg transition-all"
                             >
                               Dimensionar
                             </button>
@@ -684,7 +684,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
             </div>
             
             <form onSubmit={handleCreateProject} className="space-y-4">
-              <label className="block text-xs font-black text-slate-500 space-y-1">
+              <label className="block text-form-label font-black text-slate-500 space-y-1">
                 Nome da Obra / Projeto
                 <input
                   type="text" required value={projNome} onChange={e => setProjNome(e.target.value)}
@@ -693,7 +693,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                 />
               </label>
 
-              <label className="block text-xs font-black text-slate-500 space-y-1">
+              <label className="block text-form-label font-black text-slate-500 space-y-1">
                 Responsável Técnico (RT)
                 <input
                   type="text" required value={projRT} onChange={e => setProjRT(e.target.value)}
@@ -703,7 +703,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
               </label>
 
               <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Número da ART (Opcional)
                   <input
                     type="text" value={projART} onChange={e => setProjART(e.target.value)}
@@ -712,7 +712,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                   />
                 </label>
 
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Agressividade (CAA)
                   <select
                     value={projCAA} onChange={e => setProjCAA(e.target.value as any)}
@@ -729,13 +729,13 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-50">
                 <button
                   type="button" onClick={() => setIsNewProjectModalOpen(false)}
-                  className="px-4 py-2.5 text-xs font-black uppercase text-slate-500 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2.5 text-button font-black uppercase text-slate-500 hover:bg-slate-100 rounded-xl"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 text-xs font-black uppercase bg-blue-600 text-white hover:bg-blue-700 rounded-xl shadow-md"
+                  className="px-5 py-2.5 text-button font-black uppercase bg-blue-600 text-white hover:bg-blue-700 rounded-xl shadow-md"
                 >
                   Criar Cálculo
                 </button>
@@ -758,7 +758,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
             
             <form onSubmit={handleCreateElement} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Pavimento
                   <input
                     type="text" required value={elPavimentoInput} onChange={e => setElPavimentoInput(e.target.value)}
@@ -767,7 +767,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                   />
                 </label>
 
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Tag do Elemento
                   <input
                     type="text" required value={elTag} onChange={e => setElTag(e.target.value)}
@@ -777,7 +777,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                 </label>
               </div>
 
-              <label className="block text-xs font-black text-slate-500 space-y-1">
+              <label className="block text-form-label font-black text-slate-500 space-y-1">
                 Tipo do Elemento
                 <select
                   value={elTipo} onChange={e => setElTipo(e.target.value as any)}
@@ -793,13 +793,13 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-50">
                 <button
                   type="button" onClick={() => setIsNewElementModalOpen(false)}
-                  className="px-4 py-2.5 text-xs font-black uppercase text-slate-500 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2.5 text-button font-black uppercase text-slate-500 hover:bg-slate-100 rounded-xl"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 text-xs font-black uppercase bg-blue-600 text-white hover:bg-blue-700 rounded-xl shadow-md"
+                  className="px-5 py-2.5 text-button font-black uppercase bg-blue-600 text-white hover:bg-blue-700 rounded-xl shadow-md"
                 >
                   Adicionar
                 </button>

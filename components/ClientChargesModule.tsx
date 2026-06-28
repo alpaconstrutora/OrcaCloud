@@ -244,8 +244,8 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                         <tr className={`hover:bg-gray-50 transition-colors ${isOverdue ? 'bg-red-50/30' : ''} ${isCancelled ? 'opacity-50' : ''}`}>
                                             <td className="px-4 py-3 font-semibold text-gray-900 max-w-[160px] truncate">{c.party_name ?? '—'}</td>
                                             <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">{c.description ?? '—'}</td>
-                                            <td className="px-4 py-3 text-gray-500 text-xs">{c.billing_type === 'PIX' ? 'PIX' : c.billing_type === 'UNDEFINED' ? 'Boleto+PIX' : 'Boleto'}</td>
-                                            <td className={`px-4 py-3 font-mono text-xs whitespace-nowrap ${isOverdue ? 'text-red-600 font-bold' : 'text-gray-600'}`}>{fmtDate(c.due_date)}</td>
+                                            <td className="px-4 py-3 text-gray-500 text-table-body">{c.billing_type === 'PIX' ? 'PIX' : c.billing_type === 'UNDEFINED' ? 'Boleto+PIX' : 'Boleto'}</td>
+                                            <td className={`px-4 py-3 font-mono text-table-body whitespace-nowrap ${isOverdue ? 'text-red-600 font-bold' : 'text-gray-600'}`}>{fmtDate(c.due_date)}</td>
                                             <td className="px-4 py-3 font-black text-gray-900 whitespace-nowrap">{fmt(c.value)}</td>
                                             <td className="px-4 py-3"><StatusBadge status={c.status} /></td>
                                             <td className="px-4 py-3">
@@ -277,7 +277,7 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                                         )}
                                                         {c.billing_type !== 'PIX' && !PAID.includes(c.status) && c.status !== 'CANCELLED' && c.asaas_payment_id && (
                                                             <button onClick={() => handleResend(c)} disabled={resending === c.id}
-                                                                className="flex items-center gap-2 px-3 py-2 bg-violet-50 hover:bg-violet-100 rounded-lg text-xs font-bold text-violet-700 transition-colors disabled:opacity-50">
+                                                                className="flex items-center gap-2 px-3 py-2 bg-violet-50 hover:bg-violet-100 rounded-lg text-button font-bold text-violet-700 transition-colors disabled:opacity-50">
                                                                 {resending === c.id
                                                                     ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                                                     : resentId === c.id
@@ -294,7 +294,7 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                                         )}
                                                         {c.pix_payload && (
                                                             <button onClick={() => copyPix(c)}
-                                                                className="flex items-center gap-2 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 rounded-lg text-xs font-bold text-emerald-700 transition-colors">
+                                                                className="flex items-center gap-2 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 rounded-lg text-button font-bold text-emerald-700 transition-colors">
                                                                 <QrCode className="w-3.5 h-3.5" /> {copiedId === c.id ? 'Copiado!' : 'Copiar PIX'} <Copy className="w-3 h-3" />
                                                             </button>
                                                         )}

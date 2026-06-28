@@ -221,7 +221,7 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
           <button
             key={tipo.slug}
             onClick={() => setSelectedTipo(tipo.slug)}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            className={`px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all ${
               selectedTipo === tipo.slug
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20'
                 : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-700'
@@ -249,7 +249,7 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
               {orgTemplate && systemTemplate && (
                 <button
                   onClick={handleResetToSystem}
-                  className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-600 transition-colors"
+                  className="flex items-center gap-1.5 text-button text-slate-500 hover:text-red-600 transition-colors"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Resetar para padrão
@@ -274,13 +274,13 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                       <div key={i} className="flex items-center gap-2">
                         <GripVertical className="w-4 h-4 text-slate-300 shrink-0" />
                         <input
-                          className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono shrink-0 focus:ring-2 focus:ring-indigo-400 outline-none"
+                          className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-form-input font-mono shrink-0 focus:ring-2 focus:ring-indigo-400 outline-none"
                           value={phase.code}
                           onChange={e => updateEapPhase(i, 'code', e.target.value)}
                           placeholder="1.0"
                         />
                         <input
-                          className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-indigo-400 outline-none"
+                          className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-form-input focus:ring-2 focus:ring-indigo-400 outline-none"
                           value={phase.name}
                           onChange={e => updateEapPhase(i, 'name', e.target.value)}
                         />
@@ -292,13 +292,13 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                   </div>
                   <div className="flex items-center gap-2 pt-2 border-t border-slate-50">
                     <input
-                      className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono shrink-0 focus:ring-2 focus:ring-indigo-400 outline-none"
+                      className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-form-input font-mono shrink-0 focus:ring-2 focus:ring-indigo-400 outline-none"
                       value={newEapCode}
                       onChange={e => setNewEapCode(e.target.value)}
                       placeholder="1.0"
                     />
                     <input
-                      className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-indigo-400 outline-none"
+                      className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-form-input focus:ring-2 focus:ring-indigo-400 outline-none"
                       value={newEapName}
                       onChange={e => setNewEapName(e.target.value)}
                       placeholder="Nome da fase"
@@ -321,11 +321,11 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                     {draft.required_docs.map((doc, i) => (
                       <div key={i} className="flex items-center gap-2">
                         <input
-                          className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-indigo-400 outline-none"
+                          className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-form-input focus:ring-2 focus:ring-indigo-400 outline-none"
                           value={doc.name}
                           onChange={e => updateDoc(i, 'name', e.target.value)}
                         />
-                        <label className="flex items-center gap-1 text-xs font-bold text-slate-500 shrink-0 cursor-pointer">
+                        <label className="flex items-center gap-1 text-form-label font-bold text-slate-500 shrink-0 cursor-pointer">
                           <input
                             type="checkbox"
                             checked={doc.required}
@@ -342,13 +342,13 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                   </div>
                   <div className="flex items-center gap-2 pt-2 border-t border-slate-50">
                     <input
-                      className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-indigo-400 outline-none"
+                      className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-form-input focus:ring-2 focus:ring-indigo-400 outline-none"
                       value={newDocName}
                       onChange={e => setNewDocName(e.target.value)}
                       placeholder="Nome do documento"
                       onKeyDown={e => e.key === 'Enter' && addDoc()}
                     />
-                    <label className="flex items-center gap-1 text-xs font-bold text-slate-500 shrink-0 cursor-pointer">
+                    <label className="flex items-center gap-1 text-form-label font-bold text-slate-500 shrink-0 cursor-pointer">
                       <input type="checkbox" checked={newDocRequired} onChange={e => setNewDocRequired(e.target.checked)} className="rounded" />
                       Obrig.
                     </label>
@@ -369,19 +369,19 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                     {draft.indicators.map((ind, i) => (
                       <div key={i} className="flex items-center gap-2">
                         <input
-                          className="w-28 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono shrink-0 focus:ring-2 focus:ring-indigo-400 outline-none"
+                          className="w-28 border border-slate-200 rounded-lg px-2 py-1.5 text-form-input font-mono shrink-0 focus:ring-2 focus:ring-indigo-400 outline-none"
                           value={ind.key}
                           onChange={e => updateIndicator(i, 'key', e.target.value)}
                           placeholder="chave"
                         />
                         <input
-                          className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-indigo-400 outline-none"
+                          className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-form-input focus:ring-2 focus:ring-indigo-400 outline-none"
                           value={ind.label}
                           onChange={e => updateIndicator(i, 'label', e.target.value)}
                           placeholder="Rótulo"
                         />
                         <input
-                          className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-indigo-400 outline-none"
+                          className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-form-input focus:ring-2 focus:ring-indigo-400 outline-none"
                           value={ind.unit}
                           onChange={e => updateIndicator(i, 'unit', e.target.value)}
                           placeholder="unid."
@@ -394,19 +394,19 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                   </div>
                   <div className="flex items-center gap-2 pt-2 border-t border-slate-50">
                     <input
-                      className="w-28 border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono shrink-0 focus:ring-2 focus:ring-indigo-400 outline-none"
+                      className="w-28 border border-slate-200 rounded-lg px-2 py-1.5 text-form-input font-mono shrink-0 focus:ring-2 focus:ring-indigo-400 outline-none"
                       value={newIndKey}
                       onChange={e => setNewIndKey(e.target.value)}
                       placeholder="chave"
                     />
                     <input
-                      className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-indigo-400 outline-none"
+                      className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-form-input focus:ring-2 focus:ring-indigo-400 outline-none"
                       value={newIndLabel}
                       onChange={e => setNewIndLabel(e.target.value)}
                       placeholder="Rótulo"
                     />
                     <input
-                      className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-indigo-400 outline-none"
+                      className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-form-input focus:ring-2 focus:ring-indigo-400 outline-none"
                       value={newIndUnit}
                       onChange={e => setNewIndUnit(e.target.value)}
                       placeholder="unid."
@@ -440,7 +440,7 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                         ))}
                         <div className="flex items-center gap-2">
                           <input
-                            className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-indigo-400 outline-none"
+                            className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-form-input focus:ring-2 focus:ring-indigo-400 outline-none"
                             value={newChecklistItems[phase] || ''}
                             onChange={e => setNewChecklistItems(prev => ({ ...prev, [phase]: e.target.value }))}
                             placeholder="Adicionar item..."

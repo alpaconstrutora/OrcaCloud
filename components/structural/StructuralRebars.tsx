@@ -62,7 +62,7 @@ const RebarForm: React.FC<{
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <label className="flex flex-col gap-1 text-xs font-bold text-slate-500">
+        <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Bitola *
           <select value={f.bitolaId} onChange={e => set('bitolaId', e.target.value)}
             className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white">
@@ -70,40 +70,40 @@ const RebarForm: React.FC<{
             {catalog.map(c => <option key={c.id} value={c.id}>{bitolaLabel(c)}</option>)}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs font-bold text-slate-500">
+        <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Função
           <select value={f.funcao} onChange={e => set('funcao', e.target.value as RebarFunction)}
             className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white">
             {REBAR_FUNCS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs font-bold text-slate-500">
+        <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Formato / dobra
           <select value={f.formatoDobra} onChange={e => set('formatoDobra', e.target.value)}
             className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white">
             {FORMATS.map(fm => <option key={fm} value={fm}>{fm}</option>)}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs font-bold text-slate-500">
+        <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Posição (nº)
           <input type="number" min="1" value={f.posicao} onChange={e => set('posicao', e.target.value)}
             placeholder="Ex.: 1"
             className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white" />
         </label>
-        <label className="flex flex-col gap-1 text-xs font-bold text-slate-500">
+        <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           {isEstribo ? 'Qtd. de estribos *' : 'Qtd. de barras *'}
           <input type="number" min="1" value={f.quantidade} onChange={e => set('quantidade', e.target.value)}
             className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white" />
         </label>
         {isEstribo ? (
-          <label className="flex flex-col gap-1 text-xs font-bold text-slate-500">
+          <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
             Espaçamento (cm)
             <input type="number" step="1" value={f.espacamentoCm} onChange={e => set('espacamentoCm', e.target.value)}
               placeholder="Ex.: 20"
               className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white" />
           </label>
         ) : (
-          <label className="flex flex-col gap-1 text-xs font-bold text-slate-500">
+          <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
             Comprimento unit. (cm)
             <input type="number" step="1" value={f.comprimentoUnitCm} onChange={e => set('comprimentoUnitCm', e.target.value)}
               placeholder="Calculado se vazio"
@@ -113,11 +113,11 @@ const RebarForm: React.FC<{
       </div>
       <div className="flex items-center gap-2 pt-1">
         <button onClick={() => onSubmit(f)} disabled={!valid || saving}
-          className="flex items-center gap-2 bg-blue-600 disabled:bg-slate-300 text-white rounded-xl px-4 py-2 text-xs font-black uppercase tracking-widest">
+          className="flex items-center gap-2 bg-blue-600 disabled:bg-slate-300 text-white rounded-xl px-4 py-2 text-button font-black uppercase tracking-widest">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Salvar armadura
         </button>
-        <button onClick={onCancel} className="flex items-center gap-1.5 text-slate-500 text-xs font-bold hover:text-slate-800">
+        <button onClick={onCancel} className="flex items-center gap-1.5 text-slate-500 text-button font-bold hover:text-slate-800">
           <X className="w-4 h-4" /> Cancelar
         </button>
       </div>
@@ -193,7 +193,7 @@ const StructuralRebars: React.FC<Props> = ({ orgId, element }) => {
           <p className="text-[11px] text-slate-400 font-medium">{element.nome} · {element.tipo} · ×{element.quantidade}</p>
         </div>
         <button onClick={startNew}
-          className="flex items-center gap-1 text-xs font-black text-blue-600 hover:text-blue-700">
+          className="flex items-center gap-1 text-button font-black text-blue-600 hover:text-blue-700">
           <Plus className="w-3.5 h-3.5" /> Nova chamada
         </button>
       </div>
@@ -233,12 +233,12 @@ const StructuralRebars: React.FC<Props> = ({ orgId, element }) => {
                   <td className="px-3 py-2.5 font-bold">{bitolaLabel(r.bitola_id)}</td>
                   <td className="px-3 py-2.5 text-slate-500">{funcLabel(r.funcao)}</td>
                   <td className="px-3 py-2.5">{r.quantidade}</td>
-                  <td className="px-3 py-2.5 text-slate-400 text-xs">
+                  <td className="px-3 py-2.5 text-slate-400 text-table-body">
                     {r.espacamento_cm != null ? `@${r.espacamento_cm} cm` : ''}
                     {r.comprimento_unit_cm != null ? `${r.comprimento_unit_cm} cm` : ''}
                     {!r.espacamento_cm && !r.comprimento_unit_cm ? '—' : ''}
                   </td>
-                  <td className="px-3 py-2.5 text-slate-400 text-xs">{r.formato_dobra}</td>
+                  <td className="px-3 py-2.5 text-slate-400 text-table-body">{r.formato_dobra}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => startEdit(r)}

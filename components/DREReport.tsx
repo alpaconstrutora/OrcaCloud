@@ -128,11 +128,11 @@ function DetailGroup({ group, lines }: { group: DREGroup; lines: DRELine[] }) {
             </tr>
             {open && lines.map(l => (
                 <tr key={l.category_name} className="bg-gray-50/50 border-b border-gray-50">
-                    <td className="px-4 py-2 pl-12 text-xs text-gray-500">{l.category_name}</td>
-                    <td className={`px-4 py-2 text-xs text-right tabular-nums ${l.net < 0 ? 'text-red-500' : 'text-gray-700'}`}>
+                    <td className="px-4 py-2 pl-12 text-table-body text-gray-500">{l.category_name}</td>
+                    <td className={`px-4 py-2 text-table-body text-right tabular-nums ${l.net < 0 ? 'text-red-500' : 'text-gray-700'}`}>
                         {formatBRL(l.net)}
                     </td>
-                    <td className="px-4 py-2 text-xs text-right tabular-nums text-gray-400">
+                    <td className="px-4 py-2 text-table-body text-right tabular-nums text-gray-400">
                         {formatBRL(l.pending_credit - l.pending_debit)}
                     </td>
                 </tr>
@@ -162,11 +162,11 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
             <table className="w-full">
                 <thead>
                     <tr className="bg-gray-50/80 border-b border-gray-100">
-                        <th className="px-4 py-3 text-left text-xs font-black text-gray-400 uppercase tracking-wider">Obra</th>
-                        <th className="px-4 py-3 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Receita</th>
-                        <th className="px-4 py-3 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Custo</th>
-                        <th className="px-4 py-3 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Margem</th>
-                        <th className="px-4 py-3 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Margem %</th>
+                        <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Obra</th>
+                        <th className="px-4 py-3 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Receita</th>
+                        <th className="px-4 py-3 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Custo</th>
+                        <th className="px-4 py-3 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Margem</th>
+                        <th className="px-4 py-3 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Margem %</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -344,7 +344,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                     <div className="flex gap-2">
                         {(['resumo', 'detalhe', 'por_obra'] as const).map(m => (
                             <button key={m} onClick={() => setViewMode(m)}
-                                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
+                                className={`px-4 py-1.5 rounded-full text-table-body font-bold transition-all ${
                                     viewMode === m ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-500 hover:border-blue-300'
                                 }`}
                             >
@@ -361,9 +361,9 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                         <table className="w-full">
                             <thead>
                                 <tr className="bg-gray-50/80 border-b border-gray-100">
-                                    <th className="px-4 py-3 text-left text-xs font-black text-gray-400 uppercase tracking-wider">Linha</th>
-                                    <th className="px-4 py-3 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Realizado</th>
-                                    <th className="px-4 py-3 text-right text-xs font-black text-gray-400 uppercase tracking-wider">Previsto</th>
+                                    <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Linha</th>
+                                    <th className="px-4 py-3 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Realizado</th>
+                                    <th className="px-4 py-3 text-right text-table-header font-black text-gray-400 uppercase tracking-wider">Previsto</th>
                                 </tr>
                             </thead>
                             <tbody>

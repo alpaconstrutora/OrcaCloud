@@ -460,7 +460,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
             <button
               onClick={handleApplyTemplate}
               disabled={!selectedTemplateId || applyingTemplate}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 disabled:opacity-40 transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 disabled:opacity-40 transition-colors"
             >
               {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
               Aplicar
@@ -472,7 +472,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
           <button
             onClick={handleSeedFromTemplate}
             disabled={seeding}
-            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-900/20 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-900/20 disabled:opacity-50"
           >
             {seeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
             Pré-popular pelo tipo: {TIPO_OBRA_LABELS[tipoObra]}
@@ -522,14 +522,14 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
               <button
                 onClick={handleApplyTemplate}
                 disabled={applyingTemplate}
-                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 disabled:opacity-40 transition-colors"
               >
                 {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
                 Aplicar
               </button>
               <button
                 onClick={() => { setShowTemplateSelector(false); setSelectedTemplateId(currentTemplateId ?? '') }}
-                className="px-3 py-2 text-slate-500 hover:bg-slate-100 rounded-xl text-xs font-bold"
+                className="px-3 py-2 text-slate-500 hover:bg-slate-100 rounded-xl text-button font-bold"
               >
                 Cancelar
               </button>
@@ -537,7 +537,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
           ) : (
             <button
               onClick={() => setShowTemplateSelector(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-button font-bold hover:bg-slate-50 transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Trocar template
@@ -578,7 +578,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
               className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${GATE_COLORS[gate]}`}>
+                <span className={`text-form-input font-black px-2 py-0.5 rounded-lg ${GATE_COLORS[gate]}`}>
                   {GATE_LABELS[gate]}
                 </span>
                 <span className="text-sm font-bold text-slate-600">{gateAnswered}/{gateItems.length}</span>
@@ -642,7 +642,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                               key={opt.value}
                               disabled={isSaving}
                               onClick={() => handleStatusSelect(item, opt.value)}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black border transition-all disabled:opacity-50
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-black border transition-all disabled:opacity-50
                                 ${isActive
                                   ? opt.activeCls + ' shadow-sm'
                                   : 'border-slate-200 text-slate-500 ' + opt.hoverCls}`}
@@ -671,7 +671,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                             <button
                               disabled={isUploadingThis}
                               onClick={() => fileRefs.current[item.id]?.click()}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black border transition-all
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-form-input font-black border transition-all
                                 ${hasPhoto
                                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                                   : 'border-slate-200 text-slate-500 hover:bg-slate-100'}`}
@@ -693,7 +693,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                           </p>
                           <div className="space-y-2">
                             <div>
-                              <label className="text-xs font-bold text-slate-500">Descrição</label>
+                              <label className="text-form-label font-bold text-slate-500">Descrição</label>
                               <textarea
                                 value={ncForm.description}
                                 onChange={e => setNcForms(f => ({ ...f, [item.id]: { ...f[item.id], description: e.target.value } }))}
@@ -703,7 +703,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <label className="text-xs font-bold text-slate-500">Severidade</label>
+                                <label className="text-form-label font-bold text-slate-500">Severidade</label>
                                 <select
                                   value={ncForm.severity}
                                   onChange={e => setNcForms(f => ({ ...f, [item.id]: { ...f[item.id], severity: e.target.value as NCFormState['severity'] } }))}
@@ -715,7 +715,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                                 </select>
                               </div>
                               <div>
-                                <label className="text-xs font-bold text-slate-500">Prazo</label>
+                                <label className="text-form-label font-bold text-slate-500">Prazo</label>
                                 <input
                                   type="date"
                                   value={ncForm.dueDate}
@@ -725,7 +725,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                               </div>
                             </div>
                             <div>
-                              <label className="text-xs font-bold text-slate-500">Ação corretiva</label>
+                              <label className="text-form-label font-bold text-slate-500">Ação corretiva</label>
                               <textarea
                                 value={ncForm.correctiveAction}
                                 onChange={e => setNcForms(f => ({ ...f, [item.id]: { ...f[item.id], correctiveAction: e.target.value } }))}
@@ -741,14 +741,14 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                                 setExpandedNCItemId(null)
                                 setNcForms(f => { const n = { ...f }; delete n[item.id]; return n })
                               }}
-                              className="px-3 py-1.5 text-slate-500 hover:bg-slate-100 rounded-xl text-xs font-bold"
+                              className="px-3 py-1.5 text-slate-500 hover:bg-slate-100 rounded-xl text-button font-bold"
                             >
                               Cancelar
                             </button>
                             <button
                               disabled={isSaving || !ncForm.description.trim()}
                               onClick={() => handleNCSubmit(item)}
-                              className="flex items-center gap-1.5 px-4 py-1.5 bg-red-600 text-white rounded-xl text-xs font-black hover:bg-red-700 disabled:opacity-50"
+                              className="flex items-center gap-1.5 px-4 py-1.5 bg-red-600 text-white rounded-xl text-button font-black hover:bg-red-700 disabled:opacity-50"
                             >
                               {isSaving && <Loader2 className="w-3 h-3 animate-spin" />}
                               Confirmar NC

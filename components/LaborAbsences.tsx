@@ -587,7 +587,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                         <button
                             key={id}
                             onClick={() => setView(id)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             <Icon className="w-3.5 h-3.5" />
                             {label}
@@ -601,13 +601,13 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                 <div className="flex items-center gap-2 flex-wrap">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
+                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
                     </div>
 
                     {view === 'requests' && (
                         <>
                             <div className="relative">
-                                <select value={filterTipo} onChange={e => setFilterTipo(e.target.value as AbsenceTipo | '')} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none appearance-none">
+                                <select value={filterTipo} onChange={e => setFilterTipo(e.target.value as AbsenceTipo | '')} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none appearance-none">
                                     <option value="">Todos os tipos</option>
                                     {(Object.entries(TIPO_CONFIG) as [AbsenceTipo, typeof TIPO_CONFIG[AbsenceTipo]][]).map(([k, v]) => (
                                         <option key={k} value={k}>{v.label}</option>
@@ -616,7 +616,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                             </div>
                             <div className="relative">
-                                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as AbsenceStatus | '')} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none appearance-none">
+                                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as AbsenceStatus | '')} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none appearance-none">
                                     <option value="">Todos os status</option>
                                     {(Object.entries(STATUS_CONFIG) as [AbsenceStatus, typeof STATUS_CONFIG[AbsenceStatus]][]).map(([k, v]) => (
                                         <option key={k} value={k}>{v.label}</option>
@@ -628,7 +628,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                     )}
 
                     <div className="relative">
-                        <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none appearance-none">
+                        <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none appearance-none">
                             <option value="">Todos</option>
                             {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                         </select>
@@ -637,7 +637,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
 
                     <button
                         onClick={() => view === 'requests' ? setShowForm(true) : setShowNewPeriod(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold text-xs shadow-md"
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold text-button shadow-md"
                     >
                         <Plus className="w-3.5 h-3.5" />
                         {view === 'requests' ? 'Nova Ausência' : 'Novo Período'}
@@ -764,7 +764,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                                     return (
                                         <tr key={bal.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                                             <td className="px-4 py-3 text-sm font-bold text-slate-900">{bal.employee_name}</td>
-                                            <td className="px-4 py-3 text-xs text-slate-600 font-medium">{bal.periodo_inicio} → {bal.periodo_fim}</td>
+                                            <td className="px-4 py-3 text-table-body text-slate-600 font-medium">{bal.periodo_inicio} → {bal.periodo_fim}</td>
                                             <td className="px-4 py-3 min-w-[180px]">
                                                 {(() => {
                                                     // Barra de progresso do período concessivo

@@ -320,7 +320,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
         <button 
           onClick={() => setSelectedProjectId(null)}
-          className="px-4 py-2 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors"
+          className="px-4 py-2 border border-gray-200 text-gray-600 hover:bg-gray-50 rounded-xl font-bold text-button uppercase tracking-wider transition-colors"
         >
           Trocar de Obra
         </button>
@@ -332,7 +332,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-3 font-black text-xs uppercase tracking-widest transition-colors border-b-2
+            className={`pb-3 font-black text-button uppercase tracking-widest transition-colors border-b-2
               ${activeTab === tab 
                 ? 'border-indigo-600 text-indigo-600' 
                 : 'border-transparent text-gray-400 hover:text-gray-600'}`}
@@ -434,7 +434,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   <button
                     onClick={handleScanInvoices}
                     disabled={actionLoading}
-                    className="px-6 py-3 bg-white text-indigo-900 hover:bg-indigo-50 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all disabled:opacity-50"
+                    className="px-6 py-3 bg-white text-indigo-900 hover:bg-indigo-50 rounded-2xl font-black text-button uppercase tracking-widest flex items-center gap-2 transition-all disabled:opacity-50"
                   >
                     {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-indigo-900" />}
                     Executar Varredura
@@ -454,7 +454,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Número do CNO</label>
+                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Número do CNO</label>
                   <input
                     value={cnoForm.cno_number}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, cno_number: e.target.value }))}
@@ -464,7 +464,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Status da Regularização</label>
+                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Status da Regularização</label>
                   <select
                     value={cnoForm.status}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, status: e.target.value as any }))}
@@ -479,7 +479,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Alvará de Construção</label>
+                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Alvará de Construção</label>
                   <input
                     value={cnoForm.alvara_numero}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, alvara_numero: e.target.value }))}
@@ -489,7 +489,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Matrícula do Imóvel</label>
+                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Matrícula do Imóvel</label>
                   <input
                     value={cnoForm.matricula_imovel}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, matricula_imovel: e.target.value }))}
@@ -499,7 +499,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Área Aprovada (m²)</label>
+                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Área Aprovada (m²)</label>
                   <input
                     type="number"
                     value={cnoForm.area_aprovada}
@@ -509,7 +509,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Área Real de Aferição (m²)</label>
+                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Área Real de Aferição (m²)</label>
                   <input
                     type="number"
                     value={cnoForm.area_real}
@@ -519,7 +519,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Padrão Construtivo</label>
+                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Padrão Construtivo</label>
                   <select
                     value={cnoForm.padrao_construtivo || 'normal'}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, padrao_construtivo: e.target.value as any }))}
@@ -532,7 +532,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Responsabilidade</label>
+                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Responsabilidade</label>
                   <select
                     value={cnoForm.responsavel_tipo || 'construtor'}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, responsavel_tipo: e.target.value as any }))}
@@ -545,7 +545,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">ART / RRT Vinculada</label>
+                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">ART / RRT Vinculada</label>
                   <input
                     value={cnoForm.art_rrt}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, art_rrt: e.target.value }))}
@@ -559,7 +559,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 <button
                   onClick={handleSaveCnoRegistration}
                   disabled={actionLoading}
-                  className="px-6 py-3 bg-indigo-600 text-white hover:bg-indigo-700 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/20"
+                  className="px-6 py-3 bg-indigo-600 text-white hover:bg-indigo-700 rounded-2xl font-black text-button uppercase tracking-widest flex items-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/20"
                 >
                   {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                   Salvar Cadastro CNO
@@ -679,7 +679,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   <button
                     onClick={handleRunSimulation}
                     disabled={actionLoading}
-                    className="flex-1 py-3 bg-indigo-600 text-white hover:bg-indigo-700 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                    className="flex-1 py-3 bg-indigo-600 text-white hover:bg-indigo-700 rounded-2xl font-black text-button uppercase tracking-widest flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
                   >
                     {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                     Simular
@@ -688,7 +688,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     <button
                       onClick={handleSaveSimulation}
                       disabled={actionLoading}
-                      className="px-4 py-3 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center transition-colors"
+                      className="px-4 py-3 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-2xl font-black text-button uppercase tracking-widest flex items-center justify-center transition-colors"
                       title="Salvar como simulação ativa"
                     >
                       Salvar
@@ -776,7 +776,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 <button
                   onClick={handleScanInvoices}
                   disabled={actionLoading}
-                  className="px-4 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl font-black text-xs uppercase tracking-wider transition-colors flex items-center gap-2"
+                  className="px-4 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl font-black text-button uppercase tracking-wider transition-colors flex items-center gap-2"
                 >
                   {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                   Scanner de NF-e
@@ -899,7 +899,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
               <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
                 <button
                   onClick={() => alert('Exportando dossiê ZIP compactado...')}
-                  className="px-6 py-3 bg-indigo-600 text-white hover:bg-indigo-700 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20"
+                  className="px-6 py-3 bg-indigo-600 text-white hover:bg-indigo-700 rounded-2xl font-black text-button uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20"
                 >
                   Baixar Dossiê Completo (.zip)
                 </button>

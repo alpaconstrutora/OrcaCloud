@@ -193,7 +193,7 @@ const CompleteRepairStepModal: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => setFiles(files.filter((_, j) => j !== i))}
-                      className="text-gray-400 hover:text-red-500 ml-2 text-xs shrink-0"
+                      className="text-gray-400 hover:text-red-500 ml-2 text-button shrink-0"
                     >
                       remover
                     </button>

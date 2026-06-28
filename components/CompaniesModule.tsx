@@ -155,7 +155,7 @@ const Field: React.FC<{
     required?: boolean;
 }> = ({ label, children, required }) => (
     <div>
-        <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-1">
+        <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">
             {label}{required && <span className="text-red-500 ml-1">*</span>}
         </label>
         {children}
@@ -298,14 +298,14 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => setShowDashboard(true)}
-                            className="px-5 py-3 border border-gray-200 text-gray-600 rounded-2xl font-black text-xs uppercase tracking-[0.12em] hover:bg-gray-50 transition-all flex items-center gap-2 active:scale-95"
+                            className="px-5 py-3 border border-gray-200 text-gray-600 rounded-2xl font-black text-button uppercase tracking-[0.12em] hover:bg-gray-50 transition-all flex items-center gap-2 active:scale-95"
                         >
                             <BarChart3 className="w-4 h-4" />
                             Dashboard
                         </button>
                         <button
                             onClick={openNew}
-                            className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.15em] hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2 active:scale-95"
+                            className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-black text-button uppercase tracking-[0.15em] hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 flex items-center gap-2 active:scale-95"
                         >
                             <Plus className="w-4 h-4" />
                             Nova Empresa
@@ -540,7 +540,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                             Cancelar
                         </button>
                         <button type="submit" disabled={saving}
-                            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
+                            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             Cadastrar Empresa
                         </button>
@@ -599,7 +599,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
 
                                 <div className="flex items-center gap-1 flex-shrink-0">
                                     <button onClick={() => setSelectedCompany(c)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-xs font-black uppercase tracking-wide">
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-button font-black uppercase tracking-wide">
                                         <Settings2 className="w-3.5 h-3.5" />
                                         Gerenciar
                                     </button>

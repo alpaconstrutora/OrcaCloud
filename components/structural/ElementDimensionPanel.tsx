@@ -444,7 +444,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
           <button
             onClick={handleSaveDimension}
             disabled={saving || !result}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest transition-all shadow-md active:scale-95 disabled:bg-slate-300"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest transition-all shadow-md active:scale-95 disabled:bg-slate-300"
           >
             <Save className="w-4 h-4" />
             {saving ? 'Salvando...' : 'Salvar Cálculo'}
@@ -477,7 +477,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
           {/* Form Dinâmico com base no tipo */}
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <label className="block text-xs font-black text-slate-500 space-y-1">
+              <label className="block text-form-label font-black text-slate-500 space-y-1">
                 Classe Concreto (fck)
                 <select
                   value={geometria.fckMpa ?? 25}
@@ -495,7 +495,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
 
               {element.tipo === 'VIGA' && (
                 <div className="col-span-2 space-y-3">
-                  <label className="block text-xs font-black text-slate-500 space-y-1">
+                  <label className="block text-form-label font-black text-slate-500 space-y-1">
                     Configuração de Vão
                     <select
                       value={isContinua ? 'continua' : 'biapoiada'}
@@ -513,7 +513,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
 
                   {isContinua ? (
                     <div className="grid grid-cols-2 gap-3">
-                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                      <label className="block text-form-label font-black text-slate-500 space-y-1">
                         Vão L1 (m)
                         <input
                           type="number" step="0.1" value={geometria.L1M ?? 4.0}
@@ -521,7 +521,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
-                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                      <label className="block text-form-label font-black text-slate-500 space-y-1">
                         Vão L2 (m)
                         <input
                           type="number" step="0.1" value={geometria.L2M ?? 4.0}
@@ -531,7 +531,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                       </label>
                     </div>
                   ) : (
-                    <label className="block text-xs font-black text-slate-500 space-y-1">
+                    <label className="block text-form-label font-black text-slate-500 space-y-1">
                       Vão da Viga (m)
                       <input
                         type="number" step="0.1" value={geometria.comprimentoVaoM ?? 4.0}
@@ -544,7 +544,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
               )}
               {element.tipo === 'VIGA_BALDRAME' && (
                 <div className="col-span-2 space-y-3">
-                  <label className="block text-xs font-black text-slate-500 space-y-1">
+                  <label className="block text-form-label font-black text-slate-500 space-y-1">
                     Vão do Baldrame (m)
                     <input
                       type="number" step="0.1" value={geometria.comprimentoVaoM ?? 3.0}
@@ -564,7 +564,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                 </div>
               )}
               {element.tipo === 'PILAR' && (
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Comprimento (m)
                   <input
                     type="number" step="0.1" value={geometria.comprimentoLivreM ?? 2.8}
@@ -578,7 +578,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
             {/* Geometria de Vigas e Pilares */}
             {(element.tipo === 'VIGA' || element.tipo === 'PILAR' || element.tipo === 'VIGA_BALDRAME') && (
               <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Largura b (cm)
                   <input
                     type="number" value={geometria.bCm ?? 15}
@@ -586,7 +586,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Altura h (cm)
                   <input
                     type="number" value={geometria.hCm ?? 40}
@@ -600,7 +600,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
             {/* Geometria de Lajes */}
             {element.tipo === 'LAJE' && (
               <>
-                <label className="block text-xs font-black text-slate-500 space-y-1 col-span-2">
+                <label className="block text-form-label font-black text-slate-500 space-y-1 col-span-2">
                   Tipo de Laje
                   <select
                     value={geometria.tipoLaje ?? 'macica'}
@@ -615,7 +615,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                 {geometria.tipoLaje === 'trelicada' ? (
                   <>
                     <div className="grid grid-cols-2 gap-3 col-span-2">
-                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                      <label className="block text-form-label font-black text-slate-500 space-y-1">
                         Vão Unidirecional Lx (m)
                         <input
                           type="number" step="0.1" value={geometria.lxM ?? 3.5}
@@ -623,7 +623,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
-                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                      <label className="block text-form-label font-black text-slate-500 space-y-1">
                         Treliça de Catálogo
                         <select
                           value={geometria.trelicaAdotada ?? 'TR12645'}
@@ -638,7 +638,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 col-span-2">
-                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                      <label className="block text-form-label font-black text-slate-500 space-y-1">
                         Altura da Treliça h_tr (cm)
                         <input
                           type="number" value={geometria.htrCm ?? 12}
@@ -646,7 +646,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
-                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                      <label className="block text-form-label font-black text-slate-500 space-y-1">
                         Espessura Capa h_c (cm)
                         <input
                           type="number" value={geometria.hcCm ?? 5}
@@ -657,7 +657,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 col-span-2">
-                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                      <label className="block text-form-label font-black text-slate-500 space-y-1">
                         Largura Vigota b_w (cm)
                         <input
                           type="number" value={geometria.bwCm ?? 12}
@@ -665,7 +665,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
-                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                      <label className="block text-form-label font-black text-slate-500 space-y-1">
                         Largura Bloco b_e (cm)
                         <input
                           type="number" value={geometria.beCm ?? 30}
@@ -675,7 +675,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                       </label>
                     </div>
 
-                    <label className="block text-xs font-black text-slate-500 space-y-1 col-span-2">
+                    <label className="block text-form-label font-black text-slate-500 space-y-1 col-span-2">
                       Tipo de Enchimento (Material)
                       <select
                         value={geometria.tipoEnchimento ?? 'EPS'}
@@ -690,7 +690,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                 ) : (
                   <>
                     <div className="grid grid-cols-2 gap-3 col-span-2">
-                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                      <label className="block text-form-label font-black text-slate-500 space-y-1">
                         Vão Menor Lx (m)
                         <input
                           type="number" step="0.1" value={geometria.lxM ?? 3.5}
@@ -698,7 +698,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
-                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                      <label className="block text-form-label font-black text-slate-500 space-y-1">
                         Vão Maior Ly (m)
                         <input
                           type="number" step="0.1" value={geometria.lyM ?? 4.0}
@@ -707,7 +707,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         />
                       </label>
                     </div>
-                    <label className="block text-xs font-black text-slate-500 space-y-1 col-span-2">
+                    <label className="block text-form-label font-black text-slate-500 space-y-1 col-span-2">
                       Espessura h (cm)
                       <input
                         type="number" value={geometria.hCm ?? 10}
@@ -723,7 +723,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
             {/* Bitolas Adotadas */}
             {(element.tipo === 'VIGA' || element.tipo === 'PILAR' || element.tipo === 'VIGA_BALDRAME') && (
               <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Aço Longitudinal
                   <select
                     value={geometria.bitolaLongitudinalMm ?? 10}
@@ -739,7 +739,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                 </label>
 
                 {(element.tipo === 'VIGA' || element.tipo === 'VIGA_BALDRAME') && (
-                  <label className="block text-xs font-black text-slate-500 space-y-1">
+                  <label className="block text-form-label font-black text-slate-500 space-y-1">
                     Bitola Estribo
                     <select
                       value={geometria.bitolaEstriboMm ?? 5.0}
@@ -758,7 +758,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
             {/* Geometria de Sapatas */}
             {element.tipo === 'SAPATA' && (
               <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Lado Pilar A (cm)
                   <input
                     type="number" value={geometria.aPilarCm ?? 20}
@@ -766,7 +766,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Lado Pilar B (cm)
                   <input
                     type="number" value={geometria.bPilarCm ?? 20}
@@ -784,7 +784,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
               isContinua ? (
                 <div className="space-y-4 col-span-2">
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="block text-xs font-black text-slate-500 space-y-1">
+                    <label className="block text-form-label font-black text-slate-500 space-y-1">
                       Carga Vão L1 (kN/m)
                       <input
                         type="number" value={cargas.q1Knm ?? 15}
@@ -792,7 +792,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                       />
                     </label>
-                    <label className="block text-xs font-black text-slate-500 space-y-1">
+                    <label className="block text-form-label font-black text-slate-500 space-y-1">
                       Carga Vão L2 (kN/m)
                       <input
                         type="number" value={cargas.q2Knm ?? 15}
@@ -801,7 +801,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                       />
                     </label>
                   </div>
-                  <label className="block text-xs font-black text-slate-500 space-y-1">
+                  <label className="block text-form-label font-black text-slate-500 space-y-1">
                     Redistribuição de Momentos (δ)
                     <select
                       value={geometria.deltaRed ?? 0.90}
@@ -819,7 +819,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3 col-span-2">
-                  <label className="block text-xs font-black text-slate-500 space-y-1">
+                  <label className="block text-form-label font-black text-slate-500 space-y-1">
                     Momento Mk (kNm)
                     <input
                       type="number" value={cargas.mkKnm ?? 10}
@@ -827,7 +827,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                       className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                     />
                   </label>
-                  <label className="block text-xs font-black text-slate-500 space-y-1">
+                  <label className="block text-form-label font-black text-slate-500 space-y-1">
                     Cisalham. Vk (kN)
                     <input
                       type="number" value={cargas.vkKn ?? 15}
@@ -840,7 +840,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
             )}
 
             {element.tipo === 'VIGA_BALDRAME' && (
-              <label className="block text-xs font-black text-slate-500 space-y-1 col-span-2">
+              <label className="block text-form-label font-black text-slate-500 space-y-1 col-span-2">
                 Carga de Alvenaria Superior (kN/m)
                 <input
                   type="number" value={cargas.cargaParedeKnm ?? 10.0}
@@ -851,7 +851,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
             )}
 
             {element.tipo === 'PILAR' && (
-              <label className="block text-xs font-black text-slate-500 space-y-1">
+              <label className="block text-form-label font-black text-slate-500 space-y-1">
                 Força Normal Nk (kN)
                 <input
                   type="number" value={cargas.nkKn ?? 250}
@@ -863,7 +863,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
 
             {element.tipo === 'LAJE' && (
               <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Revestimento (kN/m²)
                   <input
                     type="number" step="0.1" value={cargas.cargaRevestimentoKnm2 ?? 1.0}
@@ -871,7 +871,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Sobrecarga NBR (kN/m²)
                   <input
                     type="number" step="0.1" value={cargas.cargaVariavelKnm2 ?? 1.5}
@@ -884,7 +884,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
 
             {element.tipo === 'SAPATA' && (
               <div className="grid grid-cols-2 gap-3">
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Força Normal Nk (kN)
                   <input
                     type="number" value={cargas.nkKn ?? 300}
@@ -892,7 +892,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Solo σ_adm (MPa)
                   <input
                     type="number" step="0.05" value={cargas.sigmaSoloMpa ?? 0.2}
@@ -900,7 +900,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Momento Mk,A (kNm)
                   <input
                     type="number" value={cargas.mkAKnm ?? 0}
@@ -908,7 +908,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
-                <label className="block text-xs font-black text-slate-500 space-y-1">
+                <label className="block text-form-label font-black text-slate-500 space-y-1">
                   Momento Mk,B (kNm)
                   <input
                     type="number" value={cargas.mkBKnm ?? 0}
@@ -924,7 +924,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
           {element.tipo !== 'SAPATA' && (
             <button
               onClick={handleSugerirSeçao}
-              className="w-full flex items-center justify-center gap-2 bg-slate-800 text-white hover:bg-slate-700 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+              className="w-full flex items-center justify-center gap-2 bg-slate-800 text-white hover:bg-slate-700 py-3 rounded-xl text-button font-black uppercase tracking-wider transition-all"
             >
               <RefreshCw className="w-4 h-4" /> Sugerir Seção Ideal
             </button>
@@ -941,14 +941,14 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
               <button
                 onClick={handleExportPDF}
                 disabled={!result}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg text-button font-bold transition-all disabled:opacity-50"
               >
                 <FileText className="w-4 h-4" /> Memorial PDF
               </button>
               <button
                 onClick={handleExportToCompras}
                 disabled={exporting || !result}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-lg text-button font-bold transition-all disabled:opacity-50"
               >
                 <ShoppingCart className="w-4 h-4" /> Enviar p/ Compras
               </button>

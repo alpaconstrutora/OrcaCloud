@@ -125,7 +125,7 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                 </button>
                 <button
                     onClick={onNewRun}
-                    className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-black text-xs uppercase tracking-tight"
+                    className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-black text-button uppercase tracking-tight"
                 >
                     {!orgId || orgId === 'all' ? (
                         <><Calculator className="w-4 h-4" /> Gerar Folhas em Lote</>

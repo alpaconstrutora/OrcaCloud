@@ -242,7 +242,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                     </button>
                                 </div>
                             </div>
-                            <button onClick={() => setActiveTab('negotiations')} className="flex items-center gap-2 text-xs font-black text-indigo-600 uppercase tracking-widest hover:translate-x-1 transition-transform">
+                            <button onClick={() => setActiveTab('negotiations')} className="flex items-center gap-2 text-button font-black text-indigo-600 uppercase tracking-widest hover:translate-x-1 transition-transform">
                                 Ver Painel de Lances
                                 <ArrowRight className="w-4 h-4" />
                             </button>
@@ -451,14 +451,14 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                                 <button
                                                     onClick={() => handleAnalyzeBid(neg.id, neg.item, neg.yourBid)}
                                                     disabled={analyzingBidId === neg.id}
-                                                    className={`px-6 py-3 bg-gray-100 text-gray-900 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-200 transition-all active:scale-95 disabled:opacity-50
+                                                    className={`px-6 py-3 bg-gray-100 text-gray-900 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-200 transition-all active:scale-95 disabled:opacity-50
                                                     ${analyzingBidId === neg.id ? 'animate-pulse' : ''}
                                                 `}>
                                                     {analyzingBidId === neg.id ? 'Analisando...' : 'IA Review'}
                                                 </button>
                                                 <button
                                                     onClick={() => setActiveNegotiationId(neg.id)}
-                                                    className="px-6 py-3 bg-black text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-800 transition-all active:scale-95 shadow-lg shadow-gray-200">
+                                                    className="px-6 py-3 bg-black text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-800 transition-all active:scale-95 shadow-lg shadow-gray-200">
                                                     Negociar
                                                 </button>
                                             </div>
@@ -514,8 +514,8 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 ].map((neg, i) => (
                                     <tr key={i} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onClick={() => setActiveNegotiationId(neg.id)}>
                                         <td className="px-8 py-5 font-black text-gray-900 uppercase tracking-tight">{neg.item}</td>
-                                        <td className="px-8 py-5 text-xs font-bold text-gray-500 uppercase">{neg.project}</td>
-                                        <td className="px-8 py-5 text-xs font-bold text-gray-900">{neg.qty}</td>
+                                        <td className="px-8 py-5 text-table-body font-bold text-gray-500 uppercase">{neg.project}</td>
+                                        <td className="px-8 py-5 text-table-body font-bold text-gray-900">{neg.qty}</td>
                                         <td className="px-8 py-5 text-center font-black text-gray-900">{neg.bestBid}</td>
                                         <td className={`px-8 py-5 text-right font-black ${neg.status === 'Winning' ? 'text-emerald-600' : 'text-gray-900'}`}>{neg.yourBid}</td>
                                         <td className="px-8 py-5 text-right">
@@ -804,14 +804,14 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                     <div className="mt-12 flex justify-end gap-4 border-t border-gray-50 pt-8">
                                         <button
                                             onClick={() => handleViewOrder(order.id, 'details')}
-                                            className="flex items-center gap-2 px-6 py-3 bg-gray-50 text-gray-600 rounded-xl text-xs font-black uppercase tracking-widest border border-gray-100 hover:bg-white transition-all active:scale-95"
+                                            className="flex items-center gap-2 px-6 py-3 bg-gray-50 text-gray-600 rounded-xl text-button font-black uppercase tracking-widest border border-gray-100 hover:bg-white transition-all active:scale-95"
                                         >
                                             <FileText className="w-4 h-4" />
                                             Ver Detalhes
                                         </button>
                                         <button
                                             onClick={() => handleViewOrder(order.id, 'logistics')}
-                                            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:scale-105 active:scale-95 transition-all"
+                                            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl text-button font-black uppercase tracking-widest shadow-lg shadow-indigo-100 hover:scale-105 active:scale-95 transition-all"
                                         >
                                             <Truck className="w-4 h-4" />
                                             Logística do Pedido
@@ -822,7 +822,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                                     setActiveNegotiationId(order.id);
                                                     setActiveTab('negotiations');
                                                 }}
-                                                className="flex items-center gap-2 px-6 py-3 bg-amber-50 text-amber-600 rounded-xl text-xs font-black uppercase tracking-widest border border-amber-100 hover:bg-amber-100 transition-all active:scale-95"
+                                                className="flex items-center gap-2 px-6 py-3 bg-amber-50 text-amber-600 rounded-xl text-button font-black uppercase tracking-widest border border-amber-100 hover:bg-amber-100 transition-all active:scale-95"
                                             >
                                                 <Gavel className="w-4 h-4" />
                                                 Negociar
@@ -853,10 +853,10 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                                         {order.number || order.id.slice(0, 8)}
                                                     </div>
                                                 </td>
-                                                <td className="px-8 py-5 text-xs font-bold text-gray-500">
+                                                <td className="px-8 py-5 text-table-body font-bold text-gray-500">
                                                     {new Date(order.created_at || '').toLocaleDateString()}
                                                 </td>
-                                                <td className="px-8 py-5 text-center text-xs font-bold text-gray-900">{order.items?.length || 0}</td>
+                                                <td className="px-8 py-5 text-center text-table-body font-bold text-gray-900">{order.items?.length || 0}</td>
                                                 <td className="px-8 py-5">
                                                     <div className="flex flex-col">
                                                         <span className="text-xs font-black text-gray-900 uppercase tracking-tight">{order.paymentMethod || 'Boleto'}</span>
@@ -953,7 +953,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 placeholder="Buscar cotação..."
                                 value={searchQueryQuotations}
                                 onChange={(e) => setSearchQueryQuotations(e.target.value)}
-                                className="pl-11 pr-6 py-3 bg-gray-50 border border-gray-100 rounded-xl text-xs font-bold w-64 outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all"
+                                className="pl-11 pr-6 py-3 bg-gray-50 border border-gray-100 rounded-xl text-form-input font-bold w-64 outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all"
                             />
                         </div>
                         <button className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 transition-all shadow-sm active:scale-95">
@@ -991,11 +991,11 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                                 </div>
                                             </td>
                                             <td className="px-8 py-5 text-sm font-black text-gray-900">{q.title}</td>
-                                            <td className="px-8 py-5 text-xs font-bold text-gray-500 uppercase">{q.projectName}</td>
-                                            <td className="px-8 py-5 text-center text-xs font-bold text-rose-600">
+                                            <td className="px-8 py-5 text-table-body font-bold text-gray-500 uppercase">{q.projectName}</td>
+                                            <td className="px-8 py-5 text-center text-table-body font-bold text-rose-600">
                                                 {new Date(q.deadline).toLocaleDateString()}
                                             </td>
-                                            <td className="px-8 py-5 text-center text-xs font-bold text-gray-400">{q.items.length}</td>
+                                            <td className="px-8 py-5 text-center text-table-body font-bold text-gray-400">{q.items.length}</td>
                                             <td className="px-8 py-5 text-right">
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); setActiveQuotationId(q.id); }}

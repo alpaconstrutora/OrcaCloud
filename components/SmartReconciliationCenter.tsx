@@ -215,14 +215,14 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                     <button
                         onClick={confirmAllHigh}
                         disabled={busy === 'bulk' || counts.high === 0}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-black hover:bg-emerald-700 disabled:opacity-40"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-button font-black hover:bg-emerald-700 disabled:opacity-40"
                     >
                         <ShieldCheck className="w-3.5 h-3.5" /> Conciliar alta confiança ({counts.high})
                     </button>
                     <button
                         onClick={reprocess}
                         disabled={reprocessing || !selectedAccountId}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-xs font-bold hover:border-blue-200 hover:text-blue-600 disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-button font-bold hover:border-blue-200 hover:text-blue-600 disabled:opacity-50"
                     >
                         <RefreshCw className={`w-3.5 h-3.5 ${reprocessing ? 'animate-spin' : ''}`} /> Reprocessar
                     </button>
@@ -243,7 +243,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                     <button
                         key={b}
                         onClick={() => setBand(b)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${band === b ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+                        className={`px-3 py-1.5 rounded-lg text-button font-black transition-all ${band === b ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
                     >
                         {label}
                     </button>
@@ -320,14 +320,14 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                                     <button
                                         onClick={() => reject(sug)}
                                         disabled={busy === sug.id}
-                                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-xs font-bold hover:bg-gray-200 disabled:opacity-50"
+                                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-button font-bold hover:bg-gray-200 disabled:opacity-50"
                                     >
                                         <X className="w-3.5 h-3.5" /> Descartar
                                     </button>
                                     <button
                                         onClick={() => confirm(sug)}
                                         disabled={busy === sug.id}
-                                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-black hover:bg-purple-700 disabled:opacity-50"
+                                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-button font-black hover:bg-purple-700 disabled:opacity-50"
                                     >
                                         <Check className="w-3.5 h-3.5" /> Conciliar
                                     </button>

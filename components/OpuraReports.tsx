@@ -257,7 +257,7 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                 <div className="flex flex-wrap gap-1.5">
                     {DIMENSIONS.map(d => (
                         <button key={d.value} onClick={() => setDimension(d.value)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                            className={`px-3 py-1.5 rounded-lg text-button font-bold transition-colors ${
                                 dimension === d.value
                                     ? 'bg-blue-600 text-white'
                                     : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
@@ -272,24 +272,24 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
             {/* Filtros */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap items-end gap-4">
                 <div>
-                    <label className="block text-xs font-bold text-gray-400 mb-1">Período por</label>
+                    <label className="block text-form-label font-bold text-gray-400 mb-1">Período por</label>
                     <select value={dateField} onChange={e => setDateField(e.target.value as OpuraDateField)}
                         className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400">
                         {DATE_FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                     </select>
                 </div>
                 <div>
-                    <label className="block text-xs font-bold text-gray-400 mb-1">De</label>
+                    <label className="block text-form-label font-bold text-gray-400 mb-1">De</label>
                     <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
                         className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
                 </div>
                 <div>
-                    <label className="block text-xs font-bold text-gray-400 mb-1">Até</label>
+                    <label className="block text-form-label font-bold text-gray-400 mb-1">Até</label>
                     <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
                         className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
                 </div>
                 <div>
-                    <label className="block text-xs font-bold text-gray-400 mb-1">Direção</label>
+                    <label className="block text-form-label font-bold text-gray-400 mb-1">Direção</label>
                     <select value={direction} onChange={e => setDirection(e.target.value as typeof direction)}
                         className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400">
                         <option value="">Tudo</option>
@@ -298,7 +298,7 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                     </select>
                 </div>
                 <div>
-                    <label className="block text-xs font-bold text-gray-400 mb-1">Status</label>
+                    <label className="block text-form-label font-bold text-gray-400 mb-1">Status</label>
                     <select value={status} onChange={e => setStatus(e.target.value as typeof status)}
                         className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400">
                         <option value="">Tudo</option>
@@ -315,22 +315,22 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                         <ArrowLeftRight className="w-3.5 h-3.5" /> Comparar com (base)
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-400 mb-1">De (B)</label>
+                        <label className="block text-form-label font-bold text-gray-400 mb-1">De (B)</label>
                         <input type="date" value={dateFromB} onChange={e => setDateFromB(e.target.value)}
                             className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-400 mb-1">Até (B)</label>
+                        <label className="block text-form-label font-bold text-gray-400 mb-1">Até (B)</label>
                         <input type="date" value={dateToB} onChange={e => setDateToB(e.target.value)}
                             className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-indigo-400" />
                     </div>
                     <div className="flex gap-1.5">
                         <button onClick={() => applyComparePreset('mes')}
-                            className="px-3 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-xl text-xs font-bold hover:bg-indigo-50">
+                            className="px-3 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-xl text-button font-bold hover:bg-indigo-50">
                             Mês × anterior
                         </button>
                         <button onClick={() => applyComparePreset('ano')}
-                            className="px-3 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-xl text-xs font-bold hover:bg-indigo-50">
+                            className="px-3 py-2 bg-white border border-indigo-200 text-indigo-700 rounded-xl text-button font-bold hover:bg-indigo-50">
                             Ano × anterior
                         </button>
                     </div>

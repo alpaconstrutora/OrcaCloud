@@ -106,7 +106,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
 
                 <div className="space-y-3">
                     <div>
-                        <label className="block text-xs text-gray-400 mb-1">Almoxarifado</label>
+                        <label className="block text-form-label text-gray-400 mb-1">Almoxarifado</label>
                         <select
                             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                             value={form.warehouseId}
@@ -120,7 +120,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="col-span-2">
-                            <label className="block text-xs text-gray-400 mb-1">Insumo / Descrição *</label>
+                            <label className="block text-form-label text-gray-400 mb-1">Insumo / Descrição *</label>
                             <input
                                 className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                                 value={form.inputDescription}
@@ -129,7 +129,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-gray-400 mb-1">Código</label>
+                            <label className="block text-form-label text-gray-400 mb-1">Código</label>
                             <input
                                 className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                                 value={form.inputCode ?? ''}
@@ -138,7 +138,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-gray-400 mb-1">Unidade *</label>
+                            <label className="block text-form-label text-gray-400 mb-1">Unidade *</label>
                             <input
                                 className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                                 value={form.inputUnit}
@@ -147,7 +147,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-gray-400 mb-1">Quantidade *</label>
+                            <label className="block text-form-label text-gray-400 mb-1">Quantidade *</label>
                             <input
                                 type="number" min="0.0001" step="0.01"
                                 className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
@@ -157,7 +157,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
                         </div>
                         {form.type === 'in' && (
                             <div>
-                                <label className="block text-xs text-gray-400 mb-1">Custo unitário</label>
+                                <label className="block text-form-label text-gray-400 mb-1">Custo unitário</label>
                                 <input
                                     type="number" min="0" step="0.01"
                                     className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
@@ -168,7 +168,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
                             </div>
                         )}
                         <div>
-                            <label className="block text-xs text-gray-400 mb-1">Data</label>
+                            <label className="block text-form-label text-gray-400 mb-1">Data</label>
                             <input
                                 type="date"
                                 className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
@@ -179,7 +179,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
                     </div>
 
                     <div>
-                        <label className="block text-xs text-gray-400 mb-1">Observações</label>
+                        <label className="block text-form-label text-gray-400 mb-1">Observações</label>
                         <input
                             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                             value={form.notes ?? ''}
@@ -253,7 +253,7 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
 
                 <div className="space-y-3">
                     <div>
-                        <label className="block text-xs text-gray-400 mb-1">Nome *</label>
+                        <label className="block text-form-label text-gray-400 mb-1">Nome *</label>
                         <input
                             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                             value={form.name}
@@ -261,7 +261,7 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
                         />
                     </div>
                     <div>
-                        <label className="block text-xs text-gray-400 mb-1">Tipo</label>
+                        <label className="block text-form-label text-gray-400 mb-1">Tipo</label>
                         <select
                             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                             value={form.type}
@@ -273,7 +273,7 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs text-gray-400 mb-1">Obra (opcional)</label>
+                        <label className="block text-form-label text-gray-400 mb-1">Obra (opcional)</label>
                         <select
                             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                             value={form.projectId ?? ''}
@@ -284,7 +284,7 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs text-gray-400 mb-1">Observações</label>
+                        <label className="block text-form-label text-gray-400 mb-1">Observações</label>
                         <input
                             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                             value={form.notes ?? ''}
@@ -540,7 +540,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                     </tbody>
                                     <tfoot>
                                         <tr className="border-t border-gray-600 bg-gray-800/50">
-                                            <td colSpan={5} className="px-4 py-3 text-right text-gray-400 text-xs uppercase font-medium">Total em Estoque</td>
+                                            <td colSpan={5} className="px-4 py-3 text-right text-gray-400 text-table-body uppercase font-medium">Total em Estoque</td>
                                             <td className="px-4 py-3 text-right text-white font-bold">{fmtBrl(filteredBalances.reduce((s, b) => s + b.totalValue, 0))}</td>
                                         </tr>
                                     </tfoot>
@@ -711,7 +711,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                 <span className="text-sm text-gray-400">{filteredMovements.length} movimentos</span>
                                 <button
                                     onClick={() => setMovementModal('adjust')}
-                                    className="flex items-center gap-1 text-xs text-yellow-400 hover:text-yellow-300"
+                                    className="flex items-center gap-1 text-button text-yellow-400 hover:text-yellow-300"
                                 >
                                     <Plus className="w-3 h-3" /> Ajuste
                                 </button>
@@ -746,7 +746,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                         {new Date(m.movedAt).toLocaleDateString('pt-BR')}
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                                        <span className={`px-2 py-0.5 rounded-full text-table-body font-medium ${
                                                             isIn ? 'bg-green-900/40 text-green-400' :
                                                             m.type === 'adjust' ? 'bg-yellow-900/40 text-yellow-400' :
                                                             'bg-red-900/40 text-red-400'
@@ -812,7 +812,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                                 <span className="text-white font-medium">{t.fromWarehouseName ?? '—'}</span>
                                                                 <ArrowLeftRight className="w-4 h-4 text-gray-500 shrink-0" />
                                                                 <span className="text-white font-medium">{t.toWarehouseName ?? '—'}</span>
-                                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[t.status]}`}>
+                                                                <span className={`px-2 py-0.5 rounded-full text-table-body font-medium ${statusColor[t.status]}`}>
                                                                     {statusLabel[t.status]}
                                                                 </span>
                                                             </div>
@@ -835,7 +835,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                                         await inventoryService.receiveTransfer(t.id);
                                                                         load();
                                                                     }}
-                                                                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-medium"
+                                                                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-button font-medium"
                                                                 >
                                                                     <CheckCircle2 className="w-3 h-3" /> Receber
                                                                 </button>
@@ -845,7 +845,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                                         await inventoryService.cancelTransfer(t.id);
                                                                         load();
                                                                     }}
-                                                                    className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-400 hover:text-red-400 text-xs"
+                                                                    className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-400 hover:text-red-400 text-button"
                                                                 >
                                                                     Cancelar
                                                                 </button>
@@ -916,7 +916,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                     <p className="font-bold text-blue-300 text-sm">{fmtBrl(wValue)}</p>
                                                 </div>
                                             </div>
-                                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs ${w.isActive ? 'bg-green-900/40 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
+                                            <span className={`inline-block px-2 py-0.5 rounded-full text-button ${w.isActive ? 'bg-green-900/40 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
                                                 {w.isActive ? 'Ativo' : 'Inativo'}
                                             </span>
                                         </div>
@@ -961,7 +961,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                 <td className="px-4 py-3 text-center">
                                                     <span className="px-3 py-1 rounded-full bg-blue-900/40 text-blue-300 font-bold text-sm">{lt.leadTimeDays}d</span>
                                                 </td>
-                                                <td className="px-4 py-3 text-gray-400 hidden md:table-cell text-xs">{lt.notes ?? '—'}</td>
+                                                <td className="px-4 py-3 text-gray-400 hidden md:table-cell text-table-body">{lt.notes ?? '—'}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -1080,7 +1080,7 @@ const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClos
                 <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-xs text-gray-400 mb-1">Origem *</label>
+                            <label className="block text-form-label text-gray-400 mb-1">Origem *</label>
                             <select
                                 className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                                 value={form.fromWarehouseId}
@@ -1090,7 +1090,7 @@ const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClos
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs text-gray-400 mb-1">Destino *</label>
+                            <label className="block text-form-label text-gray-400 mb-1">Destino *</label>
                             <select
                                 className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                                 value={form.toWarehouseId}
@@ -1101,14 +1101,14 @@ const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClos
                         </div>
                     </div>
                     <div>
-                        <label className="block text-xs text-gray-400 mb-1">Observações</label>
+                        <label className="block text-form-label text-gray-400 mb-1">Observações</label>
                         <input className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white" value={form.notes ?? ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
                     </div>
 
                     <div>
                         <div className="flex items-center justify-between mb-2">
-                            <label className="text-xs text-gray-400 uppercase font-medium">Itens</label>
-                            <button onClick={addItem} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
+                            <label className="text-form-label text-gray-400 uppercase font-medium">Itens</label>
+                            <button onClick={addItem} className="flex items-center gap-1 text-button text-blue-400 hover:text-blue-300">
                                 <Plus className="w-3 h-3" /> Adicionar
                             </button>
                         </div>
@@ -1119,19 +1119,19 @@ const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClos
                             {form.items.map((item, idx) => (
                                 <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-gray-800/50 border border-gray-700 rounded-lg p-3">
                                     <div className="col-span-5">
-                                        <label className="block text-xs text-gray-500 mb-1">Descrição</label>
+                                        <label className="block text-form-label text-gray-500 mb-1">Descrição</label>
                                         <input className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white" value={item.inputDescription} onChange={e => updateItem(idx, { inputDescription: e.target.value })} placeholder="Insumo" />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-xs text-gray-500 mb-1">Cód.</label>
+                                        <label className="block text-form-label text-gray-500 mb-1">Cód.</label>
                                         <input className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white" value={item.inputCode ?? ''} onChange={e => updateItem(idx, { inputCode: e.target.value || undefined })} />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-xs text-gray-500 mb-1">Un</label>
+                                        <label className="block text-form-label text-gray-500 mb-1">Un</label>
                                         <input className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white" value={item.inputUnit} onChange={e => updateItem(idx, { inputUnit: e.target.value })} />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-xs text-gray-500 mb-1">Qtd</label>
+                                        <label className="block text-form-label text-gray-500 mb-1">Qtd</label>
                                         <input type="number" min="0.001" step="0.01" className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white" value={item.quantity || ''} onChange={e => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })} />
                                     </div>
                                     <div className="col-span-1 flex justify-center">
@@ -1253,7 +1253,7 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
                             <div className="flex items-center gap-3">
                                 <ClipboardList className="w-4 h-4 text-blue-400 shrink-0" />
                                 <span className="font-semibold text-white">{req.number}</span>
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[req.status]}`}>
+                                <span className={`px-2 py-0.5 rounded-full text-button font-medium ${STATUS_COLORS[req.status]}`}>
                                     {STATUS_LABELS[req.status]}
                                 </span>
                             </div>
@@ -1261,7 +1261,7 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
                                 {req.status === 'pending' && (
                                     <button
                                         onClick={() => setApprovingRequest(req)}
-                                        className="px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-medium flex items-center gap-1"
+                                        className="px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-button font-medium flex items-center gap-1"
                                     >
                                         <Check className="w-3 h-3" /> Avaliar
                                     </button>
@@ -1270,7 +1270,7 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
                                     <button
                                         onClick={() => handleDeliver(req.id)}
                                         disabled={delivering === req.id}
-                                        className="px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-xs font-medium flex items-center gap-1 disabled:opacity-50"
+                                        className="px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-button font-medium flex items-center gap-1 disabled:opacity-50"
                                     >
                                         {delivering === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
                                         Entregar
@@ -1280,7 +1280,7 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
                                     <button
                                         onClick={() => handleCancel(req.id)}
                                         disabled={cancelling === req.id}
-                                        className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-medium flex items-center gap-1 disabled:opacity-50"
+                                        className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-button font-medium flex items-center gap-1 disabled:opacity-50"
                                     >
                                         {cancelling === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
                                         Cancelar
@@ -1404,7 +1404,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
                 <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-xs text-gray-400 mb-1">Solicitante *</label>
+                            <label className="block text-form-label text-gray-400 mb-1">Solicitante *</label>
                             <input
                                 className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                                 value={form.requestedBy}
@@ -1413,7 +1413,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
                             />
                         </div>
                         <div>
-                            <label className="block text-xs text-gray-400 mb-1">Almoxarifado</label>
+                            <label className="block text-form-label text-gray-400 mb-1">Almoxarifado</label>
                             <select
                                 className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                                 value={form.warehouseId ?? ''}
@@ -1425,7 +1425,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
                         </div>
                     </div>
                     <div>
-                        <label className="block text-xs text-gray-400 mb-1">Observações</label>
+                        <label className="block text-form-label text-gray-400 mb-1">Observações</label>
                         <input
                             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                             value={form.notes ?? ''}
@@ -1435,8 +1435,8 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
 
                     <div>
                         <div className="flex items-center justify-between mb-2">
-                            <label className="text-xs text-gray-400 uppercase font-medium">Itens *</label>
-                            <button onClick={addItem} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
+                            <label className="text-form-label text-gray-400 uppercase font-medium">Itens *</label>
+                            <button onClick={addItem} className="flex items-center gap-1 text-button text-blue-400 hover:text-blue-300">
                                 <Plus className="w-3 h-3" /> Adicionar
                             </button>
                         </div>
@@ -1449,7 +1449,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
                             {form.items.map((item, idx) => (
                                 <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-gray-800/50 border border-gray-700 rounded-lg p-3">
                                     <div className="col-span-5">
-                                        <label className="block text-xs text-gray-500 mb-1">Descrição *</label>
+                                        <label className="block text-form-label text-gray-500 mb-1">Descrição *</label>
                                         <input
                                             className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
                                             value={item.inputDescription}
@@ -1458,7 +1458,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
                                         />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-xs text-gray-500 mb-1">Cód.</label>
+                                        <label className="block text-form-label text-gray-500 mb-1">Cód.</label>
                                         <input
                                             className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
                                             value={item.inputCode ?? ''}
@@ -1466,7 +1466,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
                                         />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-xs text-gray-500 mb-1">Un</label>
+                                        <label className="block text-form-label text-gray-500 mb-1">Un</label>
                                         <input
                                             className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
                                             value={item.inputUnit}
@@ -1474,7 +1474,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
                                         />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-xs text-gray-500 mb-1">Qtd *</label>
+                                        <label className="block text-form-label text-gray-500 mb-1">Qtd *</label>
                                         <input
                                             type="number" min="0.001" step="0.01"
                                             className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
@@ -1556,7 +1556,7 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ request, onClose, onDone })
 
                 <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
                     <div>
-                        <label className="block text-xs text-gray-400 mb-1">Aprovado / Rejeitado por *</label>
+                        <label className="block text-form-label text-gray-400 mb-1">Aprovado / Rejeitado por *</label>
                         <input
                             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
                             value={approvedBy}

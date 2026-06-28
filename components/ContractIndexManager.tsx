@@ -166,7 +166,7 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
                                 <button
                                     onClick={() => handleApplyReajuste(c.id, c.reajuste_index)}
                                     disabled={applyingId === c.id}
-                                    className="shrink-0 px-3 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                                    className="shrink-0 px-3 py-1.5 bg-amber-600 text-white text-button font-semibold rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
                                 >
                                     {applyingId === c.id ? 'Aplicando…' : 'Aplicar'}
                                 </button>
@@ -287,7 +287,7 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('source') && (
-                                            <td className="px-4 py-2.5 text-xs text-gray-400">{v.source ?? '—'}</td>
+                                            <td className="px-4 py-2.5 text-table-body text-gray-400">{v.source ?? '—'}</td>
                                         )}
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-3 py-2.5">

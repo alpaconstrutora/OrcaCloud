@@ -194,7 +194,7 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ organizationId,
                         <button
                             key={p}
                             onClick={() => { setPreset(p); setOffset(0); }}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${
+                            className={`px-3 py-1.5 rounded-lg text-button font-black uppercase tracking-widest transition-all ${
                                 preset === p
                                     ? 'bg-blue-600 text-white shadow-sm'
                                     : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -323,7 +323,7 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ organizationId,
                                 <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Obras — Receita × Custo</h2>
                                 <button
                                     onClick={() => onNavigate?.('controladoria')}
-                                    className="flex items-center gap-1 text-xs text-blue-600 font-bold hover:underline"
+                                    className="flex items-center gap-1 text-button text-blue-600 font-bold hover:underline"
                                 >
                                     Ver DRE <ArrowRight className="w-3 h-3" />
                                 </button>
@@ -370,7 +370,7 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ organizationId,
                                 <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Top Fornecedores — AP</h2>
                                 <button
                                     onClick={() => onNavigate?.('financial-boletos')}
-                                    className="flex items-center gap-1 text-xs text-blue-600 font-bold hover:underline"
+                                    className="flex items-center gap-1 text-button text-blue-600 font-bold hover:underline"
                                 >
                                     Ver boletos <ArrowRight className="w-3 h-3" />
                                 </button>

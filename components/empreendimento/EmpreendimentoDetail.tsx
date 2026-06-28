@@ -55,7 +55,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-xs font-bold text-gray-400 hover:text-gray-600 mb-3">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-button font-bold text-gray-400 hover:text-gray-600 mb-3">
           <ArrowLeft className="w-4 h-4" /> Voltar
         </button>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -82,16 +82,16 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
           </div>
           <div className="flex items-center gap-2">
             {e.imovib_study_id && (
-              <button onClick={() => setSyncOpen(true)} className="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2">
+              <button onClick={() => setSyncOpen(true)} className="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-black text-button uppercase tracking-widest flex items-center gap-2">
                 <RefreshCw className="w-4 h-4" /> Sincronizar do Estudo
               </button>
             )}
             {e.imovib_study_id && onGoToStudy && (
-              <button onClick={onGoToStudy} className="px-4 py-2.5 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2">
+              <button onClick={onGoToStudy} className="px-4 py-2.5 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-xl font-black text-button uppercase tracking-widest flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" /> Ver Estudo
               </button>
             )}
-            <button onClick={onEdit} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2">
+            <button onClick={onEdit} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-button uppercase tracking-widest flex items-center gap-2">
               <Edit className="w-4 h-4" /> Editar
             </button>
           </div>
@@ -104,7 +104,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`pb-3 font-black text-xs uppercase tracking-widest transition-colors border-b-2 flex items-center gap-1.5
+            className={`pb-3 font-black text-button uppercase tracking-widest transition-colors border-b-2 flex items-center gap-1.5
               ${tab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
           >
             <t.icon className="w-4 h-4" /> {t.label}

@@ -423,7 +423,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <p className="text-xl font-black text-white mt-0.5">{nextDue ? `R$ ${nextDue.value.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}` : 'Em dia'}</p>
                                 {nextDue && <p className="text-[10px] text-blue-200 font-bold">{new Date(nextDue.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}
                             </div>
-                            {enabledTabIds.includes('financeiro') && <button onClick={() => setActiveTab('financeiro')} className="flex items-center gap-2 px-5 py-3 bg-white text-blue-600 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-50 transition-all shadow"><Wallet className="w-4 h-4" /> Financeiro</button>}
+                            {enabledTabIds.includes('financeiro') && <button onClick={() => setActiveTab('financeiro')} className="flex items-center gap-2 px-5 py-3 bg-white text-blue-600 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-blue-50 transition-all shadow"><Wallet className="w-4 h-4" /> Financeiro</button>}
                         </div>
                     </div>
                     {/* Grid principal */}
@@ -1770,7 +1770,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         ].map((k, i) => (
                             <div key={i} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 text-center">
                                 <p className="text-[8px] font-black text-gray-400 uppercase tracking-wide mb-1">{k.label}</p>
-                                <p className={`text-xs font-black ${k.color} tabular-nums`}>{k.value}</p>
+                                <p className={`text-table-body font-black ${k.color} tabular-nums`}>{k.value}</p>
                             </div>
                         ))}
                     </div>
@@ -1872,7 +1872,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 <span className="text-sm font-bold text-gray-900 uppercase tracking-tight">{charge.description}</span>
                                             </td>
                                             <td className="px-8 py-4">
-                                                <div className={`flex items-center gap-2 text-xs font-bold tabular-nums ${overdue ? 'text-red-500' : 'text-gray-400'}`}>
+                                                <div className={`flex items-center gap-2 text-button font-bold tabular-nums ${overdue ? 'text-red-500' : 'text-gray-400'}`}>
                                                     <Calendar className="w-3.5 h-3.5" />
                                                     {new Date(charge.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                                                     {overdue && <span className="text-[9px] bg-red-100 text-red-500 px-2 py-0.5 rounded-full font-black uppercase">Vencido</span>}
@@ -1955,7 +1955,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         ].map((k, i) => (
                             <div key={i} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 text-center">
                                 <p className="text-[8px] font-black text-gray-400 uppercase tracking-wide mb-1">{k.label}</p>
-                                <p className={`text-xs font-black ${k.color} tabular-nums`}>{k.value}</p>
+                                <p className={`text-table-body font-black ${k.color} tabular-nums`}>{k.value}</p>
                             </div>
                         ))}
                     </div>
@@ -2946,7 +2946,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         {doc.category || 'DOCUMENTO'}
                                                     </span>
                                                 </td>
-                                                <td className="px-8 py-4 text-xs font-bold text-gray-400 tabular-nums">
+                                                <td className="px-8 py-4 text-table-body font-bold text-gray-400 tabular-nums">
                                                     {doc.date || '--'}
                                                 </td>
                                                 <td className="px-8 py-4 text-right">
@@ -3624,7 +3624,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         {clientProfile && (
                             <button
                                 onClick={() => { setMeusDadosForm({ ...clientProfile }); setShowMeusDados(true); }}
-                                className="flex items-center gap-2 px-3 py-2 md:px-5 md:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                                className="flex items-center gap-2 px-3 py-2 md:px-5 md:py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl md:rounded-2xl text-[10px] md:text-button font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-100 active:scale-95"
                             >
                                 <UserCircle className="w-4 h-4" />
                                 <span className="hidden sm:inline">Meus Dados</span>
@@ -3651,7 +3651,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         {isAdmin && clientProfile && (
                             <button
                                 onClick={() => onClientSelect?.(null!)}
-                                className="hidden md:flex items-center gap-2 px-4 py-3 bg-gray-100 hover:bg-indigo-50 text-gray-500 hover:text-indigo-600 rounded-2xl text-xs font-black uppercase tracking-widest transition-all border border-transparent hover:border-indigo-200"
+                                className="hidden md:flex items-center gap-2 px-4 py-3 bg-gray-100 hover:bg-indigo-50 text-gray-500 hover:text-indigo-600 rounded-2xl text-button font-black uppercase tracking-widest transition-all border border-transparent hover:border-indigo-200"
                             >
                                 <Users className="w-4 h-4" />
                                 Trocar Cliente
@@ -3833,7 +3833,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         setSavingDados(false);
                                     }
                                 }}
-                                className="w-full flex items-center justify-center gap-3 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                                className="w-full flex items-center justify-center gap-3 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl text-button font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-100 active:scale-95"
                             >
                                 <Save className="w-4 h-4" />
                                 {savingDados ? 'Salvando...' : 'Salvar Alterações'}
@@ -3853,7 +3853,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
                                 className={`
-                                    flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all duration-300
+                                    flex items-center gap-2 px-6 py-2.5 rounded-xl text-button font-bold transition-all duration-300
                                     ${activeTab === tab.id
                                         ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 scale-105'
                                         : isAdmin && !isVisible

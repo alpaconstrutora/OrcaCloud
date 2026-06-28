@@ -238,7 +238,7 @@ const LaborFolhaEmpregado: React.FC<LaborFolhaEmpregadoProps> = ({ orgId, period
             <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
             <div>
                 <p className="text-sm font-bold text-amber-800">{error}</p>
-                <button onClick={fetchData} className="mt-2 text-xs font-black text-amber-600 hover:text-amber-800 flex items-center gap-1">
+                <button onClick={fetchData} className="mt-2 text-button font-black text-amber-600 hover:text-amber-800 flex items-center gap-1">
                     <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
                 </button>
             </div>
@@ -254,7 +254,7 @@ const LaborFolhaEmpregado: React.FC<LaborFolhaEmpregadoProps> = ({ orgId, period
                 </div>
                 <button
                     onClick={() => window.print()}
-                    className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-button font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
                 >
                     <Printer className="w-3.5 h-3.5" />
                     Imprimir
@@ -314,7 +314,7 @@ const LaborFolhaEmpregado: React.FC<LaborFolhaEmpregadoProps> = ({ orgId, period
 
                                 {rows.length === 0 ? (
                                     <tr>
-                                        <td colSpan={10} className="text-center px-3 py-8 text-slate-400 text-xs italic">
+                                        <td colSpan={10} className="text-center px-3 py-8 text-slate-400 text-table-body italic">
                                             Nenhum empregado encontrado para o período.
                                         </td>
                                     </tr>

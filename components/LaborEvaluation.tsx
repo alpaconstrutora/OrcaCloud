@@ -171,7 +171,7 @@ const CycleForm: React.FC<CycleFormProps> = ({ orgId, cycle, onClose, onSaved })
                         <div className="flex items-center justify-between mb-3">
                             <FieldLabel>Competências avaliadas</FieldLabel>
                             <button onClick={addComp}
-                                className="flex items-center gap-1.5 text-xs font-bold text-violet-600 hover:text-violet-800 transition-colors">
+                                className="flex items-center gap-1.5 text-button font-bold text-violet-600 hover:text-violet-800 transition-colors">
                                 <Plus className="w-3.5 h-3.5" /> Adicionar
                             </button>
                         </div>
@@ -187,7 +187,7 @@ const CycleForm: React.FC<CycleFormProps> = ({ orgId, cycle, onClose, onSaved })
                                     </div>
                                     <div className="flex items-center gap-1 mt-1.5 shrink-0">
                                         <span className="text-[10px] text-slate-400 font-bold">Peso</span>
-                                        <select className="text-xs font-bold border border-slate-200 rounded-lg px-1.5 py-1 bg-white outline-none"
+                                        <select className="text-form-input font-bold border border-slate-200 rounded-lg px-1.5 py-1 bg-white outline-none"
                                             value={c.peso} onChange={e => updateComp(c.id, 'peso', Number(e.target.value))}>
                                             {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
                                         </select>
@@ -300,12 +300,12 @@ const EvalForm: React.FC<EvalFormProps> = ({ response, competencias, onClose, on
                                     <div className="flex items-center gap-2">
                                         <StarRating value={r.nota}
                                             onChange={v => setRespostas(p => p.map(x => x.competencia_id === comp.id ? { ...x, nota: v } : x))} />
-                                        <span className={`text-xs font-black w-6 text-center ${r.nota > 0 ? 'text-violet-600' : 'text-slate-300'}`}>
+                                        <span className={`text-form-input font-black w-6 text-center ${r.nota > 0 ? 'text-violet-600' : 'text-slate-300'}`}>
                                             {r.nota > 0 ? r.nota : '–'}
                                         </span>
                                     </div>
                                 </div>
-                                <input className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium outline-none focus:ring-1 focus:ring-violet-200 transition-all"
+                                <input className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-1 focus:ring-violet-200 transition-all"
                                     placeholder="Comentário sobre esta competência (opcional)"
                                     value={r.comentario || ''}
                                     onChange={e => setRespostas(p => p.map(x => x.competencia_id === comp.id ? { ...x, comentario: e.target.value } : x))} />
@@ -315,17 +315,17 @@ const EvalForm: React.FC<EvalFormProps> = ({ response, competencias, onClose, on
 
                     <div className="space-y-3 pt-2">
                         <Field label="Pontos fortes">
-                            <textarea className={`${inputCls} resize-none text-xs`} rows={2}
+                            <textarea className={`${inputCls} resize-none text-form-input`} rows={2}
                                 value={pontosFortes} onChange={e => setPontosFortes(e.target.value)}
                                 placeholder="Principais pontos fortes observados..." />
                         </Field>
                         <Field label="Pontos de melhoria">
-                            <textarea className={`${inputCls} resize-none text-xs`} rows={2}
+                            <textarea className={`${inputCls} resize-none text-form-input`} rows={2}
                                 value={pontosMelhoria} onChange={e => setPontosMelhoria(e.target.value)}
                                 placeholder="Principais oportunidades de desenvolvimento..." />
                         </Field>
                         <Field label="Comentário geral">
-                            <textarea className={`${inputCls} resize-none text-xs`} rows={2}
+                            <textarea className={`${inputCls} resize-none text-form-input`} rows={2}
                                 value={comentarioGeral} onChange={e => setComentarioGeral(e.target.value)}
                                 placeholder="Observações adicionais..." />
                         </Field>
@@ -538,7 +538,7 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                 <div className="flex-1">
                     <div className="flex items-center gap-3 flex-wrap">
                         <h2 className="text-xl font-black text-slate-900">{cycle.nome}</h2>
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black ${STATUS.color} ${STATUS.bg}`}>
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-form-input font-black ${STATUS.color} ${STATUS.bg}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${STATUS.dot}`} />
                             {STATUS.label}
                         </span>
@@ -589,7 +589,7 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
                 {(['avaliacoes', 'resultados'] as const).map(v => (
                     <button key={v} onClick={() => setView(v)}
-                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${view === v ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                        className={`px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all ${view === v ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                         {v === 'avaliacoes' ? 'Avaliações' : 'Resultados'}
                     </button>
                 ))}
@@ -688,7 +688,7 @@ const CycleDetail: React.FC<CycleDetailProps> = ({ cycle, orgId, employees, onBa
                                     const cls = r.classificacao ? CLASS_CONFIG[r.classificacao] : null;
                                     return (
                                         <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-4 py-3 text-slate-400 font-black text-xs">#{i + 1}</td>
+                                            <td className="px-4 py-3 text-slate-400 font-black text-table-body">#{i + 1}</td>
                                             <td className="px-4 py-3">
                                                 <p className="font-bold text-slate-800">{r.employee_nome || '–'}</p>
                                                 {r.employee_cargo && <p className="text-[10px] text-slate-400">{r.employee_cargo}</p>}
@@ -853,7 +853,7 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
                 {([['ciclos', 'Ciclos de Avaliação'], ['pdi', 'PDI']] as [MainTab, string][]).map(([v, label]) => (
                     <button key={v} onClick={() => setMainTab(v)}
-                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${mainTab === v ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                        className={`px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all ${mainTab === v ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                         {label}
                     </button>
                 ))}
@@ -953,7 +953,7 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
                                                 <td className="px-4 py-3 font-bold text-slate-800">{p.employee_nome || '–'}</td>
                                                 <td className="px-4 py-3 text-slate-600">{p.competencia}</td>
                                                 <td className="px-4 py-3 text-slate-500 max-w-[200px] truncate">{p.acao}</td>
-                                                <td className="px-4 py-3 text-slate-400 text-xs">
+                                                <td className="px-4 py-3 text-slate-400 text-table-body">
                                                     {p.prazo ? new Date(p.prazo).toLocaleDateString('pt-BR') : '–'}
                                                 </td>
                                                 <td className="px-4 py-3">

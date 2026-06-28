@@ -141,7 +141,7 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
         <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Nova Evidência</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-bold text-slate-500">Etapa</label>
+            <label className="text-form-label font-bold text-slate-500">Etapa</label>
             <select
               value={gate}
               onChange={e => setGate(e.target.value as typeof gate)}
@@ -153,7 +153,7 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
             </select>
           </div>
           <div>
-            <label className="text-xs font-bold text-slate-500">Descrição</label>
+            <label className="text-form-label font-bold text-slate-500">Descrição</label>
             <input
               type="text"
               value={description}
@@ -203,7 +203,7 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
                   </button>
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-2 py-1">
-                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${GATE_COLORS[f.gate]}`}>
+                  <span className={`text-button font-bold px-1.5 py-0.5 rounded ${GATE_COLORS[f.gate]}`}>
                     {GATE_LABELS[f.gate]}
                   </span>
                   {f.description && <p className="text-xs text-white/80 truncate mt-0.5">{f.description}</p>}

@@ -138,7 +138,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     <div className="relative">
                         <button
                             onClick={() => setIsProjectSelectorOpen(!isProjectSelectorOpen)}
-                            className="flex items-center gap-2 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full hover:bg-blue-100 transition-all border border-blue-100"
+                            className="flex items-center gap-2 text-button font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full hover:bg-blue-100 transition-all border border-blue-100"
                         >
                             {settings.name || 'Selecionar Obra'}
                             <ChevronRight className={`w-3 h-3 transition-transform ${isProjectSelectorOpen ? 'rotate-90' : ''}`} />
@@ -153,7 +153,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                         <button
                                             key={p.id}
                                             onClick={() => { onLoadProject(p.id, 'schedule'); setIsProjectSelectorOpen(false); }}
-                                            className={`w-full text-left px-4 py-2 text-xs font-bold hover:bg-gray-50 flex items-center justify-between group ${p.id === settings.id ? 'text-blue-600 bg-blue-50/50' : 'text-gray-600'}`}
+                                            className={`w-full text-left px-4 py-2 text-button font-bold hover:bg-gray-50 flex items-center justify-between group ${p.id === settings.id ? 'text-blue-600 bg-blue-50/50' : 'text-gray-600'}`}
                                         >
                                             <span className="truncate">{p.name}</span>
                                             {p.id === settings.id && <CheckCircle2 className="w-4 h-4 text-blue-500" />}
@@ -192,7 +192,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                         <button
                             key={key}
                             onClick={() => setViewMode(key)}
-                            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`px-3 py-1.5 rounded-md text-button font-semibold transition-all ${viewMode === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             {label}
                         </button>
@@ -305,7 +305,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     <button
                         onClick={allExpanded ? handleCollapseAll : handleExpandAll}
                         title={allExpanded ? 'Recolher tudo' : 'Expandir tudo'}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 bg-white transition-all"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-button font-bold border border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700 bg-white transition-all"
                     >
                         {allExpanded ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
                         {allExpanded ? 'Recolher' : 'Expandir'}
@@ -326,7 +326,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                 {/* Baseline */}
                                 <button
                                     onClick={() => { setIsBaselineModalOpen(true); closeOverflow(); }}
-                                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold transition-colors ${schedule.activeBaselineId ? 'text-blue-700 bg-blue-50/60' : 'text-gray-600 hover:bg-gray-50'}`}
+                                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-button font-semibold transition-colors ${schedule.activeBaselineId ? 'text-blue-700 bg-blue-50/60' : 'text-gray-600 hover:bg-gray-50'}`}
                                 >
                                     <TrendingUp className="w-3.5 h-3.5 shrink-0" />
                                     {schedule.activeBaselineId
@@ -338,7 +338,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                 {/* What-If */}
                                 <button
                                     onClick={() => { handleToggleSimulation(); closeOverflow(); }}
-                                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold transition-colors ${isSimulationMode ? 'text-purple-700 bg-purple-50/60' : 'text-gray-600 hover:bg-gray-50'}`}
+                                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-button font-semibold transition-colors ${isSimulationMode ? 'text-purple-700 bg-purple-50/60' : 'text-gray-600 hover:bg-gray-50'}`}
                                 >
                                     <FlaskConical className="w-3.5 h-3.5 shrink-0" />
                                     Modo What-If
@@ -349,7 +349,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                 <button
                                     onClick={() => { handleExportPDF(); closeOverflow(); }}
                                     disabled={isExportingPDF}
-                                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full flex items-center gap-2.5 px-4 py-2 text-button font-semibold text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {isExportingPDF ? <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-blue-500" /> : <FileDown className="w-3.5 h-3.5 shrink-0" />}
                                     Exportar PDF
@@ -360,7 +360,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                 {/* Auto Equipe */}
                                 <button
                                     onClick={() => { (allAuto ? handleDisableAutoAllItems : handleApplyAutoAllItems)(); closeOverflow(); }}
-                                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold transition-colors ${allAuto ? 'text-green-700 bg-green-50/60' : 'text-gray-600 hover:bg-gray-50'}`}
+                                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-button font-semibold transition-colors ${allAuto ? 'text-green-700 bg-green-50/60' : 'text-gray-600 hover:bg-gray-50'}`}
                                 >
                                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0" /></svg>
                                     Auto Equipe
@@ -370,7 +370,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                 {/* Classificação de Cargos */}
                                 <button
                                     onClick={() => { onOpenCrewClassification(); closeOverflow(); }}
-                                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-4 py-2 text-button font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
                                 >
                                     <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" /></svg>
                                     Classificação de Cargos
@@ -379,7 +379,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                 {/* Configurações */}
                                 <button
                                     onClick={() => { setIsConfigModalOpen(true); closeOverflow(); }}
-                                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-4 py-2 text-button font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
                                 >
                                     <Settings className="w-3.5 h-3.5 shrink-0" />
                                     Configurações
@@ -390,7 +390,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                 {/* Limpar tudo */}
                                 <button
                                     onClick={() => { onClearAll(); closeOverflow(); }}
-                                    className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                                    className="w-full flex items-center gap-2.5 px-4 py-2 text-button font-semibold text-red-500 hover:bg-red-50 transition-colors"
                                 >
                                     <Trash2 className="w-3.5 h-3.5 shrink-0" />
                                     Limpar tudo

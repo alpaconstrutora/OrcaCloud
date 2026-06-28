@@ -112,7 +112,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                         </p>
                         <button
                             onClick={onNewStudy}
-                            className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-md active:scale-95"
+                            className="inline-flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-md active:scale-95"
                         >
                             <Plus className="w-4 h-4" />
                             Criar Primeiro Estudo

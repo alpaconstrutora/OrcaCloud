@@ -219,7 +219,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-xs active:scale-95 transition-transform hover:bg-slate-50"
+            className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-button active:scale-95 transition-transform hover:bg-slate-50"
           >
             ⬅
           </button>
@@ -232,7 +232,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
         <select
           value={selectedCompanyId}
           onChange={(e) => handleCompanyChange(e.target.value)}
-          className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-slate-500"
+          className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-slate-500"
         >
           {companies.map(c => (
             <option key={c.id} value={c.id}>{c.razao_social}</option>
@@ -305,7 +305,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
                         <select
                           value={operationType}
                           onChange={(e) => setOperationType(e.target.value)}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                         >
                           <option value="expedicao">Expedição (Comprovante / Canhoto / Rastreio)</option>
                           <option value="recebimento">Recebimento (Foto do palete / NF)</option>
@@ -321,7 +321,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
                           value={documentRef}
                           onChange={(e) => setDocumentRef(e.target.value)}
                           placeholder="Ex: Chave NF-e ou número do pedido"
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                         />
                       </div>
 
@@ -332,14 +332,14 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
                           required
                           accept="image/*,application/pdf"
                           onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
-                          className="w-full text-xs font-semibold text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800"
+                          className="w-full text-form-input font-semibold text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-form-input file:font-semibold file:bg-slate-900 file:text-white hover:file:bg-slate-800"
                         />
                       </div>
 
                       <button
                         type="submit"
                         disabled={uploading}
-                        className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
+                        className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
                       >
                         {uploading ? (
                           <>

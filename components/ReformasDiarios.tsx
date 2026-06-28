@@ -274,7 +274,7 @@ const ReformasDiarios: React.FC<ReformasDiariosProps> = ({ userId }) => {
           <textarea
             value={manualNotes}
             onChange={(e) => setManualNotes(e.target.value)}
-            className="w-full h-20 bg-[#070913] border border-white/5 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-orange-500 resize-none font-medium"
+            className="w-full h-20 bg-[#070913] border border-white/5 rounded-xl px-3 py-2 text-form-input text-white outline-none focus:border-orange-500 resize-none font-medium"
             placeholder="Digite detalhes extras da obra ou impedimentos..."
           />
         </div>
@@ -312,7 +312,7 @@ const ReformasDiarios: React.FC<ReformasDiariosProps> = ({ userId }) => {
               type="text"
               value={clima}
               onChange={(e) => setClima(e.target.value)}
-              className="bg-transparent text-xs text-white outline-none font-medium w-full"
+              className="bg-transparent text-form-input text-white outline-none font-medium w-full"
               placeholder="Clima"
             />
           </div>
@@ -322,7 +322,7 @@ const ReformasDiarios: React.FC<ReformasDiariosProps> = ({ userId }) => {
               type="text"
               value={temperatura}
               onChange={(e) => setTemperatura(e.target.value)}
-              className="bg-transparent text-xs text-white outline-none font-medium w-full"
+              className="bg-transparent text-form-input text-white outline-none font-medium w-full"
               placeholder="Temp"
             />
           </div>
@@ -332,7 +332,7 @@ const ReformasDiarios: React.FC<ReformasDiariosProps> = ({ userId }) => {
         <button
           onClick={handleGenerateReport}
           disabled={generatingReport}
-          className="w-full py-3 bg-gradient-to-tr from-orange-600 to-amber-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+          className="w-full py-3 bg-gradient-to-tr from-orange-600 to-amber-500 text-white text-button font-black uppercase tracking-widest rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {generatingReport ? (
             <>

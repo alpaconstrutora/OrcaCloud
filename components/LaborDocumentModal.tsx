@@ -271,14 +271,14 @@ const LaborDocumentModal: React.FC<LaborDocumentModalProps> = ({ employees, orgI
                 <div className="p-6 border-t border-slate-50 bg-slate-50/50 flex items-center justify-end gap-3">
                     <button
                         onClick={onClose}
-                        className="px-6 py-2.5 text-slate-500 font-black text-xs uppercase tracking-tight hover:text-slate-700 transition-all"
+                        className="px-6 py-2.5 text-slate-500 font-black text-button uppercase tracking-tight hover:text-slate-700 transition-all"
                     >
                         Cancelar
                     </button>
                     <button
                         onClick={handleSubmit}
                         disabled={loading}
-                        className={`flex items-center gap-2 px-8 py-2.5 text-white rounded-xl transition-all shadow-lg font-black text-xs uppercase tracking-tight disabled:opacity-50 disabled:cursor-not-allowed ${isEdit ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}
+                        className={`flex items-center gap-2 px-8 py-2.5 text-white rounded-xl transition-all shadow-lg font-black text-form-input uppercase tracking-tight disabled:opacity-50 disabled:cursor-not-allowed ${isEdit ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}
                     >
                         {loading ? (
                             <>

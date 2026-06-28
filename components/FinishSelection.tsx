@@ -117,7 +117,7 @@ const FinishSelection: React.FC = () => {
                 </div>
                 <button
                     disabled={Object.keys(selections).length === 0}
-                    className={`px-10 py-5 rounded-[1.5rem] text-xs font-black uppercase tracking-[0.2em] transition-all
+                    className={`px-10 py-5 rounded-[1.5rem] text-button font-black uppercase tracking-[0.2em] transition-all
             ${Object.keys(selections).length > 0
                             ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95'
                             : 'bg-gray-200 text-gray-400 cursor-not-allowed'}

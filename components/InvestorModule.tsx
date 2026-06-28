@@ -28,7 +28,7 @@ const InvestorModule: React.FC<Props> = ({ organizationId, profile, settings, bu
         <div className="flex items-center gap-3 px-6 py-3 bg-white border-b border-gray-100">
           <button
             onClick={() => setSelectedInvestor(null)}
-            className="flex items-center gap-2 text-xs font-black text-gray-400 hover:text-blue-600 uppercase tracking-widest transition-colors"
+            className="flex items-center gap-2 text-button font-black text-gray-400 hover:text-blue-600 uppercase tracking-widest transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Meus Investidores

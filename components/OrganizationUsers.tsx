@@ -528,10 +528,10 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     <table className="w-full text-left">
                         <thead className="bg-gray-50 border-b border-gray-200">
                             <tr>
-                                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Membro</th>
-                                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Função / Cargo</th>
-                                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Entrou em</th>
-                                <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Ações</th>
+                                <th className="px-6 py-3 text-table-header font-semibold text-gray-500 uppercase tracking-wider">Membro</th>
+                                <th className="px-6 py-3 text-table-header font-semibold text-gray-500 uppercase tracking-wider">Função / Cargo</th>
+                                <th className="px-6 py-3 text-table-header font-semibold text-gray-500 uppercase tracking-wider">Entrou em</th>
+                                <th className="px-6 py-3 text-table-header font-semibold text-gray-500 uppercase tracking-wider text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
@@ -585,7 +585,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     <button
                                                         type="button"
                                                         onClick={() => handleOpenEditMember(member)}
-                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-colors"
+                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-button font-medium rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-colors"
                                                     >
                                                         <Edit2 className="w-3.5 h-3.5" />
                                                         Editar
@@ -593,7 +593,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     <button
                                                         type="button"
                                                         onClick={() => handleResendInvite(member)}
-                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 transition-colors"
+                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-button font-medium rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 transition-colors"
                                                     >
                                                         <Send className="w-3.5 h-3.5" />
                                                         Reenviar
@@ -601,7 +601,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     <button
                                                         type="button"
                                                         onClick={() => setEditingMemberId(editingMemberId === member.id ? null : member.id)}
-                                                        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors ${editingMemberId === member.id ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50 border-transparent hover:border-blue-100'}`}
+                                                        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-table-body font-medium rounded-lg border transition-colors ${editingMemberId === member.id ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50 border-transparent hover:border-blue-100'}`}
                                                     >
                                                         <Shield className="w-3.5 h-3.5" />
                                                         Permissões
@@ -609,7 +609,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     <button
                                                         type="button"
                                                         onClick={() => handleRemoveMember(member.id)}
-                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
+                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-button font-medium rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
                                                     >
                                                         <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
@@ -871,7 +871,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                     {PRODUCTS.map(p => (
                                         <button key={p.id} type="button"
                                             onClick={() => setEditMemberProductContext(p.id)}
-                                            className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all text-xs font-bold ${
+                                            className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all text-table-header font-bold ${
                                                 editMemberProductContext === p.id
                                                     ? 'border-blue-500 bg-blue-50 text-blue-700'
                                                     : 'border-gray-200 text-gray-500 hover:border-gray-300'
@@ -958,7 +958,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                         {PRODUCTS.map(p => (
                                             <button key={p.id} type="button"
                                                 onClick={() => setNewMemberProductContext(p.id)}
-                                                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-xs font-bold ${
+                                                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-button font-bold ${
                                                     newMemberProductContext === p.id
                                                         ? 'border-blue-500 bg-blue-50 text-blue-700'
                                                         : 'border-gray-200 text-gray-500 hover:border-gray-300'

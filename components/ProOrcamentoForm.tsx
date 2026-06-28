@@ -462,7 +462,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   }
                 }
               }}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
+              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
             >
               <option value="">Selecione um modelo...</option>
               {getTodosTemplates().map((t: any, index) => (
@@ -487,7 +487,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   setClienteId(e.target.value);
                 }
               }}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
+              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
             >
               <option value="">Selecione um cliente...</option>
               {clientes.map(c => (
@@ -507,21 +507,21 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   placeholder="Nome completo do cliente"
                   value={novoClienteNome}
                   onChange={(e) => setNovoClienteNome(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
                 />
                 <input
                   type="tel"
                   placeholder="Telefone (com DDD)"
                   value={novoClienteTelefone}
                   onChange={(e) => setNovoClienteTelefone(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
                 />
                 <input
                   type="text"
                   placeholder="Endereço de execução (opcional)"
                   value={novoClienteEndereco}
                   onChange={(e) => setNovoClienteEndereco(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
                 />
               </div>
             </div>
@@ -548,7 +548,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
               placeholder="Ex: Instalação de ar-condicionado Split 12000 BTUs com fornecimento de fiação e tubulação de cobre até 3m."
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none shadow-sm font-medium"
+              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-button text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none shadow-sm font-medium"
             />
           </div>
 
@@ -565,7 +565,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   placeholder="Ex: m², un, h"
                   value={unidade}
                   onChange={(e) => setUnidade(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
                 />
               </div>
               <div className="space-y-1">
@@ -583,7 +583,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                       setValor((qNum * uNum).toFixed(2));
                     }
                   }}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
                 />
               </div>
               <div className="space-y-1">
@@ -601,7 +601,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                       setValor((qNum * uNum).toFixed(2));
                     }
                   }}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
                 />
               </div>
             </div>
@@ -623,7 +623,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
               placeholder="0,00"
               value={valor}
               onChange={(e) => setValor(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
+              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
             />
           </div>
 
@@ -635,7 +635,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                 type="number"
                 value={validadeDias}
                 onChange={(e) => setValidadeDias(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
+                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
               />
             </div>
 
@@ -646,7 +646,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                 type="number"
                 value={garantiaDias}
                 onChange={(e) => setGarantiaDias(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
+                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
               />
             </div>
           </div>
@@ -659,7 +659,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
               placeholder="Ex: Não incluso quebra de alvenaria. Chave Pix para pagamento no rodapé do documento."
               value={observacoes}
               onChange={(e) => setObservacoes(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none shadow-sm font-medium"
+              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none shadow-sm font-medium"
             />
           </div>
 
@@ -667,7 +667,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
           <div className="pt-4 flex flex-col gap-3">
             <button
               onClick={() => handleSave('ENVIADO')}
-              className="w-full py-3.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-black text-xs uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 active:scale-[0.98]"
+              className="w-full py-3.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-black text-button uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 active:scale-[0.98]"
             >
               🚀 Salvar e Enviar via WhatsApp
             </button>
@@ -675,13 +675,13 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => handleSave('RASCUNHO')}
-                className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-650 font-bold text-xs rounded-full border border-slate-250 transition-colors"
+                className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-650 font-bold text-button rounded-full border border-slate-250 transition-colors"
               >
                 💾 Rascunho
               </button>
               <button
                 onClick={() => handleSave('APROVADO')}
-                className="py-2.5 bg-gradient-to-tr from-emerald-500 to-teal-400 hover:from-emerald-600 hover:to-teal-500 text-white font-bold text-xs rounded-full transition-colors shadow-md shadow-emerald-500/10"
+                className="py-2.5 bg-gradient-to-tr from-emerald-500 to-teal-400 hover:from-emerald-600 hover:to-teal-500 text-white font-bold text-button rounded-full transition-colors shadow-md shadow-emerald-500/10"
               >
                 ✅ Direto p/ Serviço
               </button>

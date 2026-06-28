@@ -310,7 +310,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                                 type="number"
                                                 value={item.unitPrice}
                                                 onChange={(e) => handlePriceChange(idx, parseFloat(e.target.value) || 0)}
-                                                className="w-full bg-white border border-gray-100 rounded-lg pl-8 pr-3 py-2 text-xs font-black outline-none focus:ring-2 focus:ring-indigo-500/10"
+                                                className="w-full bg-white border border-gray-100 rounded-lg pl-8 pr-3 py-2 text-form-input font-black outline-none focus:ring-2 focus:ring-indigo-500/10"
                                             />
                                         </div>
                                     </div>
@@ -330,13 +330,13 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                 placeholder="Mensagem opcional..."
                                 value={message}
                                 onChange={(e) => setMessage(e.target.value)}
-                                className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500/10 resize-none h-20 mb-4"
+                                className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-500/10 resize-none h-20 mb-4"
                             />
 
                             <button
                                 onClick={handleSubmitProposal}
                                 disabled={submitting}
-                                className="w-full bg-indigo-600 text-white py-4 rounded-2xl flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-50"
+                                className="w-full bg-indigo-600 text-white py-4 rounded-2xl flex items-center justify-center gap-2 text-button font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-50"
                             >
                                 <Send className="w-4 h-4" />
                                 Enviar Proposta

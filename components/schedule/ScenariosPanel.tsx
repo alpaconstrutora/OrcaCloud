@@ -369,10 +369,10 @@ const ConfirmModal: React.FC<{
             <h3 className="text-sm font-bold text-gray-800">{title}</h3>
             <p className="text-xs text-gray-500 leading-relaxed">{message}</p>
             <div className="flex justify-end gap-2 pt-1">
-                <button onClick={onCancel} className="px-4 py-2 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-lg">
+                <button onClick={onCancel} className="px-4 py-2 text-button font-medium text-gray-500 hover:bg-gray-100 rounded-lg">
                     Cancelar
                 </button>
-                <button onClick={onConfirm} className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${confirmClass}`}>
+                <button onClick={onConfirm} className={`px-4 py-2 text-table-body font-bold rounded-lg transition-all ${confirmClass}`}>
                     {confirmLabel}
                 </button>
             </div>

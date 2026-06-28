@@ -257,14 +257,14 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                             <button
                                 onClick={() => openCreateModal(b)}
                                 disabled={busyId === b.id}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-bold hover:bg-blue-100 disabled:opacity-50"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-button font-bold hover:bg-blue-100 disabled:opacity-50"
                             >
                                 <Plus className="w-3.5 h-3.5" /> Criar lançamento
                             </button>
                             <button
                                 onClick={() => onConfirmNoTitle(b)}
                                 disabled={busyId === b.id}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-600 text-xs font-bold hover:bg-gray-100 disabled:opacity-50"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-600 text-button font-bold hover:bg-gray-100 disabled:opacity-50"
                             >
                                 <CheckCircle2 className="w-3.5 h-3.5" /> Sem título
                             </button>
@@ -298,14 +298,14 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                             <button
                                 onClick={() => onReverse(i)}
                                 disabled={busyId === i.id}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-bold hover:bg-red-100 disabled:opacity-50"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 text-red-700 text-button font-bold hover:bg-red-100 disabled:opacity-50"
                             >
                                 <Undo2 className="w-3.5 h-3.5" /> Estornar
                             </button>
                             <button
                                 onClick={() => onReopen(i)}
                                 disabled={busyId === i.id}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-600 text-xs font-bold hover:bg-gray-100 disabled:opacity-50"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-50 text-gray-600 text-button font-bold hover:bg-gray-100 disabled:opacity-50"
                             >
                                 <RotateCcw className="w-3.5 h-3.5" /> Reabrir
                             </button>
@@ -337,7 +337,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         <button
                             onClick={() => onReconcileDiff(m)}
                             disabled={busyId === m.bank_id}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-50 text-purple-700 text-xs font-bold hover:bg-purple-100 disabled:opacity-50"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-purple-50 text-purple-700 text-button font-bold hover:bg-purple-100 disabled:opacity-50"
                         >
                             <Link2 className="w-3.5 h-3.5" /> Conciliar com diferença
                         </button>

@@ -166,7 +166,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                             <button
                                 onClick={onDownloadTemplate}
                                 title="Baixar modelo para importação"
-                                className="flex items-center gap-2 bg-white text-gray-500 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-200 active:scale-95"
+                                className="flex items-center gap-2 bg-white text-gray-500 px-4 py-3 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-200 active:scale-95"
                             >
                                 <FileDown className="w-4 h-4" />
                                 <span>Template</span>
@@ -175,7 +175,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                         {onImport && (
                             <button
                                 onClick={onImport}
-                                className="flex items-center gap-2 bg-white text-gray-600 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-200 active:scale-95"
+                                className="flex items-center gap-2 bg-white text-gray-600 px-5 py-3 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-200 active:scale-95"
                             >
                                 <Upload className="w-4 h-4" />
                                 <span>Importar</span>
@@ -184,7 +184,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                         {onExport && items.length > 0 && (
                             <button
                                 onClick={onExport}
-                                className="flex items-center gap-2 bg-white text-gray-600 px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-200 active:scale-95"
+                                className="flex items-center gap-2 bg-white text-gray-600 px-5 py-3 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-200 active:scale-95"
                             >
                                 <Download className="w-4 h-4" />
                                 <span>Exportar</span>
@@ -200,7 +200,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                         />
                         <button
                             onClick={handleAdd}
-                            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/10 active:scale-95"
+                            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/10 active:scale-95"
                         >
                             <Plus className="w-4 h-4" />
                             <span>Novo Cadastro</span>
@@ -318,14 +318,14 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                 <button
                                     type="button"
                                     onClick={handleCancel}
-                                    className="px-6 py-3 text-xs font-black uppercase text-gray-400 hover:text-gray-600 transition-all"
+                                    className="px-6 py-3 text-button font-black uppercase text-gray-400 hover:text-gray-600 transition-all"
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="flex items-center gap-2 bg-black text-white px-10 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50 shadow-xl shadow-gray-200"
+                                    className="flex items-center gap-2 bg-black text-white px-10 py-3 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-800 transition-all disabled:opacity-50 shadow-xl shadow-gray-200"
                                 >
                                     <Save className="w-4 h-4" />
                                     {loading ? 'Gravando...' : 'Salvar Registro'}

@@ -328,11 +328,11 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
                 </div>
 
                 {msg && (
-                    <div className={`p-3 rounded-xl text-xs font-bold ${msg.startsWith('✓') ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{msg}</div>
+                    <div className={`p-3 rounded-xl text-form-label font-bold ${msg.startsWith('✓') ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{msg}</div>
                 )}
 
                 <button onClick={handleSubmit} disabled={saving}
-                    className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 disabled:opacity-50">
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 disabled:opacity-50">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus size={16} />} Lançar Incentivo
                 </button>
             </Card>
@@ -484,14 +484,14 @@ const HabitualityTab: React.FC<{ orgId: string }> = ({ orgId }) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
-                                {flags.length === 0 && <tr><td colSpan={6} className="py-10 text-center text-slate-300 text-xs font-bold uppercase">Sem incentivos no período</td></tr>}
+                                {flags.length === 0 && <tr><td colSpan={6} className="py-10 text-center text-slate-300 text-table-body font-bold uppercase">Sem incentivos no período</td></tr>}
                                 {flags.map((f, i) => (
                                     <tr key={i} className={f.is_habitual ? 'bg-rose-50/40' : ''}>
                                         <td className="py-3 px-2 text-sm font-bold text-slate-700">{f.employee_name}</td>
-                                        <td className="py-3 px-2 text-xs font-bold text-slate-500">{f.rubric_name}</td>
+                                        <td className="py-3 px-2 text-table-body font-bold text-slate-500">{f.rubric_name}</td>
                                         <td className="py-3 px-2 text-center text-sm font-black text-slate-800">{f.months_paid}/{f.window_months}</td>
-                                        <td className="py-3 px-2 text-right text-xs font-bold text-slate-600">{brl(f.avg_monthly_amount)}</td>
-                                        <td className="py-3 px-2 text-right text-xs font-black text-rose-600">{f.is_habitual ? brl(f.estimated_annual_reflexo) : '—'}</td>
+                                        <td className="py-3 px-2 text-right text-table-body font-bold text-slate-600">{brl(f.avg_monthly_amount)}</td>
+                                        <td className="py-3 px-2 text-right text-table-body font-black text-rose-600">{f.is_habitual ? brl(f.estimated_annual_reflexo) : '—'}</td>
                                         <td className="py-3 px-2 text-center">
                                             {f.is_habitual
                                                 ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-rose-100 text-rose-700"><AlertTriangle size={10} /> Habitual</span>
@@ -699,8 +699,8 @@ const RuleEditor: React.FC<{ rule: IncentiveRule; setRule: (r: IncentiveRule) =>
                 )}
 
                 <div className="flex justify-end gap-2 pt-2">
-                    <button onClick={onCancel} className="px-5 py-2.5 text-slate-400 font-black text-xs uppercase tracking-widest hover:text-slate-600">Cancelar</button>
-                    <button onClick={onSave} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700">Salvar Regra</button>
+                    <button onClick={onCancel} className="px-5 py-2.5 text-slate-400 font-black text-button uppercase tracking-widest hover:text-slate-600">Cancelar</button>
+                    <button onClick={onSave} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700">Salvar Regra</button>
                 </div>
             </div>
         </div>

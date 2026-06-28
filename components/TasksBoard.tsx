@@ -324,7 +324,7 @@ function DroppableColumn({
       {onAddTask && (
         <button
           onClick={() => onAddTask(buildDefaults(col.key, groupBy))}
-          className="mt-2 flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors w-full"
+          className="mt-2 flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-button font-bold text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors w-full"
         >
           <Plus className="w-3.5 h-3.5" /> Adicionar tarefa
         </button>

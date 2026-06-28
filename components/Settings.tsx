@@ -162,13 +162,13 @@ const Settings: React.FC = () => {
                             <p className="text-sm text-gray-500 mt-1">Prefixo e sufixo usados na geração automática dos números de pedido.</p>
                         </div>
                     </div>
-                    <button onClick={() => handleAppSettingsReset('numbering')} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                    <button onClick={() => handleAppSettingsReset('numbering')} className="flex items-center gap-1.5 text-button text-gray-400 hover:text-gray-600 transition-colors shrink-0">
                         <RotateCcw className="w-3.5 h-3.5" /> Padrões
                     </button>
                 </div>
                 <div className="mt-6 border-t border-gray-100 pt-6 grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Prefixo</label>
+                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-widest mb-1.5">Prefixo</label>
                         <input
                             type="text"
                             value={appSettings.orderPrefix}
@@ -179,7 +179,7 @@ const Settings: React.FC = () => {
                         <p className="text-[11px] text-gray-400 mt-1">Ex: <span className="font-mono">{appSettings.orderPrefix}123456</span></p>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Sufixo de Duplicata</label>
+                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-widest mb-1.5">Sufixo de Duplicata</label>
                         <input
                             type="text"
                             value={appSettings.orderDuplicateSuffix}
@@ -210,7 +210,7 @@ const Settings: React.FC = () => {
                             <p className="text-sm text-gray-500 mt-1">Assunto e corpo do e-mail enviado ao fornecedor em cada mudança de status.</p>
                         </div>
                     </div>
-                    <button onClick={() => handleAppSettingsReset('email')} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                    <button onClick={() => handleAppSettingsReset('email')} className="flex items-center gap-1.5 text-button text-gray-400 hover:text-gray-600 transition-colors shrink-0">
                         <RotateCcw className="w-3.5 h-3.5" /> Padrões
                     </button>
                 </div>
@@ -222,7 +222,7 @@ const Settings: React.FC = () => {
                 </div>
                 <div className="border-t border-gray-100 pt-6 space-y-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Assunto</label>
+                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-widest mb-1.5">Assunto</label>
                         <input
                             type="text"
                             value={appSettings.emailStatusChangeSubject}
@@ -231,7 +231,7 @@ const Settings: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Corpo</label>
+                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-widest mb-1.5">Corpo</label>
                         <textarea
                             rows={3}
                             value={appSettings.emailStatusChangeBody}
@@ -270,7 +270,7 @@ const Settings: React.FC = () => {
 
                 <div className="mt-6 border-t border-gray-100 pt-6 space-y-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Phone Number ID</label>
+                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-widest mb-1.5">Phone Number ID</label>
                         <input
                             type="text"
                             value={waForm.phoneNumberId}
@@ -281,7 +281,7 @@ const Settings: React.FC = () => {
                         <p className="text-xs text-gray-400 mt-1">Encontrado em Meta for Developers → seu app → WhatsApp → API Setup.</p>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Access Token</label>
+                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-widest mb-1.5">Access Token</label>
                         <div className="relative">
                             <input
                                 type={showToken ? 'text' : 'password'}
@@ -304,7 +304,7 @@ const Settings: React.FC = () => {
                     <div className="flex items-center justify-between pt-2">
                         <button
                             onClick={handleWaClear}
-                            className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-red-600 transition-colors"
+                            className="flex items-center gap-2 text-button font-bold text-gray-400 hover:text-red-600 transition-colors"
                         >
                             <Trash2 className="w-3.5 h-3.5" />
                             Limpar credenciais
@@ -332,7 +332,7 @@ const Settings: React.FC = () => {
                             <p className="text-sm text-gray-500 mt-1">Texto das mensagens enviadas ao fornecedor via Z-API.</p>
                         </div>
                     </div>
-                    <button onClick={() => handleAppSettingsReset('whatsapp')} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                    <button onClick={() => handleAppSettingsReset('whatsapp')} className="flex items-center gap-1.5 text-button text-gray-400 hover:text-gray-600 transition-colors shrink-0">
                         <RotateCcw className="w-3.5 h-3.5" /> Padrões
                     </button>
                 </div>
@@ -340,7 +340,7 @@ const Settings: React.FC = () => {
                 {/* Template: Pedido Enviado */}
                 <div className="mt-6 border-t border-gray-100 pt-6 space-y-2">
                     <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-bold text-gray-700 uppercase tracking-widest">Pedido Enviado ao Fornecedor</label>
+                        <label className="text-form-label font-bold text-gray-700 uppercase tracking-widest">Pedido Enviado ao Fornecedor</label>
                     </div>
                     <div className="flex flex-wrap gap-2 mb-2">
                         <span className="text-[11px] text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
@@ -359,7 +359,7 @@ const Settings: React.FC = () => {
                 {/* Template: Mudança de Status */}
                 <div className="mt-6 space-y-2">
                     <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-bold text-gray-700 uppercase tracking-widest">Mudança de Status</label>
+                        <label className="text-form-label font-bold text-gray-700 uppercase tracking-widest">Mudança de Status</label>
                     </div>
                     <div className="flex flex-wrap gap-2 mb-2">
                         <span className="text-[11px] text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>

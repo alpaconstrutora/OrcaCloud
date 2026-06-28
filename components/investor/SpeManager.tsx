@@ -131,7 +131,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                 {isAdmin && (
                     <button
                         onClick={() => setShowNewEntity(v => !v)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-bold hover:bg-blue-700"
                     >
                         <Plus className="w-4 h-4" /> Nova SPE
                     </button>
@@ -259,12 +259,12 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                                                                             <input type="number" min="0" step="0.01"
                                                                                 value={ci.amount || ''}
                                                                                 onChange={e => setCapitalInput(c => ({ ...c, [p.id!]: { ...ci, amount: parseFloat(e.target.value) || 0 } }))}
-                                                                                className="w-24 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none"
+                                                                                className="w-24 px-2 py-1 border border-gray-200 rounded text-form-input focus:outline-none"
                                                                                 placeholder="0,00"
                                                                             />
                                                                             <button
                                                                                 onClick={() => handleCapitalAction(p.id!, entity.id!)}
-                                                                                className="p-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                                                                                className="p-1.5 bg-blue-600 text-white rounded text-button hover:bg-blue-700"
                                                                             >
                                                                                 <DollarSign className="w-3 h-3" />
                                                                             </button>
@@ -286,7 +286,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                                                     <select
                                                         value={partnerForm[entity.id!]?.investor_id || ''}
                                                         onChange={e => setPartnerForm(f => ({ ...f, [entity.id!]: { ...f[entity.id!], investor_id: e.target.value } }))}
-                                                        className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-40"
+                                                        className="px-2 py-1.5 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-40"
                                                     >
                                                         <option value="">Selecione...</option>
                                                         {investors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
@@ -297,7 +297,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                                                     <input type="number" min="0" max="100" step="0.01"
                                                         value={partnerForm[entity.id!]?.ownership_pct || ''}
                                                         onChange={e => setPartnerForm(f => ({ ...f, [entity.id!]: { ...f[entity.id!], ownership_pct: parseFloat(e.target.value) || 0 } }))}
-                                                        className="w-24 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-24 px-2 py-1.5 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="0"
                                                     />
                                                 </label>
@@ -306,13 +306,13 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                                                     <input type="number" min="0" step="0.01"
                                                         value={partnerForm[entity.id!]?.capital_calls_total || ''}
                                                         onChange={e => setPartnerForm(f => ({ ...f, [entity.id!]: { ...f[entity.id!], capital_calls_total: parseFloat(e.target.value) || 0 } }))}
-                                                        className="w-32 px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-32 px-2 py-1.5 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="0,00"
                                                     />
                                                 </label>
                                                 <button
                                                     onClick={() => handleAddPartner(entity.id!)}
-                                                    className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700"
+                                                    className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-button font-bold hover:bg-blue-700"
                                                 >
                                                     <Plus className="w-4 h-4" /> Sócio
                                                 </button>

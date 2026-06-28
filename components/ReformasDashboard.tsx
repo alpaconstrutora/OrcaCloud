@@ -186,7 +186,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
           <select
             value={activeProjectId}
             onChange={(e) => handleSelectProject(e.target.value)}
-            className="w-full bg-[#070913] border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500 mt-1.5"
+            className="w-full bg-[#070913] border border-white/5 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500 mt-1.5"
           >
             {projetos.map(p => (
               <option key={p.id} value={p.id}>{p.nome_cliente}</option>
@@ -283,7 +283,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
                   placeholder="Ex: João da Silva"
                   value={nomeCliente}
                   onChange={(e) => setNomeCliente(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
                   required
                 />
               </div>
@@ -296,7 +296,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
                   placeholder="Rua, Número, Bairro, Apto"
                   value={endereco}
                   onChange={(e) => setEndereco(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
                 />
               </div>
 
@@ -309,7 +309,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
                     placeholder="0"
                     value={orcamentoTotal}
                     onChange={(e) => setOrcamentoTotal(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
                   />
                 </div>
                 <div className="space-y-1">
@@ -318,7 +318,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
                     type="date"
                     value={dataInicio}
                     onChange={(e) => setDataInicio(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
                     required
                   />
                 </div>
@@ -329,14 +329,14 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 font-bold text-xs rounded-xl transition-all"
+                className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 font-bold text-button rounded-xl transition-all"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 py-2.5 bg-gradient-to-tr from-orange-600 to-amber-500 text-white font-bold text-xs rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                className="flex-1 py-2.5 bg-gradient-to-tr from-orange-600 to-amber-500 text-white font-bold text-button rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
                 {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 Criar Obra

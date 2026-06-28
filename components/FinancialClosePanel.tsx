@@ -211,7 +211,7 @@ const FinancialClosePanel: React.FC<FinancialClosePanelProps> = ({ organizationI
                                 <span className="text-sm font-bold text-gray-800 flex-1">
                                     {MONTHS_FULL[p.period_month - 1]} / {p.period_year}
                                 </span>
-                                <span className={`text-xs font-black px-2 py-0.5 rounded-full ${p.is_closed ? 'bg-gray-100 text-gray-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                <span className={`text-button font-black px-2 py-0.5 rounded-full ${p.is_closed ? 'bg-gray-100 text-gray-600' : 'bg-emerald-50 text-emerald-600'}`}>
                                     {p.is_closed ? 'Fechado' : 'Reaberto'}
                                 </span>
                             </button>

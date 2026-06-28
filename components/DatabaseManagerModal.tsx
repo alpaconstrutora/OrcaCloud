@@ -151,14 +151,14 @@ const DatabaseManagerModal: React.FC<DatabaseManagerModalProps> = ({ isOpen, onC
                             <div className="flex justify-end gap-2">
                                 <button
                                     onClick={() => { setIsCreating(false); setIsEditing(null); }}
-                                    className="px-3 py-1.5 text-xs font-bold text-gray-500 hover:text-gray-700"
+                                    className="px-3 py-1.5 text-button font-bold text-gray-500 hover:text-gray-700"
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     onClick={() => isCreating ? handleCreate() : handleUpdate(isEditing!)}
                                     disabled={!editName.trim()}
-                                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 disabled:opacity-50"
+                                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-button font-bold hover:bg-blue-700 disabled:opacity-50"
                                 >
                                     Salvar
                                 </button>
@@ -218,7 +218,7 @@ const DatabaseManagerModal: React.FC<DatabaseManagerModalProps> = ({ isOpen, onC
                                         ) : (
                                             <button
                                                 onClick={() => onSelect(db)}
-                                                className="px-3 py-1 bg-gray-100 text-gray-600 hover:bg-blue-600 hover:text-white text-xs font-bold rounded-lg ml-2 transition-colors"
+                                                className="px-3 py-1 bg-gray-100 text-gray-600 hover:bg-blue-600 hover:text-white text-button font-bold rounded-lg ml-2 transition-colors"
                                             >
                                                 Selecionar
                                             </button>

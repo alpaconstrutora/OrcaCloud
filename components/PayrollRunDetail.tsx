@@ -41,7 +41,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
             <button
                 onClick={onBack}
-                className="flex items-center gap-2 text-slate-400 hover:text-slate-900 font-bold text-xs uppercase transition-colors"
+                className="flex items-center gap-2 text-slate-400 hover:text-slate-900 font-bold text-button uppercase transition-colors"
             >
                 <ArrowRight className="w-4 h-4 rotate-180" /> Voltar à Lista
             </button>
@@ -180,7 +180,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                                 ))}
                             </div>
                             <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
-                                <button onClick={() => setShowAuditModal(false)} className="px-6 py-2.5 bg-slate-800 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-900 transition-all">Fechar</button>
+                                <button onClick={() => setShowAuditModal(false)} className="px-6 py-2.5 bg-slate-800 text-white rounded-xl font-bold text-button uppercase tracking-widest hover:bg-slate-900 transition-all">Fechar</button>
                             </div>
                         </div>
                     </div>

@@ -150,7 +150,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                     <div className="space-y-4 animate-in fade-in duration-300">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">
+                                <label className="block text-form-label font-black text-gray-500 uppercase tracking-wider mb-1.5">
                                     <User className="w-3.5 h-3.5 inline mr-1" />Nome Completo *
                                 </label>
                                 <input type="text" value={buyerName} onChange={e => setBuyerName(e.target.value)}
@@ -158,7 +158,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                     placeholder="Nome do comprador" />
                             </div>
                             <div>
-                                <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">
+                                <label className="block text-form-label font-black text-gray-500 uppercase tracking-wider mb-1.5">
                                     <CreditCard className="w-3.5 h-3.5 inline mr-1" />CPF *
                                 </label>
                                 <input type="text" value={buyerCpf} onChange={e => setBuyerCpf(formatCpf(e.target.value))}
@@ -166,7 +166,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                     placeholder="000.000.000-00" maxLength={14} />
                             </div>
                             <div>
-                                <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">
+                                <label className="block text-form-label font-black text-gray-500 uppercase tracking-wider mb-1.5">
                                     <Mail className="w-3.5 h-3.5 inline mr-1" />E-mail
                                 </label>
                                 <input type="email" value={buyerEmail} onChange={e => setBuyerEmail(e.target.value)}
@@ -174,7 +174,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                     placeholder="email@exemplo.com" />
                             </div>
                             <div>
-                                <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">
+                                <label className="block text-form-label font-black text-gray-500 uppercase tracking-wider mb-1.5">
                                     <Phone className="w-3.5 h-3.5 inline mr-1" />Telefone
                                 </label>
                                 <input type="text" value={buyerPhone} onChange={e => setBuyerPhone(formatPhone(e.target.value))}
@@ -182,7 +182,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                     placeholder="(00) 00000-0000" maxLength={15} />
                             </div>
                             <div>
-                                <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">
+                                <label className="block text-form-label font-black text-gray-500 uppercase tracking-wider mb-1.5">
                                     <DollarSign className="w-3.5 h-3.5 inline mr-1" />Renda Mensal
                                 </label>
                                 <input type="number" value={buyerIncome || ''} onChange={e => setBuyerIncome(Number(e.target.value))}
@@ -192,7 +192,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                         </div>
                         <div className="flex justify-end pt-4">
                             <button onClick={() => setActiveStep('payment')} disabled={!canProceedBuyer}
-                                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20">
+                                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20">
                                 Próximo <ArrowRight className="w-4 h-4" />
                             </button>
                         </div>
@@ -206,7 +206,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                             /* Rental Flow */
                             <div className="space-y-6">
                                 <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
-                                    <label className="block text-xs font-black text-blue-600 uppercase tracking-wider mb-3">
+                                    <label className="block text-form-label font-black text-blue-600 uppercase tracking-wider mb-3">
                                         Prazo do Contrato (Meses)
                                     </label>
                                     <select value={monthlyInstallments} onChange={e => setMonthlyInstallments(Number(e.target.value))}
@@ -224,7 +224,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                 <div className="bg-amber-50 rounded-xl p-4 border border-amber-100 flex items-center gap-4">
                                     <Percent className="w-5 h-5 text-amber-600" />
                                     <div className="flex-1">
-                                        <label className="text-xs font-black text-amber-600 uppercase tracking-wider">Desconto Solicitado (no aluguel)</label>
+                                        <label className="text-form-label font-black text-amber-600 uppercase tracking-wider">Desconto Solicitado (no aluguel)</label>
                                         <input type="range" min={0} max={20} step={1} value={discountPct}
                                             onChange={e => setDiscountPct(Number(e.target.value))}
                                             className="w-full accent-amber-500" />
@@ -238,7 +238,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 {/* Sliders */}
                                 <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-100">
-                                    <label className="block text-xs font-black text-emerald-600 uppercase tracking-wider mb-3">
+                                    <label className="block text-form-label font-black text-emerald-600 uppercase tracking-wider mb-3">
                                         Entrada (Ato)
                                     </label>
                                     <input type="range" min={5} max={100} value={downPaymentPct}
@@ -251,7 +251,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                 </div>
 
                                 <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
-                                    <label className="block text-xs font-black text-blue-600 uppercase tracking-wider mb-3">
+                                    <label className="block text-form-label font-black text-blue-600 uppercase tracking-wider mb-3">
                                         Parcelas Mensais
                                     </label>
                                     <select value={monthlyInstallments} onChange={e => setMonthlyInstallments(Number(e.target.value))}
@@ -267,7 +267,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                 </div>
 
                                 <div className="bg-purple-50 rounded-xl p-5 border border-purple-100">
-                                    <label className="block text-xs font-black text-purple-600 uppercase tracking-wider mb-3">
+                                    <label className="block text-form-label font-black text-purple-600 uppercase tracking-wider mb-3">
                                         Financiamento
                                     </label>
                                     <input type="range" min={0} max={Math.max(0, 100 - downPaymentPct)} value={financingPct}
@@ -286,7 +286,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                             <div className="bg-amber-50 rounded-xl p-4 border border-amber-100 flex items-center gap-4">
                                 <Percent className="w-5 h-5 text-amber-600" />
                                 <div className="flex-1">
-                                    <label className="text-xs font-black text-amber-600 uppercase tracking-wider">Desconto Solicitado</label>
+                                    <label className="text-form-label font-black text-amber-600 uppercase tracking-wider">Desconto Solicitado</label>
                                     <input type="range" min={0} max={10} step={0.5} value={discountPct}
                                         onChange={e => setDiscountPct(Number(e.target.value))}
                                         className="w-full accent-amber-500" />
@@ -356,11 +356,11 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
 
                         <div className="flex justify-between pt-2">
                             <button onClick={() => setActiveStep('buyer')}
-                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all">
+                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all">
                                 Voltar
                             </button>
                             <button onClick={() => setActiveStep('review')}
-                                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20">
+                                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20">
                                 Revisar <ArrowRight className="w-4 h-4" />
                             </button>
                         </div>
@@ -412,7 +412,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
 
                         {/* Notes */}
                         <div>
-                            <label className="block text-xs font-black text-gray-500 uppercase tracking-wider mb-1.5">Observações</label>
+                            <label className="block text-form-label font-black text-gray-500 uppercase tracking-wider mb-1.5">Observações</label>
                             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
                                 className="w-full p-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-sm"
                                 placeholder="Notas adicionais para a incorporadora..." />
@@ -420,16 +420,16 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
 
                         <div className="flex justify-between pt-2">
                             <button onClick={() => setActiveStep('payment')}
-                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all">
+                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all">
                                 Voltar
                             </button>
                             <div className="flex gap-3">
                                 <button onClick={onCancel}
-                                    className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all">
+                                    className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all">
                                     Cancelar
                                 </button>
                                 <button onClick={handleSubmit} disabled={!canSubmit}
-                                    className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-500/20 active:scale-95 disabled:opacity-50">
+                                    className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-500/20 active:scale-95 disabled:opacity-50">
                                     <Send className="w-4 h-4" />
                                     Enviar Proposta
                                 </button>

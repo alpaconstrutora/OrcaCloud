@@ -4488,7 +4488,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                         </div>
 
                         <div className="p-6 bg-white border-t border-gray-100 flex justify-center">
-                            <button onClick={() => setViewingTaskPhotos(null)} className="px-10 py-3 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg active:scale-95">
+                            <button onClick={() => setViewingTaskPhotos(null)} className="px-10 py-3 bg-gray-900 text-white rounded-2xl font-black text-button uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg active:scale-95">
                                 FECHAR GALERIA
                             </button>
                         </div>

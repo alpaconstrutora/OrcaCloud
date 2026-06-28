@@ -163,13 +163,13 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                     <div className="col-span-2 space-y-4">
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1">Nome *</label>
+                                <label className="block text-form-label font-medium text-gray-500 mb-1">Nome *</label>
                                 <input value={name} onChange={e => setName(e.target.value)}
                                     placeholder="ex: Contrato de Empreitada Padrão"
                                     className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de contrato</label>
+                                <label className="block text-form-label font-medium text-gray-500 mb-1">Tipo de contrato</label>
                                 <select value={contractType} onChange={e => setContractType(e.target.value)}
                                     className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                                     <option value="">Todos</option>
@@ -180,7 +180,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                             </div>
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Descrição</label>
+                            <label className="block text-form-label font-medium text-gray-500 mb-1">Descrição</label>
                             <input value={description} onChange={e => setDescription(e.target.value)}
                                 placeholder="Uso interno para identificar o template"
                                 className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -189,7 +189,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                         {/* Editor / Preview */}
                         <div>
                             <div className="flex items-center justify-between mb-1">
-                                <label className="text-xs font-medium text-gray-500">
+                                <label className="text-form-label font-medium text-gray-500">
                                     {previewMode ? 'Preview (variáveis substituídas por exemplo)' : 'Conteúdo HTML — use {{VARIAVEL}} para substituição dinâmica'}
                                 </label>
                             </div>
@@ -204,7 +204,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                                     onChange={e => setBodyHtml(e.target.value)}
                                     rows={24}
                                     spellCheck={false}
-                                    className="w-full font-mono text-xs rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                                    className="w-full font-mono text-form-input rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                 />
                             )}
                         </div>
@@ -314,7 +314,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                                         </td>
                                     )}
                                     {tableColumns.visibleColumns.includes('type') && (
-                                        <td className="px-4 py-3 text-gray-500 text-xs">{t.contract_type || '—'}</td>
+                                        <td className="px-4 py-3 text-gray-500 text-table-body">{t.contract_type || '—'}</td>
                                     )}
                                     {tableColumns.visibleColumns.includes('variables') && (
                                         <td className="px-4 py-3">
@@ -331,7 +331,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                                         </td>
                                     )}
                                     {tableColumns.visibleColumns.includes('version') && (
-                                        <td className="px-4 py-3 text-xs text-gray-400">v{t.version}</td>
+                                        <td className="px-4 py-3 text-table-body text-gray-400">v{t.version}</td>
                                     )}
                                     <td className="px-4 py-3">
                                         <div className="flex gap-1 justify-end">

@@ -492,7 +492,7 @@ const TaskSpaceRail: React.FC<Props> = ({
                       }}
                       onBlur={() => handleCreateFolder(space.id)}
                       placeholder="Nome da pasta…"
-                      className="flex-1 text-xs py-1 px-1.5 rounded border border-blue-300 outline-none bg-white text-slate-800 min-w-0"
+                      className="flex-1 text-form-input py-1 px-1.5 rounded border border-blue-300 outline-none bg-white text-slate-800 min-w-0"
                     />
                   </div>
                 )}
@@ -516,14 +516,14 @@ const TaskSpaceRail: React.FC<Props> = ({
             }}
             onBlur={handleCreateSpace}
             placeholder="Nome do espaço…"
-            className="flex-1 text-xs py-1 px-2 rounded-lg border border-blue-300 outline-none bg-white text-slate-800 min-w-0"
+            className="flex-1 text-form-input py-1 px-2 rounded-lg border border-blue-300 outline-none bg-white text-slate-800 min-w-0"
           />
         </div>
       )}
 
       {!loadingSpaces && spaces.length === 0 && !creatingSpace && (
         <button onClick={() => setCreatingSpace(true)}
-          className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-slate-400 hover:text-blue-600 transition-colors">
+          className="flex items-center gap-1.5 px-2 py-1.5 text-button text-slate-400 hover:text-blue-600 transition-colors">
           <Plus className="w-3.5 h-3.5" /> Criar primeiro espaço
         </button>
       )}

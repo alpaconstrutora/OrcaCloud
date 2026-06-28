@@ -98,7 +98,7 @@ const GeoPanel: React.FC = () => {
             <button
               key={s.id}
               onClick={() => setSelectedState(s.id)}
-              className={`text-left px-3 py-2 rounded text-xs font-semibold border transition ${
+              className={`text-left px-3 py-2 rounded text-button font-semibold border transition ${
                 selectedState === s.id
                   ? 'bg-indigo-600 text-white border-indigo-600'
                   : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-400'
@@ -128,7 +128,7 @@ const GeoPanel: React.FC = () => {
             </div>
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded bg-indigo-600 text-white hover:bg-indigo-700"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-button font-bold rounded bg-indigo-600 text-white hover:bg-indigo-700"
               title="Disponível apenas para administradores"
             >
               <Plus className="w-3.5 h-3.5" /> Adicionar
@@ -236,7 +236,7 @@ const AddCityModal: React.FC<{
         </p>
 
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Estado *</label>
+          <label className="block text-form-label font-bold uppercase tracking-wider text-slate-500 mb-1">Estado *</label>
           <select
             value={stateId}
             onChange={e => setStateId(e.target.value)}
@@ -251,7 +251,7 @@ const AddCityModal: React.FC<{
         </div>
 
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Nome *</label>
+          <label className="block text-form-label font-bold uppercase tracking-wider text-slate-500 mb-1">Nome *</label>
           <input
             value={name}
             onChange={e => setName(e.target.value)}
@@ -263,7 +263,7 @@ const AddCityModal: React.FC<{
         </div>
 
         <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
+          <label className="block text-form-label font-bold uppercase tracking-wider text-slate-500 mb-1">
             Código IBGE (opcional)
           </label>
           <input
@@ -356,7 +356,7 @@ const BanksPanel: React.FC = () => {
               <td className="py-1.5 font-mono font-bold">{b.code}</td>
               <td className="py-1.5">{b.name}</td>
               <td className="py-1.5 text-slate-500">{b.short_name}</td>
-              <td className="py-1.5 font-mono text-xs text-slate-400">{b.ispb}</td>
+              <td className="py-1.5 font-mono text-table-body text-slate-400">{b.ispb}</td>
             </tr>
           ))}
         </tbody>

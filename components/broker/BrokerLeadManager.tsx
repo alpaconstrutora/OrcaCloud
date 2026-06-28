@@ -144,12 +144,12 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
                             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
                     </div>
                     <div className="flex bg-gray-100 rounded-xl p-1">
-                        <button onClick={() => setViewMode('funnel')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'funnel' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Funil</button>
-                        <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Lista</button>
+                        <button onClick={() => setViewMode('funnel')} className={`px-3 py-1.5 rounded-lg text-form-input font-bold transition-all ${viewMode === 'funnel' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Funil</button>
+                        <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded-lg text-button font-bold transition-all ${viewMode === 'list' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Lista</button>
                     </div>
                 </div>
                 <button onClick={() => setShowNewLeadForm(true)}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
+                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
                     <Plus className="w-4 h-4" /> Novo Lead
                 </button>
             </div>
@@ -197,7 +197,7 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
                             </div>
                         </div>
                         <button onClick={handleAddLead} disabled={!newLead.name}
-                            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all disabled:opacity-50">
+                            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all disabled:opacity-50">
                             Cadastrar Lead
                         </button>
                     </div>
@@ -309,7 +309,7 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
                             <p className="text-sm text-gray-500 mt-1">{selectedLead.email} • {selectedLead.phone}</p>
                         </div>
                         <div className="flex items-center gap-3">
-                            <span className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider ${STAGE_CONFIG[selectedLead.stage].bg} ${STAGE_CONFIG[selectedLead.stage].color} border ${STAGE_CONFIG[selectedLead.stage].border}`}>
+                            <span className={`px-4 py-2 rounded-xl text-table-body font-black uppercase tracking-wider ${STAGE_CONFIG[selectedLead.stage].bg} ${STAGE_CONFIG[selectedLead.stage].color} border ${STAGE_CONFIG[selectedLead.stage].border}`}>
                                 {STAGE_CONFIG[selectedLead.stage].label}
                             </span>
                             <button onClick={() => setSelectedLead(null)} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
@@ -370,7 +370,7 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
                     {selectedLead.stage !== 'VENDA' && (
                         <div className="mt-6 pt-4 border-t border-gray-100">
                             <button onClick={() => advanceStage(selectedLead)}
-                                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
+                                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
                                 <ChevronRight className="w-4 h-4" />
                                 Avançar para {STAGE_CONFIG[
                                     (['LEAD', 'VISITA', 'PROPOSTA', 'NEGOCIACAO', 'VENDA'] as BrokerLeadStage[])[

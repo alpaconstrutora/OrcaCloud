@@ -289,7 +289,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                             newBrackets[idx].min_value = parseFloat(e.target.value);
                                                                             setInssBrackets(newBrackets);
                                                                         }}
-                                                                        className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-xs font-black"
+                                                                        className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-form-input font-black"
                                                                     />
                                                                     <span className="text-slate-400 text-[10px]">até</span>
                                                                     <input 
@@ -300,7 +300,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                             newBrackets[idx].max_value = parseFloat(e.target.value);
                                                                             setInssBrackets(newBrackets);
                                                                         }}
-                                                                        className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-xs font-black"
+                                                                        className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-form-input font-black"
                                                                     />
                                                                 </div>
                                                             </div>
@@ -360,7 +360,7 @@ const LaborFiscalSettings: React.FC = () => {
                     <div className="px-8 pb-8">
                         <button 
                             onClick={handleAddINSSBracket}
-                            className="w-full flex items-center justify-center gap-2 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                            className="w-full flex items-center justify-center gap-2 py-4 bg-indigo-600 text-white rounded-2xl font-black text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
                         >
                             <Plus size={16} /> Nova Vigência INSS
                         </button>
@@ -441,7 +441,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                             newBrackets[idx].min_value = parseFloat(e.target.value);
                                                                             setIrrfBrackets(newBrackets);
                                                                         }}
-                                                                        className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-xs font-black"
+                                                                        className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-form-input font-black"
                                                                     />
                                                                     <span className="text-slate-400 text-[10px]">até</span>
                                                                     <input 
@@ -452,7 +452,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                             newBrackets[idx].max_value = parseFloat(e.target.value);
                                                                             setIrrfBrackets(newBrackets);
                                                                         }}
-                                                                        className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-xs font-black"
+                                                                        className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-form-input font-black"
                                                                     />
                                                                 </div>
                                                             </div>
@@ -476,7 +476,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                                     newBrackets[idx].deduction = parseFloat(e.target.value);
                                                                     setIrrfBrackets(newBrackets);
                                                                 }}
-                                                                className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-right font-black text-slate-400 text-xs"
+                                                                className="w-20 bg-white border border-slate-200 rounded px-1 py-0.5 text-right font-black text-slate-400 text-form-input"
                                                             />
                                                         ) : (
                                                             <p className="text-xs font-black text-slate-400">R$ {bracket.deduction.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
@@ -529,7 +529,7 @@ const LaborFiscalSettings: React.FC = () => {
                     <div className="px-8 pb-8">
                         <button 
                             onClick={handleAddIRRFBracket}
-                            className="w-full flex items-center justify-center gap-2 py-4 bg-rose-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-100"
+                            className="w-full flex items-center justify-center gap-2 py-4 bg-rose-600 text-white rounded-2xl font-black text-button uppercase tracking-widest hover:bg-rose-700 transition-all shadow-lg shadow-rose-100"
                         >
                             <Plus size={16} /> Nova Vigência IRRF
                         </button>
@@ -577,7 +577,7 @@ const LaborFiscalSettings: React.FC = () => {
                     <button 
                         onClick={handleSaveFGTS}
                         disabled={saving}
-                        className={`flex items-center gap-2 px-6 py-3 border rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-sm ${
+                        className={`flex items-center gap-2 px-6 py-3 border rounded-2xl font-black text-button uppercase tracking-widest transition-all shadow-sm ${
                             editingFGTS ? 'bg-amber-100 border-amber-300 text-amber-700 animate-pulse' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                         }`}
                     >

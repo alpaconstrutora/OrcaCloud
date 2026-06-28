@@ -262,7 +262,7 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
                                                     key={tipo}
                                                     type="button"
                                                     onClick={() => set('aviso_previo_tipo', tipo)}
-                                                    className={`p-3 rounded-xl border-2 text-xs font-black uppercase tracking-widest transition-all ${form.aviso_previo_tipo === tipo ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                                                    className={`p-3 rounded-xl border-2 text-button font-black uppercase tracking-widest transition-all ${form.aviso_previo_tipo === tipo ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
                                                 >
                                                     {tipo === 'TRABALHADO' ? 'Trabalhado' : tipo === 'INDENIZADO' ? 'Indenizado' : 'Dispensado'}
                                                 </button>
@@ -277,7 +277,7 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
                                             <input type="date" value={form.aviso_previo_fim || ''} onChange={e => set('aviso_previo_fim', e.target.value)} className={inputCls} />
                                         </InputGroup>
                                     </div>
-                                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 text-xs font-bold text-blue-800">
+                                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 text-form-input font-bold text-blue-800">
                                         Aviso proporcional: 30 dias + 3 dias por ano trabalhado (máx. 90 dias — Lei 12.506/2011).
                                     </div>
                                 </>
@@ -291,7 +291,7 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
                             {/* Barra de progresso */}
                             <div className="flex items-center justify-between mb-2">
                                 <p className="text-xs font-black text-slate-600">{checkedItems.length} / {CHECKLIST_ITEMS.length} itens concluídos</p>
-                                <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${completionPct === 100 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                <span className={`text-form-input font-black px-2 py-0.5 rounded-lg ${completionPct === 100 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                                     {completionPct}%
                                 </span>
                             </div>
@@ -544,12 +544,12 @@ const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, o
                 <div className="flex items-center gap-2">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-44" />
+                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-44" />
                     </div>
                     <button
                         onClick={() => { setEditingRecord(null); setShowWizard(true); }}
                         disabled={eligible.length === 0}
-                        className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-all font-bold text-xs shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-xl hover:bg-rose-700 transition-all font-bold text-button shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                         <Plus className="w-3.5 h-3.5" />
                         Iniciar Desligamento

@@ -824,7 +824,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 <tbody className="divide-y divide-gray-100">
                                                     {avulsoItems.map((item, idx) => (
                                                         <tr key={idx} className="hover:bg-orange-50/30 transition-colors">
-                                                            <td className="px-4 py-3 font-mono text-xs text-gray-500">{item.code || '—'}</td>
+                                                            <td className="px-4 py-3 font-mono text-table-body text-gray-500">{item.code || '—'}</td>
                                                             <td className="px-4 py-3 font-medium text-gray-900">{item.description}</td>
                                                             <td className="px-4 py-3 text-right text-gray-500">{item.unit}</td>
                                                             <td className="px-4 py-3 text-right font-medium">{item.quantity}</td>
@@ -907,7 +907,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                                                     />
                                                                 </td>
-                                                                <td className="px-4 py-3 font-mono text-xs text-gray-500">
+                                                                <td className="px-4 py-3 font-mono text-table-body text-gray-500">
                                                                     <div className="flex items-center gap-2">
                                                                         {item.sinapiItem?.type === SinapiType.COMPOSITION && (
                                                                             <Layers className="w-3 h-3 text-blue-500" />
@@ -936,7 +936,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                                                 step="any"
                                                                                 value={customPrices.get(code) ?? item.sinapiItem!.price ?? 0}
                                                                                 onChange={(e) => updateItemPrice(code, parseFloat(e.target.value) || 0)}
-                                                                                className="w-28 text-right rounded-lg border border-emerald-300 p-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                                                                                className="w-28 text-right rounded-lg border border-emerald-300 p-1.5 text-form-input font-bold text-emerald-700 bg-emerald-50 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
                                                                             />
                                                                             <span className="text-[9px] text-gray-400">Preço Unit.</span>
                                                                         </div>
@@ -1113,7 +1113,7 @@ const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClos
                             placeholder="Nova unidade..."
                             className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
                         />
-                        <button onClick={handleAdd} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap">
+                        <button onClick={handleAdd} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-button font-black transition-all whitespace-nowrap">
                             <Plus className="w-3.5 h-3.5" /> Adicionar
                         </button>
                     </div>
@@ -1225,7 +1225,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                     {/* Manual fields */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Código <span className="text-gray-300 font-normal normal-case tracking-normal">(opcional)</span></label>
+                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Código <span className="text-gray-300 font-normal normal-case tracking-normal">(opcional)</span></label>
                             <input
                                 type="text"
                                 value={form.code}
@@ -1235,7 +1235,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Unidade *</label>
+                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Unidade *</label>
                             <div className="flex gap-2">
                                 <select
                                     value={units.includes(form.unit) ? form.unit : form.unit ? '__custom__' : ''}
@@ -1261,7 +1261,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                             </div>
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Descrição *</label>
+                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Descrição *</label>
                             <input
                                 type="text"
                                 value={form.description}
@@ -1271,7 +1271,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Quantidade *</label>
+                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Quantidade *</label>
                             <input
                                 type="number"
                                 min={0.001}
@@ -1283,7 +1283,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Preço Unitário (R$)</label>
+                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Preço Unitário (R$)</label>
                             <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 pointer-events-none select-none">R$</span>
                                 <input

@@ -220,7 +220,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         </div>
                         <button
                             onClick={onCreate}
-                            className="px-8 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-700 transition-all shadow-2xl shadow-blue-500/20 flex items-center gap-3 active:scale-95"
+                            className="px-8 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black text-button uppercase tracking-[0.2em] hover:bg-blue-700 transition-all shadow-2xl shadow-blue-500/20 flex items-center gap-3 active:scale-95"
                         >
                             <Plus className="w-5 h-5" />
                             Nova Empresa
@@ -481,7 +481,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             </p>
                             <button
                                 onClick={() => onTabChange('organizations')}
-                                className="mt-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
+                                className="mt-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
                                 Ir para Organização
                             </button>
                         </div>
@@ -548,7 +548,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                     <div className="flex items-center justify-end gap-2">
                                                         <button
                                                             onClick={() => handleResendInviteFromList(org.id, member.email, member.name, member.role)}
-                                                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 transition-colors"
+                                                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-button font-medium rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 transition-colors"
                                                         >
                                                             <Send className="w-3.5 h-3.5" />
                                                             Reenviar
@@ -558,7 +558,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                                 setManagingOrgId(org.id);
                                                                 onTabChange('users');
                                                             }}
-                                                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-colors"
+                                                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-button font-medium rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-colors"
                                                         >
                                                             <Users className="w-3.5 h-3.5" />
                                                             Gerenciar

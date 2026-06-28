@@ -151,7 +151,7 @@ const ContestConditionModal: React.FC<Props> = ({
                 {files.map((f, i) => (
                   <li key={i} className="flex items-center justify-between text-sm text-gray-700 bg-gray-50 px-3 py-1.5 rounded">
                     <span className="truncate">{f.name}</span>
-                    <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-xs text-gray-400 hover:text-red-500 ml-2 shrink-0">remover</button>
+                    <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-button text-gray-400 hover:text-red-500 ml-2 shrink-0">remover</button>
                   </li>
                 ))}
               </ul>

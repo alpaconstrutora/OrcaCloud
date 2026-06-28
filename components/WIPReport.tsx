@@ -120,7 +120,7 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
                 <button
                     onClick={load}
                     disabled={loading}
-                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-colors"
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-button font-black uppercase tracking-widest rounded-xl transition-colors"
                 >
                     {loading ? 'Carregando…' : 'Atualizar'}
                 </button>
@@ -241,7 +241,7 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
                         </tbody>
                         <tfoot>
                             <tr className="border-t-2 border-slate-200 bg-slate-50">
-                                <td colSpan={2} className="px-4 py-3 text-xs font-black text-slate-600 uppercase tracking-widest">
+                                <td colSpan={2} className="px-4 py-3 text-table-body font-black text-slate-600 uppercase tracking-widest">
                                     Total ({rows.length} obras)
                                 </td>
                                 <td className="px-4 py-3 text-sm font-bold text-right tabular-nums text-slate-700">

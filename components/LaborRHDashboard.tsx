@@ -193,7 +193,7 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
                     <h2 className="text-xl font-black text-slate-900 tracking-tight">Dashboard Executivo RH</h2>
                     <p className="text-xs text-slate-400 font-medium mt-0.5 capitalize">{mesAtual}</p>
                 </div>
-                <button onClick={() => refetch()} className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 transition-all text-xs font-bold">
+                <button onClick={() => refetch()} className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 transition-all text-button font-bold">
                     <RefreshCw className="w-3.5 h-3.5" /> Atualizar
                 </button>
             </div>

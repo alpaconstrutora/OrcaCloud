@@ -173,7 +173,7 @@ const AccidentForm: React.FC<AccidentFormProps> = ({ orgId, employees, projects,
                         </InputGroup>
                         <div className="flex items-end pb-1">
                             <button type="button" onClick={() => set('cat_emitida', !form.cat_emitida)}
-                                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all w-full justify-center ${form.cat_emitida ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
+                                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-form-label font-bold transition-all w-full justify-center ${form.cat_emitida ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
                                 {form.cat_emitida ? <CheckCircle2 className="w-4 h-4" /> : <X className="w-4 h-4" />}
                                 CAT Emitida
                             </button>
@@ -471,7 +471,7 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                         ['regulatory', 'Docs Regulatórios',FileText],
                     ] as const).map(([id, label, Icon]) => (
                         <button key={id} onClick={() => setView(id)}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
                             <Icon className="w-3.5 h-3.5" />{label}
                             {id === 'regulatory' && regAlerts.length > 0 && (
                                 <span className="px-1.5 py-0.5 bg-orange-500 text-white text-[9px] font-black rounded-full">{regAlerts.length}</span>
@@ -482,18 +482,18 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                 <div className="flex items-center gap-2 flex-wrap">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
+                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
                     </div>
                     {view === 'accidents' && (
                         <button onClick={() => { setEditingAccident(null); setShowForm(true); }}
-                            className="flex items-center gap-2 px-4 py-2 bg-rose-700 text-white rounded-xl hover:bg-rose-800 font-bold text-xs shadow-md">
+                            className="flex items-center gap-2 px-4 py-2 bg-rose-700 text-white rounded-xl hover:bg-rose-800 font-bold text-button shadow-md">
                             <Plus className="w-3.5 h-3.5" /> Registrar Acidente
                         </button>
                     )}
                     {view === 'regulatory' && (
                         <>
                             <div className="relative">
-                                <select value={regFilter} onChange={e => setRegFilter(e.target.value as SSTDocTipo | '')} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none appearance-none">
+                                <select value={regFilter} onChange={e => setRegFilter(e.target.value as SSTDocTipo | '')} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none appearance-none">
                                     <option value="">Todos os tipos</option>
                                     {(Object.keys(DOC_TIPO_CONFIG) as SSTDocTipo[]).map(k => (
                                         <option key={k} value={k}>{DOC_TIPO_CONFIG[k].label}</option>
@@ -502,7 +502,7 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                             </div>
                             <button onClick={() => { setEditingRegDoc(null); setShowRegForm(true); }}
-                                className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 font-bold text-xs shadow-md">
+                                className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-xl hover:bg-teal-700 font-bold text-button shadow-md">
                                 <Plus className="w-3.5 h-3.5" /> Cadastrar Documento
                             </button>
                         </>
@@ -580,12 +580,12 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                                 {checklists.map(ck => (
                                     <tr key={ck.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                                         <td className="px-4 py-3 text-sm font-bold text-slate-900">{ck.nome_checklist}</td>
-                                        <td className="px-4 py-3 text-xs font-black text-rose-600">{ck.nr_referencia || '—'}</td>
-                                        <td className="px-4 py-3 text-xs text-slate-500">{ck.project_name || '—'}</td>
-                                        <td className="px-4 py-3 text-xs text-slate-500">{ck.data_aplicacao}</td>
+                                        <td className="px-4 py-3 text-table-body font-black text-rose-600">{ck.nr_referencia || '—'}</td>
+                                        <td className="px-4 py-3 text-table-body text-slate-500">{ck.project_name || '—'}</td>
+                                        <td className="px-4 py-3 text-table-body text-slate-500">{ck.data_aplicacao}</td>
                                         <td className="px-4 py-3">
                                             {ck.conformidade_pct != null ? (
-                                                <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${ck.conformidade_pct >= 80 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                                <span className={`text-button font-black px-2 py-0.5 rounded-lg ${ck.conformidade_pct >= 80 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                                                     {ck.conformidade_pct.toFixed(0)}%
                                                 </span>
                                             ) : '—'}

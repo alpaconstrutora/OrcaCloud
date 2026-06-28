@@ -130,7 +130,7 @@ const MaterialModal: React.FC<MaterialModalProps> = ({
                     <div className="grid grid-cols-1 gap-6">
                         {/* Title */}
                         <div>
-                            <label className="block text-xs font-black text-gray-700 uppercase tracking-widest mb-2">
+                            <label className="block text-form-label font-black text-gray-700 uppercase tracking-widest mb-2">
                                 Título do Material *
                             </label>
                             <input
@@ -146,7 +146,7 @@ const MaterialModal: React.FC<MaterialModalProps> = ({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Type */}
                             <div>
-                                <label className="block text-xs font-black text-gray-700 uppercase tracking-widest mb-2">
+                                <label className="block text-form-label font-black text-gray-700 uppercase tracking-widest mb-2">
                                     <FileType className="w-4 h-4 inline-block mr-1" />
                                     Tipo do Documento *
                                 </label>
@@ -164,7 +164,7 @@ const MaterialModal: React.FC<MaterialModalProps> = ({
 
                             {/* Project Link */}
                             <div>
-                                <label className="block text-xs font-black text-gray-700 uppercase tracking-widest mb-2">
+                                <label className="block text-form-label font-black text-gray-700 uppercase tracking-widest mb-2">
                                     <Building2 className="w-4 h-4 inline-block mr-1" />
                                     Vincular a Empreendimento
                                 </label>
@@ -183,7 +183,7 @@ const MaterialModal: React.FC<MaterialModalProps> = ({
 
                         {/* File Upload Div */}
                         <div>
-                            <label className="block text-xs font-black text-gray-700 uppercase tracking-widest mb-2">
+                            <label className="block text-form-label font-black text-gray-700 uppercase tracking-widest mb-2">
                                 <UploadCloud className="w-4 h-4 inline-block mr-1" />
                                 Arquivo do Documento *
                             </label>
@@ -217,7 +217,7 @@ const MaterialModal: React.FC<MaterialModalProps> = ({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Version */}
                             <div>
-                                <label className="block text-xs font-black text-gray-700 uppercase tracking-widest mb-2">
+                                <label className="block text-form-label font-black text-gray-700 uppercase tracking-widest mb-2">
                                     Versão
                                 </label>
                                 <input

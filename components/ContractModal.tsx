@@ -465,7 +465,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             </div>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Número do Contrato</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Número do Contrato</label>
                                     <div className="relative">
                                         <input
                                             type="text"
@@ -494,7 +494,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     )}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Título / Objeto</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Título / Objeto</label>
                                     <input
                                         type="text"
                                         required
@@ -507,7 +507,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 {isOutgoing ? (
                                     <div className="col-span-2 space-y-2">
                                         <div className="flex items-center justify-between ml-1">
-                                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest">Cliente / Contratante</label>
+                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Cliente / Contratante</label>
                                             {!showClientCreate && (
                                                 <button type="button" onClick={() => setShowClientCreate(true)} className="text-[11px] font-medium text-blue-600 hover:text-blue-800 uppercase tracking-wider">
                                                     + Novo Cliente
@@ -542,11 +542,11 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 />
                                                 <div className="flex gap-2">
                                                     <button type="button" onClick={handleCreateClient} disabled={!newClientName.trim() || savingClient}
-                                                        className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-semibold uppercase tracking-wider disabled:opacity-50 hover:bg-blue-700 transition-colors">
+                                                        className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-button font-semibold uppercase tracking-wider disabled:opacity-50 hover:bg-blue-700 transition-colors">
                                                         {savingClient ? 'Salvando…' : 'Salvar Cliente'}
                                                     </button>
                                                     <button type="button" onClick={() => { setShowClientCreate(false); setNewClientName(''); setNewClientDoc(''); }}
-                                                        className="px-4 py-2.5 bg-white text-gray-500 border border-gray-200 rounded-xl text-xs font-medium hover:bg-gray-50 transition-colors">
+                                                        className="px-4 py-2.5 bg-white text-gray-500 border border-gray-200 rounded-xl text-button font-medium hover:bg-gray-50 transition-colors">
                                                         Cancelar
                                                     </button>
                                                 </div>
@@ -569,7 +569,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </div>
                                 ) : (
                                     <div className="col-span-2 space-y-2">
-                                        <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Fornecedor / Contratado</label>
+                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Fornecedor / Contratado</label>
                                         <div className="relative group">
                                             <User className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                             <select
@@ -587,7 +587,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </div>
                                 )}
                                 <div className="col-span-2 space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Status do Contrato</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Status do Contrato</label>
                                     <div className="relative group">
                                         <select
                                             required
@@ -612,7 +612,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
                                 {/* GED: Upload Contrato Assinado */}
                                 <div className="col-span-2 space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Contrato Assinado (GED)</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Contrato Assinado (GED)</label>
                                     {formData.signed_contract_url ? (
                                         <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-100 rounded-2xl group/file">
                                             <div className="flex items-center gap-3">
@@ -678,7 +678,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 <div className="grid grid-cols-1 gap-6">
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between ml-1">
-                                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest">Escopo / Objeto do Contrato</label>
+                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Escopo / Objeto do Contrato</label>
                                             <div className="flex gap-2">
                                                 <button type="button" onClick={() => setScopePickerOpen(true)}
                                                     className="text-[11px] font-medium text-blue-600 hover:text-blue-800 uppercase tracking-wider">
@@ -701,7 +701,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </div>
                                     <div className="grid grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Serviços Inclusos</label>
+                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Serviços Inclusos</label>
                                             <textarea
                                                 rows={3}
                                                 placeholder="Liste os serviços incluídos no contrato"
@@ -711,7 +711,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Serviços Excluídos</label>
+                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Serviços Excluídos</label>
                                             <textarea
                                                 rows={3}
                                                 placeholder="Liste os serviços NÃO incluídos no contrato"
@@ -734,7 +734,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
                                 <div className="grid grid-cols-2 gap-6">
                                     <div className="space-y-2">
-                                        <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Responsável Interno</label>
+                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Responsável Interno</label>
                                         {employees.length > 0 ? (
                                             <select
                                                 value={formData.internal_responsible || ''}
@@ -759,7 +759,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         )}
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Responsável do Cliente</label>
+                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Responsável do Cliente</label>
                                         <input
                                             type="text"
                                             placeholder="Nome do responsável no cliente"
@@ -771,7 +771,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     <div className="col-span-2 space-y-3">
                                         <div className="flex items-center gap-2 ml-1">
                                             <MapPin className="w-3.5 h-3.5 text-blue-500" />
-                                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest">Endereço de Execução</label>
+                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Endereço de Execução</label>
                                         </div>
                                         <div className="grid grid-cols-[1fr_120px] gap-3">
                                             <input
@@ -823,7 +823,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">SLA (Dias de Resposta)</label>
+                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">SLA (Dias de Resposta)</label>
                                         <div className="relative group">
                                             <input
                                                 type="number"
@@ -837,7 +837,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Garantia Contratual</label>
+                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Garantia Contratual</label>
                                         <div className="relative group">
                                             <input
                                                 type="number"
@@ -862,7 +862,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             </div>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Tipo de Contrato</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Tipo de Contrato</label>
                                     <select
                                         required
                                         value={formData.contract_type}
@@ -889,7 +889,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </select>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Natureza</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Natureza</label>
                                     <select
                                         required
                                         value={formData.nature}
@@ -904,7 +904,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </select>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">
                                         {formData.is_recurring ? 'Valor por Ciclo (Opcional)' : 'Valor Original (Base)'}
                                     </label>
                                     <div className="relative group">
@@ -927,7 +927,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 {isOutgoing && (
                                     <>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Valor Mão de Obra (Opcional)</label>
+                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Valor Mão de Obra (Opcional)</label>
                                             <div className="relative group">
                                                 <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
                                                 <input type="number" min="0" step="0.01" placeholder="0,00"
@@ -938,7 +938,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Valor Materiais (Opcional)</label>
+                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Valor Materiais (Opcional)</label>
                                             <div className="relative group">
                                                 <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
                                                 <input type="number" min="0" step="0.01" placeholder="0,00"
@@ -951,7 +951,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </>
                                 )}
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Retenção de Garantia (%)</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Retenção de Garantia (%)</label>
                                     <div className="relative group">
                                         <input
                                             type="number"
@@ -980,7 +980,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             <div className="grid grid-cols-2 gap-6">
                                 {/* Modalidade de faturamento */}
                                 <div className="col-span-2 space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Modalidade de Faturamento</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Modalidade de Faturamento</label>
                                     <div className="flex gap-2 flex-wrap">
                                         {([
                                             { value: undefined, label: 'Padrão' },
@@ -993,7 +993,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 key={opt.label}
                                                 type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, billing_mode: opt.value as any }))}
-                                                className={`px-4 py-2 rounded-xl text-xs font-medium uppercase tracking-wider border transition-all ${
+                                                className={`px-4 py-2 rounded-xl text-form-input font-medium uppercase tracking-wider border transition-all ${
                                                     (formData.billing_mode ?? undefined) === opt.value
                                                         ? 'bg-blue-600 text-white border-blue-600'
                                                         : 'bg-gray-50 text-gray-500 border-gray-100 hover:border-blue-300'
@@ -1036,7 +1036,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     )}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Forma de Pagamento</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Forma de Pagamento</label>
                                     <select
                                         required
                                         value={formData.payment_method}
@@ -1053,7 +1053,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
                                 {isOutgoing && (
                                     <div className="space-y-2">
-                                        <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Conta de Recebimento</label>
+                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Conta de Recebimento</label>
                                         <div className="relative group">
                                             <select
                                                 value={formData.payment_account_id || ''}
@@ -1071,19 +1071,19 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </div>
                                 )}
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Condição de Pagamento</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Condição de Pagamento</label>
                                     <div className="flex bg-gray-50 rounded-2xl p-1 border border-gray-100">
                                         <button
                                             type="button"
                                             onClick={() => setFormData({ ...formData, payment_term_type: 'Vista' })}
-                                            className={`flex-1 py-3 px-4 rounded-xl text-xs font-medium uppercase tracking-wider transition-all ${formData.payment_term_type === 'Vista' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                            className={`flex-1 py-3 px-4 rounded-xl text-form-label font-medium uppercase tracking-wider transition-all ${formData.payment_term_type === 'Vista' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                                         >
                                             À Vista
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setFormData({ ...formData, payment_term_type: 'Parcelado' })}
-                                            className={`flex-1 py-3 px-4 rounded-xl text-xs font-medium uppercase tracking-wider transition-all ${formData.payment_term_type === 'Parcelado' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                            className={`flex-1 py-3 px-4 rounded-xl text-button font-medium uppercase tracking-wider transition-all ${formData.payment_term_type === 'Parcelado' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                                         >
                                             Parcelado
                                         </button>
@@ -1091,7 +1091,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Prazo de Pagamento (Dias)</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Prazo de Pagamento (Dias)</label>
                                     <div className="relative group">
                                         <input
                                             type="number"
@@ -1107,7 +1107,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 {formData.payment_term_type === 'Parcelado' && !formData.is_recurring && (
                                     <div className="space-y-4 animate-in fade-in slide-in-from-left-2 duration-300 col-span-2">
                                         <div className="space-y-2">
-                                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Nº de Parcelas</label>
+                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Nº de Parcelas</label>
                                             <div className="relative group">
                                                 <input
                                                     type="number"
@@ -1127,7 +1127,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         {installmentSchedule.length > 0 && (
                                             <div className="space-y-2">
                                                 <div className="flex items-center justify-between">
-                                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Cronograma de Parcelas</label>
+                                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Cronograma de Parcelas</label>
                                                     <button
                                                         type="button"
                                                         onClick={() => setInstallmentSchedule(buildSchedule(formData.payment_installments ?? 1, formData.original_value ?? 0, formData.start_date ?? new Date().toISOString().split('T')[0]))}
@@ -1173,7 +1173,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     </div>
                                                     <div className="grid grid-cols-[40px_1fr_1fr] bg-gray-50 border-t border-gray-100 px-4 py-2">
                                                         <span className="col-span-2 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Total</span>
-                                                        <span className={`text-right text-xs font-black ${Math.abs(installmentSchedule.reduce((s, i) => s + i.value, 0) - (formData.original_value ?? 0)) > 0.01 ? 'text-red-600' : 'text-green-600'}`}>
+                                                        <span className={`text-right text-form-label font-black ${Math.abs(installmentSchedule.reduce((s, i) => s + i.value, 0) - (formData.original_value ?? 0)) > 0.01 ? 'text-red-600' : 'text-green-600'}`}>
                                                             R$ {installmentSchedule.reduce((s, i) => s + i.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                                         </span>
                                                     </div>
@@ -1191,7 +1191,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 {formData.is_recurring && (
                                     <>
                                         <div className="space-y-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Periodicidade</label>
+                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Periodicidade</label>
                                             <select
                                                 required
                                                 value={formData.billing_cycle || 'Mensal'}
@@ -1205,7 +1205,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             </select>
                                         </div>
                                         <div className="space-y-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Dia de Vencimento</label>
+                                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Dia de Vencimento</label>
                                             <div className="relative group">
                                                 <input
                                                     type="number"
@@ -1231,7 +1231,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             </div>
                             <div className="grid grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Centro de Custo</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Centro de Custo</label>
                                     <HierarchicalSelect
                                         items={costCenters}
                                         value={formData.cost_center_id || ''}
@@ -1242,7 +1242,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Conta Financeira</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Conta Financeira</label>
                                     <HierarchicalSelect
                                         items={chartOfAccounts}
                                         value={formData.category_id || ''}
@@ -1253,7 +1253,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Obra Relacionada</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Obra Relacionada</label>
                                     <div className="relative group">
                                         <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                         <select
@@ -1270,7 +1270,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Orçamento de Referência (Opcional)</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Orçamento de Referência (Opcional)</label>
                                     <div className="relative group">
                                         <FileText className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                         <select
@@ -1298,7 +1298,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             </div>
                             <div className="space-y-6">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Data Início</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Data Início</label>
                                     <input
                                         type="date"
                                         required
@@ -1308,7 +1308,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">
                                         {formData.is_recurring ? "Data Fim (Limite Opcional)" : "Data Fim (Previsão)"}
                                     </label>
                                     <input
@@ -1320,7 +1320,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Índice Reajuste</label>
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Índice Reajuste</label>
                                     <select
                                         value={formData.reajuste_index}
                                         onChange={(e) => setFormData({ ...formData, reajuste_index: e.target.value })}
@@ -1360,7 +1360,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                         <button
                             type="submit"
                             disabled={isSubmitting || isFetchingNumber}
-                            className={`w-full py-5 rounded-[24px] text-white transition-all shadow-xl font-medium text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 group ${(isSubmitting || isFetchingNumber)
+                            className={`w-full py-5 rounded-[24px] text-white transition-all shadow-xl font-medium text-form-label uppercase tracking-[0.2em] flex items-center justify-center gap-3 group ${(isSubmitting || isFetchingNumber)
                                 ? 'bg-gray-400 cursor-not-allowed shadow-none'
                                 : 'bg-gray-900 hover:bg-emerald-600 shadow-gray-200 hover:shadow-emerald-200 active:scale-95'
                                 }`}

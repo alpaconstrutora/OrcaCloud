@@ -924,7 +924,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                 value={newProjectName}
                 onChange={e => setNewProjectName(e.target.value)}
                 placeholder="Ex: Residência Unifamiliar"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1"
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-form-input text-white focus:outline-none focus:border-blue-500 mt-1"
               />
             </div>
             <div>
@@ -953,7 +953,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                 <select
                   value={selectedAssociatedProjectId}
                   onChange={e => setSelectedAssociatedProjectId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-form-input text-white focus:outline-none focus:border-blue-500 mt-1"
                 >
                   <option value="">Nenhum</option>
                   {engineeringProjects.map(ep => (
@@ -967,7 +967,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                 <select
                   value={selectedOrcamentoId}
                   onChange={e => setSelectedOrcamentoId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-form-input text-white focus:outline-none focus:border-blue-500 mt-1"
                 >
                   <option value="">Nenhum</option>
                   {orcamentos.map(o => (
@@ -1003,7 +1003,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               const proj = projects.find(p => p.id === e.target.value);
               if (proj) selectProject(proj);
             }}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs font-semibold text-white focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-form-input font-semibold text-white focus:outline-none focus:border-blue-500"
           >
             {projects.length === 0 && <option>Nenhum projeto encontrado</option>}
             {projects.map(p => (
@@ -1038,7 +1038,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               {files.map(f => (
                 <div
                   key={f.id}
-                  className={`w-full p-1 rounded-xl border text-xs flex items-center justify-between group transition-all duration-200
+                  className={`w-full p-1 rounded-xl border text-form-label flex items-center justify-between group transition-all duration-200
                     ${activeFile?.id === f.id
                       ? 'bg-blue-600/10 border-blue-500 text-white font-bold'
                       : 'bg-slate-900 border-slate-800/60 hover:bg-slate-850 hover:border-slate-700 text-slate-300'}`}
@@ -1078,7 +1078,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               {layers.map(l => (
                 <div
                   key={l.id}
-                  className={`flex items-center justify-between p-2 rounded-lg text-xs cursor-pointer hover:bg-slate-900
+                  className={`flex items-center justify-between p-2 rounded-lg text-button cursor-pointer hover:bg-slate-900
                     ${activeLayer?.id === l.id ? 'bg-slate-900 text-white font-semibold' : 'text-slate-400'}`}
                   onClick={() => setActiveLayer(l)}
                 >
@@ -1150,7 +1150,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
             {/* Escala */}
             <button
               onClick={() => { setTool('SCALE'); setCalibrationPoints([]); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-bold transition-all
                 ${tool === 'SCALE' ? 'bg-red-600 text-white shadow-lg shadow-red-500/25' : 'hover:bg-slate-800 text-slate-400'}`}
               title="Calibrar Escala (Manual)"
             >
@@ -1171,7 +1171,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
             <button
               onClick={() => { setTool('POLYGON'); setTempPoints([]); }}
               disabled={!activeFile?.scale}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all disabled:opacity-40
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-bold transition-all disabled:opacity-40
                 ${tool === 'POLYGON' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25' : 'hover:bg-slate-800 text-slate-400'}`}
               title="Medir Área (Polígono)"
             >
@@ -1183,7 +1183,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
             <button
               onClick={() => { setTool('LINE'); setTempPoints([]); }}
               disabled={!activeFile?.scale}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all disabled:opacity-40
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-bold transition-all disabled:opacity-40
                 ${tool === 'LINE' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25' : 'hover:bg-slate-800 text-slate-400'}`}
               title="Medir Comprimento Linear"
             >
@@ -1195,7 +1195,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
             <button
               onClick={() => { setTool('POINT'); setTempPoints([]); }}
               disabled={!activeFile?.scale}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all disabled:opacity-40
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-bold transition-all disabled:opacity-40
                 ${tool === 'POINT' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25' : 'hover:bg-slate-800 text-slate-400'}`}
               title="Contar Elementos (Cliques)"
             >
@@ -1412,7 +1412,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                       }
                     }
                   }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-form-input text-white focus:outline-none focus:border-blue-500 mt-1"
                 >
                   <option value="">Novo Item (Criar no Orçamento)</option>
                   {linkedProject.budget.map((b: any) => (
@@ -1430,7 +1430,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                 value={newItemName}
                 onChange={e => setNewItemName(e.target.value)}
                 placeholder="Ex: Porcelanato 60x60"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1"
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-form-input text-white focus:outline-none focus:border-blue-500 mt-1"
               />
             </div>
             <div className="flex gap-2">
@@ -1439,7 +1439,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                 <select
                   value={newItemUnit}
                   onChange={e => setNewItemUnit(e.target.value as any)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-form-input text-white focus:outline-none focus:border-blue-500 mt-1"
                 >
                   <option value="M2">m²</option>
                   <option value="M">metros</option>
@@ -1453,7 +1453,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                   value={newItemValue}
                   onChange={e => setNewItemValue(e.target.value)}
                   placeholder="0.00"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-form-input text-white focus:outline-none focus:border-blue-500 mt-1"
                 />
               </div>
             </div>
@@ -1485,7 +1485,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               const item = libraryItems.find(i => i.id === e.target.value);
               if (item) setActiveLibraryItem(item);
             }}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs font-semibold text-white focus:outline-none focus:border-blue-500"
+            className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-form-input font-semibold text-white focus:outline-none focus:border-blue-500"
           >
             {libraryItems.length === 0 && <option value="">Nenhum item cadastrado</option>}
             {libraryItems.map(i => (
@@ -1535,7 +1535,7 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
             <div className="mt-4 pt-4 border-t border-slate-800">
               <button
                 onClick={handleExportToOrcamento}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black uppercase tracking-wider py-3 px-4 rounded-xl shadow-xl shadow-blue-500/10 transition-all hover:scale-[1.02] active:scale-95"
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-button font-black uppercase tracking-wider py-3 px-4 rounded-xl shadow-xl shadow-blue-500/10 transition-all hover:scale-[1.02] active:scale-95"
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 <span>Enviar para Orçamento</span>

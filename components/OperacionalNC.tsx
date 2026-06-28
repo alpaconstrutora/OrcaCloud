@@ -158,7 +158,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
 
       <button
         onClick={() => setShowForm(s => !s)}
-        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-700 transition-colors"
+        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-red-700 transition-colors"
       >
         <Plus className="w-4 h-4" />
         {showForm ? 'Cancelar' : 'Registrar NC'}
@@ -168,7 +168,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
         <form onSubmit={handleSubmit} className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-100">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wide">Descrição</label>
+              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Descrição</label>
               <textarea
                 value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
@@ -179,7 +179,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
               />
             </div>
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wide">Severidade</label>
+              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Severidade</label>
               <select
                 value={form.severity}
                 onChange={e => setForm(f => ({ ...f, severity: e.target.value as typeof form.severity }))}
@@ -191,7 +191,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
               </select>
             </div>
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wide">Prazo</label>
+              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Prazo</label>
               <input
                 type="date"
                 value={form.dueDate}
@@ -200,7 +200,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
               />
             </div>
             <div className="col-span-2">
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wide">Ação corretiva</label>
+              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Ação corretiva</label>
               <textarea
                 value={form.correctiveAction}
                 onChange={e => setForm(f => ({ ...f, correctiveAction: e.target.value }))}
@@ -214,7 +214,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 bg-red-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-700 disabled:opacity-60 transition-colors"
+              className="flex items-center gap-2 px-5 py-2 bg-red-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-red-700 disabled:opacity-60 transition-colors"
             >
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
               Registrar
@@ -281,14 +281,14 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
                         {nc.status === 'open' && (
                           <button
                             onClick={() => handleStatusChange(nc.id, 'in_treatment')}
-                            className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-xs font-black hover:bg-amber-200 transition-colors"
+                            className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-button font-black hover:bg-amber-200 transition-colors"
                           >
                             Iniciar tratamento
                           </button>
                         )}
                         <button
                           onClick={() => handleStatusChange(nc.id, 'closed')}
-                          className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-black hover:bg-green-200 transition-colors"
+                          className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-button font-black hover:bg-green-200 transition-colors"
                         >
                           Encerrar NC
                         </button>

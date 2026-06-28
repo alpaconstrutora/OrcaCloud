@@ -164,7 +164,7 @@ const Dashboard: React.FC<DashboardProps> = ({ budget, settings, onNavigate }) =
               <button
                 key={level}
                 onClick={() => setGroupingLevel(level)}
-                className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${groupingLevel === level
+                className={`px-4 py-2 text-button font-bold rounded-lg transition-all ${groupingLevel === level
                   ? 'bg-white text-blue-600 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
                   }`}

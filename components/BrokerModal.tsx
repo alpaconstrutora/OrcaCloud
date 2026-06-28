@@ -277,7 +277,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                         <button
                                             type="button"
                                             onClick={handleCopyLink}
-                                            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
+                                            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-emerald-700 transition-all active:scale-95"
                                         >
                                             {tokenCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                             {tokenCopied ? 'Copiado!' : 'Copiar Link'}
@@ -285,7 +285,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                         <button
                                             type="button"
                                             onClick={handleGenerateToken}
-                                            className="flex items-center justify-center gap-2 px-4 py-3 border border-gray-200 text-gray-500 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-gray-300 hover:text-gray-700 transition-all"
+                                            className="flex items-center justify-center gap-2 px-4 py-3 border border-gray-200 text-gray-500 rounded-2xl text-button font-black uppercase tracking-widest hover:border-gray-300 hover:text-gray-700 transition-all"
                                             title="Gerar novo link (invalida o anterior)"
                                         >
                                             <RefreshCw className="w-4 h-4" />
@@ -293,7 +293,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                         <button
                                             type="button"
                                             onClick={handleRevokeToken}
-                                            className="flex items-center justify-center gap-2 px-4 py-3 border border-red-100 text-red-400 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-red-300 hover:text-red-600 transition-all"
+                                            className="flex items-center justify-center gap-2 px-4 py-3 border border-red-100 text-red-400 rounded-2xl text-button font-black uppercase tracking-widest hover:border-red-300 hover:text-red-600 transition-all"
                                             title="Revogar acesso"
                                         >
                                             <Trash2 className="w-4 h-4" />
@@ -309,7 +309,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                     <button
                                         type="button"
                                         onClick={handleGenerateToken}
-                                        className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 transition-all active:scale-95"
+                                        className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-blue-700 transition-all active:scale-95"
                                     >
                                         <Link2 className="w-4 h-4" />
                                         Gerar Link de Acesso
@@ -324,14 +324,14 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                     <button
                         type="button"
                         onClick={onClose}
-                        className="px-6 py-3 bg-gray-100 text-gray-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all"
+                        className="px-6 py-3 bg-gray-100 text-gray-500 rounded-2xl font-black text-button uppercase tracking-widest hover:bg-gray-200 transition-all"
                     >
                         Cancelar
                     </button>
                     <button
                         type="submit"
                         disabled={loading}
-                        className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 flex items-center justify-center gap-2 group disabled:opacity-50"
+                        className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-black text-button uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 flex items-center justify-center gap-2 group disabled:opacity-50"
                     >
                         {loading ? (
                             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

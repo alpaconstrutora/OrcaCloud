@@ -117,7 +117,7 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
           </div>
           <button
             onClick={onReset}
-            className="mt-3 w-full text-xs font-bold text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors"
+            className="mt-3 w-full text-button font-bold text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors"
           >
             Restaurar Padrão
           </button>

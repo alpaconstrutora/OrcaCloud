@@ -74,13 +74,13 @@ const ReportsTab: React.FC<Props> = ({
                             <select
                                 value={uploadCategory}
                                 onChange={e => onUploadCategoryChange(e.target.value as ReportCategory)}
-                                className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="px-2 py-1.5 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 {CATEGORIES.map(([cat, label]) => (
                                     <option key={cat} value={cat}>{label}</option>
                                 ))}
                             </select>
-                            <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer hover:bg-blue-700 transition-colors">
+                            <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-form-label font-bold shadow-md cursor-pointer hover:bg-blue-700 transition-colors">
                                 <Plus className="w-4 h-4" />
                                 Adicionar
                                 <input type="file" accept="application/pdf,.docx,.xlsx" className="hidden" onChange={onUpload} />

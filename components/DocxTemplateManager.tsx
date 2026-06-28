@@ -264,7 +264,7 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Nome do modelo *</label>
+                                    <label className="block text-form-label font-medium text-gray-500 mb-1">Nome do modelo *</label>
                                     <input
                                         value={draft.name}
                                         onChange={e => setDraft({ ...draft, name: e.target.value })}
@@ -273,7 +273,7 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Descrição</label>
+                                    <label className="block text-form-label font-medium text-gray-500 mb-1">Descrição</label>
                                     <input
                                         value={draft.description}
                                         onChange={e => setDraft({ ...draft, description: e.target.value })}
@@ -285,7 +285,7 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
 
                             {/* Upload / substituição do arquivo */}
                             <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1">
+                                <label className="block text-form-label font-medium text-gray-500 mb-1">
                                     Arquivo .docx {draft.id ? '(deixe em branco para manter o atual)' : '*'}
                                 </label>
                                 <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-dashed border-gray-300 dark:border-gray-600 px-3 py-3 text-sm text-gray-600 dark:text-gray-300 hover:border-blue-400 hover:bg-blue-50/40 transition-colors">

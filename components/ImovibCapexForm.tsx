@@ -323,7 +323,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
 
                 {/* ── ÁREA TOTAL ── */}
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-4">
-                    <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-3">
+                    <label className="block text-form-label font-black uppercase tracking-wider text-slate-500 mb-3">
                         Área Total (m²)
                     </label>
                     <div className="text-2xl font-black text-indigo-700">
@@ -340,7 +340,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                 {/* ── CUSTO OBRA POR BLOCO ── */}
                 {study.blocks && study.blocks.length > 0 && (
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-4">
-                        <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-4">
+                        <label className="block text-form-label font-black uppercase tracking-wider text-slate-500 mb-4">
                             Custo de Obra (R$/m²) por Bloco
                         </label>
                         <div className="space-y-3">
@@ -372,7 +372,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
 
                 {/* ── CUSTO DE AQUISIÇÃO DO TERRENO ── */}
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-6">
-                    <label className="block text-xs font-black uppercase tracking-wider text-amber-700 mb-3">
+                    <label className="block text-form-label font-black uppercase tracking-wider text-amber-700 mb-3">
                         Custo de Aquisição do Terreno (R$)
                     </label>
                     <div className="flex items-center gap-3 max-w-xs">
@@ -398,7 +398,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Área */}
                             <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
-                                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">
+                                <label className="block text-form-label font-black uppercase tracking-wider text-slate-400 mb-2">
                                     Área Total (m²)
                                 </label>
                                 {totalBlockArea > 0 && simplifiedAreaSqm === 0 && (
@@ -423,7 +423,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                             setSimplifiedAreaSqm(0);
                                             saveSimplifiedFields(simplifiedCostSqm, 0);
                                         }}
-                                        className="mt-2 text-xs text-indigo-500 hover:text-indigo-700 font-medium underline"
+                                        className="mt-2 text-button text-indigo-500 hover:text-indigo-700 font-medium underline"
                                     >
                                         Usar área dos blocos ({Math.round(totalBlockArea).toLocaleString('pt-BR')} m²)
                                     </button>
@@ -432,7 +432,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
 
                             {/* Custo por m² */}
                             <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
-                                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">
+                                <label className="block text-form-label font-black uppercase tracking-wider text-slate-400 mb-2">
                                     Custo Total por m²
                                 </label>
                                 <p className="text-xs text-slate-400 font-medium mb-2">
@@ -490,8 +490,8 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                         )}
 
                         <div className="flex justify-end gap-2 mb-4">
-                            <button onClick={expandAll} className="px-3 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">Expandir Tudo</button>
-                            <button onClick={collapseAll} className="px-3 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">Recolher Tudo</button>
+                            <button onClick={expandAll} className="px-3 py-1.5 text-button font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">Expandir Tudo</button>
+                            <button onClick={collapseAll} className="px-3 py-1.5 text-button font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">Recolher Tudo</button>
                         </div>
 
                         <div className="space-y-4">

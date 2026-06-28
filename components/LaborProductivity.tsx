@@ -197,7 +197,7 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
                     <div className="space-y-3">
                         {teamRanking.map((r, i) => (
                             <div key={r.team.id} className="flex items-center gap-4">
-                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-100 text-slate-600' : 'bg-orange-100 text-orange-600'}`}>
+                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-button font-black ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-100 text-slate-600' : 'bg-orange-100 text-orange-600'}`}>
                                     {i + 1}
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -259,13 +259,13 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
                                     <td className="px-4 py-3">
                                         <p className="text-xs font-bold text-slate-700">{log.team_name || log.employee_name || '—'}</p>
                                     </td>
-                                    <td className="px-4 py-3 text-right text-xs font-bold text-slate-500">
+                                    <td className="px-4 py-3 text-right text-table-body font-bold text-slate-500">
                                         {log.planned_qty.toLocaleString('pt-BR')}<span className="text-[9px] text-slate-400 ml-0.5">{log.unit}</span>
                                     </td>
-                                    <td className="px-4 py-3 text-right text-xs font-black text-slate-900">
+                                    <td className="px-4 py-3 text-right text-table-body font-black text-slate-900">
                                         {log.actual_qty.toLocaleString('pt-BR')}<span className="text-[9px] text-slate-400 ml-0.5">{log.unit}</span>
                                     </td>
-                                    <td className="px-4 py-3 text-xs text-slate-500">
+                                    <td className="px-4 py-3 text-table-body text-slate-500">
                                         {log.man_hour_per_unit ? `${log.man_hour_per_unit.toFixed(3)} h/${log.unit}` : '—'}
                                     </td>
                                     <td className="px-4 py-3">

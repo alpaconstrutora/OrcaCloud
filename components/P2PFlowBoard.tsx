@@ -135,7 +135,7 @@ function StageCard({
           {stage.view && (
             <button
               onClick={() => onNavigate(stage.view!)}
-              className="mt-3 w-full flex items-center justify-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800"
+              className="mt-3 w-full flex items-center justify-center gap-1 text-button font-bold text-indigo-600 hover:text-indigo-800"
             >
               Abrir módulo <ChevronRight className="w-3 h-3" />
             </button>

@@ -82,7 +82,7 @@ const TabBtn: React.FC<{ active: boolean; label: string; badge?: number; onClick
 }) => (
   <button
     onClick={onClick}
-    className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap
+    className={`flex items-center gap-1.5 px-4 py-2.5 text-button font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap
       ${active ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-700'}`}
   >
     {label}
@@ -121,7 +121,7 @@ const TransitionModal: React.FC<{
         )}
 
         <div>
-          <label className="text-xs font-black text-slate-500 uppercase tracking-widest block mb-1.5">
+          <label className="text-form-label font-black text-slate-500 uppercase tracking-widest block mb-1.5">
             Motivo / Observação
           </label>
           <textarea
@@ -261,7 +261,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
                 {wo.code as string}
               </span>
             )}
-            <span className={`text-xs font-black px-2.5 py-1 rounded-lg uppercase tracking-widest ${statusCfg.bg} ${statusCfg.color}`}>
+            <span className={`text-form-label font-black px-2.5 py-1 rounded-lg uppercase tracking-widest ${statusCfg.bg} ${statusCfg.color}`}>
               {statusCfg.label}
             </span>
             {(wo.priority as string) !== 'normal' && (
@@ -346,7 +346,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
             {onViewOther && (
               <button
                 onClick={() => onViewOther(pred.id)}
-                className="flex items-center gap-1.5 text-xs font-bold text-amber-700 hover:text-amber-900 flex-shrink-0"
+                className="flex items-center gap-1.5 text-button font-bold text-amber-700 hover:text-amber-900 flex-shrink-0"
               >
                 Ver OE
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -364,7 +364,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
             {status === 'blocked' && (
               <button
                 onClick={() => setShowUnblockModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 active:scale-95"
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-emerald-700 active:scale-95"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 Desbloquear
@@ -374,7 +374,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
               <button
                 key={next}
                 onClick={() => handleTransitionClick(next)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest active:scale-95 transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest active:scale-95 transition-all ${
                   next === 'blocked' ? 'bg-red-50 text-red-700 hover:bg-red-100' :
                   next === 'rejected' ? 'bg-red-50 text-red-700 hover:bg-red-100' :
                   'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-900/20'

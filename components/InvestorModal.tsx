@@ -298,7 +298,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                                                 type="number" min="0" max="100" step="0.01"
                                                                 value={participations[project.id]?.ownership_pct ?? ''}
                                                                 onChange={(e) => setParticipationField(project.id, 'ownership_pct', parseFloat(e.target.value) || 0)}
-                                                                className="w-24 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                                                className="w-24 px-2 py-1 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-purple-500"
                                                                 placeholder="0"
                                                             />
                                                         </label>
@@ -308,7 +308,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                                                 type="number" min="0" step="0.01"
                                                                 value={participations[project.id]?.committed_amount ?? ''}
                                                                 onChange={(e) => setParticipationField(project.id, 'committed_amount', parseFloat(e.target.value) || 0)}
-                                                                className="w-40 px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                                                className="w-40 px-2 py-1 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-purple-500"
                                                                 placeholder="0,00"
                                                             />
                                                         </label>

@@ -30,7 +30,7 @@ const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ou
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div>
-        <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-1">{label}</label>
+        <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">{label}</label>
         {children}
     </div>
 );
@@ -109,7 +109,7 @@ const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
                 <p className="text-xs font-black uppercase tracking-widest text-gray-500">Metas e Indicadores Anuais</p>
                 {!showForm && (
                     <button onClick={openNew}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
+                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
                         <Plus className="w-3.5 h-3.5" /> Definir Metas
                     </button>
                 )}
@@ -168,11 +168,11 @@ const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
 
                     <div className="flex justify-end gap-2 pt-1 border-t border-gray-200">
                         <button type="button" onClick={cancel}
-                            className="px-4 py-2 text-xs font-black uppercase tracking-wide text-gray-500 hover:text-gray-700">
+                            className="px-4 py-2 text-button font-black uppercase tracking-wide text-gray-500 hover:text-gray-700">
                             Cancelar
                         </button>
                         <button type="submit" disabled={saving}
-                            className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
+                            className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
                             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                             Salvar
                         </button>

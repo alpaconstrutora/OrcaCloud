@@ -97,7 +97,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ email, onClose, o
                 <div className="flex p-1 bg-white border border-gray-100 rounded-xl shadow-sm">
                     <button
                         onClick={() => setActiveTab('active')}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'active' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${activeTab === 'active' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         Ativas
                         {notifications.filter(n => !n.isRead).length > 0 && (
@@ -108,7 +108,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ email, onClose, o
                     </button>
                     <button
                         onClick={() => setActiveTab('history')}
-                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         Histórico
                     </button>

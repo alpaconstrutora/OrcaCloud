@@ -140,7 +140,7 @@ function ApproveRejectModal({ item, mode, userEmail, config, onDone, onClose }: 
                     </div>
                     {err && <p className="text-xs text-red-600 font-semibold bg-red-50 rounded-lg p-2 mb-3">{err}</p>}
                     <div className="mb-5">
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">
                             {isApprove ? 'Observação (opcional)' : 'Motivo da rejeição *'}
                         </label>
                         <textarea
@@ -447,7 +447,7 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
                         <div className="p-6 space-y-4">
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Valor mínimo (R$)</label>
+                                    <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Valor mínimo (R$)</label>
                                     <input
                                         type="number" min={0} step="1"
                                         value={editing.faixa_min ?? 0}
@@ -456,7 +456,7 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Valor máximo (R$, vazio = sem limite)</label>
+                                    <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Valor máximo (R$, vazio = sem limite)</label>
                                     <input
                                         type="number" min={0} step="1" placeholder="Sem limite"
                                         value={editing.faixa_max ?? ''}
@@ -466,7 +466,7 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Níveis de aprovação</label>
+                                <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Níveis de aprovação</label>
                                 <div className="flex gap-2">
                                     {([1, 2] as const).map(n => (
                                         <button
@@ -480,7 +480,7 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Rótulo Nível 1</label>
+                                <label className="block text-button font-bold text-gray-500 uppercase tracking-wider mb-1">Rótulo Nível 1</label>
                                 <input
                                     type="text" placeholder="Ex: Gestor"
                                     value={editing.level1_label ?? ''}
@@ -490,7 +490,7 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
                             </div>
                             {editing.required_levels === 2 && (
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Rótulo Nível 2</label>
+                                    <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Rótulo Nível 2</label>
                                     <input
                                         type="text" placeholder="Ex: Financeiro / Diretoria"
                                         value={editing.level2_label ?? ''}

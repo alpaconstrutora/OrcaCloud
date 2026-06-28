@@ -128,7 +128,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                         <button
                             key={s}
                             onClick={() => setFilterStatus(s)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterStatus === s ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                            className={`px-3 py-1.5 rounded-lg text-form-input font-bold transition-all ${filterStatus === s ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
                         >
                             {s === 'ALL' ? 'Todos' : s.charAt(0) + s.slice(1).toLowerCase()}
                         </button>
@@ -136,7 +136,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                     <select
                         value={filterContract}
                         onChange={e => setFilterContract(e.target.value as any)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 outline-none"
+                        className="px-3 py-1.5 rounded-lg text-button font-bold bg-slate-100 text-slate-600 outline-none"
                     >
                         <option value="ALL">Todos os vínculos</option>
                         {Object.entries(CONTRACT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}

@@ -174,7 +174,7 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
                                             </p>
                                             <button
                                                 onClick={handleAIAnalysis}
-                                                className="px-6 py-3 bg-white text-blue-900 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-50 transition-colors"
+                                                className="px-6 py-3 bg-white text-blue-900 rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-50 transition-colors"
                                             >
                                                 Gerar Análise IA
                                             </button>
@@ -268,7 +268,7 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
                             <p className="text-xs text-indigo-700 mb-4">
                                 Precisa de informações específicas sobre esta obra?
                             </p>
-                            <button className="w-full py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors">
+                            <button className="w-full py-2 bg-indigo-600 text-white rounded-xl text-button font-bold hover:bg-indigo-700 transition-colors">
                                 Entrar em Contato
                             </button>
                         </div>

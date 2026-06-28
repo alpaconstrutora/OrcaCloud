@@ -366,7 +366,7 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                                     <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-100 space-y-3">
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                             <div className="md:col-span-2">
-                                                <label className="block text-xs font-medium text-gray-600 mb-1">Nome da conta *</label>
+                                                <label className="block text-form-label font-medium text-gray-600 mb-1">Nome da conta *</label>
                                                 <input
                                                     type="text"
                                                     value={accountForm.name}
@@ -376,7 +376,7 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-600 mb-1">Banco</label>
+                                                <label className="block text-form-label font-medium text-gray-600 mb-1">Banco</label>
                                                 <input
                                                     type="text"
                                                     value={accountForm.bank}
@@ -386,7 +386,7 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-600 mb-1">Agência</label>
+                                                <label className="block text-form-label font-medium text-gray-600 mb-1">Agência</label>
                                                 <input
                                                     type="text"
                                                     value={accountForm.branch}
@@ -396,7 +396,7 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-600 mb-1">Número da conta</label>
+                                                <label className="block text-form-label font-medium text-gray-600 mb-1">Número da conta</label>
                                                 <input
                                                     type="text"
                                                     value={accountForm.account_number}
@@ -406,7 +406,7 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-600 mb-1">Descrição</label>
+                                                <label className="block text-form-label font-medium text-gray-600 mb-1">Descrição</label>
                                                 <input
                                                     type="text"
                                                     value={accountForm.description}

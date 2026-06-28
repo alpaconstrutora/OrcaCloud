@@ -124,14 +124,14 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => setIsCategoryModalOpen(true)}
-                        className="flex items-center gap-3 px-6 py-3 bg-white text-gray-700 border border-gray-200 rounded-[1.25rem] hover:bg-gray-50 font-black text-xs uppercase tracking-widest transition-all shadow-sm active:scale-95"
+                        className="flex items-center gap-3 px-6 py-3 bg-white text-gray-700 border border-gray-200 rounded-[1.25rem] hover:bg-gray-50 font-black text-button uppercase tracking-widest transition-all shadow-sm active:scale-95"
                     >
                         <Tag className="w-5 h-5 text-blue-500" />
                         Categorias
                     </button>
                     <button
                         onClick={() => { setEditingSupplier(undefined); setIsModalOpen(true); }}
-                        className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                        className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
                     >
                         <Plus className="w-5 h-5" />
                         Novo Fornecedor

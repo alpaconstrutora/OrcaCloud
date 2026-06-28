@@ -197,7 +197,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               placeholder="Ex: Alpa Refrigeração & Climatização"
               value={templateHeader}
               onChange={(e) => setTemplateHeader(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
               required
             />
             <span className="block text-[8px] text-slate-400">Este nome aparecerá em destaque no cabeçalho do PDF dos seus orçamentos.</span>
@@ -208,7 +208,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             <select
               value={profissao}
               onChange={(e) => setProfissao(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
             >
               <option value="AR_CONDICIONADO">Ar-condicionado e Refrigeração</option>
               <option value="ELETRICISTA">Eletricista / Instalações Elétricas</option>
@@ -232,7 +232,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               <select
                 value={pixKeyType}
                 onChange={(e) => setPixKeyType(e.target.value as ProPixKeyType)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
               >
                 <option value="CPF">CPF</option>
                 <option value="CNPJ">CNPJ</option>
@@ -248,7 +248,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 placeholder="Insira a chave pix"
                 value={pixKey}
                 onChange={(e) => setPixKey(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
                 required
               />
             </div>
@@ -270,7 +270,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               placeholder="Ex: Obrigado pela preferência! Garantia de 90 dias conforme CDC."
               value={templateFooter}
               onChange={(e) => setTemplateFooter(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none font-medium"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none font-medium"
             />
           </div>
         </div>
@@ -295,7 +295,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                   placeholder="Ex: Instalação de Ar-condicionado de Janela"
                   value={tempTitulo}
                   onChange={(e) => setTempTitulo(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
                 />
               </div>
               <div className="space-y-1">
@@ -305,7 +305,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                   placeholder="Ex: 350,00"
                   value={tempValor}
                   onChange={(e) => setTempValor(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
                 />
               </div>
             </div>
@@ -317,7 +317,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                   placeholder="Ex: Área (m2), metro, unidade"
                   value={tempUnidade}
                   onChange={(e) => setTempUnidade(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
                 />
               </div>
               <div className="space-y-1">
@@ -327,7 +327,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                   placeholder="Ex: 100"
                   value={tempQuantidade}
                   onChange={(e) => setTempQuantidade(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
                 />
               </div>
             </div>
@@ -351,7 +351,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 placeholder="Descreva o que está incluso no serviço..."
                 value={tempDescricao}
                 onChange={(e) => setTempDescricao(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-teal-500 resize-none font-medium"
+                className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 resize-none font-medium"
               />
             </div>
             <div className="flex gap-2 justify-end">
@@ -432,7 +432,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           <button
             type="submit"
             disabled={saving}
-            className="w-full py-3 bg-gradient-to-tr from-teal-500 to-cyan-400 text-white text-xs font-black uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+            className="w-full py-3 bg-gradient-to-tr from-teal-500 to-cyan-400 text-white text-button font-black uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
           >
             {saving ? (
               <>

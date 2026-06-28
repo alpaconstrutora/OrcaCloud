@@ -215,7 +215,7 @@ const ConditionDetailPanel: React.FC<Props> = ({
               {condition.responsibility ? (
                 <InfoSection title="Responsabilidade" action={
                   condition.state !== 'CLOSED' && condition.state !== 'IN_REPAIR' ? (
-                    <button onClick={() => setOpenModal('assign_responsibility')} className="text-xs text-blue-600 hover:underline">Reatribuir</button>
+                    <button onClick={() => setOpenModal('assign_responsibility')} className="text-button text-blue-600 hover:underline">Reatribuir</button>
                   ) : undefined
                 }>
                   <InfoRow label="Parte responsável" value={condition.responsibility.responsibleParty} />
@@ -227,7 +227,7 @@ const ConditionDetailPanel: React.FC<Props> = ({
               ) : condition.state !== 'DETECTED' && condition.state !== 'CLOSED' ? (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 flex items-center justify-between">
                   <p className="text-sm text-yellow-800">Responsabilidade não atribuída</p>
-                  <button onClick={() => setOpenModal('assign_responsibility')} className="text-xs font-medium text-yellow-700 hover:text-yellow-900 underline">
+                  <button onClick={() => setOpenModal('assign_responsibility')} className="text-button font-medium text-yellow-700 hover:text-yellow-900 underline">
                     Atribuir agora
                   </button>
                 </div>
@@ -252,7 +252,7 @@ const ConditionDetailPanel: React.FC<Props> = ({
               {condition.actionPlan && (
                 <InfoSection title="Plano de ação" action={
                   condition.state !== 'CLOSED' ? (
-                    <button onClick={() => setOpenModal('revise_plan')} className="text-xs text-blue-600 hover:underline">
+                    <button onClick={() => setOpenModal('revise_plan')} className="text-button text-blue-600 hover:underline">
                       Revisar plano
                     </button>
                   ) : undefined
@@ -287,7 +287,7 @@ const ConditionDetailPanel: React.FC<Props> = ({
               {condition.contestation && (
                 <InfoSection title="Contestação">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    <span className={`text-button font-medium px-2 py-0.5 rounded-full ${
                       condition.contestation.state === 'open'      ? 'bg-red-100 text-red-700' :
                       condition.contestation.state === 'resolved'  ? 'bg-green-100 text-green-700' :
                       condition.contestation.state === 'escalated' ? 'bg-purple-100 text-purple-700' :

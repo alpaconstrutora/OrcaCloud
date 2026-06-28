@@ -299,7 +299,7 @@ const BrokerIntegrations: React.FC<BrokerIntegrationsProps> = ({ organizationId 
                         <p className="text-xs text-gray-400 mt-0.5">Notificações HTTP automáticas para sistemas externos a cada evento.</p>
                     </div>
                     <button onClick={() => setShowWebhookForm(true)}
-                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-lg shadow-indigo-900/20">
+                        className="flex items-center gap-1.5 px-3 py-2 text-button font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-lg shadow-indigo-900/20">
                         <Plus className="w-3.5 h-3.5" /> Novo webhook
                     </button>
                 </div>
@@ -333,10 +333,10 @@ const BrokerIntegrations: React.FC<BrokerIntegrationsProps> = ({ organizationId 
                                                 {EVENT_LABELS[wh.event_type]}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 text-gray-400 text-xs font-mono max-w-[200px] truncate" title={wh.endpoint_url}>
+                                        <td className="px-4 py-3 text-gray-400 text-table-body font-mono max-w-[200px] truncate" title={wh.endpoint_url}>
                                             {wh.endpoint_url}
                                         </td>
-                                        <td className="px-4 py-3 text-gray-400 text-xs">{formatTimeAgo(wh.last_triggered)}</td>
+                                        <td className="px-4 py-3 text-gray-400 text-table-body">{formatTimeAgo(wh.last_triggered)}</td>
                                         <td className="px-4 py-3 font-bold text-gray-600">{wh.events_count}</td>
                                         <td className="px-4 py-3">
                                             <button

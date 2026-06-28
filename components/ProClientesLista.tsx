@@ -139,7 +139,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
             }
             setMostrarForm(!mostrarForm);
           }}
-          className="text-xs font-black uppercase tracking-widest text-teal-600 hover:text-teal-500"
+          className="text-button font-black uppercase tracking-widest text-teal-600 hover:text-teal-500"
         >
           {mostrarForm ? 'Cancelar' : '+ Cadastrar'}
         </button>
@@ -157,33 +157,33 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
               placeholder="Nome do Cliente"
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
             />
             <input
               type="tel"
               placeholder="WhatsApp / Telefone (com DDD)"
               value={telefone}
               onChange={(e) => setTelefone(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
             />
             <input
               type="text"
               placeholder="Endereço de execução"
               value={endereco}
               onChange={(e) => setEndereco(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
             />
             <textarea
               rows={2}
               placeholder="Observações úteis..."
               value={observacoes}
               onChange={(e) => setObservacoes(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none"
             />
           </div>
           <button
             onClick={handleSubmit}
-            className="w-full py-2.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white text-xs font-black uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 active:scale-95"
+            className="w-full py-2.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white text-button font-black uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 active:scale-95"
           >
             {editingClienteId ? 'Salvar Alterações' : 'Confirmar Cadastro'}
           </button>

@@ -286,10 +286,10 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                     <p className="text-sm text-gray-500 font-medium tracking-tight">Gerencie e monitore suas integrações inteligentes.</p>
                 </div>
                 <div className="flex bg-gray-100 p-1.5 rounded-2xl">
-                    <button onClick={() => setActiveTab('painel')} className={`px-5 py-2.5 rounded-xl text-xs font-medium uppercase tracking-widest transition-all ${activeTab === 'painel' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Painel</button>
-                    <button onClick={() => setActiveTab('config')} className={`px-5 py-2.5 rounded-xl text-xs font-medium uppercase tracking-widest transition-all ${activeTab === 'config' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Configurações</button>
-                    <button onClick={() => setActiveTab('ruler')} className={`px-5 py-2.5 rounded-xl text-xs font-medium uppercase tracking-widest transition-all ${activeTab === 'ruler' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Régua</button>
-                    <button onClick={() => setActiveTab('history')} className={`px-5 py-2.5 rounded-xl text-xs font-medium uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Histórico</button>
+                    <button onClick={() => setActiveTab('painel')} className={`px-5 py-2.5 rounded-xl text-button font-medium uppercase tracking-widest transition-all ${activeTab === 'painel' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Painel</button>
+                    <button onClick={() => setActiveTab('config')} className={`px-5 py-2.5 rounded-xl text-button font-medium uppercase tracking-widest transition-all ${activeTab === 'config' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Configurações</button>
+                    <button onClick={() => setActiveTab('ruler')} className={`px-5 py-2.5 rounded-xl text-button font-medium uppercase tracking-widest transition-all ${activeTab === 'ruler' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Régua</button>
+                    <button onClick={() => setActiveTab('history')} className={`px-5 py-2.5 rounded-xl text-button font-medium uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Histórico</button>
                 </div>
             </div>
 
@@ -304,7 +304,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                         <button
                             onClick={handleCommitChanges}
                             disabled={isSaving}
-                            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-medium text-xs uppercase tracking-widest transition-all disabled:opacity-50"
+                            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-medium text-button uppercase tracking-widest transition-all disabled:opacity-50"
                         >
                             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             {isSaving ? 'Salvando...' : 'Salvar Alterações'}
@@ -455,7 +455,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                 </div>
                                                 <button
                                                     onClick={() => setActiveTab('history')}
-                                                    className="px-4 py-2 bg-white border border-red-100 text-red-600 text-xs font-medium uppercase rounded-lg hover:bg-red-50 transition-colors tracking-widest"
+                                                    className="px-4 py-2 bg-white border border-red-100 text-red-600 text-button font-medium uppercase rounded-lg hover:bg-red-50 transition-colors tracking-widest"
                                                 >
                                                     Ver Histórico
                                                 </button>
@@ -502,7 +502,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                     value={(financialInfo[item.field as keyof FinancialInfo] as string) || ''}
                                     onChange={e => handleSaveGlobal(item.field as keyof FinancialInfo, e.target.value)}
                                     placeholder="URL do Webhook..."
-                                    className="w-full bg-gray-50 px-4 py-3 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white font-mono text-xs font-medium outline-none transition-all"
+                                    className="w-full bg-gray-50 px-4 py-3 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white font-mono text-form-input font-medium outline-none transition-all"
                                 />
                             </div>
                         ))}
@@ -584,7 +584,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                         handleSaveGlobal('contractTemplates', newTemplates);
                                                     }}
                                                     placeholder="Ex: TPL_FINANCE_001"
-                                                    className="w-full bg-white px-3 py-2 rounded-xl border border-gray-200 font-mono text-xs font-medium outline-none focus:border-blue-500"
+                                                    className="w-full bg-white px-3 py-2 rounded-xl border border-gray-200 font-mono text-form-input font-medium outline-none focus:border-blue-500"
                                                 />
                                             </div>
                                         </div>
@@ -670,7 +670,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                                     newRules[idx].days = Number(e.target.value);
                                                                     handleSaveGlobal('billingRules', newRules);
                                                                 }}
-                                                                className="bg-transparent text-xs font-medium text-gray-700 outline-none"
+                                                                className="bg-transparent text-form-input font-medium text-gray-700 outline-none"
                                                             >
                                                                 <option value="-1">1 dia antes</option>
                                                                 <option value="0">No dia do vencimento</option>
@@ -690,7 +690,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                                     handleSaveGlobal('billingRules', newRules);
                                                                 }}
                                                                 placeholder="R$ 0,00"
-                                                                className="bg-transparent text-xs font-medium text-gray-700 outline-none w-24"
+                                                                className="bg-transparent text-form-input font-medium text-gray-700 outline-none w-24"
                                                             />
                                                         </div>
                                                         <div className="flex flex-col">
@@ -705,7 +705,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                                     newRules[idx].active = !newRules[idx].active;
                                                                     handleSaveGlobal('billingRules', newRules);
                                                                 }}
-                                                                className={`text-xs font-medium uppercase text-left ${rule.active ? 'text-emerald-600' : 'text-gray-400'}`}
+                                                                className={`text-form-input font-medium uppercase text-left ${rule.active ? 'text-emerald-600' : 'text-gray-400'}`}
                                                             >
                                                                 {rule.active ? 'Ativo' : 'Pausado'}
                                                             </button>
@@ -721,7 +721,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                                 handleSaveGlobal('billingRules', newRules);
                                                             }}
                                                             placeholder="Ex: Olá {{cliente}}, seu boleto de {{valor}} vence em {{vencimento}}."
-                                                            className="w-full bg-white/50 border border-gray-100 rounded-xl p-3 text-xs font-medium outline-none focus:border-blue-200 focus:bg-white transition-all min-h-[60px] resize-none"
+                                                            className="w-full bg-white/50 border border-gray-100 rounded-xl p-3 text-form-input font-medium outline-none focus:border-blue-200 focus:bg-white transition-all min-h-[60px] resize-none"
                                                         />
                                                         <div className="flex gap-2 mt-1">
                                                             {['cliente', 'valor', 'vencimento', 'descricao', 'projeto'].map(v => (
@@ -956,7 +956,7 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                         'Cobrança'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 font-bold text-xs text-gray-700">{item.reference_name || 'N/A'}</td>
+                                        <td className="px-6 py-4 font-bold text-table-body text-gray-700">{item.reference_name || 'N/A'}</td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-2">
                                                 <div className={`w-1.5 h-1.5 rounded-full ${item.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />

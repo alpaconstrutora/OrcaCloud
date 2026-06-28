@@ -275,7 +275,7 @@ const SinapiImportModal: React.FC<SinapiImportModalProps> = ({ isOpen, onClose, 
 
                             {/* Mês/Ano */}
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 uppercase tracking-wider mb-1.5">
+                                <label className="block text-form-label font-bold text-gray-600 uppercase tracking-wider mb-1.5">
                                     Mês de Referência
                                 </label>
                                 <input

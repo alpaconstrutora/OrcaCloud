@@ -241,7 +241,7 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
                     ${form.weather === key ? 'border-blue-500 bg-blue-50' : 'border-slate-100 hover:border-slate-200'}`}
                 >
                   <Icon className={`w-6 h-6 ${cfg.cls}`} />
-                  <span className="text-xs font-bold text-slate-600">{cfg.label}</span>
+                  <span className="text-button font-bold text-slate-600">{cfg.label}</span>
                 </button>
               )
             })}
@@ -249,7 +249,7 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wide">Campo</label>
+              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Campo</label>
               <select
                 value={form.fieldCondition}
                 onChange={e => setForm(f => ({ ...f, fieldCondition: e.target.value as FieldCondition }))}
@@ -261,7 +261,7 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
               </select>
             </div>
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wide">Trabalhadores presentes</label>
+              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Trabalhadores presentes</label>
               <input
                 type="number"
                 min="0"
@@ -271,7 +271,7 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
               />
             </div>
             <div className="col-span-2">
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wide">Anotações gerais</label>
+              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Anotações gerais</label>
               <textarea
                 value={form.generalNotes}
                 onChange={e => setForm(f => ({ ...f, generalNotes: e.target.value }))}
@@ -361,7 +361,7 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
           <button
             onClick={handleAutoGenerate}
             disabled={generating}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-60 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-60 transition-colors"
           >
             {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             {generating ? 'Gerando...' : 'Registrar dia'}

@@ -277,7 +277,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                 { label: 'Área do Terreno (m²)', key: 'terreno_area' },
                             ].map(({ label, key }) => (
                                 <div key={key}>
-                                    <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-2">{label}</label>
+                                    <label className="block text-form-label font-black uppercase tracking-wider text-slate-400 mb-2">{label}</label>
                                     <input
                                         type="number"
                                         value={(formData as any)[key] ?? ''}
@@ -554,7 +554,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                                     <td colSpan={11} className="px-6 py-4 bg-slate-50/50">
                                                         <button
                                                             onClick={() => handleAddUnit(block.id)}
-                                                            className="text-xs font-black tracking-widest uppercase text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 transition-colors"
+                                                            className="text-button font-black tracking-widest uppercase text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 transition-colors"
                                                         >
                                                             <Plus className="w-3 h-3" /> Adicionar Tipologia
                                                         </button>

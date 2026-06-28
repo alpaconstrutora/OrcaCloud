@@ -736,7 +736,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                             <div className="flex justify-between items-center mb-6">
                               <span className="text-sm font-bold text-gray-700">Variação em Mão de Obra (Dissídios)</span>
-                              <span className={`px-3 py-1 rounded-full text-xs font-black ${sensLabor >= 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                              <span className={`px-3 py-1 rounded-full text-form-input font-black ${sensLabor >= 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}`}>
                                 {sensLabor > 0 ? '+' : ''}{sensLabor}%
                               </span>
                             </div>
@@ -949,10 +949,10 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                               {parametricService.generateSCurveData(totalValue, simulationDuration).map((row) => (
                                 <tr key={row.month} className="hover:bg-gray-50/50 transition-colors">
                                   <td className="px-6 py-3 font-bold text-gray-700">Mês {row.month}</td>
-                                  <td className="px-6 py-3 text-right font-mono text-xs text-blue-600 font-bold">
+                                  <td className="px-6 py-3 text-right font-mono text-table-body text-blue-600 font-bold">
                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.periodic)}
                                   </td>
-                                  <td className="px-6 py-3 text-right font-mono text-xs text-gray-900 font-bold">
+                                  <td className="px-6 py-3 text-right font-mono text-table-body text-gray-900 font-bold">
                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.cumulative)}
                                   </td>
                                   <td className="px-6 py-3 text-right">
@@ -1256,7 +1256,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                               <td className="px-6 py-4 text-right font-black text-gray-900 bg-gray-50/30">
                                 {item.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
                               </td>
-                              <td className="px-6 py-4 text-right text-gray-500 font-mono text-xs">
+                              <td className="px-6 py-4 text-right text-gray-500 font-mono text-table-body">
                                 {coef.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
                               </td>
                             </tr>

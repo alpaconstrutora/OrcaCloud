@@ -64,7 +64,7 @@ const TypeForm: React.FC<{
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
-          <label className="block text-xs font-semibold text-slate-600 mb-1">Nome *</label>
+          <label className="block text-form-label font-semibold text-slate-600 mb-1">Nome *</label>
           <input
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             value={form.name}
@@ -74,7 +74,7 @@ const TypeForm: React.FC<{
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1">
+          <label className="block text-form-label font-semibold text-slate-600 mb-1">
             Slug (identificador) *
           </label>
           <input
@@ -84,12 +84,12 @@ const TypeForm: React.FC<{
             readOnly={lockSlug}
             placeholder="infraestrutura_urbana"
           />
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-form-input text-slate-400 mt-0.5">
             {lockSlug ? 'O slug não pode ser alterado (usado em obras existentes)' : 'Usado internamente; sem espaços'}
           </p>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1">Cor</label>
+          <label className="block text-form-label font-semibold text-slate-600 mb-1">Cor</label>
           <div className="flex flex-wrap gap-1.5 pt-1">
             {COLOR_OPTIONS.map(c => (
               <button
@@ -103,7 +103,7 @@ const TypeForm: React.FC<{
           </div>
         </div>
         <div className="col-span-2">
-          <label className="block text-xs font-semibold text-slate-600 mb-1">Descrição</label>
+          <label className="block text-form-label font-semibold text-slate-600 mb-1">Descrição</label>
           <input
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             value={form.description}
@@ -154,7 +154,7 @@ const Modal: React.FC<{ title: string; onClose: () => void; children: React.Reac
 
 // ── Badge de tipo ──────────────────────────────────────────────────────────────
 const TypeBadge: React.FC<{ type: ObraType }> = ({ type }) => (
-  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${colorClasses(type.color)}`}>
+  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-form-label font-semibold border ${colorClasses(type.color)}`}>
     {type.name}
   </span>
 );

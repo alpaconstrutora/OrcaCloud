@@ -640,7 +640,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
                 <button
                     onClick={onRegisterDeal}
-                    className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-600 transition-all active:scale-95 shadow-xl shadow-gray-900/10 hover:shadow-blue-600/20"
+                    className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-button uppercase tracking-[0.2em] hover:bg-blue-600 transition-all active:scale-95 shadow-xl shadow-gray-900/10 hover:shadow-blue-600/20"
                 >
                     Registrar Negócio
                 </button>
@@ -949,7 +949,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-black text-gray-900">
                                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price || 0)}
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-bold text-gray-600">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-table-body font-bold text-gray-600">
                                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format((property.price || 0) / (property.private_area || property.area || 1))}
                                                             </td>
                                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-[10px] font-black">
@@ -972,7 +972,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                                     </span>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-bold text-center text-gray-500">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-table-body font-bold text-center text-gray-500">
                                                                 {property.floor ? `${property.floor}º` : 'Térreo'}
                                                             </td>
                                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
@@ -982,8 +982,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                             </td>
                                                             <td className="px-6 py-2.5 text-right">
                                                                 <div className="flex items-center justify-end gap-3">
-                                                                    <button onClick={(e) => { e.stopPropagation(); setEditingProperty(property); setIsPropertyModalOpen(true); }} className="text-blue-600 hover:text-blue-800 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1.5"><Edit className="w-3.5 h-3.5" />Editar</button>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteProperty(property.id); }} className="text-red-400 hover:text-red-600 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-red-50 rounded-lg transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); setEditingProperty(property); setIsPropertyModalOpen(true); }} className="text-blue-600 hover:text-blue-800 text-button font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1.5"><Edit className="w-3.5 h-3.5" />Editar</button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteProperty(property.id); }} className="text-red-400 hover:text-red-600 text-button font-black uppercase tracking-widest p-1.5 hover:bg-red-50 rounded-lg transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
                                                                 </div>
                                                             </td>
                                                         </tr>
@@ -997,9 +997,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                 filteredProperties.filter(p => p.type === 'BUILDING' || !p.parent_id).map(property => (
                                                     <tr key={property.id} className="hover:bg-blue-50/50 transition-colors cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>
                                                         <td className="px-6 py-3 border-r border-gray-100 last:border-r-0 font-bold text-gray-900 group-hover:text-blue-600 transition-colors uppercase whitespace-nowrap">{property.name}</td>
-                                                        <td className="px-6 py-3 border-r border-gray-100 last:border-r-0 text-gray-400 text-xs italic">{property.address || 'Resumo do Empreendimento'}</td>
+                                                        <td className="px-6 py-3 border-r border-gray-100 last:border-r-0 text-gray-400 text-table-body italic">{property.address || 'Resumo do Empreendimento'}</td>
                                                         <td className="px-6 py-3 border-r border-gray-100 last:border-r-0 font-bold text-gray-900 whitespace-nowrap">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price || 0)}</td>
-                                                        <td className="px-6 py-3 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap text-xs font-bold text-gray-400">---</td>
+                                                        <td className="px-6 py-3 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap text-table-body font-bold text-gray-400">---</td>
                                                         <td className="px-6 py-3 border-r border-gray-100 last:border-r-0 text-center"><span className={`px-2 py-0.5 rounded uppercase tracking-widest text-[9px] font-black border ${getStatusColor(property.status)}`}>{getStatusLabel(property.status)}</span></td>
                                                         <td className="px-6 py-3 whitespace-nowrap text-right">
                                                             <div className="flex justify-end gap-1">
@@ -1329,19 +1329,19 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                             </span>
                                                         </div>
                                                     </td>
-                                                    <td className="px-6 py-4 text-center font-bold text-gray-600 text-xs">
+                                                    <td className="px-6 py-4 text-center font-bold text-gray-600 text-table-body">
                                                         {property?.block || '-'}
                                                     </td>
-                                                    <td className="px-6 py-4 text-center font-bold text-gray-600 text-xs">
+                                                    <td className="px-6 py-4 text-center font-bold text-gray-600 text-table-body">
                                                         {property?.private_area || property?.area || 0}m²
                                                     </td>
-                                                    <td className="px-6 py-4 text-right font-mono font-bold text-gray-500 text-xs">
+                                                    <td className="px-6 py-4 text-right font-mono font-bold text-gray-500 text-table-body">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property?.price || 0)}
                                                     </td>
-                                                    <td className="px-6 py-4 text-right font-mono font-bold text-gray-400 text-xs">
+                                                    <td className="px-6 py-4 text-right font-mono font-bold text-gray-400 text-table-body">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format((property?.price || 0) / (property?.private_area || property?.area || 1))}
                                                     </td>
-                                                    <td className="px-6 py-4 text-center font-bold text-gray-600 text-xs text-center">
+                                                    <td className="px-6 py-4 text-center font-bold text-gray-600 text-table-body text-center">
                                                         {property?.floor ? `${property.floor}º` : 'T'}
                                                     </td>
                                                     <td className="px-6 py-4 text-right font-mono font-black text-gray-900">
@@ -1390,7 +1390,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                         setEditingDeal({ type: 'SALE' } as PropertyDeal);
                                         setIsDealModalOpen(true);
                                     }}
-                                    className="w-full py-8 bg-gray-50/50 hover:bg-gray-50 text-gray-400 font-black uppercase tracking-[0.3em] text-xs transition-all border-t border-gray-100 flex items-center justify-center gap-3 group"
+                                    className="w-full py-8 bg-gray-50/50 hover:bg-gray-50 text-gray-400 font-black uppercase tracking-[0.3em] text-button transition-all border-t border-gray-100 flex items-center justify-center gap-3 group"
                                 >
                                     <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
                                     Registrar Nova Negociação

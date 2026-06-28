@@ -399,7 +399,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                     <button
                       key={conv.id}
                       onClick={() => setSelectedConversation(conv)}
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs text-left font-medium transition-all
+                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-button text-left font-medium transition-all
                         ${selectedConversation?.id === conv.id ? 'bg-orange-500 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                     >
                       <span className="text-lg">#</span>
@@ -440,7 +440,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         placeholder={`Enviar mensagem em #${selectedConversation.name}...`}
-                        className="flex-1 bg-[#121212] border border-white/5 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-orange-500/50"
+                        className="flex-1 bg-[#121212] border border-white/5 rounded-xl px-4 py-2 text-form-input text-white focus:outline-none focus:border-orange-500/50"
                       />
                       <button type="submit" className="p-2.5 bg-orange-500 text-white hover:bg-orange-600 active:scale-95 transition-all rounded-xl">
                         <Send className="w-4 h-4" />
@@ -461,7 +461,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                 <h3 className="text-md font-bold text-white">Documentos e Projetos Compartilhados</h3>
                 <div className="relative max-w-xs w-full">
                   <Search className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
-                  <input placeholder="Buscar documentos..." className="bg-[#1c1c1c] border border-white/5 pl-9 pr-4 py-2 rounded-xl text-xs w-full text-white focus:outline-none" />
+                  <input placeholder="Buscar documentos..." className="bg-[#1c1c1c] border border-white/5 pl-9 pr-4 py-2 rounded-xl text-form-input w-full text-white focus:outline-none" />
                 </div>
               </div>
 
@@ -556,7 +556,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                 <h3 className="text-md font-bold text-white">Solicitações de Atendimento</h3>
                 <button
                   onClick={() => setIsNewRequestModalOpen(true)}
-                  className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 px-4 py-2 rounded-xl text-xs text-white transition-all font-bold shadow-lg shadow-orange-500/10"
+                  className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 px-4 py-2 rounded-xl text-button text-white transition-all font-bold shadow-lg shadow-orange-500/10"
                 >
                   <Plus className="w-4 h-4" />
                   Nova Solicitação
@@ -615,7 +615,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                   value={newRequest.title}
                   onChange={(e) => setNewRequest({ ...newRequest, title: e.target.value })}
                   placeholder="Ex: Reenvio de projeto executivo de fundação"
-                  className="bg-[#121212] border border-white/5 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-orange-500"
+                  className="bg-[#121212] border border-white/5 rounded-xl px-3.5 py-2.5 text-form-input text-white focus:outline-none focus:border-orange-500"
                 />
               </div>
 
@@ -627,7 +627,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                   value={newRequest.description}
                   onChange={(e) => setNewRequest({ ...newRequest, description: e.target.value })}
                   placeholder="Explique o motivo do seu pedido..."
-                  className="bg-[#121212] border border-white/5 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-orange-500"
+                  className="bg-[#121212] border border-white/5 rounded-xl px-3.5 py-2.5 text-form-input text-white focus:outline-none focus:border-orange-500"
                 />
               </div>
 
@@ -637,7 +637,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                   <select
                     value={newRequest.type}
                     onChange={(e) => setNewRequest({ ...newRequest, type: e.target.value as any })}
-                    className="bg-[#121212] border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none"
+                    className="bg-[#121212] border border-white/5 rounded-xl px-3 py-2.5 text-form-input text-white focus:outline-none"
                   >
                     <option value="TECNICA">Técnica</option>
                     <option value="CONTRATO">Dúvida Contratual</option>
@@ -652,7 +652,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                   <select
                     value={newRequest.priority}
                     onChange={(e) => setNewRequest({ ...newRequest, priority: e.target.value as any })}
-                    className="bg-[#121212] border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none"
+                    className="bg-[#121212] border border-white/5 rounded-xl px-3 py-2.5 text-form-input text-white focus:outline-none"
                   >
                     <option value="BAIXA">Baixa</option>
                     <option value="MEDIA">Média</option>
@@ -665,13 +665,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                 <button
                   type="button"
                   onClick={() => setIsNewRequestModalOpen(false)}
-                  className="px-4 py-2 border border-white/10 rounded-xl text-xs text-gray-400 hover:text-white transition-all font-semibold"
+                  className="px-4 py-2 border border-white/10 rounded-xl text-button text-gray-400 hover:text-white transition-all font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 active:scale-95 rounded-xl text-xs text-white font-bold transition-all"
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 active:scale-95 rounded-xl text-button text-white font-bold transition-all"
                 >
                   Enviar Solicitação
                 </button>

@@ -68,7 +68,7 @@ const AIInsightCard: React.FC<AIInsightCardProps> = ({
                 {onAction && (
                     <button
                         onClick={onAction}
-                        className="flex items-center gap-2 text-xs font-black uppercase tracking-widest group/btn"
+                        className="flex items-center gap-2 text-button font-black uppercase tracking-widest group/btn"
                     >
                         Saber mais
                         <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />

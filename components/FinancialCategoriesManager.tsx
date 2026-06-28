@@ -158,7 +158,7 @@ const FinancialCategoriesManager: React.FC = () => {
                     <button
                         onClick={handleSync}
                         disabled={syncing}
-                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1.5 px-3 py-2 text-button font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors disabled:opacity-50"
                         title="Importar categorias já usadas em transações e regras"
                     >
                         {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -166,7 +166,7 @@ const FinancialCategoriesManager: React.FC = () => {
                     </button>
                     <button
                         onClick={() => { setAdding(true); setTimeout(() => document.getElementById('new-cat-input')?.focus(), 50); }}
-                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-lg shadow-indigo-900/20"
+                        className="flex items-center gap-1.5 px-3 py-2 text-button font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-lg shadow-indigo-900/20"
                     >
                         <Plus className="w-3.5 h-3.5" /> Nova categoria
                     </button>

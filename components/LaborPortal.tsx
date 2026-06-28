@@ -442,7 +442,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
                 <p className="text-sm font-black text-slate-700">{activeEmployees.length} colaboradores ativos</p>
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-44" />
+                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-44" />
                 </div>
             </div>
 
@@ -536,11 +536,11 @@ const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees }) => {
                 <div className="space-y-4">
                     <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1 w-fit">
                         <button onClick={() => setView('management')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${view === 'management' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === 'management' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>
                             <Key className="w-3.5 h-3.5" /> Gestão de Acessos
                         </button>
                         <button onClick={() => setView('portal')}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${view === 'portal' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === 'portal' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>
                             <Smartphone className="w-3.5 h-3.5" /> Prévia do Portal
                         </button>
                     </div>

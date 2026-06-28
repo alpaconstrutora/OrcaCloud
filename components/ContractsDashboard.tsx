@@ -201,7 +201,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
                 <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-medium">
                     <AlertTriangle size={16} className="shrink-0" />
                     <span>{loadError}</span>
-                    <button onClick={load} className="ml-auto text-xs underline hover:no-underline">Tentar novamente</button>
+                    <button onClick={load} className="ml-auto text-button underline hover:no-underline">Tentar novamente</button>
                 </div>
             )}
 
@@ -276,10 +276,10 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
                                     return (
                                         <tr key={c.id} onClick={() => onViewContract(c.id)}
                                             className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer">
-                                            <td className="px-4 py-3 font-mono text-xs font-semibold text-blue-700 dark:text-blue-400">{c.number}</td>
+                                            <td className="px-4 py-3 font-mono text-table-body font-semibold text-blue-700 dark:text-blue-400">{c.number}</td>
                                             <td className="px-4 py-3 text-gray-900 dark:text-white font-medium max-w-[200px] truncate">{c.title}</td>
                                             {showsClient && (
-                                                <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px] truncate">
+                                                <td className="px-4 py-3 text-table-body text-gray-500 max-w-[160px] truncate">
                                                     {(c as any).client_id ? (clientNames[(c as any).client_id] ?? '…') : '—'}
                                                 </td>
                                             )}
@@ -292,7 +292,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
                                                     {STATUS_LABEL[c.status] ?? c.status}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-xs text-gray-500">
+                                            <td className="px-4 py-3 text-table-body text-gray-500">
                                                 {c.is_recurring ? (
                                                     <span className="text-blue-500">Recorrente</span>
                                                 ) : c.end_date ? (

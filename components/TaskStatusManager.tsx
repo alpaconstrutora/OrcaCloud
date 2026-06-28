@@ -157,7 +157,7 @@ const TaskStatusManager: React.FC<Props> = ({ orgId, onClose, onChanged }) => {
         </div>
 
         <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-600">
+          <label className="flex items-center gap-2 cursor-pointer text-form-label font-bold text-slate-600">
             <input
               type="checkbox"
               checked={s.is_default}
@@ -166,7 +166,7 @@ const TaskStatusManager: React.FC<Props> = ({ orgId, onClose, onChanged }) => {
             />
             Status padrão (novas tarefas)
           </label>
-          <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-600">
+          <label className="flex items-center gap-2 cursor-pointer text-form-label font-bold text-slate-600">
             <input
               type="checkbox"
               checked={s.is_done}
@@ -178,13 +178,13 @@ const TaskStatusManager: React.FC<Props> = ({ orgId, onClose, onChanged }) => {
         </div>
 
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="px-3 py-1.5 text-xs font-black text-slate-500 hover:bg-slate-200 rounded-lg">
+          <button onClick={onCancel} className="px-3 py-1.5 text-button font-black text-slate-500 hover:bg-slate-200 rounded-lg">
             Cancelar
           </button>
           <button
             onClick={onSave}
             disabled={saving !== null}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-black bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-4 py-1.5 text-button font-black bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
             Salvar
@@ -252,7 +252,7 @@ const TaskStatusManager: React.FC<Props> = ({ orgId, onClose, onChanged }) => {
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => setEditing({ id: s.id, name: s.name, color: s.color, is_default: s.is_default, is_done: s.is_done, position: s.position })}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 text-xs font-black"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 text-button font-black"
                         >
                           Editar
                         </button>
@@ -279,7 +279,7 @@ const TaskStatusManager: React.FC<Props> = ({ orgId, onClose, onChanged }) => {
               ) : (
                 <button
                   onClick={() => setShowNew(true)}
-                  className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50/50 transition-colors text-xs font-black"
+                  className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50/50 transition-colors text-button font-black"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Novo status
@@ -291,7 +291,7 @@ const TaskStatusManager: React.FC<Props> = ({ orgId, onClose, onChanged }) => {
 
         {/* Footer */}
         <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex justify-end">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-black text-slate-500 hover:bg-slate-200">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-button font-black text-slate-500 hover:bg-slate-200">
             Fechar
           </button>
         </div>

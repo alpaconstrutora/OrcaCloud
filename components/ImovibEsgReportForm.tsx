@@ -225,7 +225,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                                     <button
                                         key={cert}
                                         onClick={() => toggleCert(cert)}
-                                        className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${certs.includes(cert)
+                                        className={`px-4 py-2 rounded-xl text-button font-bold border transition-all ${certs.includes(cert)
                                             ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm'
                                             : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
                                             }`}
@@ -338,7 +338,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
 
                         <div className="space-y-6 relative z-10">
                             <div>
-                                <label className="block text-xs font-black tracking-widest uppercase text-slate-500 mb-3">Veredito Final</label>
+                                <label className="block text-form-label font-black tracking-widest uppercase text-slate-500 mb-3">Veredito Final</label>
                                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                                     {[
                                         { id: 'draft', label: 'Rascunho', color: 'bg-slate-800 text-slate-300' },
@@ -364,7 +364,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                             </div>
 
                             <div>
-                                <label className="block text-xs font-black tracking-widest uppercase text-slate-500 mb-3">Justificativa / Condicionantes</label>
+                                <label className="block text-button font-black tracking-widest uppercase text-slate-500 mb-3">Justificativa / Condicionantes</label>
                                 <textarea
                                     value={committeeNotes}
                                     onChange={(e) => setCommitteeNotes(e.target.value)}

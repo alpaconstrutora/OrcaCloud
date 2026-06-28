@@ -555,13 +555,13 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
 
                                 <div className="flex justify-end gap-2 pt-2">
                                     <button onClick={() => { setPendingFile(null); setPendingExtraction(null); setDocumentoBlobUrl(null); }}
-                                        className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg text-xs font-bold uppercase tracking-widest">
+                                        className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg text-button font-bold uppercase tracking-widest">
                                         Trocar arquivo
                                     </button>
                                     <button
                                         onClick={() => handleUploadAndSave(false)}
                                         disabled={busy || !organizationId}
-                                        className="flex items-center gap-2 px-5 py-2 bg-gray-100 text-gray-900 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-200 disabled:opacity-50"
+                                        className="flex items-center gap-2 px-5 py-2 bg-gray-100 text-gray-900 rounded-lg text-button font-bold uppercase tracking-widest hover:bg-gray-200 disabled:opacity-50"
                                         title={!organizationId ? 'Selecione a organização antes de salvar' : undefined}
                                     >
                                         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
@@ -570,7 +570,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     <button
                                         onClick={() => handleUploadAndSave(true)}
                                         disabled={busy || !organizationId}
-                                        className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50"
+                                        className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg text-button font-bold uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50"
                                         title={!organizationId ? 'Selecione a organização antes de salvar' : undefined}
                                     >
                                         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ThumbsUp className="w-3.5 h-3.5" />}
@@ -629,7 +629,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         <button
                                             onClick={handleAplicarLinhaManual}
                                             disabled={busy || !linhaManual}
-                                            className="mt-2 px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-amber-700 disabled:opacity-50"
+                                            className="mt-2 px-4 py-2 bg-amber-600 text-white rounded-lg text-button font-bold uppercase tracking-widest hover:bg-amber-700 disabled:opacity-50"
                                         >
                                             Validar linha digitável
                                         </button>
@@ -717,7 +717,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                 type="button"
                                                 onClick={() => { setShowNovoFornecedor(v => !v); setSupplierId(''); }}
                                                 title="Cadastrar novo fornecedor com dados do boleto"
-                                                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${
+                                                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-form-label font-bold transition-colors ${
                                                     showNovoFornecedor
                                                         ? 'bg-blue-600 text-white border-blue-600'
                                                         : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'
@@ -864,7 +864,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                         type="button"
                                                         onClick={handleSalvarNovoFornecedor}
                                                         disabled={salvandoForn || !novoForn.name.trim()}
-                                                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 disabled:opacity-50"
+                                                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-button font-bold hover:bg-blue-700 disabled:opacity-50"
                                                     >
                                                         {salvandoForn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                                                         Salvar e selecionar
@@ -872,7 +872,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                     <button
                                                         type="button"
                                                         onClick={() => setShowNovoFornecedor(false)}
-                                                        className="px-3 py-2 text-gray-500 hover:text-gray-700 text-xs font-bold"
+                                                        className="px-3 py-2 text-gray-500 hover:text-gray-700 text-button font-bold"
                                                     >
                                                         Cancelar
                                                     </button>
@@ -935,7 +935,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                             <button
                                 onClick={handleExcluirRascunho}
                                 disabled={busy}
-                                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg text-xs font-bold uppercase tracking-widest flex items-center gap-2"
+                                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg text-button font-bold uppercase tracking-widest flex items-center gap-2"
                             >
                                 <Trash2 className="w-3.5 h-3.5" /> Excluir
                             </button>
@@ -945,7 +945,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                             <button
                                 onClick={handleCancelar}
                                 disabled={busy}
-                                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-xs font-bold uppercase tracking-widest flex items-center gap-2"
+                                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-button font-bold uppercase tracking-widest flex items-center gap-2"
                             >
                                 <Ban className="w-3.5 h-3.5" /> Cancelar
                             </button>
@@ -954,7 +954,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                         <button
                             onClick={handleSalvar}
                             disabled={busy}
-                            className="px-5 py-2 bg-gray-100 text-gray-900 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-200 flex items-center gap-2"
+                            className="px-5 py-2 bg-gray-100 text-gray-900 rounded-lg text-button font-bold uppercase tracking-widest hover:bg-gray-200 flex items-center gap-2"
                         >
                             <Save className="w-3.5 h-3.5" /> Salvar Rascunho
                         </button>
@@ -963,7 +963,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                             <button
                                 onClick={handleAprovar}
                                 disabled={busy || !supplierId}
-                                className="px-5 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                                className="px-5 py-2 bg-blue-600 text-white rounded-lg text-button font-bold uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
                             >
                                 <ThumbsUp className="w-3.5 h-3.5" /> Aprovar e Lançar
                             </button>
@@ -973,7 +973,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                             <button
                                 onClick={handleMarcarPago}
                                 disabled={busy}
-                                className="px-5 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-emerald-700 flex items-center gap-2"
+                                className="px-5 py-2 bg-emerald-600 text-white rounded-lg text-button font-bold uppercase tracking-widest hover:bg-emerald-700 flex items-center gap-2"
                             >
                                 <CheckCircle2 className="w-3.5 h-3.5" /> Marcar como Pago
                             </button>
@@ -1059,7 +1059,7 @@ const MultaJurosFields: React.FC<MultaJurosFieldsProps> = ({
                         <select
                             value={jurosDiaTipo}
                             onChange={e => setJurosDiaTipo(e.target.value as 'valor' | 'percentual')}
-                            className="px-2 py-2 border border-gray-200 rounded-lg text-xs font-bold bg-white"
+                            className="px-2 py-2 border border-gray-200 rounded-lg text-form-input font-bold bg-white"
                         >
                             <option value="valor">R$</option>
                             <option value="percentual">%</option>

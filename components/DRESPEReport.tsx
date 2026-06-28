@@ -81,7 +81,7 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
                     </select>
                 </div>
                 <button onClick={load} disabled={loading}
-                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-colors">
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-button font-black uppercase tracking-widest rounded-xl transition-colors">
                     {loading ? 'Carregando…' : 'Atualizar'}
                 </button>
                 {data.length > 0 && (
@@ -125,7 +125,7 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
                                 const isTotalRow = isTotal(col.key)
                                 return (
                                     <tr key={col.key} className={isTotalRow ? 'bg-slate-50/70' : 'hover:bg-blue-50/20'}>
-                                        <td className={`px-5 py-2.5 sticky left-0 ${isTotalRow ? 'bg-slate-50/70' : 'bg-white'} text-xs ${isTotalRow ? 'font-black text-slate-700' : isDeduction(col.key) ? 'text-slate-500 pl-8' : 'font-semibold text-slate-600'}`}>
+                                        <td className={`px-5 py-2.5 sticky left-0 ${isTotalRow ? 'bg-slate-50/70' : 'bg-white'} text-form-label ${isTotalRow ? 'font-black text-slate-700' : isDeduction(col.key) ? 'text-slate-500 pl-8' : 'font-semibold text-slate-600'}`}>
                                             {col.label}
                                         </td>
                                         {data.map(spe => {

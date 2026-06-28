@@ -170,7 +170,7 @@ const LaborRubrics: React.FC = () => {
                 </div>
                 <button 
                     onClick={() => handleOpenModal(null)}
-                    className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 font-black text-xs uppercase tracking-widest"
+                    className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 font-black text-button uppercase tracking-widest"
                 >
                     <Plus size={16} /> Nova Rubrica
                 </button>
@@ -192,7 +192,7 @@ const LaborRubrics: React.FC = () => {
                 <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-2xl">
                     <Filter size={16} className="text-slate-400" />
                     <select 
-                        className="bg-transparent border-none text-xs font-black text-slate-600 outline-none uppercase tracking-widest"
+                        className="bg-transparent border-none text-form-input font-black text-slate-600 outline-none uppercase tracking-widest"
                         value={filterType}
                         onChange={(e) => setFilterType(e.target.value)}
                     >
@@ -232,7 +232,7 @@ const LaborRubrics: React.FC = () => {
                             <tr key={r.code} className="hover:bg-slate-50/50 transition-colors group">
                                 <td className="px-8 py-5">
                                     <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs ${
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-table-header ${
                                             r.type === 'provento' ? 'bg-emerald-50 text-emerald-600' : 
                                             r.type === 'desconto' ? 'bg-rose-50 text-rose-600' : 
                                             r.type === 'informativa' ? 'bg-slate-100 text-slate-500' :
@@ -741,14 +741,14 @@ const LaborRubrics: React.FC = () => {
                         <div className="p-8 bg-slate-50 flex items-center justify-between border-t border-slate-100">
                             <button 
                                 onClick={() => setIsModalOpen(false)}
-                                className="px-6 py-3 text-slate-400 font-black text-xs uppercase tracking-widest hover:text-slate-600 transition-all"
+                                className="px-6 py-3 text-slate-400 font-black text-button uppercase tracking-widest hover:text-slate-600 transition-all"
                             >
                                 Cancelar
                             </button>
                             <button 
                                 onClick={handleSave}
                                 disabled={isSaving}
-                                className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 font-black text-xs uppercase tracking-widest disabled:opacity-50"
+                                className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 font-black text-button uppercase tracking-widest disabled:opacity-50"
                             >
                                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save size={16} />}
                                 {editingRubric ? 'Salvar Alterações' : 'Criar Rubrica'}

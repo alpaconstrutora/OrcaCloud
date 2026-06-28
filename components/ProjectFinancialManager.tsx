@@ -1301,15 +1301,15 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 <input type="text" placeholder="Buscar despesas..." value={expenseSearchTerm} onChange={e => setExpenseSearchTerm(e.target.value)} className="bg-white border border-gray-200 p-2 rounded-xl text-sm w-full max-w-xs" />
                 <div className="flex flex-wrap gap-2 items-center">
                     <div className="flex items-center gap-1">
-                        <label className="text-xs text-gray-400 whitespace-nowrap">De</label>
+                        <label className="text-form-label text-gray-400 whitespace-nowrap">De</label>
                         <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="bg-white border border-gray-200 p-2 rounded-xl text-sm" />
                     </div>
                     <div className="flex items-center gap-1">
-                        <label className="text-xs text-gray-400 whitespace-nowrap">Até</label>
+                        <label className="text-form-label text-gray-400 whitespace-nowrap">Até</label>
                         <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="bg-white border border-gray-200 p-2 rounded-xl text-sm" />
                     </div>
                     {(filterDateFrom || filterDateTo) && (
-                        <button onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); }} className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded-lg border border-gray-200 bg-white">✕ Limpar datas</button>
+                        <button onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); }} className="text-button text-gray-400 hover:text-gray-600 px-2 py-1 rounded-lg border border-gray-200 bg-white">✕ Limpar datas</button>
                     )}
                     <select value={originFilter} onChange={e => setOriginFilter(e.target.value)} className="bg-white border border-gray-200 p-2 rounded-xl text-sm">
                         <option value="all">Todas as Origens</option>
@@ -1321,7 +1321,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         <option value="Folha de Pagamento">Folha de Pagamento</option>
                     </select>
                     <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="bg-white border border-gray-200 p-2 rounded-xl text-sm"><option value="all">Todas as Categorias</option>{EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select>
-                    <button onClick={() => setIsAddingTransaction(true)} className="bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-normal flex items-center gap-1 shadow-md hover:bg-red-700 transition-all uppercase"><Plus className="w-4 h-4" /> NOVA DESPESA</button>
+                    <button onClick={() => setIsAddingTransaction(true)} className="bg-red-600 text-white px-4 py-2 rounded-xl text-button font-normal flex items-center gap-1 shadow-md hover:bg-red-700 transition-all uppercase"><Plus className="w-4 h-4" /> NOVA DESPESA</button>
                 </div>
             </div>
             {isAddingTransaction && (
@@ -1360,7 +1360,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                     {exp.description.split(' ').map((word: string) => word.startsWith('#') ? <span className="text-blue-600 font-mono text-sm font-normal">{word} </span> : word + ' ')}
                                 </td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 uppercase tracking-tight">{exp.supplier}</td>
-                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-mono font-normal text-gray-400">{exp.orderNumber || '-'}</td>
+                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-table-body font-mono font-normal text-gray-400">{exp.orderNumber || '-'}</td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-normal uppercase ${exp.isOrder ? 'bg-blue-50 text-blue-600' :
                                         (exp.measurementId || exp.description.toLowerCase().includes('medição') || exp.description.toLowerCase().includes('contrato:')) ? 'bg-purple-50 text-purple-600' :
@@ -1532,7 +1532,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-8 py-5 text-xs font-bold text-gray-500">
+                                    <td className="px-8 py-5 text-table-body font-bold text-gray-500">
                                         {item.date ? new Date(item.date).toLocaleDateString('pt-BR') : '-'}
                                     </td>
                                     <td className={`px-8 py-5 text-sm font-black text-right ${item.type === 'INCOME' ? 'text-emerald-500' : 'text-red-500'}`}>
@@ -1620,7 +1620,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         <select
                             value={selectedOrgId}
                             onChange={(e) => setSelectedOrgId(e.target.value)}
-                            className="bg-transparent text-xs font-normal uppercase tracking-widest text-gray-600 outline-none pr-4 cursor-pointer"
+                            className="bg-transparent text-form-input font-normal uppercase tracking-widest text-gray-600 outline-none pr-4 cursor-pointer"
                         >
                             <option value="ALL">Todas as Organizações</option>
                             {allOrgs.map(org => (

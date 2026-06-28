@@ -199,7 +199,7 @@ function ScheduleForm({
 
             {/* Nome */}
             <div>
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Nome</label>
+                <label className="text-form-label font-bold text-gray-500 uppercase tracking-widest block mb-1">Nome</label>
                 <input
                     value={form.name ?? ''}
                     onChange={e => set('name', e.target.value)}
@@ -211,7 +211,7 @@ function ScheduleForm({
             {/* Frequência + Dia + Hora */}
             <div className="grid grid-cols-3 gap-3">
                 <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Frequência</label>
+                    <label className="text-form-label font-bold text-gray-500 uppercase tracking-widest block mb-1">Frequência</label>
                     <select
                         value={form.frequency ?? 'WEEKLY'}
                         onChange={e => set('frequency', e.target.value as ReportFrequency)}
@@ -224,7 +224,7 @@ function ScheduleForm({
                 </div>
                 {form.frequency === 'WEEKLY' && (
                     <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Dia da Semana</label>
+                        <label className="text-form-label font-bold text-gray-500 uppercase tracking-widest block mb-1">Dia da Semana</label>
                         <select
                             value={form.day_of_week ?? 1}
                             onChange={e => set('day_of_week', Number(e.target.value))}
@@ -236,7 +236,7 @@ function ScheduleForm({
                 )}
                 {form.frequency === 'MONTHLY' && (
                     <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Dia do Mês</label>
+                        <label className="text-form-label font-bold text-gray-500 uppercase tracking-widest block mb-1">Dia do Mês</label>
                         <input
                             type="number" min={1} max={28}
                             value={form.day_of_month ?? 1}
@@ -246,7 +246,7 @@ function ScheduleForm({
                     </div>
                 )}
                 <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Horário (BRT)</label>
+                    <label className="text-form-label font-bold text-gray-500 uppercase tracking-widest block mb-1">Horário (BRT)</label>
                     <select
                         value={form.hour ?? 8}
                         onChange={e => set('hour', Number(e.target.value))}
@@ -261,14 +261,14 @@ function ScheduleForm({
 
             {/* Tipos de relatório */}
             <div>
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-2">Incluir no e-mail</label>
+                <label className="text-form-label font-bold text-gray-500 uppercase tracking-widest block mb-2">Incluir no e-mail</label>
                 <div className="flex gap-2 flex-wrap">
                     {(['ALERTS', 'SCORECARD', 'CASHFLOW'] as ReportType[]).map(t => {
                         const active = (form.report_types ?? []).includes(t);
                         return (
                             <button
                                 key={t} type="button" onClick={() => toggleType(t)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                                className={`px-3 py-1.5 rounded-lg text-form-label font-black transition-all ${
                                     active ? 'bg-violet-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                                 }`}
                             >
@@ -281,7 +281,7 @@ function ScheduleForm({
 
             {/* Destinatários */}
             <div>
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block mb-1">Destinatários</label>
+                <label className="text-button font-bold text-gray-500 uppercase tracking-widest block mb-1">Destinatários</label>
                 <div className="flex gap-2">
                     <input
                         value={recipientInput}
@@ -564,7 +564,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                         <button
                             key={t.id}
                             onClick={() => setTab(t.id)}
-                            className={`flex items-center gap-2 px-4 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${
+                            className={`flex items-center gap-2 px-4 py-3 text-button font-black uppercase tracking-widest border-b-2 transition-all ${
                                 tab === t.id
                                     ? 'border-violet-600 text-violet-700'
                                     : 'border-transparent text-gray-400 hover:text-gray-700'
@@ -675,14 +675,14 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                                     {scorecards.map(s => (
                                                         <tr key={s.project_id} className="hover:bg-gray-50 transition-colors">
                                                             <td className="px-4 py-3 font-semibold text-gray-900 max-w-[180px] truncate">{s.project_name}</td>
-                                                            <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{fmt(s.receita_realizada, true)}</td>
-                                                            <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{fmt(s.custo_realizado, true)}</td>
-                                                            <td className={`px-4 py-3 font-black text-xs whitespace-nowrap ${s.margem_pct < 0 ? 'text-red-600' : s.margem_pct < 10 ? 'text-amber-600' : 'text-green-700'}`}>
+                                                            <td className="px-4 py-3 font-mono text-table-body text-gray-700 whitespace-nowrap">{fmt(s.receita_realizada, true)}</td>
+                                                            <td className="px-4 py-3 font-mono text-table-body text-gray-700 whitespace-nowrap">{fmt(s.custo_realizado, true)}</td>
+                                                            <td className={`px-4 py-3 font-black text-table-header whitespace-nowrap ${s.margem_pct < 0 ? 'text-red-600' : s.margem_pct < 10 ? 'text-amber-600' : 'text-green-700'}`}>
                                                                 {s.margem_pct.toFixed(1)}%
                                                             </td>
-                                                            <td className="px-4 py-3 font-mono text-xs text-blue-700 whitespace-nowrap">{fmt(s.ar_pendente, true)}</td>
-                                                            <td className="px-4 py-3 font-mono text-xs text-orange-700 whitespace-nowrap">{fmt(s.ap_pendente, true)}</td>
-                                                            <td className={`px-4 py-3 font-black text-xs whitespace-nowrap ${s.saldo_projetado < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                                                            <td className="px-4 py-3 font-mono text-table-body text-blue-700 whitespace-nowrap">{fmt(s.ar_pendente, true)}</td>
+                                                            <td className="px-4 py-3 font-mono text-table-body text-orange-700 whitespace-nowrap">{fmt(s.ap_pendente, true)}</td>
+                                                            <td className={`px-4 py-3 font-black text-table-body whitespace-nowrap ${s.saldo_projetado < 0 ? 'text-red-600' : 'text-green-700'}`}>
                                                                 {fmt(s.saldo_projetado, true)}
                                                             </td>
                                                             <td className="px-4 py-3">
@@ -720,7 +720,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                     {!showForm && !editTarget && (
                                         <button
                                             onClick={() => { setShowForm(true); setEditTarget(null); setSendMsg(null); }}
-                                            className="flex items-center gap-2 px-3 py-2 bg-violet-600 text-white rounded-xl text-xs font-black hover:bg-violet-700 transition-colors flex-shrink-0"
+                                            className="flex items-center gap-2 px-3 py-2 bg-violet-600 text-white rounded-xl text-button font-black hover:bg-violet-700 transition-colors flex-shrink-0"
                                         >
                                             <Plus className="w-3.5 h-3.5" />
                                             Novo
@@ -790,7 +790,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                         <button
                                             key={h.value}
                                             onClick={() => setHorizon(h.value)}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                                            className={`px-3 py-1.5 rounded-lg text-button font-black transition-all ${
                                                 horizon === h.value
                                                     ? 'bg-violet-600 text-white'
                                                     : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'

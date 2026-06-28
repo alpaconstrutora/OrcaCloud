@@ -721,14 +721,14 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                     <div className="flex gap-2">
                         <button
                             onClick={() => handleCreate(SinapiType.INPUT)}
-                            className="bg-white text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-gray-50 flex items-center gap-2 shadow-sm"
+                            className="bg-white text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg text-button font-bold hover:bg-gray-50 flex items-center gap-2 shadow-sm"
                         >
                             <Box className="w-3.5 h-3.5" />
                             Novo Insumo
                         </button>
                         <button
                             onClick={() => handleCreate(SinapiType.COMPOSITION)}
-                            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700 flex items-center gap-2 shadow-sm shadow-blue-200"
+                            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-button font-bold hover:bg-blue-700 flex items-center gap-2 shadow-sm shadow-blue-200"
                         >
                             <Layers className="w-3.5 h-3.5" />
                             Nova Composição
@@ -804,7 +804,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                     />
                                 </div>
                                 <select
-                                    className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 text-gray-600 cursor-pointer min-w-[120px]"
+                                    className="rounded-lg border border-gray-200 px-3 py-2 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 text-gray-600 cursor-pointer min-w-[120px]"
                                     value={searchScope}
                                     onChange={(e) => setSearchScope(e.target.value as 'description' | 'category' | 'both')}
                                     title="Escopo da busca"
@@ -815,7 +815,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                 </select>
 
                                 <select
-                                    className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-blue-50 text-blue-700 border-blue-100 cursor-pointer min-w-[130px]"
+                                    className="rounded-lg border border-gray-200 px-3 py-2 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-blue-50 text-blue-700 border-blue-100 cursor-pointer min-w-[130px]"
                                     value={searchMode}
                                     onChange={(e) => setSearchMode(e.target.value as 'exact' | 'all-words')}
                                     title="Modo da busca"
@@ -831,7 +831,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                         <div className="flex items-center gap-2">
                             <label className="text-[10px] font-bold text-gray-400 uppercase">Base de Dados:</label>
                             <select
-                                className="bg-transparent text-xs font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
+                                className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                                 value={searchDatabase}
                                 onChange={(e) => setSearchDatabase(e.target.value)}
                             >
@@ -846,7 +846,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                     <label className="text-[10px] font-bold text-gray-400 uppercase">Selecione:</label>
                                     <div className="flex items-center gap-2">
                                         <select
-                                            className="bg-white text-xs font-bold text-gray-800 outline-none border border-gray-200 rounded-md py-1 px-2 hover:border-blue-300 max-w-[150px]"
+                                            className="bg-white text-form-input font-bold text-gray-800 outline-none border border-gray-200 rounded-md py-1 px-2 hover:border-blue-300 max-w-[150px]"
                                             value={currentDatabase?.id || ''}
                                             onChange={(e) => {
                                                 const db = databases.find(d => d.id === e.target.value);
@@ -904,7 +904,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                         <div className="flex items-center gap-2">
                             <label className="text-[10px] font-bold text-gray-400 uppercase">Referência:</label>
                             <select
-                                className="bg-transparent text-xs font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
+                                className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                                 value={searchReference}
                                 onChange={(e) => setSearchReference(e.target.value)}
                             >
@@ -969,7 +969,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                         <div className="flex items-center gap-2">
                             <label className="text-[10px] font-bold text-gray-400 uppercase">Estado:</label>
                             <select
-                                className="bg-transparent text-xs font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
+                                className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                                 value={searchLocation}
                                 onChange={(e) => setSearchLocation(e.target.value)}
                             >
@@ -984,7 +984,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                         <div className="flex items-center gap-2">
                             <label className="text-[10px] font-bold text-gray-400 uppercase">Encargos Sociais:</label>
                             <select
-                                className="bg-transparent text-xs font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
+                                className="bg-transparent text-form-input font-medium text-blue-600 outline-none border-b border-dashed border-blue-200 hover:border-blue-500 cursor-pointer"
                                 value={searchCharges}
                                 onChange={(e) => setSearchCharges(e.target.value)}
                             >
@@ -1283,7 +1283,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                     {navigationHistory.length > 0 && (
                                         <button
                                             onClick={handleGoBack}
-                                            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:bg-gray-50 hover:border-blue-200 hover:text-blue-600 transition-all shadow-sm shrink-0"
+                                            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-button font-bold text-gray-600 hover:bg-gray-50 hover:border-blue-200 hover:text-blue-600 transition-all shadow-sm shrink-0"
                                         >
                                             <ArrowLeft className="w-3.5 h-3.5" />
                                             Voltar
@@ -1319,7 +1319,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                 {selectedItem.source === 'Própria' && (
                                                     <button
                                                         onClick={handleAddComponent}
-                                                        className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-100 transition-colors flex items-center gap-1"
+                                                        className="text-button bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg font-bold hover:bg-blue-100 transition-colors flex items-center gap-1"
                                                     >
                                                         <Plus className="w-3.5 h-3.5" />
                                                         Adicionar Componente
@@ -1415,7 +1415,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                                         type="text"
                                                                         value={comp.description}
                                                                         onChange={(e) => handleUpdateComposition({ description: e.target.value }, idx)}
-                                                                        className="w-full text-xs font-medium text-gray-700 uppercase outline-none bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 leading-tight"
+                                                                        className="w-full text-form-input font-medium text-gray-700 uppercase outline-none bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 leading-tight"
                                                                     />
                                                                 ) : (
                                                                     <span className="leading-tight text-xs font-medium text-gray-700 uppercase">{comp.description}</span>
@@ -1437,7 +1437,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                                     step="0.0001"
                                                                     value={comp.quantity || 0}
                                                                     onChange={(e) => handleUpdateComposition({ quantity: Number(e.target.value) }, idx)}
-                                                                    className="w-full text-center outline-none bg-white border border-gray-200 rounded py-1 text-xs font-bold text-blue-600 focus:ring-2 focus:ring-blue-500"
+                                                                    className="w-full text-center outline-none bg-white border border-gray-200 rounded py-1 text-form-input font-bold text-blue-600 focus:ring-2 focus:ring-blue-500"
                                                                 />
                                                             </div>
                                                             <div className="col-span-1">
@@ -1448,7 +1448,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                                         step="0.01"
                                                                         value={resolvedPrice}
                                                                         onChange={(e) => handleUpdateComposition({ price: Number(e.target.value) }, idx)}
-                                                                        className={`w-full text-right outline-none bg-transparent py-1 text-xs font-bold ${isLoadingAuxiliary && resolvedPrice === 0 ? 'animate-pulse text-gray-300' : 'text-gray-700'}`}
+                                                                        className={`w-full text-right outline-none bg-transparent py-1 text-form-input font-bold ${isLoadingAuxiliary && resolvedPrice === 0 ? 'animate-pulse text-gray-300' : 'text-gray-700'}`}
                                                                     />
                                                                 </div>
                                                             </div>
@@ -1708,7 +1708,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                                                     placeholder="Nome da cópia..."
                                                     value={duplicateName}
                                                     onChange={(e) => setDuplicateName(e.target.value)}
-                                                    className="px-2 py-1 text-xs border border-gray-200 rounded outline-none"
+                                                    className="px-2 py-1 text-form-input border border-gray-200 rounded outline-none"
                                                 />
                                                 <button
                                                     onClick={() => { if (!duplicateName.trim()) return; onDuplicate(group, duplicateName).then(() => setIsDuplicating(null)); }}

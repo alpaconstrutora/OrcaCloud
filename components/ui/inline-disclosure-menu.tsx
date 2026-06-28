@@ -166,13 +166,13 @@ export function InlineDisclosureMenu({
                         >
                           <button
                             onClick={() => { onDelete?.(); setOpen(false); setConfirm(false); }}
-                            className="h-8 flex-1 cursor-pointer rounded-xl bg-[#F24140] text-xs font-semibold text-white"
+                            className="h-8 flex-1 cursor-pointer rounded-xl bg-[#F24140] text-button font-semibold text-white"
                           >
                             Confirmar
                           </button>
                           <button
                             onClick={() => setConfirm(false)}
-                            className="h-8 flex-1 cursor-pointer rounded-xl border border-gray-200 text-xs text-gray-600"
+                            className="h-8 flex-1 cursor-pointer rounded-xl border border-gray-200 text-button text-gray-600"
                           >
                             Cancelar
                           </button>

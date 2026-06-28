@@ -36,7 +36,7 @@ const TabBtn: React.FC<{
 }> = ({ active, icon: Icon, label, count, onClick }) => (
   <button
     onClick={onClick}
-    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all
+    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-button font-black uppercase tracking-widest transition-all
       ${active
         ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
         : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
@@ -414,7 +414,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
             {spaces.length > 0 && (
               <button
                 onClick={() => setShowSpaceSheet(true)}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-button font-black uppercase tracking-widest transition-all
                   ${isSpaceMode
                     ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
                     : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}
@@ -430,7 +430,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
             <button
               onClick={() => setViewMode('list')}
               title="Visualização em lista"
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-black uppercase tracking-widest transition-all
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-button font-black uppercase tracking-widest transition-all
                 ${viewMode === 'list' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'}`}
             >
               <List className="w-3.5 h-3.5" />
@@ -442,7 +442,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
                 if (groupBy === 'none') setGroupBy('status')
               }}
               title="Visualização Kanban"
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-black uppercase tracking-widest transition-all
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-button font-black uppercase tracking-widest transition-all
                 ${viewMode === 'board' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-50'}`}
             >
               <Kanban className="w-3.5 h-3.5" />
@@ -456,7 +456,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
             <select
               value={groupBy}
               onChange={e => setGroupBy(e.target.value as GroupByField)}
-              className={`pl-8 pr-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border appearance-none cursor-pointer transition-all
+              className={`pl-8 pr-3 py-2.5 rounded-xl text-form-input font-black uppercase tracking-widest border appearance-none cursor-pointer transition-all
                 ${groupBy !== 'none'
                   ? 'bg-blue-600 text-white border-blue-600 [&>option]:bg-white [&>option]:text-slate-900'
                   : 'border-slate-200 text-slate-500 bg-white hover:bg-slate-50'}`}
@@ -474,7 +474,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
             <button
               onClick={() => setShowStatusMgr(true)}
               title="Gerenciar status"
-              className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-form-input font-black uppercase tracking-widest border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100"
             >
               <Settings2 className="w-4 h-4" />
               Status
@@ -483,7 +483,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           <button
             onClick={() => setShowMobilePreview(true)}
             title="Prévia Mobile"
-            className="hidden md:flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+            className="hidden md:flex items-center gap-2 px-3 py-2.5 rounded-xl text-button font-black uppercase tracking-widest border border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-100"
           >
             <Smartphone className="w-4 h-4" />
             Mobile
@@ -499,7 +499,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               setShowForm(true)
             }}
             disabled={!orgForNew}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-button font-black uppercase tracking-widest bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
             Nova
@@ -514,7 +514,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
           <select
             value={filterOrg}
             onChange={(e) => setFilterOrg(e.target.value)}
-            className="text-xs font-bold text-slate-700 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-blue-400"
+            className="text-form-input font-bold text-slate-700 border border-slate-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-blue-400"
           >
             <option value="">Todas as organizações</option>
             {orgsOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -589,7 +589,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
               <h2 className="text-base font-black text-slate-800">{contentTitle}</h2>
               <button
                 onClick={() => handleSelectInbox(view)}
-                className="text-xs text-slate-400 hover:text-slate-700 transition-colors"
+                className="text-button text-slate-400 hover:text-slate-700 transition-colors"
                 title="Voltar para inbox"
               >
                 ✕

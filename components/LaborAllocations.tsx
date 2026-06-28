@@ -424,7 +424,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                     <button 
                                         onClick={handleSave}
                                         disabled={!!saving}
-                                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 font-black text-xs uppercase tracking-widest disabled:opacity-50"
+                                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 font-black text-button uppercase tracking-widest disabled:opacity-50"
                                     >
                                         {saving === selectedEmployee.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                         Salvar % Alocação
@@ -455,7 +455,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                 <select 
                                                     value={alloc.project_id}
                                                     onChange={(e) => handleUpdateWorksite(idx, e.target.value)}
-                                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                                                 >
                                                     {worksites.map(w => (
                                                         <option key={w.id} value={w.id}>{w.name}</option>
@@ -470,7 +470,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                     max="100"
                                                     value={alloc.allocation_percent}
                                                     onChange={(e) => handleUpdatePercent(idx, parseInt(e.target.value) || 0)}
-                                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                                                 />
                                             </div>
                                             <button 
@@ -617,7 +617,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                             value={costCenterSearch}
                                                             onChange={(e) => { setCostCenterSearch(e.target.value); setCostCenterOpen(true); }}
                                                             onFocus={() => setCostCenterOpen(true)}
-                                                            className="flex-1 text-xs font-medium outline-none bg-transparent placeholder:text-slate-400"
+                                                            className="flex-1 text-form-input font-medium outline-none bg-transparent placeholder:text-slate-400"
                                                         />
                                                         {costCenterSearch && (
                                                             <X className="w-3 h-3 text-slate-400 hover:text-red-500 cursor-pointer shrink-0" onClick={() => setCostCenterSearch('')} />
@@ -698,7 +698,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                             value={chartSearch}
                                                             onChange={(e) => { setChartSearch(e.target.value); setChartOpen(true); }}
                                                             onFocus={() => setChartOpen(true)}
-                                                            className="flex-1 text-xs font-medium outline-none bg-transparent placeholder:text-slate-400"
+                                                            className="flex-1 text-form-input font-medium outline-none bg-transparent placeholder:text-slate-400"
                                                         />
                                                         {chartSearch && (
                                                             <X className="w-3 h-3 text-slate-400 hover:text-red-500 cursor-pointer shrink-0" onClick={() => setChartSearch('')} />
@@ -789,7 +789,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                 value={encargoCostCenterSearch}
                                                                 onChange={(e) => { setEncargoCostCenterSearch(e.target.value); setEncargoCostCenterOpen(true); }}
                                                                 onFocus={() => setEncargoCostCenterOpen(true)}
-                                                                className="flex-1 text-xs font-medium outline-none bg-transparent placeholder:text-slate-400"
+                                                                className="flex-1 text-form-input font-medium outline-none bg-transparent placeholder:text-slate-400"
                                                             />
                                                             {encargoCostCenterSearch && (
                                                                 <X className="w-3 h-3 text-slate-400 hover:text-red-500 cursor-pointer shrink-0" onClick={() => setEncargoCostCenterSearch('')} />
@@ -865,7 +865,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                 value={encargoChartSearch}
                                                                 onChange={(e) => { setEncargoChartSearch(e.target.value); setEncargoChartOpen(true); }}
                                                                 onFocus={() => setEncargoChartOpen(true)}
-                                                                className="flex-1 text-xs font-medium outline-none bg-transparent placeholder:text-slate-400"
+                                                                className="flex-1 text-form-input font-medium outline-none bg-transparent placeholder:text-slate-400"
                                                             />
                                                             {encargoChartSearch && (
                                                                 <X className="w-3 h-3 text-slate-400 hover:text-red-500 cursor-pointer shrink-0" onClick={() => setEncargoChartSearch('')} />
@@ -954,7 +954,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                 value={terceiroCostCenterSearch}
                                                                 onChange={(e) => { setTerceiroCostCenterSearch(e.target.value); setTerceiroCostCenterOpen(true); }}
                                                                 onFocus={() => setTerceiroCostCenterOpen(true)}
-                                                                className="flex-1 text-xs font-medium outline-none bg-transparent placeholder:text-slate-400"
+                                                                className="flex-1 text-form-input font-medium outline-none bg-transparent placeholder:text-slate-400"
                                                             />
                                                             {terceiroCostCenterSearch && (
                                                                 <X className="w-3 h-3 text-slate-400 hover:text-red-500 cursor-pointer shrink-0" onClick={() => setTerceiroCostCenterSearch('')} />
@@ -1030,7 +1030,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                                 value={terceiroChartSearch}
                                                                 onChange={(e) => { setTerceiroChartSearch(e.target.value); setTerceiroChartOpen(true); }}
                                                                 onFocus={() => setTerceiroChartOpen(true)}
-                                                                className="flex-1 text-xs font-medium outline-none bg-transparent placeholder:text-slate-400"
+                                                                className="flex-1 text-form-input font-medium outline-none bg-transparent placeholder:text-slate-400"
                                                             />
                                                             {terceiroChartSearch && (
                                                                 <X className="w-3 h-3 text-slate-400 hover:text-red-500 cursor-pointer shrink-0" onClick={() => setTerceiroChartSearch('')} />

@@ -75,7 +75,7 @@ const MobilePreviewFrame: React.FC<MobilePreviewFrameProps> = ({ children, onClo
 
                 <button
                     onClick={onClose}
-                    className="flex items-center gap-2 px-6 py-3 bg-white text-gray-700 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg hover:bg-gray-50 transition-all active:scale-95"
+                    className="flex items-center gap-2 px-6 py-3 bg-white text-gray-700 rounded-2xl text-button font-black uppercase tracking-widest shadow-lg hover:bg-gray-50 transition-all active:scale-95"
                 >
                     <X className="w-4 h-4" />
                     Fechar Prévia

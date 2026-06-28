@@ -69,7 +69,7 @@ const TaxReport: React.FC<TaxReportProps> = ({ investorContributions, activeProj
                     <button
                         disabled
                         title="Disponível em breve"
-                        className="flex items-center gap-2 bg-white text-gray-400 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest cursor-not-allowed opacity-60"
+                        className="flex items-center gap-2 bg-white text-gray-400 px-6 py-3 rounded-2xl text-button font-black uppercase tracking-widest cursor-not-allowed opacity-60"
                     >
                         <Download className="w-4 h-4" /> Baixar PDF Completo
                     </button>

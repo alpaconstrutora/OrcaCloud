@@ -114,7 +114,7 @@ const BitolaSection: React.FC<{ plan: BitolaCutPlan }> = ({ plan }) => {
           {barsToShow.map(bar => <BarVisual key={bar.barIndex} bar={bar} />)}
           {hasMore && (
             <button onClick={() => setExpanded(true)}
-              className="ml-8 text-xs font-bold text-blue-600 hover:underline">
+              className="ml-8 text-button font-bold text-blue-600 hover:underline">
               + {plan.bars.length - MAX_BARS_DEFAULT} barras…
             </button>
           )}

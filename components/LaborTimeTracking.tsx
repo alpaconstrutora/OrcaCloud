@@ -114,9 +114,9 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
             {/* Controls */}
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
-                    <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className="bg-transparent text-xs font-bold text-slate-600 outline-none px-2" />
+                    <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className="bg-transparent text-form-input font-bold text-slate-600 outline-none px-2" />
                     <span className="text-slate-300 font-bold text-xs">até</span>
-                    <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className="bg-transparent text-xs font-bold text-slate-600 outline-none px-2" />
+                    <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className="bg-transparent text-form-input font-bold text-slate-600 outline-none px-2" />
                 </div>
                 <div className="flex items-center gap-1.5">
                     <Filter className="w-3.5 h-3.5 text-slate-400" />
@@ -129,11 +129,11 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                 </div>
                 <div className="ml-auto flex items-center gap-2">
                     {selectedIds.size > 0 && (
-                        <button onClick={handleBulkApprove} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all">
+                        <button onClick={handleBulkApprove} className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-xl text-button font-bold hover:bg-emerald-700 transition-all">
                             <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar {selectedIds.size} selecionados
                         </button>
                     )}
-                    <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all">
+                    <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-button font-bold hover:bg-indigo-700 transition-all">
                         <Plus className="w-3.5 h-3.5" /> Registrar Ponto
                     </button>
                 </div>
@@ -247,9 +247,9 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                                     <td className="px-4 py-3 text-[10px] font-bold text-slate-500">
                                         {new Date(entry.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                                     </td>
-                                    <td className="px-4 py-3 text-right text-xs font-black text-slate-900">{entry.hours_worked}h</td>
-                                    <td className="px-4 py-3 text-right text-xs font-bold text-amber-600">{entry.overtime_hours > 0 ? `+${entry.overtime_hours}h` : '—'}</td>
-                                    <td className="px-4 py-3 text-right text-xs font-black text-slate-900">
+                                    <td className="px-4 py-3 text-right text-table-body font-black text-slate-900">{entry.hours_worked}h</td>
+                                    <td className="px-4 py-3 text-right text-table-body font-bold text-amber-600">{entry.overtime_hours > 0 ? `+${entry.overtime_hours}h` : '—'}</td>
+                                    <td className="px-4 py-3 text-right text-table-body font-black text-slate-900">
                                         {entry.total_cost ? `R$ ${entry.total_cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
                                     </td>
                                     <td className="px-4 py-3">
@@ -285,13 +285,13 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                                     <td colSpan={4} className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                                         {filtered.length} registros
                                     </td>
-                                    <td className="px-4 py-3 text-right text-xs font-black text-slate-900">
+                                    <td className="px-4 py-3 text-right text-table-body font-black text-slate-900">
                                         {filtered.reduce((s, e) => s + e.hours_worked, 0).toFixed(0)}h
                                     </td>
-                                    <td className="px-4 py-3 text-right text-xs font-bold text-amber-600">
+                                    <td className="px-4 py-3 text-right text-table-body font-bold text-amber-600">
                                         {filtered.reduce((s, e) => s + e.overtime_hours, 0).toFixed(0)}h
                                     </td>
-                                    <td className="px-4 py-3 text-right text-xs font-black text-emerald-700">
+                                    <td className="px-4 py-3 text-right text-table-body font-black text-emerald-700">
                                         R$ {filtered.reduce((s, e) => s + (e.total_cost || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </td>
                                     <td colSpan={2} />

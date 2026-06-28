@@ -75,16 +75,16 @@ function ClaimRow({ claim, onSelect, projects }: { claim: WarrantyClaim; onSelec
                 </p>
             </td>
             <td className="px-4 py-3">
-                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${STATE_COLORS[claim.state]}`}>
+                <span className={`px-2 py-0.5 rounded-full text-table-body font-bold ${STATE_COLORS[claim.state]}`}>
                     {STATE_LABELS[claim.state]}
                 </span>
             </td>
             <td className="px-4 py-3">
-                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${SEVERITY_COLORS[claim.severity]}`}>
+                <span className={`px-2 py-0.5 rounded-full text-table-body font-semibold capitalize ${SEVERITY_COLORS[claim.severity]}`}>
                     {claim.severity}
                 </span>
             </td>
-            <td className="px-4 py-3 text-xs text-gray-500">
+            <td className="px-4 py-3 text-table-body text-gray-500">
                 {claim.sla_deadline ? (
                     <span className={slaVencido ? 'text-red-600 font-semibold' : ''}>
                         {new Date(claim.sla_deadline + 'T00:00:00').toLocaleDateString('pt-BR')}
@@ -92,7 +92,7 @@ function ClaimRow({ claim, onSelect, projects }: { claim: WarrantyClaim; onSelec
                     </span>
                 ) : '—'}
             </td>
-            <td className="px-4 py-3 text-xs text-gray-400">
+            <td className="px-4 py-3 text-table-body text-gray-400">
                 {new Date(claim.created_at).toLocaleDateString('pt-BR')}
             </td>
         </tr>
@@ -161,7 +161,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                 </div>
                 <button
                     onClick={() => { setShowModal(true); onOpenClaim?.(); }}
-                    className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                    className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
                 >
                     <Plus className="w-4 h-4" />
                     Abrir Chamado
@@ -187,7 +187,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                     <button
                         key={s}
                         onClick={() => setFilterState(s)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                        className={`px-3 py-1.5 rounded-full text-table-body font-bold transition-all ${
                             filterState === s
                                 ? 'bg-blue-600 text-white shadow'
                                 : 'bg-white border border-gray-200 text-gray-500 hover:border-blue-300'
@@ -206,7 +206,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                     <div className="flex flex-col items-center justify-center h-40 gap-2">
                         <Shield className="w-10 h-10 text-gray-200" />
                         <p className="text-sm text-gray-400 font-medium">Nenhum chamado de garantia encontrado.</p>
-                        <button onClick={() => setShowModal(true)} className="text-xs text-blue-600 font-semibold hover:underline">
+                        <button onClick={() => setShowModal(true)} className="text-button text-blue-600 font-semibold hover:underline">
                             Abrir primeiro chamado
                         </button>
                     </div>
@@ -215,11 +215,11 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-gray-100 bg-gray-50/50">
-                                    <th className="px-4 py-3 text-left text-xs font-black text-gray-400 uppercase tracking-wider">Chamado</th>
-                                    <th className="px-4 py-3 text-left text-xs font-black text-gray-400 uppercase tracking-wider">Estado</th>
-                                    <th className="px-4 py-3 text-left text-xs font-black text-gray-400 uppercase tracking-wider">Severidade</th>
-                                    <th className="px-4 py-3 text-left text-xs font-black text-gray-400 uppercase tracking-wider">SLA</th>
-                                    <th className="px-4 py-3 text-left text-xs font-black text-gray-400 uppercase tracking-wider">Abertura</th>
+                                    <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Chamado</th>
+                                    <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Estado</th>
+                                    <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Severidade</th>
+                                    <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">SLA</th>
+                                    <th className="px-4 py-3 text-left text-table-header font-black text-gray-400 uppercase tracking-wider">Abertura</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
@@ -328,7 +328,7 @@ export function WarrantyClaimModal({
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2">
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Obra</label>
+                            <label className="block text-form-label font-bold text-gray-600 mb-1">Obra</label>
                             <select
                                 value={form.project_id}
                                 onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}
@@ -341,7 +341,7 @@ export function WarrantyClaimModal({
                             </select>
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Sistema afetado *</label>
+                            <label className="block text-form-label font-bold text-gray-600 mb-1">Sistema afetado *</label>
                             <input
                                 value={form.sistema_descricao}
                                 onChange={e => setForm(f => ({ ...f, sistema_descricao: e.target.value }))}
@@ -351,7 +351,7 @@ export function WarrantyClaimModal({
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Prazo de garantia</label>
+                            <label className="block text-form-label font-bold text-gray-600 mb-1">Prazo de garantia</label>
                             <select
                                 value={form.warranty_term_code}
                                 onChange={e => setForm(f => ({ ...f, warranty_term_code: e.target.value }))}
@@ -364,7 +364,7 @@ export function WarrantyClaimModal({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Severidade</label>
+                            <label className="block text-form-label font-bold text-gray-600 mb-1">Severidade</label>
                             <select
                                 value={form.severity}
                                 onChange={e => setForm(f => ({ ...f, severity: e.target.value as typeof f.severity }))}
@@ -377,7 +377,7 @@ export function WarrantyClaimModal({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Local / Cômodo</label>
+                            <label className="block text-form-label font-bold text-gray-600 mb-1">Local / Cômodo</label>
                             <input
                                 value={form.local_afetado}
                                 onChange={e => setForm(f => ({ ...f, local_afetado: e.target.value }))}
@@ -386,7 +386,7 @@ export function WarrantyClaimModal({
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Unidade / Apt</label>
+                            <label className="block text-form-label font-bold text-gray-600 mb-1">Unidade / Apt</label>
                             <input
                                 value={form.unidade_ref}
                                 onChange={e => setForm(f => ({ ...f, unidade_ref: e.target.value }))}
@@ -395,7 +395,7 @@ export function WarrantyClaimModal({
                             />
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Nome do cliente</label>
+                            <label className="block text-form-label font-bold text-gray-600 mb-1">Nome do cliente</label>
                             <input
                                 value={form.client_name}
                                 onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))}
@@ -404,7 +404,7 @@ export function WarrantyClaimModal({
                             />
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-xs font-bold text-gray-600 mb-1">Descrição do problema *</label>
+                            <label className="block text-form-label font-bold text-gray-600 mb-1">Descrição do problema *</label>
                             <textarea
                                 value={form.descricao}
                                 onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
@@ -582,7 +582,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                 <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100">
                     <div className="flex-1 min-w-0 pr-4">
                         <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${STATE_COLORS[claim.state]}`}>
+                            <span className={`px-2 py-0.5 rounded-full text-button font-bold ${STATE_COLORS[claim.state]}`}>
                                 {STATE_LABELS[claim.state]}
                             </span>
                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${SEVERITY_COLORS[claim.severity]}`}>
@@ -620,13 +620,13 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                             <button
                                 onClick={handleDelete}
                                 disabled={deleting}
-                                className="flex-1 py-2 bg-red-600 text-white rounded-xl text-xs font-black hover:bg-red-700 transition-all disabled:opacity-60"
+                                className="flex-1 py-2 bg-red-600 text-white rounded-xl text-button font-black hover:bg-red-700 transition-all disabled:opacity-60"
                             >
                                 {deleting ? 'Excluindo...' : 'Sim, excluir'}
                             </button>
                             <button
                                 onClick={() => setConfirmDelete(false)}
-                                className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all"
+                                className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-button font-bold hover:bg-gray-50 transition-all"
                             >
                                 Cancelar
                             </button>
@@ -640,7 +640,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                         <button
                             key={t}
                             onClick={() => setTab(t)}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-t-lg transition-colors capitalize ${
+                            className={`px-3 py-1.5 text-button font-bold rounded-t-lg transition-colors capitalize ${
                                 tab === t ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400 hover:text-gray-700'
                             }`}
                         >
@@ -655,7 +655,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                             <p className="text-xs font-black text-blue-700 uppercase tracking-wider">Editando chamado</p>
                             {projects.length > 0 && (
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1">Obra</label>
+                                    <label className="block text-form-label font-bold text-gray-600 mb-1">Obra</label>
                                     <select
                                         value={editForm.project_id}
                                         onChange={e => setEditForm(f => ({ ...f, project_id: e.target.value }))}
@@ -667,7 +667,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 </div>
                             )}
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1">Sistema afetado *</label>
+                                <label className="block text-form-label font-bold text-gray-600 mb-1">Sistema afetado *</label>
                                 <input
                                     value={editForm.sistema_descricao}
                                     onChange={e => setEditForm(f => ({ ...f, sistema_descricao: e.target.value }))}
@@ -677,7 +677,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1">Severidade</label>
+                                    <label className="block text-form-label font-bold text-gray-600 mb-1">Severidade</label>
                                     <select
                                         value={editForm.severity}
                                         onChange={e => setEditForm(f => ({ ...f, severity: e.target.value }))}
@@ -690,7 +690,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1">Local / Cômodo</label>
+                                    <label className="block text-form-label font-bold text-gray-600 mb-1">Local / Cômodo</label>
                                     <input
                                         value={editForm.local_afetado}
                                         onChange={e => setEditForm(f => ({ ...f, local_afetado: e.target.value }))}
@@ -698,7 +698,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1">Nome do cliente</label>
+                                    <label className="block text-form-label font-bold text-gray-600 mb-1">Nome do cliente</label>
                                     <input
                                         value={editForm.client_name}
                                         onChange={e => setEditForm(f => ({ ...f, client_name: e.target.value }))}
@@ -706,7 +706,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1">Unidade / Apt</label>
+                                    <label className="block text-form-label font-bold text-gray-600 mb-1">Unidade / Apt</label>
                                     <input
                                         value={editForm.unidade_ref}
                                         onChange={e => setEditForm(f => ({ ...f, unidade_ref: e.target.value }))}
@@ -715,7 +715,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1">Descrição do problema *</label>
+                                <label className="block text-form-label font-bold text-gray-600 mb-1">Descrição do problema *</label>
                                 <textarea
                                     value={editForm.descricao}
                                     onChange={e => setEditForm(f => ({ ...f, descricao: e.target.value }))}
@@ -728,13 +728,13 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 <button
                                     onClick={handleSave}
                                     disabled={saving || !editForm.sistema_descricao || !editForm.descricao}
-                                    className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all disabled:opacity-60"
+                                    className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 transition-all disabled:opacity-60"
                                 >
                                     {saving ? 'Salvando...' : 'Salvar alterações'}
                                 </button>
                                 <button
                                     onClick={() => setEditMode(false)}
-                                    className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all"
+                                    className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-button font-bold hover:bg-gray-50 transition-all"
                                 >
                                     Cancelar
                                 </button>
@@ -791,14 +791,14 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                         <button
                                             onClick={() => handleTriage(true)}
                                             disabled={triaging}
-                                            className="flex-1 py-2 bg-green-600 text-white rounded-xl text-xs font-black hover:bg-green-700 transition-all disabled:opacity-60"
+                                            className="flex-1 py-2 bg-green-600 text-white rounded-xl text-button font-black hover:bg-green-700 transition-all disabled:opacity-60"
                                         >
                                             ✓ Em Garantia
                                         </button>
                                         <button
                                             onClick={() => handleTriage(false)}
                                             disabled={triaging}
-                                            className="flex-1 py-2 bg-red-600 text-white rounded-xl text-xs font-black hover:bg-red-700 transition-all disabled:opacity-60"
+                                            className="flex-1 py-2 bg-red-600 text-white rounded-xl text-button font-black hover:bg-red-700 transition-all disabled:opacity-60"
                                         >
                                             ✗ Fora de Garantia
                                         </button>
@@ -810,7 +810,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 <div className="border border-teal-100 rounded-xl p-4 space-y-3">
                                     <p className="text-xs font-bold text-teal-700 uppercase tracking-wider">Encerrar Chamado</p>
                                     <div>
-                                        <label className="text-xs font-semibold text-gray-600 block mb-1">Nota NPS do cliente (0-10)</label>
+                                        <label className="text-form-label font-semibold text-gray-600 block mb-1">Nota NPS do cliente (0-10)</label>
                                         <input
                                             type="number" min={0} max={10}
                                             value={npsNota}
@@ -821,7 +821,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                     <button
                                         onClick={handleClose}
                                         disabled={closing || npsNota === ''}
-                                        className="w-full py-2 bg-teal-600 text-white rounded-xl text-xs font-black hover:bg-teal-700 transition-all disabled:opacity-60"
+                                        className="w-full py-2 bg-teal-600 text-white rounded-xl text-button font-black hover:bg-teal-700 transition-all disabled:opacity-60"
                                     >
                                         {closing ? 'Encerrando...' : 'Encerrar Chamado'}
                                     </button>
@@ -838,7 +838,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 <div key={v.id} className="bg-gray-50 rounded-xl p-4 text-sm">
                                     <div className="flex items-center justify-between mb-1">
                                         <span className="font-bold text-gray-900">{v.technician_name}</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                                        <span className={`px-2 py-0.5 rounded-full text-form-label font-bold ${
                                             v.status === 'REALIZADA' ? 'bg-green-100 text-green-700' :
                                             v.status === 'CANCELADA' ? 'bg-red-100 text-red-700' :
                                             'bg-blue-100 text-blue-700'

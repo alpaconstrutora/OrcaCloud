@@ -411,14 +411,14 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                         <div className="flex items-center gap-2 p-1.5 rounded-lg border border-dashed border-gray-200">
                             <button
                                 onClick={handleDownloadPDF}
-                                className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 hover:-translate-y-0.5 active:translate-y-0 transition-all font-bold text-xs shadow-md shadow-red-100"
+                                className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 hover:-translate-y-0.5 active:translate-y-0 transition-all font-bold text-button shadow-md shadow-red-100"
                             >
                                 <FileText className="w-4 h-4" />
                                 DOWNLOAD PDF
                             </button>
                             <button
                                 onClick={handleDownloadExcel}
-                                className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 hover:-translate-y-0.5 active:translate-y-0 transition-all font-bold text-xs shadow-md shadow-emerald-100"
+                                className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 hover:-translate-y-0.5 active:translate-y-0 transition-all font-bold text-button shadow-md shadow-emerald-100"
                             >
                                 <FileDown className="w-4 h-4" />
                                 EXCEL
@@ -509,7 +509,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                     <div className="flex bg-gray-100/80 p-1 rounded-xl border border-gray-200 shadow-inner">
                         <button
                             onClick={() => setReportType('ANALYTIC')}
-                            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${reportType === 'ANALYTIC' ? 'bg-white shadow-md text-blue-600 scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
+                            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-button font-black uppercase tracking-wider transition-all ${reportType === 'ANALYTIC' ? 'bg-white shadow-md text-blue-600 scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
                         >
                             <ClipboardList className="w-4 h-4" />
                             Orçamento
@@ -517,7 +517,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
 
                         <button
                             onClick={() => setReportType('INPUTS_ANALYTIC')}
-                            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${reportType === 'INPUTS_ANALYTIC' ? 'bg-white shadow-md text-blue-600 scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
+                            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-button font-black uppercase tracking-wider transition-all ${reportType === 'INPUTS_ANALYTIC' ? 'bg-white shadow-md text-blue-600 scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
                         >
                             <Box className="w-4 h-4" />
                             Insumos (EAP)
@@ -525,7 +525,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
 
                         <button
                             onClick={() => setReportType('INPUTS')}
-                            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${reportType === 'INPUTS' ? 'bg-white shadow-md text-blue-600 scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
+                            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-button font-black uppercase tracking-wider transition-all ${reportType === 'INPUTS' ? 'bg-white shadow-md text-blue-600 scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}`}
                         >
                             <Database className="w-4 h-4" />
                             Insumos (Global)

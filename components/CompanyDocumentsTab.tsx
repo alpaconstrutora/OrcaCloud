@@ -68,7 +68,7 @@ const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ou
 
 const Field: React.FC<{ label: string; children: React.ReactNode; required?: boolean }> = ({ label, children, required }) => (
     <div>
-        <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-1">
+        <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">
             {label}{required && <span className="text-red-500 ml-1">*</span>}
         </label>
         {children}
@@ -215,7 +215,7 @@ const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
                 </div>
                 {!showForm && (
                     <button onClick={openNew}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
+                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
                         <Plus className="w-3.5 h-3.5" /> Adicionar Documento
                     </button>
                 )}
@@ -281,14 +281,14 @@ const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
 
                     {/* Upload */}
                     <div>
-                        <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-2">Arquivo</p>
+                        <p className="text-form-input font-black uppercase tracking-widest text-gray-500 mb-2">Arquivo</p>
                         <div className="flex items-center gap-3">
                             <input ref={fileInputRef} type="file"
                                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                                 className="hidden" onChange={handleFileChange} />
                             <button type="button"
                                 onClick={() => fileInputRef.current?.click()}
-                                className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 text-gray-500 rounded-xl font-black text-xs uppercase tracking-wide hover:border-blue-400 hover:text-blue-600 transition-all">
+                                className="flex items-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 text-gray-500 rounded-xl font-black text-button uppercase tracking-wide hover:border-blue-400 hover:text-blue-600 transition-all">
                                 <Upload className="w-4 h-4" />
                                 {pendingFile ? pendingFile.name : 'Selecionar arquivo'}
                             </button>
@@ -304,11 +304,11 @@ const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
 
                     <div className="flex justify-end gap-2 pt-1 border-t border-gray-200">
                         <button type="button" onClick={cancel}
-                            className="px-4 py-2 text-xs font-black uppercase tracking-wide text-gray-500 hover:text-gray-700">
+                            className="px-4 py-2 text-button font-black uppercase tracking-wide text-gray-500 hover:text-gray-700">
                             Cancelar
                         </button>
                         <button type="submit" disabled={saving || uploading}
-                            className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
+                            className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
                             {(saving || uploading) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                             {uploading ? 'Enviando...' : 'Salvar'}
                         </button>

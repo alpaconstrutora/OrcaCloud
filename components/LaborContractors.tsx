@@ -288,7 +288,7 @@ const MeasurementForm: React.FC<MeasurementFormProps> = ({ orgId, contractors, p
                             </InputGroup>
                         </div>
                         {selectedContractor && (
-                            <button onClick={applyRetentions} className="px-3 py-2.5 bg-indigo-100 text-indigo-700 rounded-xl text-xs font-black hover:bg-indigo-200 transition-all whitespace-nowrap mb-0.5">
+                            <button onClick={applyRetentions} className="px-3 py-2.5 bg-indigo-100 text-indigo-700 rounded-xl text-form-input font-black hover:bg-indigo-200 transition-all whitespace-nowrap mb-0.5">
                                 Aplicar retenções padrão
                             </button>
                         )}
@@ -419,7 +419,7 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                 <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
                     {([['contractors', 'Cadastro', Building2], ['measurements', 'Medições', DollarSign], ['documents', 'Documentos', FileText]] as const).map(([id, label, Icon]) => (
                         <button key={id} onClick={() => setView(id)}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
                             <Icon className="w-3.5 h-3.5" />{label}
                             {id === 'documents' && docAlerts.length > 0 && (
                                 <span className="px-1.5 py-0.5 bg-rose-500 text-white text-[9px] font-black rounded-full">{docAlerts.length}</span>
@@ -430,11 +430,11 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                 <div className="flex items-center gap-2">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
+                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
                     </div>
                     <button
                         onClick={() => view === 'measurements' ? setShowMeasForm(true) : (setEditingContractor(null), setShowContractorForm(true))}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white rounded-xl hover:bg-blue-800 font-bold text-xs shadow-md">
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white rounded-xl hover:bg-blue-800 font-bold text-button shadow-md">
                         <Plus className="w-3.5 h-3.5" />
                         {view === 'measurements' ? 'Nova Medição' : 'Novo Empreiteiro'}
                     </button>
@@ -504,12 +504,12 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                                     return (
                                         <tr key={m.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                                             <td className="px-4 py-3 text-sm font-bold text-slate-900">{m.contractor_name}</td>
-                                            <td className="px-4 py-3 text-xs text-slate-500">{m.project_name || '—'}</td>
-                                            <td className="px-4 py-3 text-xs font-black text-slate-700">#{m.numero_medicao}</td>
-                                            <td className="px-4 py-3 text-xs text-slate-500">{m.periodo_inicio} → {m.periodo_fim}</td>
-                                            <td className="px-4 py-3 text-xs font-bold text-slate-700">R$ {m.valor_bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                            <td className="px-4 py-3 text-table-body text-slate-500">{m.project_name || '—'}</td>
+                                            <td className="px-4 py-3 text-table-body font-black text-slate-700">#{m.numero_medicao}</td>
+                                            <td className="px-4 py-3 text-table-body text-slate-500">{m.periodo_inicio} → {m.periodo_fim}</td>
+                                            <td className="px-4 py-3 text-table-body font-bold text-slate-700">R$ {m.valor_bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                                             <td className="px-4 py-3 text-sm font-black text-emerald-700">R$ {(m.valor_liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                            <td className="px-4 py-3 text-xs text-slate-500">{m.nota_fiscal || '—'}</td>
+                                            <td className="px-4 py-3 text-table-body text-slate-500">{m.nota_fiscal || '—'}</td>
                                             <td className="px-4 py-3">
                                                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${st.bg} ${st.text}`}>{m.status}</span>
                                             </td>

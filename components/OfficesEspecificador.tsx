@@ -776,11 +776,11 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
             </div>
             <div className="flex gap-3 pt-2">
               {editingSpec && (
-                <button type="button" onClick={() => handleDeleteSpec(editingSpec.id!)} className="py-2.5 px-4 bg-rose-50 text-rose-500 font-bold text-xs rounded-xl border border-rose-100 hover:bg-rose-100 transition-colors">
+                <button type="button" onClick={() => handleDeleteSpec(editingSpec.id!)} className="py-2.5 px-4 bg-rose-50 text-rose-500 font-bold text-button rounded-xl border border-rose-100 hover:bg-rose-100 transition-colors">
                   Excluir
                 </button>
               )}
-              <button type="submit" className="flex-1 py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-md active:scale-95 transition-all">
+              <button type="submit" className="flex-1 py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-button uppercase tracking-widest rounded-xl shadow-md active:scale-95 transition-all">
                 Salvar Spec
               </button>
             </div>
@@ -816,7 +816,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                 <input type="text" placeholder="drive.google.com/..." value={arqUrl} onChange={e => setArqUrl(e.target.value)} className={`w-full ${CHIP}`} required />
               </div>
             </div>
-            <button type="submit" className="w-full py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-md active:scale-95 transition-all">
+            <button type="submit" className="w-full py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-form-input uppercase tracking-widest rounded-xl shadow-md active:scale-95 transition-all">
               Salvar Arquivo
             </button>
           </form>
@@ -857,7 +857,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                 <textarea rows={3} placeholder="Descreva os serviços realizados e o andamento geral..." value={rdoDescricao} onChange={e => setRdoDescricao(e.target.value)} className={`w-full ${CHIP} resize-none`} required />
               </div>
             </div>
-            <button type="submit" className="w-full py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-md active:scale-95 transition-all">
+            <button type="submit" className="w-full py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-form-input uppercase tracking-widest rounded-xl shadow-md active:scale-95 transition-all">
               Salvar RDO
             </button>
           </form>

@@ -165,7 +165,7 @@ export const SupplyPanel: React.FC<Props> = ({ organizationId, projectId, onNavi
                     {onNavigateToProcurement && (
                         <button
                             onClick={onNavigateToProcurement}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-button font-bold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                         >
                             <ExternalLink className="w-3.5 h-3.5" />
                             Módulo Aquisições
@@ -174,7 +174,7 @@ export const SupplyPanel: React.FC<Props> = ({ organizationId, projectId, onNavi
                     <button
                         onClick={handleGenerate}
                         disabled={generating}
-                        className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-60 shadow-sm"
+                        className="flex items-center gap-1.5 px-4 py-1.5 text-button font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-60 shadow-sm"
                     >
                         {generating
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />

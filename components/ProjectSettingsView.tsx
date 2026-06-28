@@ -321,7 +321,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                                                 bdi: calculateBdi(newComp)
                                             });
                                         }}
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 pl-9 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2.5 pl-9 text-form-input font-bold text-gray-700 outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                                     />
                                 </div>
                             </div>

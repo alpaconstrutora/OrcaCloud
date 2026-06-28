@@ -458,7 +458,7 @@ const TasksList: React.FC<Props> = ({
             const d = new Date(t.alert_at)
             const past = d < new Date()
             return (
-              <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold
+              <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-table-body font-semibold
                 ${past ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}
               >
                 <Bell className="w-3 h-3 flex-shrink-0" />
@@ -478,7 +478,7 @@ const TasksList: React.FC<Props> = ({
         <td key="status" className={COL}>
           {taskStatus ? (
             <span
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-black uppercase tracking-wide"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-table-body font-black uppercase tracking-wide"
               style={{ backgroundColor: taskStatus.color, color: '#fff' }}
             >
               {/* círculo dashed estilo ClickUp */}
@@ -811,7 +811,7 @@ const TasksList: React.FC<Props> = ({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar tarefa..."
-            className="w-full pl-8 pr-8 py-2 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:border-blue-400"
+            className="w-full pl-8 pr-8 py-2 text-form-input border border-slate-200 rounded-xl bg-white focus:outline-none focus:border-blue-400"
           />
           {search && (
             <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -821,7 +821,7 @@ const TasksList: React.FC<Props> = ({
         </div>
         <button
           onClick={() => setShowFilters(f => !f)}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-button font-bold border transition-all
             ${showFilters || activeFilters ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 text-slate-600 hover:border-slate-300 bg-white'}`}
         >
           <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -832,14 +832,14 @@ const TasksList: React.FC<Props> = ({
           <button
             onClick={toggleExpandAll}
             title={allExpanded ? 'Recolher tudo' : 'Expandir tudo'}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border border-slate-200 text-slate-600 hover:border-slate-300 bg-white transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-button font-bold border border-slate-200 text-slate-600 hover:border-slate-300 bg-white transition-all"
           >
             {allExpanded ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
             {allExpanded ? 'Recolher' : 'Expandir'}
           </button>
         )}
         {(activeFilters || search) && (
-          <button onClick={clearFilters} className="text-xs font-bold text-slate-400 hover:text-red-500 flex items-center gap-1">
+          <button onClick={clearFilters} className="text-button font-bold text-slate-400 hover:text-red-500 flex items-center gap-1">
             <X className="w-3 h-3" /> Limpar
           </button>
         )}

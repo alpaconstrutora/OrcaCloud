@@ -171,7 +171,7 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
                 </div>
                 <button
                     onClick={() => { setEditingDoc(null); setIsModalOpen(true); }}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 font-black text-xs uppercase tracking-tight"
+                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 font-black text-button uppercase tracking-tight"
                 >
                     <Plus className="w-4 h-4" />
                     Novo Documento
@@ -244,7 +244,7 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
                                             Criado em: {doc.created_at ? new Date(doc.created_at).toLocaleDateString('pt-BR') : '—'}
                                         </div>
                                         {doc.expiry_date && (
-                                            <div className={`flex items-center gap-2 text-xs font-black ${expired ? 'text-red-600' : near ? 'text-amber-600' : 'text-slate-500'}`}>
+                                            <div className={`flex items-center gap-2 text-button font-black ${expired ? 'text-red-600' : near ? 'text-amber-600' : 'text-slate-500'}`}>
                                                 <AlertTriangle className="w-3.5 h-3.5" />
                                                 Vencimento: {new Date(doc.expiry_date + 'T00:00:00').toLocaleDateString('pt-BR')}
                                             </div>

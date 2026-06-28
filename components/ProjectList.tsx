@@ -445,14 +445,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => setIsImportModalOpen(true)}
-                            className="flex items-center gap-3 px-6 py-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[1.25rem] hover:bg-emerald-600 hover:text-white font-black text-xs uppercase tracking-widest transition-all shadow-sm active:scale-95"
+                            className="flex items-center gap-3 px-6 py-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[1.25rem] hover:bg-emerald-600 hover:text-white font-black text-button uppercase tracking-widest transition-all shadow-sm active:scale-95"
                         >
                             <FileSpreadsheet className="w-4 h-4" />
                             Importar Excel
                         </button>
                         <button
                             onClick={() => onNewProject(classificationFilter || (activeTab === 'templates' ? 'OBRA' : 'ORCAMENTO'))}
-                            className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                            className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
                         >
                             <Plus className="w-4 h-4" />
                             {isObraContext ? 'Nova Obra' : (isPlanejamentoContext ? 'Novo Planejamento' : (isDiarioContext ? 'Novo Diário' : 'Novo Orçamento'))}
@@ -465,7 +465,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 <div className="flex space-x-1.5 bg-gray-100/50 p-1.5 rounded-[1.25rem] w-fit">
                     <button
                         onClick={() => setActiveTab('budgets')}
-                        className={`flex items-center px-6 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${activeTab === 'budgets'
+                        className={`flex items-center px-6 py-2.5 text-table-header font-black uppercase tracking-widest rounded-xl transition-all ${activeTab === 'budgets'
                             ? 'bg-white text-blue-600 shadow-lg shadow-gray-200/50'
                             : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
                             }`}
@@ -475,7 +475,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     </button>
                     <button
                         onClick={() => setActiveTab('templates')}
-                        className={`flex items-center px-6 py-2.5 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${activeTab === 'templates'
+                        className={`flex items-center px-6 py-2.5 text-button font-black uppercase tracking-widest rounded-xl transition-all ${activeTab === 'templates'
                             ? 'bg-white text-blue-600 shadow-lg shadow-gray-200/50'
                             : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
                             }`}
@@ -573,7 +573,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     </div>
                                     <button
                                         onClick={() => resetColumns()}
-                                        className="mt-3 w-full text-xs font-bold text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors"
+                                        className="mt-3 w-full text-button font-bold text-blue-600 py-2 rounded-lg hover:bg-blue-50 transition-colors"
                                     >
                                         Restaurar Padrão
                                     </button>

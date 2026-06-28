@@ -228,7 +228,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex items-center gap-1.5 px-3 py-3 text-xs font-black uppercase tracking-widest border-b-2 transition-all -mb-px
+              className={`flex items-center gap-1.5 px-3 py-3 text-button font-black uppercase tracking-widest border-b-2 transition-all -mb-px
                 ${tab === t ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-700'}`}
             >
               <Icon className="w-3.5 h-3.5" />{label}
@@ -349,7 +349,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
             ) : (
               <button
                 onClick={() => setCreatingFolder(true)}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors w-full"
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-button font-bold text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors w-full"
               >
                 <Plus className="w-3.5 h-3.5" /> Nova pasta
               </button>
@@ -416,7 +416,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
                       <button
                         onClick={addMember}
                         disabled={!addingId}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-form-input font-black bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       >
                         <UserPlus className="w-4 h-4" />
                         Adicionar
@@ -442,7 +442,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
           <button
             onClick={deleteSpace}
             disabled={saving}
-            className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-red-500 hover:text-red-700 disabled:opacity-40"
+            className="flex items-center gap-1.5 text-button font-black uppercase tracking-wider text-red-500 hover:text-red-700 disabled:opacity-40"
           >
             <Trash2 className="w-3.5 h-3.5" /> Excluir espaço
           </button>
@@ -450,14 +450,14 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
             <button
               onClick={saveSettings}
               disabled={saving || !name.trim()}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
+              className="flex items-center gap-2 px-5 py-2 rounded-xl text-button font-black uppercase tracking-wider bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Salvar
             </button>
           )}
           {(tab === 'members' || tab === 'folders') && (
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-slate-500 hover:bg-slate-100">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-button font-black uppercase tracking-wider text-slate-500 hover:bg-slate-100">
               Fechar
             </button>
           )}

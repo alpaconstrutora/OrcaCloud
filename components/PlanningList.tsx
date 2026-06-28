@@ -191,7 +191,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
                 </div>
                 <button
                     onClick={onAddPlanning}
-                    className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                    className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
                 >
                     <Calendar className="w-5 h-5" />
                     <span>Novo Planejamento</span>

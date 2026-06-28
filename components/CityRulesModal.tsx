@@ -303,7 +303,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                     type="number"
                     value={limits.ecoToMed}
                     onChange={(e) => handleLimitChange('ecoToMed', Number(e.target.value))}
-                    className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     placeholder="3200"
                   />
                 </div>
@@ -321,7 +321,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                     type="number"
                     value={limits.medToMedAlt}
                     onChange={(e) => handleLimitChange('medToMedAlt', Number(e.target.value))}
-                    className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     placeholder="4300"
                   />
                 </div>
@@ -339,7 +339,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                     type="number"
                     value={limits.medAltToAlto}
                     onChange={(e) => handleLimitChange('medAltToAlto', Number(e.target.value))}
-                    className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     placeholder="5500"
                   />
                 </div>
@@ -357,7 +357,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                     type="number"
                     value={limits.altoToLuxo}
                     onChange={(e) => handleLimitChange('altoToLuxo', Number(e.target.value))}
-                    className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     placeholder="7500"
                   />
                 </div>
@@ -394,7 +394,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                   <button
                     key={r.standard}
                     onClick={() => setSelectedStandard(r.standard)}
-                    className={`px-4 py-2.5 rounded-2xl border text-xs font-bold transition-all text-left flex items-center gap-2.5 ${tabBorder} ${tabBg}`}
+                    className={`px-4 py-2.5 rounded-2xl border text-button font-bold transition-all text-left flex items-center gap-2.5 ${tabBorder} ${tabBg}`}
                   >
                     <div>
                       <div className="flex items-center gap-1.5">
@@ -464,7 +464,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                               type="text"
                               value={t.tipo}
                               onChange={(e) => handleUpdateTipologia(index, 'tipo', e.target.value)}
-                              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                               placeholder="Ex: 2 Dorms c/ Suíte"
                             />
                           </div>
@@ -479,7 +479,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                                 type="number"
                                 value={t.area}
                                 onChange={(e) => handleUpdateTipologia(index, 'area', e.target.value)}
-                                className="w-full pr-8 pl-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                                className="w-full pr-8 pl-3 py-2 border border-slate-200 rounded-lg text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                                 placeholder="65"
                               />
                               <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">
@@ -498,7 +498,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                                 type="number"
                                 value={t.mix}
                                 onChange={(e) => handleUpdateTipologia(index, 'mix', e.target.value)}
-                                className="w-full pr-6 pl-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                                className="w-full pr-6 pl-3 py-2 border border-slate-200 rounded-lg text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                                 placeholder="60"
                               />
                               <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">
@@ -525,7 +525,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                   <div className="pt-2 border-t border-slate-100 flex justify-end">
                     <button
                       onClick={handleAddTipologia}
-                      className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+                      className="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-indigo-600 rounded-xl text-button font-black uppercase tracking-wider transition-all"
                     >
                       ➕ Adicionar Tipologia
                     </button>
@@ -541,7 +541,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
         <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex flex-wrap gap-3 items-center justify-between">
           <button
             onClick={handleRestoreDefaults}
-            className="px-4 py-2.5 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+            className="px-4 py-2.5 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl text-button font-black uppercase tracking-wider transition-all"
             disabled={saving}
           >
             🔄 Restaurar Padrões
@@ -550,14 +550,14 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="px-6 py-2.5 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-black uppercase tracking-wider transition-all"
+              className="px-6 py-2.5 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-button font-black uppercase tracking-wider transition-all"
               disabled={saving}
             >
               Cancelar
             </button>
             <button
               onClick={handleSave}
-              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-98 flex items-center gap-2"
+              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all shadow-md active:scale-98 flex items-center gap-2"
               disabled={saving}
             >
               {saving ? 'Salvando...' : '💾 Salvar Regras da Praça'}

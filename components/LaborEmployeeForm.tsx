@@ -330,7 +330,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
 
                     {/* Vínculo e Função */}
                     <div>
-                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <h3 className="text-form-input font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                             <Building2 className="w-3.5 h-3.5 text-indigo-500" /> Vínculo e Função
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -534,7 +534,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                         <button
                                             type="button"
                                             onClick={() => setField('is_disabled', !form.is_disabled)}
-                                            className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-xs font-bold ${form.is_disabled ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                                            className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all text-form-input font-bold ${form.is_disabled ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
                                         >
                                             {form.is_disabled ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
                                             Pessoa com Deficiência (PcD)
@@ -779,7 +779,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <h3 className="text-form-input font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                                     <FileText className="w-3.5 h-3.5 text-indigo-500" /> CNH (Carteira Nacional de Habilitação)
                                 </h3>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -800,7 +800,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <h3 className="text-form-input font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                                     <Users className="w-3.5 h-3.5 text-indigo-500" /> Dependentes
                                 </h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

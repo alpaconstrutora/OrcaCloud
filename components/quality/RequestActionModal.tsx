@@ -159,7 +159,7 @@ const RequestActionModal: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={addStep}
-                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+                className="flex items-center gap-1 text-button text-blue-600 hover:text-blue-700"
               >
                 <Plus className="w-3.5 h-3.5" /> Adicionar etapa
               </button>

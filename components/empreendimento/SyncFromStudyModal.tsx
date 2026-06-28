@@ -98,7 +98,7 @@ export const SyncFromStudyModal: React.FC<Props> = ({ empreendimentoId, onClose,
                 </div>
               )}
 
-              <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 cursor-pointer">
+              <label className="flex items-center gap-2 text-form-label font-semibold text-gray-600 cursor-pointer">
                 <input type="checkbox" checked={overwrite} onChange={e => setOverwrite(e.target.checked)} className="w-4 h-4" />
                 Sobrescrever também status e preço das unidades (descarta alterações comerciais locais)
               </label>
@@ -107,11 +107,11 @@ export const SyncFromStudyModal: React.FC<Props> = ({ empreendimentoId, onClose,
         </div>
 
         <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 flex justify-end gap-3 rounded-b-3xl">
-          <button onClick={onClose} className="px-5 py-2.5 text-gray-600 font-bold text-xs uppercase tracking-widest hover:bg-gray-100 rounded-xl">Cancelar</button>
+          <button onClick={onClose} className="px-5 py-2.5 text-gray-600 font-bold text-button uppercase tracking-widest hover:bg-gray-100 rounded-xl">Cancelar</button>
           <button
             onClick={handleApply}
             disabled={loading || applying || !!error || !report}
-            className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2"
+            className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-xl font-black text-button uppercase tracking-widest flex items-center gap-2"
           >
             {applying ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             Sincronizar

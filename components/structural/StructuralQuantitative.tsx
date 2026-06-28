@@ -177,12 +177,12 @@ const StructuralQuantitative: React.FC<Props> = ({ orgId, projectId, projectName
         {quantRows.length > 0 && (
           <div className="flex items-center gap-2">
             <button onClick={handleExportExcel} disabled={exporting !== null}
-              className="flex items-center gap-2 bg-emerald-600 disabled:bg-slate-300 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest hover:bg-emerald-700">
+              className="flex items-center gap-2 bg-emerald-600 disabled:bg-slate-300 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest hover:bg-emerald-700">
               {exporting === 'excel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
               Excel
             </button>
             <button onClick={handleExportPdf} disabled={exporting !== null}
-              className="flex items-center gap-2 bg-red-600 disabled:bg-slate-300 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest hover:bg-red-700">
+              className="flex items-center gap-2 bg-red-600 disabled:bg-slate-300 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest hover:bg-red-700">
               {exporting === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
               PDF
             </button>
@@ -284,7 +284,7 @@ const StructuralQuantitative: React.FC<Props> = ({ orgId, projectId, projectName
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-slate-300 bg-slate-50 font-black text-slate-900">
-                  <td colSpan={2} className="px-4 py-3 text-xs uppercase tracking-widest text-slate-500">Total</td>
+                  <td colSpan={2} className="px-4 py-3 text-table-body uppercase tracking-widest text-slate-500">Total</td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {quantRows.reduce((s, r) => s + r.qtdPecas, 0)}
                   </td>

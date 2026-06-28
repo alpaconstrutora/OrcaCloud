@@ -282,7 +282,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                             <select
                                 value={selectedCompanyId}
                                 onChange={(e) => setSelectedCompanyId(e.target.value)}
-                                className="text-xs font-bold text-slate-600 outline-none bg-transparent min-w-[160px]"
+                                className="text-form-input font-bold text-slate-600 outline-none bg-transparent min-w-[160px]"
                             >
                                 {companies.map(c => (
                                     <option key={c.id} value={c.id}>{c.razao_social}</option>
@@ -647,11 +647,11 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
 
                             <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
                                 <button type="button" onClick={() => setIsRoleModalOpen(false)}
-                                    className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all">
+                                    className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-button uppercase tracking-wider rounded-xl transition-all">
                                     Cancelar
                                 </button>
                                 <button type="submit" disabled={savingRole}
-                                    className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 disabled:opacity-60">
+                                    className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-button uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 disabled:opacity-60">
                                     {savingRole && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                     {roleForm.id ? 'Salvar' : 'Criar Cargo'}
                                 </button>
@@ -703,11 +703,11 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
 
                             <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
                                 <button type="button" onClick={() => setIsFuncaoModalOpen(false)}
-                                    className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all">
+                                    className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-button uppercase tracking-wider rounded-xl transition-all">
                                     Cancelar
                                 </button>
                                 <button type="submit" disabled={savingFuncao}
-                                    className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 disabled:opacity-60">
+                                    className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-button uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 disabled:opacity-60">
                                     {savingFuncao && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                     {funcaoForm.id ? 'Salvar' : 'Criar Função'}
                                 </button>

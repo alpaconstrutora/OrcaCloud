@@ -231,7 +231,7 @@ const PipelineColumn: React.FC<{
     {onAddNew && (
       <button
         onClick={onAddNew}
-        className="mt-2 flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors w-full"
+        className="mt-2 flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-button font-bold text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors w-full"
       >
         <Plus className="w-3.5 h-3.5" /> Adicionar lead
       </button>
@@ -388,7 +388,7 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
             <button
               key={p}
               onClick={() => setFilterPriority(p)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`px-2.5 py-1.5 rounded-lg text-button font-medium transition-colors ${
                 filterPriority === p
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
@@ -399,7 +399,7 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
           ))}
         </div>
         {hasFilter && (
-          <span className="text-xs text-gray-400">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</span>
+          <span className="text-button text-gray-400">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</span>
         )}
       </div>
 

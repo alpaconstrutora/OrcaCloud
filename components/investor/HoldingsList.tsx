@@ -42,7 +42,7 @@ const HoldingsList: React.FC<Props> = ({
                 <button
                     key={status}
                     onClick={() => onFilterChange(status)}
-                    className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${filterStatus === status
+                    className={`px-4 py-2 rounded-full text-button font-bold whitespace-nowrap transition-all ${filterStatus === status
                         ? 'bg-blue-600 text-white shadow-md'
                         : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-100'
                         }`}

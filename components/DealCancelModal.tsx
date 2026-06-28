@@ -95,7 +95,7 @@ const DealCancelModal: React.FC<DealCancelModalProps> = ({ isOpen, deal, organiz
                                 <button
                                     key={r}
                                     onClick={() => setReason(r)}
-                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-left border transition-all
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-button font-bold text-left border transition-all
                                         ${reason === r
                                             ? 'bg-red-600 text-white border-red-700'
                                             : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-red-200 hover:bg-red-50'
@@ -112,7 +112,7 @@ const DealCancelModal: React.FC<DealCancelModalProps> = ({ isOpen, deal, organiz
                                 value={customReason}
                                 onChange={(e) => setCustomReason(e.target.value)}
                                 placeholder="Descreva o motivo..."
-                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 outline-none focus:border-red-400 transition-all"
+                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-form-input font-bold text-gray-700 outline-none focus:border-red-400 transition-all"
                             />
                         )}
                     </div>
@@ -141,14 +141,14 @@ const DealCancelModal: React.FC<DealCancelModalProps> = ({ isOpen, deal, organiz
                 <div className="flex gap-3 p-6 pt-0">
                     <button
                         onClick={onClose}
-                        className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 text-xs font-black rounded-xl hover:bg-gray-200 transition-all uppercase tracking-wide"
+                        className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 text-button font-black rounded-xl hover:bg-gray-200 transition-all uppercase tracking-wide"
                     >
                         Voltar
                     </button>
                     <button
                         onClick={handleConfirm}
                         disabled={loading || !finalReason.trim()}
-                        className="flex-1 px-4 py-3 bg-red-600 text-white text-xs font-black rounded-xl hover:bg-red-700 transition-all uppercase tracking-wide shadow-md shadow-red-900/20 disabled:opacity-50"
+                        className="flex-1 px-4 py-3 bg-red-600 text-white text-button font-black rounded-xl hover:bg-red-700 transition-all uppercase tracking-wide shadow-md shadow-red-900/20 disabled:opacity-50"
                     >
                         {loading ? 'Processando...' : 'Confirmar Distrato'}
                     </button>

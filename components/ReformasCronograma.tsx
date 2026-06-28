@@ -167,7 +167,7 @@ const ReformasCronograma: React.FC<ReformasCronogramaProps> = ({ userId }) => {
             placeholder="Nome da etapa (Ex: Pintura, Demolição, Pias)"
             value={tarefa}
             onChange={(e) => setTarefa(e.target.value)}
-            className="w-full bg-[#070913] border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+            className="w-full bg-[#070913] border border-white/5 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
             required
           />
 
@@ -177,13 +177,13 @@ const ReformasCronograma: React.FC<ReformasCronogramaProps> = ({ userId }) => {
               placeholder="Responsável (opcional)"
               value={responsavel}
               onChange={(e) => setResponsavel(e.target.value)}
-              className="w-full bg-[#070913] border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+              className="w-full bg-[#070913] border border-white/5 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
             />
             <input
               type="date"
               value={dataLimite}
               onChange={(e) => setDataLimite(e.target.value)}
-              className="w-full bg-[#070913] border border-white/5 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-orange-500"
+              className="w-full bg-[#070913] border border-white/5 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
             />
           </div>
         </div>
@@ -191,7 +191,7 @@ const ReformasCronograma: React.FC<ReformasCronogramaProps> = ({ userId }) => {
         <button
           type="submit"
           disabled={saving}
-          className="w-full py-2.5 bg-gradient-to-tr from-orange-600 to-amber-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+          className="w-full py-2.5 bg-gradient-to-tr from-orange-600 to-amber-500 text-white text-button font-black uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
         >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Adicionar Etapa

@@ -97,7 +97,7 @@ function QuotationModal({
                         com status <em>Aberta</em>.
                     </p>
                     <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Título da cotação</label>
+                        <label className="block text-form-label font-medium text-gray-700 mb-1">Título da cotação</label>
                         <input
                             className="w-full border rounded px-3 py-1.5 text-sm"
                             value={title}
@@ -105,7 +105,7 @@ function QuotationModal({
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Prazo de resposta</label>
+                        <label className="block text-form-label font-medium text-gray-700 mb-1">Prazo de resposta</label>
                         <input
                             type="date"
                             className="w-full border rounded px-3 py-1.5 text-sm"
@@ -173,7 +173,7 @@ function OrderModal({
                         Será criado um pedido em <em>Rascunho</em> com <strong>{count} {count === 1 ? 'item' : 'itens'}</strong>.
                     </p>
                     <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Fornecedor *</label>
+                        <label className="block text-form-label font-medium text-gray-700 mb-1">Fornecedor *</label>
                         <select
                             className="w-full border rounded px-3 py-1.5 text-sm"
                             value={supplierId}
@@ -184,7 +184,7 @@ function OrderModal({
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Data de entrega</label>
+                        <label className="block text-form-label font-medium text-gray-700 mb-1">Data de entrega</label>
                         <input
                             type="date"
                             className="w-full border rounded px-3 py-1.5 text-sm"
@@ -193,7 +193,7 @@ function OrderModal({
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Observações</label>
+                        <label className="block text-form-label font-medium text-gray-700 mb-1">Observações</label>
                         <textarea
                             className="w-full border rounded px-3 py-1.5 text-sm"
                             rows={2}
@@ -523,7 +523,7 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
                         </p>
                     </div>
                     <button
-                        className="ml-auto text-xs text-red-700 underline whitespace-nowrap"
+                        className="ml-auto text-button text-red-700 underline whitespace-nowrap"
                         onClick={() => {
                             setStatusFilter('pending');
                             setTab('plano');
@@ -571,13 +571,13 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
                     <div className="flex gap-2 ml-auto">
                         <button
                             onClick={() => setModal('quotation')}
-                            className="flex items-center gap-1.5 bg-white text-blue-700 text-xs font-semibold px-3 py-1.5 rounded hover:bg-blue-50"
+                            className="flex items-center gap-1.5 bg-white text-blue-700 text-button font-semibold px-3 py-1.5 rounded hover:bg-blue-50"
                         >
                             <FileText className="w-3.5 h-3.5" /> Gerar Cotação
                         </button>
                         <button
                             onClick={() => setModal('order')}
-                            className="flex items-center gap-1.5 bg-white text-purple-700 text-xs font-semibold px-3 py-1.5 rounded hover:bg-purple-50"
+                            className="flex items-center gap-1.5 bg-white text-purple-700 text-button font-semibold px-3 py-1.5 rounded hover:bg-purple-50"
                         >
                             <Truck className="w-3.5 h-3.5" /> Gerar Pedido
                         </button>
@@ -790,7 +790,7 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
                                             </td>
                                             <td className="px-3 py-2 text-right">{fmtQty(item.requiredQty)}</td>
                                             <td className="px-3 py-2 text-gray-500">{item.inputUnit}</td>
-                                            <td className="px-3 py-2 text-gray-600 text-xs">{item.sourceBudgetItemDesc}</td>
+                                            <td className="px-3 py-2 text-gray-600 text-table-body">{item.sourceBudgetItemDesc}</td>
                                             <td className="px-3 py-2 text-right">{fmtBrl(item.estimatedTotal)}</td>
                                         </tr>
                                     ))}
@@ -868,7 +868,7 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
                             <button
                                 onClick={loadConsolidation}
                                 disabled={loadingConsolidation}
-                                className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                                className="text-button text-gray-500 hover:text-gray-700 flex items-center gap-1"
                             >
                                 <RefreshCw className={`w-3.5 h-3.5 ${loadingConsolidation ? 'animate-spin' : ''}`} />
                                 Atualizar
@@ -987,7 +987,7 @@ function ItemRow({
             </div>
             <div className="shrink-0">
                 <select
-                    className={`text-xs px-1.5 py-0.5 rounded-full border-0 font-medium cursor-pointer ${STATUS_COLORS[item.status]}`}
+                    className={`text-button px-1.5 py-0.5 rounded-full border-0 font-medium cursor-pointer ${STATUS_COLORS[item.status]}`}
                     value={item.status}
                     onChange={e => onStatusChange(item.id, e.target.value as ProcurementStatus)}
                 >
@@ -1172,7 +1172,7 @@ function ConsolidationCard({
                     </button>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CONSOL_STATUS_COLORS[consolidation.status]}`}>
+                            <span className={`text-button px-2 py-0.5 rounded-full font-medium ${CONSOL_STATUS_COLORS[consolidation.status]}`}>
                                 {consolidation.status === 'open' ? 'Aberta' : consolidation.status === 'quoted' ? 'Cotada' : consolidation.status === 'ordered' ? 'Pedido' : 'Cancelada'}
                             </span>
                             <span className="text-xs text-gray-500 capitalize">{monthLabel}</span>
@@ -1188,13 +1188,13 @@ function ConsolidationCard({
                         <div className="flex gap-2">
                             <button
                                 onClick={() => setModal('quotation')}
-                                className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-1.5 rounded hover:bg-blue-100 font-medium"
+                                className="flex items-center gap-1 text-button bg-blue-50 text-blue-700 px-2 py-1.5 rounded hover:bg-blue-100 font-medium"
                             >
                                 <FileText className="w-3.5 h-3.5" /> Cotar
                             </button>
                             <button
                                 onClick={() => setModal('order')}
-                                className="flex items-center gap-1 text-xs bg-purple-50 text-purple-700 px-2 py-1.5 rounded hover:bg-purple-100 font-medium"
+                                className="flex items-center gap-1 text-button bg-purple-50 text-purple-700 px-2 py-1.5 rounded hover:bg-purple-100 font-medium"
                             >
                                 <Truck className="w-3.5 h-3.5" /> Pedir
                             </button>
@@ -1269,11 +1269,11 @@ function QuotationModalConsolidation({
                         ({consolidation.items?.length ?? 0} obras) · {fmtBrl(consolidation.totalEstimated)}
                     </p>
                     <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Título</label>
+                        <label className="block text-form-label font-medium text-gray-700 mb-1">Título</label>
                         <input className="w-full border rounded px-3 py-1.5 text-sm" value={title} onChange={e => setTitle(e.target.value)} />
                     </div>
                     <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Prazo de resposta</label>
+                        <label className="block text-form-label font-medium text-gray-700 mb-1">Prazo de resposta</label>
                         <input type="date" className="w-full border rounded px-3 py-1.5 text-sm" value={deadline} onChange={e => setDeadline(e.target.value)} />
                     </div>
                     {error && <p className="text-red-600 text-sm">{error}</p>}
@@ -1329,18 +1329,18 @@ function OrderModalConsolidation({
                         Volume: <strong>{fmtQty(consolidation.totalRequiredQty)} {consolidation.inputUnit}</strong> · {fmtBrl(consolidation.totalEstimated)}
                     </p>
                     <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Fornecedor *</label>
+                        <label className="block text-form-label font-medium text-gray-700 mb-1">Fornecedor *</label>
                         <select className="w-full border rounded px-3 py-1.5 text-sm" value={supplierId} onChange={e => setSupplierId(e.target.value)}>
                             <option value="">Selecione…</option>
                             {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Data de entrega</label>
+                        <label className="block text-form-label font-medium text-gray-700 mb-1">Data de entrega</label>
                         <input type="date" className="w-full border rounded px-3 py-1.5 text-sm" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
                     </div>
                     <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Observações</label>
+                        <label className="block text-form-label font-medium text-gray-700 mb-1">Observações</label>
                         <textarea className="w-full border rounded px-3 py-1.5 text-sm" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
                     </div>
                     {error && <p className="text-red-600 text-sm">{error}</p>}
@@ -1382,7 +1382,7 @@ function CurvaSChart4({ data }: { data: MonthlyBreakdown[] }) {
                         <button
                             key={m}
                             onClick={() => setMode(m)}
-                            className={`text-xs px-2 py-0.5 rounded ${mode === m ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-gray-500 hover:bg-gray-100'}`}
+                            className={`text-button px-2 py-0.5 rounded ${mode === m ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-gray-500 hover:bg-gray-100'}`}
                         >
                             {m === 'mensal' ? 'Mensal' : 'Acumulado'}
                         </button>
@@ -1490,7 +1490,7 @@ function RiscoPanel({ riskItems, items }: { riskItems: RiskItem[]; items: Procur
                                                 {item.inputCode && <p className="text-xs text-gray-400">{item.inputCode}</p>}
                                             </td>
                                             <td className="px-3 py-2 text-center">
-                                                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${RISK_COLORS[item.riskLevel]}`}>
+                                                <span className={`text-table-header px-2 py-0.5 rounded-full font-semibold ${RISK_COLORS[item.riskLevel]}`}>
                                                     {item.riskScore}
                                                 </span>
                                             </td>
@@ -1503,7 +1503,7 @@ function RiscoPanel({ riskItems, items }: { riskItems: RiskItem[]; items: Procur
                                                     ))}
                                                 </div>
                                             </td>
-                                            <td className="px-3 py-2 text-right text-xs hidden md:table-cell">
+                                            <td className="px-3 py-2 text-right text-table-body hidden md:table-cell">
                                                 {item.daysOverdue > 0
                                                     ? <span className="text-red-600 font-medium">{item.daysOverdue}d vencido</span>
                                                     : <span className="text-gray-600">{fmtDate(item.suggestedBuyDate)}</span>}
@@ -1530,7 +1530,7 @@ function RiscoPanel({ riskItems, items }: { riskItems: RiskItem[]; items: Procur
                     </p>
                     <div className="flex items-center gap-4">
                         <div className="flex-1">
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                            <label className="block text-form-label font-medium text-gray-700 mb-1">
                                 Atraso simulado: <strong>{delayDays} dias</strong>
                             </label>
                             <input

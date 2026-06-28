@@ -199,14 +199,14 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                             type="date" 
                             value={dateFilter.start}
                             onChange={(e) => setDateFilter(prev => ({ ...prev, start: e.target.value }))}
-                            className="bg-transparent text-xs font-bold text-slate-600 outline-none px-2 py-1.5 focus:bg-white rounded-xl transition-all"
+                            className="bg-transparent text-form-input font-bold text-slate-600 outline-none px-2 py-1.5 focus:bg-white rounded-xl transition-all"
                         />
                         <div className="flex items-center px-1 text-slate-300 font-bold"> até </div>
                         <input 
                             type="date" 
                             value={dateFilter.end}
                             onChange={(e) => setDateFilter(prev => ({ ...prev, end: e.target.value }))}
-                            className="bg-transparent text-xs font-bold text-slate-600 outline-none px-2 py-1.5 focus:bg-white rounded-xl transition-all"
+                            className="bg-transparent text-form-input font-bold text-slate-600 outline-none px-2 py-1.5 focus:bg-white rounded-xl transition-all"
                         />
                     </div>
                     

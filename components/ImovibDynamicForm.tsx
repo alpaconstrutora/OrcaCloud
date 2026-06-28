@@ -72,7 +72,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                     </h4>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-1">Duração Obras (Meses)</label>
+                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Duração Obras (Meses)</label>
                             <input
                                 type="number"
                                 value={constructionDurationMonths}
@@ -82,7 +82,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-1">Mês Início Obras</label>
+                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Mês Início Obras</label>
                             <input
                                 type="number"
                                 value={constructionStartMonth}
@@ -92,7 +92,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-1">Duração Vendas (Meses)</label>
+                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Duração Vendas (Meses)</label>
                             <input
                                 type="number"
                                 value={salesDurationMonths}
@@ -102,7 +102,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-1">Mês Início Vendas</label>
+                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Mês Início Vendas</label>
                             <input
                                 type="number"
                                 value={salesStartMonth}
@@ -121,7 +121,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                     </h4>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-1">Inflação (Mês)</label>
+                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Inflação (Mês)</label>
                             <input
                                 type="number"
                                 step="0.01"
@@ -132,7 +132,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-1">TMA / Desconto (Ano)</label>
+                            <label className="block text-form-label font-semibold text-gray-600 mb-1">TMA / Desconto (Ano)</label>
                             <input
                                 type="number"
                                 step="0.1"
@@ -157,7 +157,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                     </h4>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-1">Impostos (Ex: RET)</label>
+                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Impostos (Ex: RET)</label>
                             <input
                                 type="number"
                                 step="0.01"
@@ -168,7 +168,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-1">Comissão / Marketing</label>
+                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Comissão / Marketing</label>
                             <input
                                 type="number"
                                 step="0.01"
@@ -190,7 +190,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                     </h4>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-1">% Financiado</label>
+                            <label className="block text-form-label font-semibold text-gray-600 mb-1">% Financiado</label>
                             <input
                                 type="number"
                                 step="0.1"
@@ -201,7 +201,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-1">Juros (a.a %)</label>
+                            <label className="block text-form-label font-semibold text-gray-600 mb-1">Juros (a.a %)</label>
                             <input
                                 type="number"
                                 step="0.1"

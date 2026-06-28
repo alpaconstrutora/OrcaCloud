@@ -163,7 +163,7 @@ export const CrewClassificationModal: React.FC<CrewClassificationModalProps> = (
                                         />
                                         <button
                                             onClick={() => addTerm(section.key)}
-                                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-bold hover:bg-gray-700"
+                                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-button font-bold hover:bg-gray-700"
                                         >
                                             <Plus className="w-3.5 h-3.5" /> Adicionar
                                         </button>
@@ -178,7 +178,7 @@ export const CrewClassificationModal: React.FC<CrewClassificationModalProps> = (
                     <button
                         onClick={restoreDefaults}
                         disabled={saving || loading}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-button font-bold text-gray-500 hover:bg-gray-100 disabled:opacity-50"
                     >
                         <RotateCcw className="w-3.5 h-3.5" /> Restaurar padrões SINAPI
                     </button>

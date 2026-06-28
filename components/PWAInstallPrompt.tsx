@@ -70,13 +70,13 @@ export const PWAInstallPrompt: React.FC = () => {
         <div className="flex gap-2 mt-3">
           <button
             onClick={handleInstall}
-            className="flex-1 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-colors"
+            className="flex-1 py-1.5 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 transition-colors"
           >
             Instalar
           </button>
           <button
             onClick={handleDismiss}
-            className="px-3 py-1.5 text-slate-500 hover:bg-slate-100 rounded-xl text-xs font-bold transition-colors"
+            className="px-3 py-1.5 text-slate-500 hover:bg-slate-100 rounded-xl text-button font-bold transition-colors"
           >
             Depois
           </button>

@@ -45,7 +45,7 @@ export const BaselineModal: React.FC<BaselineModalProps> = ({
                     </p>
 
                     <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-500 uppercase">Nova Linha de Base</label>
+                        <label className="text-form-label font-bold text-gray-500 uppercase">Nova Linha de Base</label>
                         <input
                             type="text"
                             placeholder="Nome (ex: Planejamento Inicial)"
@@ -63,7 +63,7 @@ export const BaselineModal: React.FC<BaselineModalProps> = ({
                     </div>
 
                     <div className="border-t pt-4">
-                        <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Linhas de Base Salvas</label>
+                        <label className="text-form-label font-bold text-gray-500 uppercase block mb-2">Linhas de Base Salvas</label>
                         <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                             <div
                                 onClick={() => onActivate(null)}

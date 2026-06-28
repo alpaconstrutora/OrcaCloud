@@ -313,7 +313,7 @@ const PlanningPickerModal: React.FC<{
 // ── Field wrapper ─────────────────────────────────────────────────────────────
 const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode; colSpan?: number }> = ({ label, required, children, colSpan }) => (
   <div className={colSpan === 2 ? 'col-span-2' : colSpan === 3 ? 'col-span-3' : ''}>
-    <label className="text-xs font-black text-slate-500 uppercase tracking-wide">
+    <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">
       {label} {required && <span className="text-red-500">*</span>}
     </label>
     <div className="mt-1">{children}</div>
@@ -579,7 +579,7 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
                   <button
                     type="button"
                     onClick={() => setShowBudgetPicker(true)}
-                    className="text-xs font-black text-blue-600 hover:text-blue-800 px-2 py-1 hover:bg-blue-100 rounded-lg transition-colors"
+                    className="text-button font-black text-blue-600 hover:text-blue-800 px-2 py-1 hover:bg-blue-100 rounded-lg transition-colors"
                   >
                     Trocar
                   </button>
@@ -587,7 +587,7 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
                 <button
                   type="button"
                   onClick={() => setSelectedBudgetItem(null)}
-                  className="text-xs font-bold text-slate-400 hover:text-red-500 px-2 py-1 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
+                  className="text-button font-bold text-slate-400 hover:text-red-500 px-2 py-1 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
                 >
                   <Unlink className="w-3 h-3" />
                   Desvincular
@@ -643,14 +643,14 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
                 <button
                   type="button"
                   onClick={() => setShowPlanningPicker(true)}
-                  className="text-xs font-black text-violet-600 hover:text-violet-800 px-2 py-1 hover:bg-violet-100 rounded-lg transition-colors"
+                  className="text-button font-black text-violet-600 hover:text-violet-800 px-2 py-1 hover:bg-violet-100 rounded-lg transition-colors"
                 >
                   Trocar
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedPlanningItem(null)}
-                  className="text-xs font-bold text-slate-400 hover:text-red-500 px-2 py-1 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
+                  className="text-button font-bold text-slate-400 hover:text-red-500 px-2 py-1 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
                 >
                   <Unlink className="w-3 h-3" />
                   Desvincular
@@ -910,7 +910,7 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
                 const calculated = (selectedBudgetItem.unitCost * parseFloat(form.plannedQuantity)).toFixed(2)
                 setForm(f => ({ ...f, plannedCost: calculated }))
               }}
-              className="text-xs font-black text-blue-600 hover:text-blue-800 underline"
+              className="text-form-input font-black text-blue-600 hover:text-blue-800 underline"
             >
               ↑ Preencher custo a partir do orçamento ({fmtCurrency(selectedBudgetItem.unitCost * parseFloat(form.plannedQuantity))})
             </button>

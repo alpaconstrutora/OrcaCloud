@@ -111,7 +111,7 @@ export const PublicEspecificacoesView: React.FC<PublicEspecificacoesViewProps> =
           <p className="text-slate-400 text-sm leading-relaxed mb-6">{error}</p>
           <button
             onClick={loadData}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-widest rounded-xl transition-all"
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-button uppercase tracking-widest rounded-xl transition-all"
           >
             Tentar Novamente
           </button>
@@ -251,7 +251,7 @@ export const PublicEspecificacoesView: React.FC<PublicEspecificacoesViewProps> =
                               <>
                                 <button
                                   onClick={() => handleApprove(item.id)}
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 ${
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 ${
                                     isApproved
                                       ? 'bg-emerald-500 text-[#070913] shadow-lg shadow-emerald-500/20'
                                       : 'bg-white/5 border border-white/5 text-slate-300 hover:bg-white/10'
@@ -262,7 +262,7 @@ export const PublicEspecificacoesView: React.FC<PublicEspecificacoesViewProps> =
                                 </button>
                                 <button
                                   onClick={() => openRefusalModal(item.id)}
-                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 ${
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 ${
                                     isRefused
                                       ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
                                       : 'bg-white/5 border border-white/5 text-slate-300 hover:bg-white/10'
@@ -307,13 +307,13 @@ export const PublicEspecificacoesView: React.FC<PublicEspecificacoesViewProps> =
                 <button
                   type="button"
                   onClick={() => { setRefusalModalOpen(false); setSelectedItemId(null); }}
-                  className="px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl text-xs font-bold transition-all"
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl text-button font-bold transition-all"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-900/30 transition-all active:scale-95"
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-button font-bold shadow-lg shadow-rose-900/30 transition-all active:scale-95"
                 >
                   Registrar Recusa
                 </button>

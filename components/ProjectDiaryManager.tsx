@@ -598,7 +598,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                             <div className="relative">
                                 <button
                                     onClick={() => setIsProjectSelectorOpen(!isProjectSelectorOpen)}
-                                    className="flex items-center gap-2 text-xs font-medium text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-all border border-indigo-100"
+                                    className="flex items-center gap-2 text-button font-medium text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-all border border-indigo-100"
                                 >
                                     {settings.name || 'Selecionar Obra'}
                                     <ChevronRight className={`w-3 h-3 transition-transform ${isProjectSelectorOpen ? 'rotate-90' : ''}`} />
@@ -619,7 +619,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                             onLoadProject(p.id, 'project-diary');
                                                             setIsProjectSelectorOpen(false);
                                                         }}
-                                                        className={`w-full text-left px-4 py-2 text-xs font-medium hover:bg-gray-50 flex items-center justify-between group ${p.id === settings.id ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-600'}`}
+                                                        className={`w-full text-left px-4 py-2 text-button font-medium hover:bg-gray-50 flex items-center justify-between group ${p.id === settings.id ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-600'}`}
                                                     >
                                                         <span className="truncate">{p.name}</span>
                                                         {p.id === settings.id && <CheckCircle2 className="w-4 h-4 text-indigo-500" />}
@@ -691,7 +691,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                             });
                                                             setIsLinkingPlanningOpen(false);
                                                         }}
-                                                        className={`w-full text-left px-4 py-3 rounded-xl text-xs font-medium transition-all flex items-center justify-between group ${isManual || isAuto
+                                                        className={`w-full text-left px-4 py-3 rounded-xl text-button font-medium transition-all flex items-center justify-between group ${isManual || isAuto
                                                             ? 'bg-indigo-50 text-indigo-600 border border-indigo-100'
                                                             : 'hover:bg-gray-50 text-gray-600 border border-transparent'
                                                             }`}
@@ -768,7 +768,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                     {!isAdding && (
                         <button
                             onClick={handleAddNew}
-                            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
+                            className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
                         >
                             <Plus className="w-5 h-5" />
                             NOVA ENTRADA
@@ -839,13 +839,13 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => { setIsAdding(false); setEditingId(null); resetForm(); }}
-                                    className="px-6 py-2.5 bg-white text-gray-500 rounded-xl font-medium text-xs uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-100"
+                                    className="px-6 py-2.5 bg-white text-gray-500 rounded-xl font-medium text-button uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-100"
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     onClick={handleSave}
-                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-medium text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
                                 >
                                     <Save className="w-5 h-5" />
                                     Salvar Registro
@@ -855,9 +855,9 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
 
                         {/* Editor Tabs */}
                         <div className="flex border-b border-gray-100 bg-white">
-                            <button onClick={() => setActiveTab('geral')} className={`px-8 py-4 text-xs font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'geral' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Dados Gerais</button>
-                            <button onClick={() => setActiveTab('comentarios')} className={`px-8 py-4 text-xs font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'comentarios' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Comentários</button>
-                            <button onClick={() => setActiveTab('arquivos')} className={`px-8 py-4 text-xs font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'arquivos' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Arquivos ({(formData.images?.length || 0) + (formData.videos?.length || 0) + (formData.documents?.length || 0)})</button>
+                            <button onClick={() => setActiveTab('geral')} className={`px-8 py-4 text-form-input font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'geral' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Dados Gerais</button>
+                            <button onClick={() => setActiveTab('comentarios')} className={`px-8 py-4 text-button font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'comentarios' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Comentários</button>
+                            <button onClick={() => setActiveTab('arquivos')} className={`px-8 py-4 text-button font-medium uppercase tracking-widest border-b-2 transition-all ${activeTab === 'arquivos' ? 'border-indigo-600 text-indigo-600 bg-indigo-50/30' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Arquivos ({(formData.images?.length || 0) + (formData.videos?.length || 0) + (formData.documents?.length || 0)})</button>
                         </div>
 
                         <div className="p-8">
@@ -880,20 +880,20 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                             <table className="w-full text-left border-collapse">
                                                 <thead>
                                                     <tr className="bg-gray-50 border-b border-gray-100">
-                                                        <th className="px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-widest">Turno</th>
-                                                        <th className="px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-widest">Tempo</th>
-                                                        <th className="px-6 py-3 text-xs font-medium text-gray-400 uppercase tracking-widest">Condição</th>
+                                                        <th className="px-6 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest">Turno</th>
+                                                        <th className="px-6 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest">Tempo</th>
+                                                        <th className="px-6 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest">Condição</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-50">
                                                     {(formData.weatherShifts || []).map((shift, idx) => (
                                                         <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                                                            <td className="px-6 py-4 text-xs font-medium text-gray-600">{shift.turn}</td>
+                                                            <td className="px-6 py-4 text-table-body font-medium text-gray-600">{shift.turn}</td>
                                                             <td className="px-6 py-4">
                                                                 <select
                                                                     value={shift.weather}
                                                                     onChange={(e) => handleWeatherShiftChange(idx, 'weather', e.target.value)}
-                                                                    className="bg-transparent border-none outline-none text-xs font-medium text-gray-700 bg-gray-50 px-3 py-1.5 rounded-lg focus:bg-white focus:ring-1 focus:ring-indigo-100 transition-all"
+                                                                    className="bg-transparent border-none outline-none text-form-input font-medium text-gray-700 bg-gray-50 px-3 py-1.5 rounded-lg focus:bg-white focus:ring-1 focus:ring-indigo-100 transition-all"
                                                                 >
                                                                     {['Claro', 'Nublado', 'Chuva Leve', 'Chuva Forte', 'Instável'].map(w => <option key={w} value={w}>{w}</option>)}
                                                                 </select>
@@ -968,7 +968,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                     handleLaborChange(idx, 'category', e.target.value);
                                                                     setActiveLaborSearchIdx(idx);
                                                                 }}
-                                                                className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-xs font-medium focus:ring-2 focus:ring-indigo-100 outline-none mt-1"
+                                                                className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-form-input font-medium focus:ring-2 focus:ring-indigo-100 outline-none mt-1"
                                                             />
                                                             
                                                             {activeLaborSearchIdx === idx && (
@@ -1090,7 +1090,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                     type="number"
                                                                     value={lab.quantity}
                                                                     onChange={(e) => handleLaborChange(idx, 'quantity', parseInt(e.target.value) || 0)}
-                                                                    className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-xs font-medium focus:ring-2 focus:ring-indigo-100 outline-none"
+                                                                    className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-form-input font-medium focus:ring-2 focus:ring-indigo-100 outline-none"
                                                                 />
                                                             </div>
                                                             <div className="flex-1 flex items-center gap-2">
@@ -1100,7 +1100,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                     placeholder="8"
                                                                     value={lab.hours || ''}
                                                                     onChange={(e) => handleLaborChange(idx, 'hours', parseFloat(e.target.value) || 0)}
-                                                                    className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-xs font-medium focus:ring-2 focus:ring-indigo-100 outline-none"
+                                                                    className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-form-input font-medium focus:ring-2 focus:ring-indigo-100 outline-none"
                                                                 />
                                                             </div>
                                                         </div>
@@ -1157,7 +1157,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                                 handleActivityChange(idx, 'itemId', '');
                                                                             }
                                                                         }}
-                                                                        className="w-full bg-indigo-50/50 border border-indigo-100 outline-none focus:bg-white focus:ring-1 focus:ring-indigo-100 p-2.5 rounded-xl text-xs font-semibold text-indigo-700 transition-all"
+                                                                        className="w-full bg-indigo-50/50 border border-indigo-100 outline-none focus:bg-white focus:ring-1 focus:ring-indigo-100 p-2.5 rounded-xl text-form-input font-semibold text-indigo-700 transition-all"
                                                                     >
                                                                         <option value="">-- Selecione um item --</option>
                                                                         {linkedSchedule.itemSchedules.map(is => {
@@ -1314,7 +1314,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                             <Sun className="w-3 h-3" />
                                             <span className="text-xs font-medium uppercase tracking-widest">{entry.weather}</span>
                                         </div>
-                                        <div className={`px-2 py-1 rounded-lg text-xs font-medium uppercase tracking-widest border ${entry.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                        <div className={`px-2 py-1 rounded-lg text-button font-medium uppercase tracking-widest border ${entry.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
                                             entry.status === 'Recusado' ? 'bg-red-50 text-red-600 border-red-100' :
                                                 'bg-indigo-50 text-indigo-600 border-indigo-100'
                                             }`}>
@@ -1367,11 +1367,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                         <table className="w-full text-left">
                             <thead className="bg-gray-50 border-b border-gray-100">
                                 <tr>
-                                    <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest w-[120px]">Data</th>
-                                    <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest">Relato Curto</th>
-                                    <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest w-[150px]">Status</th>
-                                    <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest w-[100px] text-center">Clima</th>
-                                    <th className="px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest w-[120px] text-center">Mídia</th>
+                                    <th className="px-6 py-4 text-table-header font-medium text-gray-400 uppercase tracking-widest w-[120px]">Data</th>
+                                    <th className="px-6 py-4 text-table-header font-medium text-gray-400 uppercase tracking-widest">Relato Curto</th>
+                                    <th className="px-6 py-4 text-table-header font-medium text-gray-400 uppercase tracking-widest w-[150px]">Status</th>
+                                    <th className="px-6 py-4 text-table-header font-medium text-gray-400 uppercase tracking-widest w-[100px] text-center">Clima</th>
+                                    <th className="px-6 py-4 text-table-header font-medium text-gray-400 uppercase tracking-widest w-[120px] text-center">Mídia</th>
                                     <th className="px-6 py-4 text-right"></th>
                                 </tr>
                             </thead>
@@ -1400,7 +1400,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium uppercase tracking-wider ${entry.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600' :
+                                            <span className={`px-2.5 py-1 rounded-full text-button font-medium uppercase tracking-wider ${entry.status === 'Aprovado' ? 'bg-emerald-50 text-emerald-600' :
                                                 entry.status === 'Recusado' ? 'bg-red-50 text-red-600' : 'bg-indigo-50 text-indigo-600'
                                                 }`}>
                                                 {entry.status || 'Rascunho'}

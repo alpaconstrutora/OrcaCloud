@@ -579,7 +579,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
               type="datetime-local"
               value={dataAgendamento}
               onChange={(e) => setDataAgendamento(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500"
             />
           </div>
           <button
@@ -623,7 +623,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
             {antesFoto ? (
               <div className="relative rounded-[18px] overflow-hidden border border-slate-200 aspect-video shadow-sm">
                 <img src={antesFoto} alt="Antes" className="w-full h-full object-cover" />
-                <button onClick={() => setAntesFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-xs flex items-center justify-center">×</button>
+                <button onClick={() => setAntesFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-button flex items-center justify-center">×</button>
               </div>
             ) : (
               <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-[10px] uppercase font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
@@ -637,7 +637,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
             {depoisFoto ? (
               <div className="relative rounded-[18px] overflow-hidden border border-slate-200 aspect-video shadow-sm">
                 <img src={depoisFoto} alt="Depois" className="w-full h-full object-cover" />
-                <button onClick={() => setDepoisFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-xs flex items-center justify-center">×</button>
+                <button onClick={() => setDepoisFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-button flex items-center justify-center">×</button>
               </div>
             ) : (
               <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-[10px] uppercase font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
@@ -661,7 +661,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
         ) : (
           <button
             onClick={() => setMostrarAssinatura(true)}
-            className="w-full py-3 bg-white border border-slate-200 hover:bg-slate-50/50 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-600 shadow-sm transition-colors active:scale-98"
+            className="w-full py-3 bg-white border border-slate-200 hover:bg-slate-50/50 rounded-2xl font-black text-button uppercase tracking-widest text-slate-600 shadow-sm transition-colors active:scale-98"
           >
             ✍ Colher Assinatura Touch
           </button>
@@ -682,7 +682,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
               placeholder="Nome de quem está assinando"
               value={assinaturaNome}
               onChange={(e) => setAssinaturaNome(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
             />
 
             <canvas
@@ -702,14 +702,14 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
             <div className="flex gap-3 pt-2">
               <button
                 onClick={clearCanvas}
-                className="flex-1 py-2 bg-slate-100 text-slate-505 font-bold text-xs rounded-xl border border-slate-200 transition-colors hover:bg-slate-200"
+                className="flex-1 py-2 bg-slate-100 text-slate-505 font-bold text-button rounded-xl border border-slate-200 transition-colors hover:bg-slate-200"
               >
                 Limpar
               </button>
               <button
                 onClick={saveSignature}
                 disabled={!assinaturaNome}
-                className="flex-1 py-2 bg-teal-500 text-white font-bold text-xs rounded-xl disabled:opacity-50 transition-colors hover:bg-teal-600"
+                className="flex-1 py-2 bg-teal-500 text-white font-bold text-button rounded-xl disabled:opacity-50 transition-colors hover:bg-teal-600"
               >
                 Confirmar
               </button>
@@ -766,7 +766,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
               <select
                 value={recorrenciaMeses}
                 onChange={(e) => setRecorrenciaMeses(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-teal-500 mt-1"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 mt-1"
               >
                 <option value="">Não programar recorrência</option>
                 <option value="1">Daqui a 1 mês (Mensal)</option>
@@ -779,20 +779,20 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
             <button
               onClick={() => handleUpdate('CONCLUIDO')}
-              className="w-full py-3.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-black text-xs uppercase tracking-widest rounded-full shadow-md shadow-teal-500/10 transition-all active:scale-[0.98]"
+              className="w-full py-3.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-black text-button uppercase tracking-widest rounded-full shadow-md shadow-teal-500/10 transition-all active:scale-[0.98]"
             >
               🏁 Finalizar e Concluir Serviço
             </button>
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => handleUpdate(status === 'EM_ANDAMENTO' ? 'PENDENTE' : 'EM_ANDAMENTO')}
-                className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl border border-slate-200 transition-colors"
+                className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-button rounded-xl border border-slate-200 transition-colors"
               >
                 {status === 'EM_ANDAMENTO' ? '⏸ Pausar' : '▶ Iniciar Trabalho'}
               </button>
               <button
                 onClick={() => handleUpdate('BLOQUEADO')}
-                className="py-2.5 bg-red-50 hover:bg-red-100 text-red-500 font-bold text-xs rounded-xl border border-red-200/50 transition-colors"
+                className="py-2.5 bg-red-50 hover:bg-red-100 text-red-500 font-bold text-button rounded-xl border border-red-200/50 transition-colors"
               >
                 ⚠️ Bloqueado / Parado
               </button>
@@ -807,7 +807,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
             </div>
             <button
               onClick={generateComprovantePDF}
-              className="w-full py-3.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-black text-xs uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 flex items-center justify-center gap-1.5 active:scale-95"
+              className="w-full py-3.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-black text-button uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 flex items-center justify-center gap-1.5 active:scale-95"
             >
               📄 Enviar Comprovante via WhatsApp
             </button>

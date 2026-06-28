@@ -112,10 +112,10 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
             <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
                     <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)}
-                        className="bg-transparent text-xs font-bold text-slate-600 outline-none px-2" />
+                        className="bg-transparent text-form-input font-bold text-slate-600 outline-none px-2" />
                     <span className="text-slate-300 font-bold text-xs">até</span>
                     <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)}
-                        className="bg-transparent text-xs font-bold text-slate-600 outline-none px-2" />
+                        className="bg-transparent text-form-input font-bold text-slate-600 outline-none px-2" />
                 </div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{workingDays} dias úteis</span>
                 <div className="flex items-center gap-1.5 ml-auto">
@@ -125,7 +125,7 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                         { id: 'teams', label: 'Por Equipe', icon: Shield },
                     ] as const).map(({ id, label, icon: Icon }) => (
                         <button key={id} onClick={() => setView(id as any)}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${view === id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-form-input font-bold transition-all ${view === id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
                             <Icon className="w-3.5 h-3.5" /> {label}
                         </button>
                     ))}
@@ -240,7 +240,7 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                                     Encontramos {legacyCount} colaboradores no sistema antigo. Importe-os agora!
                                 </p>
                                 <button onClick={onMigrate}
-                                    className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200">
+                                    className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold text-button uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200">
                                     Importar {legacyCount} Colaboradores
                                 </button>
                             </div>
@@ -281,8 +281,8 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                                                 <span className="text-xs font-bold text-slate-800">{est.name}</span>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-right text-xs font-bold text-slate-500">{formatCurrencyFull(est.estimatedCost)}</td>
-                                        <td className="px-4 py-3 text-right text-xs font-black text-slate-900">{real ? formatCurrencyFull(real.cost) : '—'}</td>
+                                        <td className="px-4 py-3 text-right text-table-body font-bold text-slate-500">{formatCurrencyFull(est.estimatedCost)}</td>
+                                        <td className="px-4 py-3 text-right text-table-body font-black text-slate-900">{real ? formatCurrencyFull(real.cost) : '—'}</td>
                                         <td className="px-4 py-3 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -294,7 +294,7 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-right text-xs font-bold text-slate-600">
+                                        <td className="px-4 py-3 text-right text-table-body font-bold text-slate-600">
                                             {real ? `${real.hours.toFixed(1)}h` : '—'}
                                         </td>
                                     </tr>
@@ -303,13 +303,13 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, legacyCount, 
                         </tbody>
                         <tfoot className="bg-slate-50/80 border-t border-slate-100">
                             <tr>
-                                <td className="px-6 py-3 text-xs font-black text-slate-700">TOTAL</td>
-                                <td className="px-4 py-3 text-right text-xs font-black text-slate-700">{formatCurrencyFull(totalEstimated)}</td>
-                                <td className="px-4 py-3 text-right text-xs font-black text-indigo-700">{formatCurrencyFull(totalReal)}</td>
-                                <td className="px-4 py-3 text-right text-xs font-black text-slate-700">
+                                <td className="px-6 py-3 text-table-body font-black text-slate-700">TOTAL</td>
+                                <td className="px-4 py-3 text-right text-table-body font-black text-slate-700">{formatCurrencyFull(totalEstimated)}</td>
+                                <td className="px-4 py-3 text-right text-table-body font-black text-indigo-700">{formatCurrencyFull(totalReal)}</td>
+                                <td className="px-4 py-3 text-right text-table-body font-black text-slate-700">
                                     {totalEstimated > 0 ? `${realizationPct.toFixed(1)}%` : '—'}
                                 </td>
-                                <td className="px-4 py-3 text-right text-xs font-black text-slate-700">
+                                <td className="px-4 py-3 text-right text-table-body font-black text-slate-700">
                                     {(summary?.totalHours || 0).toFixed(0)}h
                                 </td>
                             </tr>

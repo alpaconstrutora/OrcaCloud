@@ -148,7 +148,7 @@ const QrCodeForm: React.FC<QrFormProps> = ({ orgId, projects, onClose, onSaved }
                     <InputGroup label="Expiração (opcional)">
                         <input type="datetime-local" value={form.expires_at || ''} onChange={e => setForm(p => ({ ...p, expires_at: e.target.value || undefined }))} className={inputCls} />
                     </InputGroup>
-                    <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-xs font-bold text-emerald-800">
+                    <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-form-input font-bold text-emerald-800">
                         O token único será gerado automaticamente pelo banco de dados.
                     </div>
                 </div>
@@ -248,7 +248,7 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
                 <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
                     {([['balances', 'Saldos', Clock], ['entries', 'Movimentações', TrendingUp], ['qrcodes', 'QR Codes', QrCode]] as const).map(([id, label, Icon]) => (
                         <button key={id} onClick={() => setView(id)}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
                             <Icon className="w-3.5 h-3.5" />{label}
                         </button>
                     ))}
@@ -256,11 +256,11 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
                 <div className="flex items-center gap-2">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
+                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
                     </div>
                     {view === 'entries' && (
                         <div className="relative">
-                            <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none appearance-none">
+                            <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none appearance-none">
                                 <option value="">Todos</option>
                                 {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                             </select>
@@ -269,7 +269,7 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
                     )}
                     <button
                         onClick={() => view === 'qrcodes' ? setShowQrForm(true) : setShowEntryForm(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold text-xs shadow-md"
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-bold text-button shadow-md"
                     >
                         <Plus className="w-3.5 h-3.5" />
                         {view === 'qrcodes' ? 'Novo QR Code' : 'Lançar Horas'}
@@ -308,8 +308,8 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
                                                     {b.saldo_horas > 0 ? '+' : ''}{b.saldo_horas.toFixed(1)}h
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-3 text-xs text-slate-500 font-medium">{b.limite_maximo}h</td>
-                                            <td className="px-4 py-3 text-xs text-slate-500 font-medium">{b.limite_negativo}h</td>
+                                            <td className="px-4 py-3 text-table-body text-slate-500 font-medium">{b.limite_maximo}h</td>
+                                            <td className="px-4 py-3 text-table-body text-slate-500 font-medium">{b.limite_negativo}h</td>
                                             <td className="px-4 py-3">
                                                 {isNeg ? <span className="flex items-center gap-1 text-xs font-black text-rose-600"><AlertTriangle className="w-3 h-3" /> Negativo</span>
                                                 : isHigh ? <span className="flex items-center gap-1 text-xs font-black text-amber-600"><AlertTriangle className="w-3 h-3" /> Próximo do limite</span>

@@ -110,7 +110,7 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, o
                         <button
                             onClick={handleCheckStatus}
                             disabled={checking}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-purple-200 text-purple-700 text-xs font-bold rounded-xl hover:bg-purple-50 transition-all"
+                            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-purple-200 text-purple-700 text-button font-bold rounded-xl hover:bg-purple-50 transition-all"
                         >
                             <RefreshCw className={`w-3.5 h-3.5 ${checking ? 'animate-spin' : ''}`} />
                             Verificar Status
@@ -144,7 +144,7 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, o
                                 value={signerEmail}
                                 onChange={(e) => setSignerEmail(e.target.value)}
                                 placeholder="email@cliente.com"
-                                className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-xs font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
+                                className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-form-input font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
                             />
                         </div>
                         <div>
@@ -154,7 +154,7 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, o
                                 value={signerPhone}
                                 onChange={(e) => setSignerPhone(e.target.value)}
                                 placeholder="(11) 99999-9999"
-                                className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-xs font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
+                                className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-form-input font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
                             />
                         </div>
                     </div>
@@ -168,7 +168,7 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, o
                     <button
                         onClick={handleSend}
                         disabled={loading}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white text-xs font-black rounded-xl hover:bg-purple-700 transition-all disabled:opacity-50 uppercase tracking-wide shadow-md shadow-purple-900/10"
+                        className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white text-button font-black rounded-xl hover:bg-purple-700 transition-all disabled:opacity-50 uppercase tracking-wide shadow-md shadow-purple-900/10"
                     >
                         <Send className="w-3.5 h-3.5" />
                         {loading ? 'Enviando...' : 'Enviar para Assinatura'}

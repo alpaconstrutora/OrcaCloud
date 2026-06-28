@@ -172,7 +172,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                 <div className="flex items-center gap-1.5">
                     <button
                         onClick={() => setActiveTab('contribuicoes')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-bold uppercase tracking-wider transition-all
                             ${activeTab === 'contribuicoes'
                                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20'
                                 : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
@@ -182,7 +182,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                     </button>
                     <button
                         onClick={() => setActiveTab('inss')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-bold uppercase tracking-wider transition-all
                             ${activeTab === 'inss'
                                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20'
                                 : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
@@ -192,7 +192,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                     </button>
                     <button
                         onClick={() => setActiveTab('folha')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-bold uppercase tracking-wider transition-all
                             ${activeTab === 'folha'
                                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20'
                                 : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
@@ -276,7 +276,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={handleReset}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-bold transition-all"
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl text-button font-bold transition-all"
                                     title="Restaurar alíquotas padrão"
                                 >
                                     <RotateCcw className="w-3.5 h-3.5" />
@@ -285,7 +285,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                                 <button
                                     onClick={handleSave}
                                     disabled={!dirty}
-                                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all
+                                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-form-label font-black uppercase tracking-wider transition-all
                                         ${dirty
                                             ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20 hover:bg-indigo-700 active:scale-95'
                                             : saved
@@ -615,7 +615,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
 
                                 <button
                                     onClick={() => { setCalcGross(''); setCalcGrossNum(0); setManualInput(false); }}
-                                    className="w-full text-xs font-bold text-slate-400 hover:text-slate-600 flex items-center justify-center gap-1 py-2 transition-colors"
+                                    className="w-full text-button font-bold text-slate-400 hover:text-slate-600 flex items-center justify-center gap-1 py-2 transition-colors"
                                 >
                                     <X className="w-3.5 h-3.5" />
                                     Limpar

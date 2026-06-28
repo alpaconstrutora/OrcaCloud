@@ -79,7 +79,7 @@ const BrokerEvents: React.FC<BrokerEventsProps> = ({ brokerEmail }) => {
             <div className="flex gap-2">
                 {([['proximos', 'Próximos'], ['inscritos', 'Inscritos'], ['passados', 'Passados']] as const).map(([id, label]) => (
                     <button key={id} onClick={() => setFilter(id)}
-                        className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${filter === id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'}`}>
+                        className={`px-5 py-2.5 rounded-xl text-button font-black uppercase tracking-widest transition-all ${filter === id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'}`}>
                         {label}
                     </button>
                 ))}
@@ -147,7 +147,7 @@ const BrokerEvents: React.FC<BrokerEventsProps> = ({ brokerEmail }) => {
                                                     <CheckCircle2 className="w-4 h-4" /> Inscrito
                                                 </span>
                                                 <button onClick={() => handleToggleRegister(event)}
-                                                    className="text-xs font-bold text-red-400 hover:text-red-600 transition-colors">
+                                                    className="text-button font-bold text-red-400 hover:text-red-600 transition-colors">
                                                     Cancelar
                                                 </button>
                                             </div>
@@ -157,7 +157,7 @@ const BrokerEvents: React.FC<BrokerEventsProps> = ({ brokerEmail }) => {
                                             </span>
                                         ) : (
                                             <button onClick={() => handleToggleRegister(event)}
-                                                className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
+                                                className="w-full py-2.5 bg-indigo-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
                                                 Inscrever-se
                                             </button>
                                         )}

@@ -870,7 +870,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           {onBack && (
             <button
               onClick={onBack}
-              className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-xs active:scale-95 transition-transform hover:bg-slate-50"
+              className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-button active:scale-95 transition-transform hover:bg-slate-50"
             >
               ⬅
             </button>
@@ -893,7 +893,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                 await loadListings(cityId);
                 await loadCityRules(cityId);
               }}
-              className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-wider shadow-xs focus:outline-none focus:ring-1 focus:ring-slate-500 cursor-pointer"
+              className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-form-input font-bold uppercase tracking-wider shadow-xs focus:outline-none focus:ring-1 focus:ring-slate-500 cursor-pointer"
             >
               {cities.map((city) => (
                 <option key={city.id} value={city.id}>
@@ -906,7 +906,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           {/* Botão de regras */}
           <button
             onClick={() => setIsRulesModalOpen(true)}
-            className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-black uppercase tracking-wider shadow-xs transition-all flex items-center gap-1.5"
+            className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-button font-black uppercase tracking-wider shadow-xs transition-all flex items-center gap-1.5"
             title="Configurar regras de padrão construtivo e tipologias da praça ativa"
           >
             ⚙️ Regras da Praça
@@ -1121,7 +1121,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                   {/* Botão de importação de concorrência */}
                   <button
                     onClick={() => setIsImportModalOpen(true)}
-                    className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-100 rounded-xl text-xs font-black text-emerald-700 uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
+                    className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-100 rounded-xl text-button font-black text-emerald-700 uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
                   >
                     📥 Importar Planilha de Concorrência
                   </button>
@@ -1145,7 +1145,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                             value={studyName}
                             onChange={(e) => setStudyName(e.target.value)}
                             placeholder="Ex: Terreno Centro - Cambuí"
-                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                           />
                         </div>
 
@@ -1156,7 +1156,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                             value={terrainArea}
                             onChange={(e) => setTerrainArea(e.target.value)}
                             placeholder="Ex: 1500"
-                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                           />
                           <span className="text-[9px] text-slate-400 font-bold block leading-normal mt-0.5">ℹ️ Dimensão usada no cálculo do VGV e Viabilidade (abstrata no mapa)</span>
                         </div>
@@ -1166,7 +1166,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                           <select
                             value={analysisRadius}
                             onChange={(e) => setAnalysisRadius(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                           >
                             <option value="500">500m (Entorno Direto)</option>
                             <option value="1000">1km (Raio Principal)</option>
@@ -1179,7 +1179,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                         <button
                           onClick={handleAnalyzeTerrain}
                           disabled={analyzing}
-                          className="w-full py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
+                          className="w-full py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
                         >
                           {analyzing ? (
                             <>
@@ -1236,7 +1236,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                             <button
                               onClick={handleSaveStudy}
                               disabled={analyzing}
-                              className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95"
+                              className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95"
                             >
                               💾 Salvar Estudo na Organização
                             </button>
@@ -1244,7 +1244,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                             <button
                               onClick={handleExportPDF}
                               disabled={analyzing}
-                              className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
+                              className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
                             >
                               📄 Exportar Relatório PDF
                             </button>
@@ -1253,7 +1253,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                               <button
                                 onClick={handleCreateViability}
                                 disabled={analyzing}
-                                className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
+                                className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
                               >
                                 🏗️ Criar Viabilidade (IMOVIB)
                               </button>
@@ -1325,7 +1325,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       placeholder="🔍 Buscar por endereço, tipo, fonte..."
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                     />
                     
                     <div className="flex gap-2">

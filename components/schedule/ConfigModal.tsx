@@ -226,7 +226,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                                         onClick={() => onUpdate({ replanMode: mode.id as ReplanMode })}
                                         className={`p-3 rounded-xl border-2 text-left transition-all ${schedule.replanMode === mode.id || (!schedule.replanMode && mode.id === ReplanMode.AFFECTED_TASK) ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-200'}`}
                                     >
-                                        <div className="text-xs font-bold text-gray-800">{mode.label}</div>
+                                        <div className="text-button font-bold text-gray-800">{mode.label}</div>
                                         <div className="text-[10px] text-gray-400">{mode.desc}</div>
                                     </button>
                                 ))}

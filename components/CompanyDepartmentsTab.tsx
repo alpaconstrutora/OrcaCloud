@@ -81,12 +81,12 @@ const InlineForm: React.FC<InlineFormProps> = ({ initial = EMPTY_FORM, onSave, o
             </div>
             <div className="flex items-center justify-end gap-2 pt-1">
                 <button type="button" onClick={onCancel}
-                    className="px-3 py-1.5 text-xs font-black uppercase text-gray-500 hover:text-gray-700">
+                    className="px-3 py-1.5 text-button font-black uppercase text-gray-500 hover:text-gray-700">
                     Cancelar
                 </button>
                 <button type="button" disabled={saving || !form.nome.trim()}
                     onClick={() => onSave(form)}
-                    className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-blue-700 disabled:opacity-50 active:scale-95">
+                    className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 disabled:opacity-50 active:scale-95">
                     {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                     Salvar
                 </button>
@@ -334,13 +334,13 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
                 <div className="flex items-center gap-2">
                     {depts.length === 0 && (
                         <button onClick={handleSeed} disabled={seeding}
-                            className="flex items-center gap-1.5 px-4 py-2 border border-blue-200 bg-blue-50 text-blue-600 rounded-xl font-black text-xs uppercase tracking-wide hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-60">
+                            className="flex items-center gap-1.5 px-4 py-2 border border-blue-200 bg-blue-50 text-blue-600 rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-60">
                             {seeding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                             Pré-carregar estrutura
                         </button>
                     )}
                     <button onClick={openAddRoot}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
+                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
                         <Plus className="w-3.5 h-3.5" /> Novo Departamento
                     </button>
                 </div>
@@ -369,7 +369,7 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
                     <Layers className="w-10 h-10 opacity-30" />
                     <p className="text-sm font-medium">Nenhum departamento cadastrado.</p>
                     <button onClick={handleSeed} disabled={seeding}
-                        className="flex items-center gap-2 px-5 py-2.5 border border-blue-200 bg-blue-50 text-blue-600 rounded-xl font-black text-xs uppercase tracking-wide hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-60">
+                        className="flex items-center gap-2 px-5 py-2.5 border border-blue-200 bg-blue-50 text-blue-600 rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-100 transition-all active:scale-95 disabled:opacity-60">
                         {seeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                         Pré-carregar estrutura padrão
                     </button>

@@ -217,7 +217,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                             </button>
                             <button
                                 onClick={() => setPricingModalOpen(true)}
-                                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
+                                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-2xl font-black text-button uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
                             >
                                 <BrainCircuit className="w-4 h-4" />
                                 Inteligência de Precificação
@@ -384,7 +384,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                                 onChange={e =>
                                                     handleInlineUpdate(inst.id, 'position_type', e.target.value)
                                                 }
-                                                className="text-xs font-bold bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-blue-400 cursor-pointer"
+                                                className="text-form-input font-bold bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-blue-400 cursor-pointer"
                                             >
                                                 {POSITION_OPTIONS.map(o => (
                                                     <option key={o} value={o}>{o}</option>
@@ -399,7 +399,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                                 onChange={e =>
                                                     handleInlineUpdate(inst.id, 'sun_orientation', e.target.value)
                                                 }
-                                                className="text-xs font-bold bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-blue-400 cursor-pointer"
+                                                className="text-form-input font-bold bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-blue-400 cursor-pointer"
                                             >
                                                 {SUN_OPTIONS.map(o => (
                                                     <option key={o} value={o}>{o}</option>
@@ -414,7 +414,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                                 onChange={e =>
                                                     handleInlineUpdate(inst.id, 'status', e.target.value)
                                                 }
-                                                className={`text-xs font-bold border rounded-lg px-2 py-1 focus:outline-none cursor-pointer ${STATUS_COLORS[inst.status] || 'bg-slate-100 text-slate-700'} border-transparent`}
+                                                className={`text-table-body font-bold border rounded-lg px-2 py-1 focus:outline-none cursor-pointer ${STATUS_COLORS[inst.status] || 'bg-slate-100 text-slate-700'} border-transparent`}
                                             >
                                                 {STATUS_OPTIONS.map(o => (
                                                     <option key={o} value={o}>{o}</option>

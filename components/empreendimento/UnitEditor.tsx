@@ -245,7 +245,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         <input className={inputCls} placeholder="Comum m²" type="number" step="0.01" value={form.common_area} onChange={e => setForm(p => ({ ...p, common_area: e.target.value }))} />
         <input className={inputCls} placeholder="Vagas" type="number" value={form.parking_spaces} onChange={e => setForm(p => ({ ...p, parking_spaces: e.target.value }))} />
         <input className={inputCls} placeholder="Preço R$" type="number" step="0.01" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} />
-        <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5">
+        <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-form-input uppercase tracking-wider flex items-center justify-center gap-1.5">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           Add
         </button>
@@ -325,7 +325,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
               <button
                 type="submit"
                 disabled={generating || genTotal === 0}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2"
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-button uppercase tracking-wider flex items-center gap-2"
               >
                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                 Gerar {genTotal > 0 ? `${genTotal} unidades` : 'Unidades'}

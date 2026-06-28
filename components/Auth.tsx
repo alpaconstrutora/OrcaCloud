@@ -153,7 +153,7 @@ const Auth: React.FC<AuthProps> = ({ group = ProfileGroup.USER, onBack }) => {
                                             setErrorMessage(null);
                                             setSuccessMessage(null);
                                         }}
-                                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                        className="text-button text-blue-600 hover:text-blue-800 font-medium"
                                     >
                                         Esqueceu a senha?
                                     </button>

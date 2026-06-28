@@ -232,7 +232,7 @@ export const LastPlannerPanel: React.FC<Props> = ({ organizationId, projectId, h
                     <button
                         key={key}
                         onClick={() => setTab(key)}
-                        className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${tab === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        className={`px-3 py-1.5 rounded-md text-button font-semibold transition-all ${tab === key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                         {label}
                     </button>
@@ -240,7 +240,7 @@ export const LastPlannerPanel: React.FC<Props> = ({ organizationId, projectId, h
             </div>
 
             {error && (
-                <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                <div className="flex items-center gap-2 text-button text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     {error}
                 </div>
@@ -547,7 +547,7 @@ const WeeklyView: React.FC<{
                                 <button
                                     key={r}
                                     onClick={() => setFailureReason(r)}
-                                    className={`w-full text-left text-xs px-3 py-2 rounded-lg border transition-all font-medium ${failureReason === r ? 'border-red-400 bg-red-50 text-red-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                    className={`w-full text-left text-button px-3 py-2 rounded-lg border transition-all font-medium ${failureReason === r ? 'border-red-400 bg-red-50 text-red-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                                 >
                                     {r}
                                 </button>
@@ -557,18 +557,18 @@ const WeeklyView: React.FC<{
                                 value={failureReason}
                                 onChange={e => setFailureReason(e.target.value)}
                                 placeholder="Ou descreva o motivo…"
-                                className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+                                className="w-full text-button border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
                             />
                         </div>
                         <div className="flex justify-end gap-2 pt-1">
-                            <button onClick={() => setFailureModal(null)} className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
+                            <button onClick={() => setFailureModal(null)} className="px-3 py-1.5 text-button font-medium text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
                             <button
                                 onClick={async () => {
                                     await onMarkComplete(failureModal.item, false, failureReason || 'Outro');
                                     setFailureModal(null);
                                 }}
                                 disabled={!failureReason.trim()}
-                                className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-all"
+                                className="px-3 py-1.5 bg-red-600 text-white text-button font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-all"
                             >
                                 Confirmar
                             </button>

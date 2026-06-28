@@ -534,7 +534,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
                             e.preventDefault();
                             setFile(null);
                           }}
-                          className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all active:scale-95"
+                          className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-button font-bold transition-all active:scale-95"
                         >
                           Limpar
                         </button>
@@ -543,7 +543,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
                             e.preventDefault();
                             processFile();
                           }}
-                          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95"
+                          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all shadow-md active:scale-95"
                         >
                           Analisar Planilha
                         </button>
@@ -581,7 +581,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
 
                 <button
                   onClick={handleDownloadTemplate}
-                  className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-2xl text-xs font-bold transition-all"
+                  className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-2xl text-button font-bold transition-all"
                 >
                   <Download className="w-4 h-4 text-gray-500" />
                   Baixar Planilha Modelo
@@ -607,7 +607,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
                     setFile(null);
                     setParsedRows([]);
                   }}
-                  className="text-xs font-bold text-blue-600 hover:underline"
+                  className="text-button font-bold text-blue-600 hover:underline"
                 >
                   Carregar Outro Arquivo
                 </button>
@@ -684,7 +684,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
         <div className="px-8 py-5 border-t border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 text-gray-500 hover:bg-gray-200/50 rounded-xl text-xs font-black uppercase tracking-widest transition-colors"
+            className="px-5 py-2.5 text-gray-500 hover:bg-gray-200/50 rounded-xl text-button font-black uppercase tracking-widest transition-colors"
           >
             Cancelar
           </button>
@@ -693,7 +693,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
             <button
               onClick={handleSubmitImport}
               disabled={isLoading || importSummary.valid === 0}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-button font-black uppercase tracking-widest transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {isLoading ? 'Importando...' : `Importar ${importSummary.valid} Ativos`}

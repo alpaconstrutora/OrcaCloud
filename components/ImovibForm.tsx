@@ -134,7 +134,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
                 <button
                     onClick={handleSubmit}
                     disabled={loading}
-                    className="flex items-center gap-2 bg-indigo-600 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 disabled:opacity-50 active:scale-95 whitespace-nowrap"
+                    className="flex items-center gap-2 bg-indigo-600 text-white px-8 py-4 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200 disabled:opacity-50 active:scale-95 whitespace-nowrap"
                 >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     Salvar Estudo
@@ -353,7 +353,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
                                 onChange={handleChange}
                                 className="mt-1 w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
                             />
-                            <label htmlFor="needs_eiv" className="text-xs font-bold text-gray-700 cursor-pointer">
+                            <label htmlFor="needs_eiv" className="text-form-label font-bold text-gray-700 cursor-pointer">
                                 Exige Estudo de Impacto de Vizinhança (EIV) ou Impacto Ambiental (EIA)
                             </label>
                         </div>

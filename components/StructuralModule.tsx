@@ -40,7 +40,7 @@ const TabBtn: React.FC<{
   <button
     onClick={onClick}
     disabled={disabled}
-    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all
+    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-button font-black uppercase tracking-widest transition-all
       ${active
         ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
         : disabled
@@ -88,7 +88,7 @@ const SteelForm: React.FC<{
 
   return (
     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-7 gap-3 items-end">
-      <label className="text-xs font-bold text-slate-500 flex flex-col gap-1">
+      <label className="text-form-label font-bold text-slate-500 flex flex-col gap-1">
         Tipo
         <select
           value={f.tipo}
@@ -98,7 +98,7 @@ const SteelForm: React.FC<{
           {STEEL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
       </label>
-      <label className="text-xs font-bold text-slate-500 flex flex-col gap-1">
+      <label className="text-form-label font-bold text-slate-500 flex flex-col gap-1">
         Bitola (mm)
         <input
           type="number" step="0.1" value={f.bitolaMm}
@@ -106,7 +106,7 @@ const SteelForm: React.FC<{
           className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white"
         />
       </label>
-      <label className="text-xs font-bold text-slate-500 flex flex-col gap-1">
+      <label className="text-form-label font-bold text-slate-500 flex flex-col gap-1">
         Peso (kg/m)
         <input
           type="number" step="0.001" value={f.pesoLinearKgM}
@@ -114,7 +114,7 @@ const SteelForm: React.FC<{
           className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white"
         />
       </label>
-      <label className="text-xs font-bold text-slate-500 flex flex-col gap-1">
+      <label className="text-form-label font-bold text-slate-500 flex flex-col gap-1">
         Barra (m)
         <input
           type="number" step="0.5" value={f.comprimentoBarraM}
@@ -122,7 +122,7 @@ const SteelForm: React.FC<{
           className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white"
         />
       </label>
-      <label className="text-xs font-bold text-slate-500 flex flex-col gap-1">
+      <label className="text-form-label font-bold text-slate-500 flex flex-col gap-1">
         Custo/kg (R$)
         <input
           type="number" step="0.01" value={f.custoKg}
@@ -130,7 +130,7 @@ const SteelForm: React.FC<{
           className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white"
         />
       </label>
-      <label className="text-xs font-bold text-slate-500 flex flex-col gap-1">
+      <label className="text-form-label font-bold text-slate-500 flex flex-col gap-1">
         Perda (%)
         <input
           type="number" step="1" value={f.perdaPctPadrao}
@@ -142,7 +142,7 @@ const SteelForm: React.FC<{
         <button
           onClick={() => onSubmit(f)}
           disabled={!valid || saving}
-          className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 disabled:bg-slate-300 text-white rounded-lg px-3 py-2 text-xs font-black uppercase tracking-wide"
+          className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 disabled:bg-slate-300 text-white rounded-lg px-3 py-2 text-button font-black uppercase tracking-wide"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Salvar
@@ -235,7 +235,7 @@ const SteelCatalog: React.FC<{ orgId?: string }> = ({ orgId }) => {
         {canEdit && (
           <button
             onClick={startNew}
-            className="flex items-center gap-2 bg-blue-600 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest hover:bg-blue-700"
+            className="flex items-center gap-2 bg-blue-600 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest hover:bg-blue-700"
           >
             <Plus className="w-4 h-4" /> Novo aço
           </button>

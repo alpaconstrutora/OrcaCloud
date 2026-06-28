@@ -51,7 +51,7 @@ const StructuralAssemblies: React.FC<Props> = ({ orgId, projectId, selected, onS
         <p className="text-xs font-black uppercase tracking-widest text-slate-400">Estruturas</p>
         <button
           onClick={startNew}
-          className="flex items-center gap-1 text-xs font-black text-blue-600 hover:text-blue-700"
+          className="flex items-center gap-1 text-button font-black text-blue-600 hover:text-blue-700"
         >
           <Plus className="w-3.5 h-3.5" /> Nova
         </button>

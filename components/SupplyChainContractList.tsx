@@ -235,13 +235,13 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         <div className="flex gap-3 justify-end">
                             <button
                                 onClick={() => setConfirmDeleteId(null)}
-                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-medium text-xs uppercase tracking-widest hover:bg-gray-200 transition-all"
+                                className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-medium text-button uppercase tracking-widest hover:bg-gray-200 transition-all"
                             >
                                 Cancelar
                             </button>
                             <button
                                 onClick={confirmDelete}
-                                className="px-6 py-3 bg-red-600 text-white rounded-xl font-medium text-xs uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-200"
+                                className="px-6 py-3 bg-red-600 text-white rounded-xl font-medium text-button uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-200"
                             >
                                 Excluir
                             </button>
@@ -291,7 +291,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
 
                     <button
                         onClick={onCreateNew}
-                        className="group flex items-center gap-2 px-6 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 hover:shadow-blue-200 font-medium text-xs uppercase tracking-widest active:scale-95 translate-y-0 hover:-translate-y-1"
+                        className="group flex items-center gap-2 px-6 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 hover:shadow-blue-200 font-medium text-button uppercase tracking-widest active:scale-95 translate-y-0 hover:-translate-y-1"
                     >
                         <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
                         Novo Contrato
@@ -299,7 +299,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     {projectId && (
                         <button
                             onClick={() => setLocalShowAll(!localShowAll)}
-                            className={`flex items-center gap-2 px-6 py-4 rounded-2xl border transition-all font-medium text-xs uppercase tracking-widest active:scale-95 ${!localShowAll
+                            className={`flex items-center gap-2 px-6 py-4 rounded-2xl border transition-all font-medium text-button uppercase tracking-widest active:scale-95 ${!localShowAll
                                 ? 'bg-blue-50 border-blue-200 text-blue-700'
                                 : 'bg-white border-gray-100 text-gray-400 hover:text-gray-600'
                                 } `}
@@ -350,7 +350,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="px-6 py-4 bg-white border border-gray-100 rounded-2xl text-xs font-medium text-gray-600 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-all uppercase tracking-widest"
+                        className="px-6 py-4 bg-white border border-gray-100 rounded-2xl text-form-input font-medium text-gray-600 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-all uppercase tracking-widest"
                     >
                         <option value="all">Todos os Status</option>
                         <option value="Rascunho">Rascunho</option>
@@ -373,7 +373,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     <p className="text-gray-400 text-sm mt-2 font-medium max-w-xs mx-auto">Não há contratos registrados para este projeto ainda.</p>
                     <button
                         onClick={onCreateNew}
-                        className="mt-8 px-8 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all font-medium text-xs uppercase tracking-widest shadow-lg shadow-blue-200 active:scale-95"
+                        className="mt-8 px-8 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all font-medium text-button uppercase tracking-widest shadow-lg shadow-blue-200 active:scale-95"
                     >
                         Começar Cadastro
                     </button>
@@ -473,7 +473,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         <th
                                             key={col.field}
                                             onClick={() => handleSort(col.field)}
-                                            className={`px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest cursor-pointer select-none hover:text-blue-500 transition-colors ${col.align}`}
+                                            className={`px-6 py-4 text-form-input font-medium text-gray-400 uppercase tracking-widest cursor-pointer select-none hover:text-blue-500 transition-colors ${col.align}`}
                                         >
                                             <span className="inline-flex items-center gap-0.5">
                                                 {col.label}
@@ -523,7 +523,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         <td className="px-6 py-5">
                                             <StatusBadge status={contract.status} />
                                         </td>
-                                        <td className="px-6 py-5 text-right font-medium text-gray-900 tracking-tighter text-xs">
+                                        <td className="px-6 py-5 text-right font-medium text-gray-900 tracking-tighter text-table-body">
                                             R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                         </td>
                                         <td className="px-6 py-5 text-right">

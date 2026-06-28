@@ -325,7 +325,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ orgId, employees, o
                         </select>
                     </Field>
                     {catalog && (
-                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold ${GRUPO_CFG[catalog.grupo].bg} ${GRUPO_CFG[catalog.grupo].color}`}>
+                        <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-form-input font-bold ${GRUPO_CFG[catalog.grupo].bg} ${GRUPO_CFG[catalog.grupo].color}`}>
                             <Layers className="w-3.5 h-3.5" />
                             Grupo: {GRUPO_CFG[catalog.grupo].label} — {catalog.desc}
                         </div>
@@ -609,7 +609,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                     ['configuracao', 'Configuração'],
                 ] as [MainTab, string][]).map(([v, label]) => (
                     <button key={v} onClick={() => setMainTab(v)}
-                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${mainTab === v ? 'bg-white text-orange-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                        className={`px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all ${mainTab === v ? 'bg-white text-orange-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                         {label}
                     </button>
                 ))}
@@ -679,7 +679,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                         return (
                                             <tr key={tipo} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                                                 <td className="px-4 py-3 font-black text-orange-700">{tipo}</td>
-                                                <td className="px-4 py-3 text-slate-500 text-xs">{catalog?.desc ?? '–'}</td>
+                                                <td className="px-4 py-3 text-slate-500 text-table-body">{catalog?.desc ?? '–'}</td>
                                                 <td className="px-4 py-3">
                                                     {g && <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${g.color} ${g.bg}`}>{g.label}</span>}
                                                 </td>
@@ -721,7 +721,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                         </select>
                         {(filterStatus || filterGrupo) && (
                             <button onClick={() => { setFilterStatus(''); setFilterGrupo(''); }}
-                                className="text-xs font-bold text-slate-500 hover:text-slate-700 flex items-center gap-1">
+                                className="text-button font-bold text-slate-500 hover:text-slate-700 flex items-center gap-1">
                                 <X className="w-3.5 h-3.5" /> Limpar filtros
                             </button>
                         )}
@@ -764,11 +764,11 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                                     <td className="px-4 py-3">
                                                         <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${g.color} ${g.bg}`}>{g.label}</span>
                                                     </td>
-                                                    <td className="px-4 py-3 text-slate-400 text-xs font-mono">
+                                                    <td className="px-4 py-3 text-slate-400 text-table-body font-mono">
                                                         {ev.per_apur || ev.entidade || '–'}
                                                     </td>
                                                     <td className="px-4 py-3"><StatusBadge status={ev.status} /></td>
-                                                    <td className="px-4 py-3 text-slate-400 text-xs">{fmt.date(ev.gerado_em)}</td>
+                                                    <td className="px-4 py-3 text-slate-400 text-table-body">{fmt.date(ev.gerado_em)}</td>
                                                     <td className="px-4 py-3">
                                                         <div className="flex items-center gap-1">
                                                             <button onClick={() => setExpandedEvent(isExpanded ? null : ev.id)}
@@ -863,7 +863,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                                 <td className="px-4 py-3">
                                                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-black ${g.color} ${g.bg}`}>{g.label}</span>
                                                 </td>
-                                                <td className="px-4 py-3 text-slate-500 text-xs">{b.per_apur || '–'}</td>
+                                                <td className="px-4 py-3 text-slate-500 text-table-body">{b.per_apur || '–'}</td>
                                                 <td className="px-4 py-3 font-bold text-slate-700">{b.total_eventos}</td>
                                                 <td className="px-4 py-3 font-bold text-emerald-600">{b.eventos_ok}</td>
                                                 <td className="px-4 py-3">
@@ -874,8 +874,8 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                                                 <td className="px-4 py-3">
                                                     <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${sc.color} ${sc.bg}`}>{sc.label}</span>
                                                 </td>
-                                                <td className="px-4 py-3 text-slate-400 text-xs font-mono">{b.protocolo_envio || '–'}</td>
-                                                <td className="px-4 py-3 text-slate-400 text-xs">{fmt.date(b.created_at)}</td>
+                                                <td className="px-4 py-3 text-slate-400 text-table-body font-mono">{b.protocolo_envio || '–'}</td>
+                                                <td className="px-4 py-3 text-slate-400 text-table-body">{fmt.date(b.created_at)}</td>
                                             </tr>
                                         );
                                     })}

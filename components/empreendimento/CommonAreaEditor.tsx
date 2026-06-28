@@ -84,7 +84,7 @@ export const CommonAreaEditor: React.FC<Props> = ({ empreendimentoId }) => {
         <input className={inputCls} placeholder="Área m²" type="number" step="0.01" value={form.area} onChange={e => setForm(p => ({ ...p, area: e.target.value }))} />
         <input className={inputCls} placeholder="Pav." type="number" value={form.floor} onChange={e => setForm(p => ({ ...p, floor: e.target.value }))} />
         <input className={inputCls} placeholder="Descrição" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
-        <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5">
+        <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-form-input uppercase tracking-wider flex items-center justify-center gap-1.5">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           Add
         </button>

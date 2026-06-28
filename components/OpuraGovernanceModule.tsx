@@ -412,7 +412,7 @@ export default function OpuraGovernanceModule({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2.5 px-5 py-3.5 font-black text-xs uppercase tracking-widest transition-all rounded-t-[1rem] -mb-px border-b-2 ${
+              className={`flex items-center gap-2.5 px-5 py-3.5 font-black text-button uppercase tracking-widest transition-all rounded-t-[1rem] -mb-px border-b-2 ${
                 active 
                   ? 'bg-gray-900/80 text-white border-blue-500' 
                   : 'text-gray-400 border-transparent hover:text-gray-200'
@@ -439,7 +439,7 @@ export default function OpuraGovernanceModule({
           </p>
           <button
             onClick={handleCreateDefaultCompany}
-            className="flex items-center gap-2.5 px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[1rem] font-black text-xs uppercase tracking-widest transition-all mx-auto shadow-lg active:scale-95"
+            className="flex items-center gap-2.5 px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[1rem] font-black text-button uppercase tracking-widest transition-all mx-auto shadow-lg active:scale-95"
           >
             <Plus className="w-4 h-4" />
             Criar Empresa Sede
@@ -519,7 +519,7 @@ export default function OpuraGovernanceModule({
                 {onChangeView && (
                   <button
                     onClick={() => onChangeView('labor-cargos')}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[1rem] font-bold text-xs uppercase tracking-wider transition-all"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[1rem] font-bold text-button uppercase tracking-wider transition-all"
                   >
                     <Briefcase className="w-4 h-4" />
                     Gerenciar em RH
@@ -589,7 +589,7 @@ export default function OpuraGovernanceModule({
                 </div>
                 <button
                   onClick={() => setIsLimitModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[1rem] font-bold text-xs uppercase tracking-wider transition-all"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[1rem] font-bold text-button uppercase tracking-wider transition-all"
                 >
                   <Plus className="w-4 h-4" />
                   Nova Alçada
@@ -620,7 +620,7 @@ export default function OpuraGovernanceModule({
                           : (lim.employee_id ? employees.find(e => e.id === lim.employee_id)?.name : 'Departamento');
                         return (
                           <tr key={lim.id} className="border-b border-gray-800/60 hover:bg-gray-900/20 text-sm">
-                            <td className="py-4 pl-4 font-black uppercase text-xs text-blue-400">{lim.flow_type}</td>
+                            <td className="py-4 pl-4 font-black uppercase text-table-body text-blue-400">{lim.flow_type}</td>
                             <td className="py-4 text-white font-bold">{target || 'Não identificado'}</td>
                             <td className="py-4 text-gray-300">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lim.limite_minimo)}</td>
                             <td className="py-4 text-gray-300">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lim.limite_maximo)}</td>
@@ -664,7 +664,7 @@ export default function OpuraGovernanceModule({
                 </div>
                 <button
                   onClick={() => setIsDelegationModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[1rem] font-bold text-xs uppercase tracking-wider transition-all"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[1rem] font-bold text-button uppercase tracking-wider transition-all"
                 >
                   <Plus className="w-4 h-4" />
                   Criar Delegação
@@ -698,8 +698,8 @@ export default function OpuraGovernanceModule({
                           <tr key={del.id} className="border-b border-gray-800/60 hover:bg-gray-900/20 text-sm">
                             <td className="py-4 pl-4 text-white font-bold">{delegator || 'Não identificado'}</td>
                             <td className="py-4 text-white font-bold">{delegatee || 'Não identificado'}</td>
-                            <td className="py-4 text-gray-400 font-bold uppercase text-xs">{del.flow_type || 'TODOS'}</td>
-                            <td className="py-4 text-gray-300 text-xs font-semibold">{start} a {end}</td>
+                            <td className="py-4 text-gray-400 font-bold uppercase text-table-body">{del.flow_type || 'TODOS'}</td>
+                            <td className="py-4 text-gray-300 text-table-body font-semibold">{start} a {end}</td>
                             <td className="py-4">
                               {del.status === 'ativa' && (
                                 <span className="text-[10px] bg-emerald-950/20 text-emerald-400 border border-emerald-950/80 px-2.5 py-1 rounded-[0.5rem] font-bold">Ativa</span>
@@ -715,7 +715,7 @@ export default function OpuraGovernanceModule({
                               {del.status === 'ativa' && (
                                 <button
                                   onClick={() => handleRevokeDelegation(del.id)}
-                                  className="text-rose-500 hover:underline text-xs font-bold mr-3"
+                                  className="text-rose-500 hover:underline text-button font-bold mr-3"
                                 >
                                   Revogar
                                 </button>
@@ -860,7 +860,7 @@ export default function OpuraGovernanceModule({
                             <td className="py-4 pl-4 text-white font-bold">{targetRole || 'Cargo Desconhecido'}</td>
                             <td className="py-4 text-gray-300">{currentEmp || 'Não Definido'}</td>
                             <td className="py-4 text-white font-semibold">{successor || 'Não Definido'}</td>
-                            <td className="py-4 font-bold uppercase text-xs text-amber-500">{plan.prontidao.replace('_', ' ')}</td>
+                            <td className="py-4 font-bold uppercase text-table-body text-amber-500">{plan.prontidao.replace('_', ' ')}</td>
                             <td className="py-4 pr-4 text-right">
                               <span className={`text-[10px] font-bold px-2 py-1 rounded-[0.5rem] uppercase ${plan.risco_perda === 'baixo' ? 'bg-emerald-950/20 text-emerald-400' : (plan.risco_perda === 'medio' ? 'bg-amber-950/20 text-amber-400' : 'bg-rose-950/20 text-rose-400')}`}>
                                 {plan.risco_perda}
@@ -906,7 +906,7 @@ export default function OpuraGovernanceModule({
                       setSandboxScenarios(data);
                     }
                   }}
-                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-[1rem] transition-all"
+                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-button uppercase tracking-wider rounded-[1rem] transition-all"
                 >
                   Criar Novo Cenário
                 </button>
@@ -928,7 +928,7 @@ export default function OpuraGovernanceModule({
                             setSandboxScenarios(data);
                           }
                         }}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-[0.5rem]"
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-button font-bold rounded-[0.5rem]"
                       >
                         Aprovar Cenário
                       </button>
@@ -956,7 +956,7 @@ export default function OpuraGovernanceModule({
             <form onSubmit={handleCreateLimit} className="space-y-4 text-sm">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Fluxo</label>
+                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Fluxo</label>
                   <select
                     value={newLimit.flow_type}
                     onChange={(e) => setNewLimit({ ...newLimit, flow_type: e.target.value as AuthorityFlowType })}
@@ -969,7 +969,7 @@ export default function OpuraGovernanceModule({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Alvo da Alçada</label>
+                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Alvo da Alçada</label>
                   <select
                     value={newLimit.target_type}
                     onChange={(e) => setNewLimit({ ...newLimit, target_type: e.target.value, target_id: '' })}
@@ -982,7 +982,7 @@ export default function OpuraGovernanceModule({
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Selecionar Alvo</label>
+                <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Selecionar Alvo</label>
                 <select
                   value={newLimit.target_id}
                   required
@@ -1001,7 +1001,7 @@ export default function OpuraGovernanceModule({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Mínimo (R$)</label>
+                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Mínimo (R$)</label>
                   <input
                     type="number"
                     value={newLimit.limite_minimo}
@@ -1010,7 +1010,7 @@ export default function OpuraGovernanceModule({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Máximo (R$)</label>
+                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Máximo (R$)</label>
                   <input
                     type="number"
                     value={newLimit.limite_maximo}
@@ -1028,20 +1028,20 @@ export default function OpuraGovernanceModule({
                   onChange={(e) => setNewLimit({ ...newLimit, requer_dupla_assinatura: e.target.checked })}
                   className="bg-gray-950 border-gray-800 rounded text-blue-600 focus:ring-0"
                 />
-                <label htmlFor="double_sig" className="text-xs text-gray-300 font-bold cursor-pointer">Requer Dupla Assinatura?</label>
+                <label htmlFor="double_sig" className="text-form-label text-gray-300 font-bold cursor-pointer">Requer Dupla Assinatura?</label>
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsLimitModalOpen(false)}
-                  className="px-5 py-3 bg-gray-900 hover:bg-gray-800 text-gray-300 font-bold text-xs uppercase tracking-wider rounded-[1rem] transition-all"
+                  className="px-5 py-3 bg-gray-900 hover:bg-gray-800 text-gray-300 font-bold text-button uppercase tracking-wider rounded-[1rem] transition-all"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-[1rem] transition-all"
+                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-button uppercase tracking-wider rounded-[1rem] transition-all"
                 >
                   Salvar Alçada
                 </button>
@@ -1064,7 +1064,7 @@ export default function OpuraGovernanceModule({
 
             <form onSubmit={handleCreateDelegation} className="space-y-4 text-sm">
               <div className="space-y-1">
-                <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Delegador (Quem se afasta)</label>
+                <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Delegador (Quem se afasta)</label>
                 <select
                   value={newDelegation.delegator_id}
                   required
@@ -1079,7 +1079,7 @@ export default function OpuraGovernanceModule({
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Substituto (Quem aprova)</label>
+                <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Substituto (Quem aprova)</label>
                 <select
                   value={newDelegation.delegatee_id}
                   required
@@ -1095,7 +1095,7 @@ export default function OpuraGovernanceModule({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Fluxo</label>
+                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Fluxo</label>
                   <select
                     value={newDelegation.flow_type}
                     onChange={(e) => setNewDelegation({ ...newDelegation, flow_type: e.target.value })}
@@ -1108,7 +1108,7 @@ export default function OpuraGovernanceModule({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Limite Máx (R$)</label>
+                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Limite Máx (R$)</label>
                   <input
                     type="number"
                     placeholder="Opcional"
@@ -1121,7 +1121,7 @@ export default function OpuraGovernanceModule({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Início</label>
+                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Início</label>
                   <input
                     type="datetime-local"
                     required
@@ -1131,7 +1131,7 @@ export default function OpuraGovernanceModule({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Término</label>
+                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Término</label>
                   <input
                     type="datetime-local"
                     required
@@ -1143,7 +1143,7 @@ export default function OpuraGovernanceModule({
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-gray-500 font-bold uppercase tracking-wider">Motivo da Ausência</label>
+                <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Motivo da Ausência</label>
                 <input
                   type="text"
                   placeholder="Ex: Férias do Diretor"
@@ -1157,13 +1157,13 @@ export default function OpuraGovernanceModule({
                 <button
                   type="button"
                   onClick={() => setIsDelegationModalOpen(false)}
-                  className="px-5 py-3 bg-gray-900 hover:bg-gray-800 text-gray-300 font-bold text-xs uppercase tracking-wider rounded-[1rem] transition-all"
+                  className="px-5 py-3 bg-gray-900 hover:bg-gray-800 text-gray-300 font-bold text-button uppercase tracking-wider rounded-[1rem] transition-all"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-[1rem] transition-all"
+                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-button uppercase tracking-wider rounded-[1rem] transition-all"
                 >
                   Confirmar
                 </button>

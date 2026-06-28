@@ -273,7 +273,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
         <div className="flex-1">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{opp.contact_name}</h2>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STAGE_COLORS[opp.stage]}`}>
+            <span className={`text-button px-2 py-0.5 rounded-full font-medium ${STAGE_COLORS[opp.stage]}`}>
               {STAGE_LABELS[opp.stage]}
             </span>
             {!isTerminal && (() => {
@@ -282,7 +282,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
                 <select
                   value={opp.sub_status ?? ''}
                   onChange={e => handleSetSubStatus(e.target.value)}
-                  className="text-xs px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-600 bg-transparent text-gray-600 dark:text-gray-300 focus:outline-none cursor-pointer"
+                  className="text-form-input px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-600 bg-transparent text-gray-600 dark:text-gray-300 focus:outline-none cursor-pointer"
                 >
                   <option value="">— Etapa —</option>
                   {presets.map(s => <option key={s} value={s}>{s}</option>)}
@@ -385,14 +385,14 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
               <div className="flex gap-3 pt-1">
                 <button
                   onClick={() => onGoToProject(opp.engineering_project_id!)}
-                  className="flex items-center gap-1 text-xs text-blue-700 dark:text-blue-300 font-medium hover:underline"
+                  className="flex items-center gap-1 text-button text-blue-700 dark:text-blue-300 font-medium hover:underline"
                 >
                   <ExternalLink size={11} /> Ver na Engenharia
                 </button>
-                <button onClick={() => setShowPicker(true)} className="text-xs text-gray-500 hover:underline">
+                <button onClick={() => setShowPicker(true)} className="text-button text-gray-500 hover:underline">
                   Trocar
                 </button>
-                <button onClick={handleUnlinkEngineering} className="text-xs text-red-500 hover:underline">
+                <button onClick={handleUnlinkEngineering} className="text-button text-red-500 hover:underline">
                   Desvincular
                 </button>
               </div>
@@ -419,7 +419,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
           {opp.budget_source === 'simple' && (
             <button
               onClick={() => setShowMigrateConfirm(true)}
-              className="w-full text-xs text-blue-600 hover:underline pt-1"
+              className="w-full text-button text-blue-600 hover:underline pt-1"
             >
               Migrar para orçamento de Engenharia →
             </button>
@@ -538,7 +538,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
               </div>
             );
           })}
-          {tasks.length === 0 && <p className="text-xs text-gray-400">Nenhuma tarefa para esta oportunidade.</p>}
+          {tasks.length === 0 && <p className="text-button text-gray-400">Nenhuma tarefa para esta oportunidade.</p>}
         </div>
 
         {/* Adição rápida */}
@@ -594,7 +594,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
             <h3 className="font-semibold text-gray-900 dark:text-white">Marcar como Perdido</h3>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Motivo da perda *</label>
+              <label className="block text-form-label font-medium text-gray-600 mb-1">Motivo da perda *</label>
               <textarea
                 className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
                 rows={3}
@@ -660,7 +660,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
               Um projeto vazio será criado em <strong>Engenharia → Orçamentos</strong> e uma notificação será enviada ao destinatário abaixo.
             </p>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">E-mail do orçamentista *</label>
+              <label className="block text-form-label font-medium text-gray-600 mb-1">E-mail do orçamentista *</label>
               <input
                 type="email"
                 autoFocus

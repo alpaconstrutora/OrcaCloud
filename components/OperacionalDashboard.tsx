@@ -147,7 +147,7 @@ const OperacionalDashboard: React.FC<Props> = ({ projectId, orgId, tipoObra }) =
       <div className="flex flex-col items-center justify-center h-64 text-red-500 gap-2">
         <AlertTriangle className="w-10 h-10" />
         <p className="font-bold text-sm">{error}</p>
-        <button onClick={loadData} className="text-xs text-blue-600 hover:underline">Tentar novamente</button>
+        <button onClick={loadData} className="text-button text-blue-600 hover:underline">Tentar novamente</button>
       </div>
     )
   }

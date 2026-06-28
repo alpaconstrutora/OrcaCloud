@@ -144,12 +144,12 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
             <div className="space-y-1">
               <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Título</label>
               <input type="text" placeholder="Ex: Nicho de Madeira Iluminado" value={novoTitulo} onChange={e => setNovoTitulo(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-[#D47A55]" required />
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55]" required />
             </div>
             <div className="space-y-1">
               <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Categoria</label>
               <select value={novaCat} onChange={e => setNovaCat(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-[#D47A55]">
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55]">
                 {Object.entries(CAT_LABELS).filter(([k]) => k !== 'TODOS').map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
@@ -157,12 +157,12 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
           <div className="space-y-1">
             <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Link da Imagem (URL)</label>
             <input type="url" placeholder="https://images.unsplash.com/..." value={novaUrl} onChange={e => setNovaUrl(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-[#D47A55]" required />
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55]" required />
           </div>
           <div className="space-y-1">
             <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Descrição / Notas técnicas</label>
             <textarea rows={2} placeholder="Descreva materiais, paleta de cores ou marcenaria..." value={novaDesc} onChange={e => setNovaDesc(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-[#D47A55] resize-none" />
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55] resize-none" />
           </div>
           <button type="submit" className="w-full py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-[10px] uppercase tracking-widest rounded-xl shadow-md active:scale-95 transition-all">
             Salvar na Biblioteca
@@ -275,20 +275,20 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
                 <span className="block text-[10px] text-slate-400 italic">Nenhum projeto cadastrado no banco.</span>
               ) : (
                 <select value={projetoVinculoId} onChange={e => setProjetoVinculoId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-[#D47A55]">
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55]">
                   {projetos.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               )}
             </div>
 
             <div className="flex gap-3">
-              <button type="button" onClick={() => setImagemSelecionada(null)} className="flex-1 py-2.5 bg-slate-100 text-slate-500 font-bold text-xs rounded-xl hover:bg-slate-200 transition-colors">
+              <button type="button" onClick={() => setImagemSelecionada(null)} className="flex-1 py-2.5 bg-slate-100 text-slate-500 font-bold text-button rounded-xl hover:bg-slate-200 transition-colors">
                 Cancelar
               </button>
               <button
                 onClick={handleVincularProjeto}
                 disabled={vinculando || projetos.length === 0}
-                className="flex-1 py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-xs uppercase tracking-widest rounded-xl disabled:opacity-50 shadow-md active:scale-95 transition-all"
+                className="flex-1 py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-button uppercase tracking-widest rounded-xl disabled:opacity-50 shadow-md active:scale-95 transition-all"
               >
                 {vinculando ? 'Vinculando...' : 'Confirmar'}
               </button>

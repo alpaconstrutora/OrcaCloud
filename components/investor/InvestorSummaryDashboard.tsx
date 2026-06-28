@@ -159,7 +159,7 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
                             ))}
                         </div>
                     )}
-                    <button onClick={onNavigateToHoldings} className="mt-4 flex items-center justify-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors pt-3 border-t border-gray-50">
+                    <button onClick={onNavigateToHoldings} className="mt-4 flex items-center justify-center gap-1 text-button font-bold text-blue-600 hover:text-blue-700 transition-colors pt-3 border-t border-gray-50">
                         Ver todas as participações <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                 </div>

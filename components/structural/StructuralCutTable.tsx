@@ -162,12 +162,12 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projectId, projectName }) 
         {rows.length > 0 && subTab === 'tabela' && (
           <div className="flex items-center gap-2">
             <button onClick={handleExportExcel} disabled={exporting !== null}
-              className="flex items-center gap-2 bg-emerald-600 disabled:bg-slate-300 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest hover:bg-emerald-700">
+              className="flex items-center gap-2 bg-emerald-600 disabled:bg-slate-300 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest hover:bg-emerald-700">
               {exporting === 'excel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
               Excel
             </button>
             <button onClick={handleExportPdf} disabled={exporting !== null}
-              className="flex items-center gap-2 bg-red-600 disabled:bg-slate-300 text-white rounded-xl px-4 py-2.5 text-xs font-black uppercase tracking-widest hover:bg-red-700">
+              className="flex items-center gap-2 bg-red-600 disabled:bg-slate-300 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest hover:bg-red-700">
               {exporting === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
               PDF
             </button>
@@ -179,12 +179,12 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projectId, projectName }) 
       {rows.length > 0 && (
         <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1 w-fit">
           <button onClick={() => setSubTab('tabela')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-button font-black uppercase tracking-widest transition-all
               ${subTab === 'tabela' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
             <Table2 className="w-3.5 h-3.5" /> Tabela
           </button>
           <button onClick={() => setSubTab('plano')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-button font-black uppercase tracking-widest transition-all
               ${subTab === 'plano' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
             <Scissors className="w-3.5 h-3.5" /> Plano de Corte
           </button>
@@ -255,7 +255,7 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projectId, projectName }) 
                       className={`text-slate-700 hover:bg-slate-50/60 transition-colors
                         ${isSectionBorder ? 'border-t-2 border-slate-200' : 'border-t border-slate-50'}`}>
                       <td className="px-3 py-2.5 font-bold text-slate-500">{row.pos}</td>
-                      <td className="px-3 py-2.5 text-slate-500 text-xs">{row.assemblyNome}</td>
+                      <td className="px-3 py-2.5 text-slate-500 text-table-body">{row.assemblyNome}</td>
                       <td className="px-3 py-2.5 font-bold">{row.elementNome}</td>
                       <td className="px-3 py-2.5">
                         <span className="text-[11px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500">
@@ -263,7 +263,7 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projectId, projectName }) 
                         </span>
                       </td>
                       <td className="px-3 py-2.5 font-bold tabular-nums">Ø {row.bitolaMm}</td>
-                      <td className="px-3 py-2.5 text-slate-500 text-xs">{row.tipo}</td>
+                      <td className="px-3 py-2.5 text-slate-500 text-table-body">{row.tipo}</td>
                       <td className="px-2 py-2">
                         <RebarShapeSvg
                           formato={row.formatoDobra}
@@ -280,7 +280,7 @@ const StructuralCutTable: React.FC<Props> = ({ orgId, projectId, projectName }) 
                 })}
                 {/* Totais */}
                 <tr className="border-t-2 border-slate-300 bg-slate-50 font-black text-slate-900">
-                  <td colSpan={8} className="px-3 py-3 text-right text-xs uppercase tracking-widest text-slate-500">Total</td>
+                  <td colSpan={8} className="px-3 py-3 text-right text-table-body uppercase tracking-widest text-slate-500">Total</td>
                   <td className="px-3 py-3 text-right tabular-nums">
                     {rows.reduce((s, r) => s + r.qtdPecas, 0)}
                   </td>

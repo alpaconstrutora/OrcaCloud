@@ -207,7 +207,7 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate, onGoTo
         <select
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value as ServiceContract['status'] | 'all')}
-          className="px-6 py-4 bg-white border border-gray-100 rounded-2xl text-xs font-medium text-gray-600 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-all uppercase tracking-widest"
+          className="px-6 py-4 bg-white border border-gray-100 rounded-2xl text-form-input font-medium text-gray-600 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 shadow-sm cursor-pointer hover:bg-gray-50 transition-all uppercase tracking-widest"
         >
           <option value="all">Todos os Status</option>
           <option value="active">Ativo</option>
@@ -293,7 +293,7 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate, onGoTo
                     <th
                       key={col.field}
                       onClick={() => handleSort(col.field)}
-                      className={`px-6 py-4 text-xs font-medium text-gray-400 uppercase tracking-widest cursor-pointer select-none hover:text-blue-500 transition-colors ${col.align}`}
+                      className={`px-6 py-4 text-form-input font-medium text-gray-400 uppercase tracking-widest cursor-pointer select-none hover:text-blue-500 transition-colors ${col.align}`}
                     >
                       <span className="inline-flex items-center gap-0.5">
                         {col.label}
@@ -331,7 +331,7 @@ const ServicesContracts: React.FC<Props> = ({ organizationId, onNavigate, onGoTo
                     <td className="px-6 py-5">
                       <StatusBadge status={c.status} />
                     </td>
-                    <td className="px-6 py-5 text-right font-medium text-gray-900 tracking-tighter text-xs">
+                    <td className="px-6 py-5 text-right font-medium text-gray-900 tracking-tighter text-table-body">
                       {fmt(c.total_value)}
                     </td>
                     <td className="px-6 py-5 text-right">

@@ -148,7 +148,7 @@ const ServicesVisit: React.FC<Props> = ({ opportunityId, organizationId, onBack 
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Localização</span>
-          <button onClick={getLocation} className="flex items-center gap-1.5 text-xs text-blue-600 hover:underline">
+          <button onClick={getLocation} className="flex items-center gap-1.5 text-button text-blue-600 hover:underline">
             <MapPin size={13} /> Capturar GPS
           </button>
         </div>
@@ -174,7 +174,7 @@ const ServicesVisit: React.FC<Props> = ({ opportunityId, organizationId, onBack 
               </button>
             </div>
             <input
-              className="ml-8 w-[calc(100%-2.5rem)] text-xs rounded border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1 text-gray-600 dark:text-gray-400"
+              className="ml-8 w-[calc(100%-2.5rem)] text-form-input rounded border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1 text-gray-600 dark:text-gray-400"
               placeholder="Observação..."
               value={c.note}
               onChange={e => updateNote(i, e.target.value)}
@@ -202,7 +202,7 @@ const ServicesVisit: React.FC<Props> = ({ opportunityId, organizationId, onBack 
           <button
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
-            className="flex items-center gap-1.5 text-xs text-blue-600 hover:underline disabled:opacity-50"
+            className="flex items-center gap-1.5 text-button text-blue-600 hover:underline disabled:opacity-50"
           >
             <Camera size={13} /> {uploading ? 'Enviando...' : 'Adicionar foto'}
           </button>
@@ -221,7 +221,7 @@ const ServicesVisit: React.FC<Props> = ({ opportunityId, organizationId, onBack 
 
       {/* Observações */}
       <div>
-        <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Observações gerais</label>
+        <label className="block text-form-label font-medium text-gray-600 dark:text-gray-400 mb-1">Observações gerais</label>
         <textarea className={INPUT} rows={4} value={observations} onChange={e => setObservations(e.target.value)} />
       </div>
 

@@ -365,7 +365,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     key={tab.id}
                                     type="button"
                                     onClick={() => setActiveTab(tab.id)}
-                                    className={`relative flex items-center gap-2 px-5 py-3 text-xs font-black uppercase tracking-widest rounded-t-xl transition-all border-b-2 ${
+                                    className={`relative flex items-center gap-2 px-5 py-3 text-button font-black uppercase tracking-widest rounded-t-xl transition-all border-b-2 ${
                                         isActive
                                             ? 'text-purple-600 bg-purple-50/60 border-purple-600'
                                             : 'text-gray-400 bg-transparent border-transparent hover:text-gray-600 hover:bg-gray-50'
@@ -505,7 +505,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             key={t}
                                             type="button"
                                             onClick={() => setFormData({ ...formData, type: t })}
-                                            className={`py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 ${formData.type === t ? 'bg-white text-purple-600 shadow-xl border border-gray-100 scale-[1.02]' : 'text-gray-400 hover:text-gray-600'}`}
+                                            className={`py-4 rounded-2xl font-black text-button uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 ${formData.type === t ? 'bg-white text-purple-600 shadow-xl border border-gray-100 scale-[1.02]' : 'text-gray-400 hover:text-gray-600'}`}
                                         >
                                             {t === 'SALE' ? 'Venda' : t === 'RENTAL' ? 'Aluguel' : 'Serviço'}
                                         </button>
@@ -646,7 +646,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                         newInsts[index] = { ...inst, dueDate: e.target.value };
                                                                         setFormData({ ...formData, custom_installments: newInsts });
                                                                     }}
-                                                                    className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg p-2 text-xs font-bold text-gray-700 outline-none"
+                                                                    className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg p-2 text-form-input font-bold text-gray-700 outline-none"
                                                                 />
                                                             </div>
                                                             <div className="col-span-6 relative">
@@ -659,7 +659,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                         newInsts[index] = { ...inst, value: parseFloat(e.target.value) || 0 };
                                                                         setFormData({ ...formData, custom_installments: newInsts });
                                                                     }}
-                                                                    className="w-full pl-6 pr-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg text-xs font-bold text-gray-700 outline-none"
+                                                                    className="w-full pl-6 pr-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg text-form-input font-bold text-gray-700 outline-none"
                                                                 />
                                                             </div>
                                                         </div>

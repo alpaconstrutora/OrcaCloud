@@ -243,7 +243,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
             <button
               key={ws.id}
               onClick={() => setSelectedWorkspace(ws)}
-              className={`flex items-center justify-between w-full px-4 py-3.5 rounded-xl text-xs text-left font-medium transition-all border
+              className={`flex items-center justify-between w-full px-4 py-3.5 rounded-xl text-button text-left font-medium transition-all border
                 ${selectedWorkspace?.id === ws.id 
                   ? 'bg-orange-500/10 border-orange-500/20 text-orange-600 font-bold' 
                   : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}
@@ -283,7 +283,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                     setWorkspaces(prev => prev.map(w => w.id === selectedWorkspace.id ? { ...w, is_active: toggled.is_active } : w));
                     setSelectedWorkspace(prev => prev ? { ...prev, is_active: toggled.is_active } : null);
                   }}
-                  className={`px-4 py-2 border rounded-xl text-xs font-semibold active:scale-95 transition-all
+                  className={`px-4 py-2 border rounded-xl text-button font-semibold active:scale-95 transition-all
                     ${selectedWorkspace.is_active 
                       ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100' 
                       : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}
@@ -297,7 +297,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
             <div className="flex border-b border-gray-100 shrink-0 gap-2">
               <button 
                 onClick={() => setActiveSubTab('usuarios')}
-                className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2
+                className={`px-4 py-2.5 text-button font-bold border-b-2 transition-all flex items-center gap-2
                   ${activeSubTab === 'usuarios' ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
               >
                 <Users className="w-4 h-4" />
@@ -305,7 +305,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
               </button>
               <button 
                 onClick={() => setActiveSubTab('documentos')}
-                className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2
+                className={`px-4 py-2.5 text-button font-bold border-b-2 transition-all flex items-center gap-2
                   ${activeSubTab === 'documentos' ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
               >
                 <FolderOpen className="w-4 h-4" />
@@ -313,7 +313,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
               </button>
               <button 
                 onClick={() => setActiveSubTab('solicitacoes')}
-                className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all flex items-center gap-2
+                className={`px-4 py-2.5 text-button font-bold border-b-2 transition-all flex items-center gap-2
                   ${activeSubTab === 'solicitacoes' ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
               >
                 <ClipboardList className="w-4 h-4" />
@@ -328,7 +328,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   <h3 className="text-sm font-bold text-gray-800">Equipe Externa do Parceiro</h3>
                   <button 
                     onClick={() => setIsInviteUserModalOpen(true)}
-                    className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-md shadow-orange-500/10"
+                    className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-button font-bold px-4 py-2 rounded-xl transition-all shadow-md shadow-orange-500/10"
                   >
                     <UserPlus className="w-4 h-4" />
                     Convidar Integrante
@@ -380,7 +380,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                       ))}
                       {partnerUsers.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="text-center py-10 text-xs text-gray-400 bg-white">
+                          <td colSpan={6} className="text-center py-10 text-table-body text-gray-400 bg-white">
                             Nenhum usuário convidado para este parceiro.
                           </td>
                         </tr>
@@ -398,7 +398,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   <h3 className="text-sm font-bold text-gray-800">Documentos GED Compartilhados</h3>
                   <button 
                     onClick={() => setIsShareDocModalOpen(true)}
-                    className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-md shadow-orange-500/10"
+                    className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white text-button font-bold px-4 py-2 rounded-xl transition-all shadow-md shadow-orange-500/10"
                   >
                     <Share2 className="w-4 h-4" />
                     Compartilhar Arquivo
@@ -533,7 +533,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   required
                   value={newWorkspaceSupplierId}
                   onChange={(e) => setNewWorkspaceSupplierId(e.target.value)}
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-gray-800 focus:outline-none"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
                 >
                   <option value="">Selecione um prestador...</option>
                   {suppliers.map(s => (
@@ -546,13 +546,13 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 <button
                   type="button"
                   onClick={() => setIsNewWorkspaceModalOpen(false)}
-                  className="px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-500 hover:bg-gray-50 transition-all font-semibold"
+                  className="px-4 py-2 border border-gray-200 rounded-xl text-button text-gray-500 hover:bg-gray-50 transition-all font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 active:scale-95 rounded-xl text-xs text-white font-bold transition-all"
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 active:scale-95 rounded-xl text-button text-white font-bold transition-all"
                 >
                   Ativar Workspace
                 </button>
@@ -576,7 +576,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   value={inviteUser.name}
                   onChange={(e) => setInviteUser({ ...inviteUser, name: e.target.value })}
                   placeholder="Nome do integrante..."
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-800 focus:outline-none focus:border-orange-500"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-800 focus:outline-none focus:border-orange-500"
                 />
               </div>
 
@@ -588,7 +588,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   value={inviteUser.email}
                   onChange={(e) => setInviteUser({ ...inviteUser, email: e.target.value })}
                   placeholder="email@parceiro.com"
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-800 focus:outline-none focus:border-orange-500"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-800 focus:outline-none focus:border-orange-500"
                 />
               </div>
 
@@ -599,7 +599,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                     value={inviteUser.phone}
                     onChange={(e) => setInviteUser({ ...inviteUser, phone: e.target.value })}
                     placeholder="(00) 00000-0000"
-                    className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs text-gray-800 focus:outline-none"
+                    className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-800 focus:outline-none"
                   />
                 </div>
 
@@ -608,7 +608,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   <select
                     value={inviteUser.role}
                     onChange={(e) => setInviteUser({ ...inviteUser, role: e.target.value as any })}
-                    className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-gray-800 focus:outline-none"
+                    className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
                   >
                     <option value="ADMINISTRADOR">Administrador (Total)</option>
                     <option value="GESTOR">Gestor (Visualização)</option>
@@ -622,13 +622,13 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 <button
                   type="button"
                   onClick={() => setIsInviteUserModalOpen(false)}
-                  className="px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-500 hover:bg-gray-50 transition-all font-semibold"
+                  className="px-4 py-2 border border-gray-200 rounded-xl text-button text-gray-500 hover:bg-gray-50 transition-all font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 active:scale-95 rounded-xl text-xs text-white font-bold transition-all"
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 active:scale-95 rounded-xl text-button text-white font-bold transition-all"
                 >
                   Convidar Integrante
                 </button>
@@ -651,7 +651,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   required
                   value={docToShareId}
                   onChange={(e) => setDocToShareId(e.target.value)}
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-xs text-gray-800 focus:outline-none"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
                 >
                   <option value="">Selecione um documento...</option>
                   {documents.map(d => (
@@ -664,13 +664,13 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 <button
                   type="button"
                   onClick={() => setIsShareDocModalOpen(false)}
-                  className="px-4 py-2 border border-gray-200 rounded-xl text-xs text-gray-500 hover:bg-gray-50 transition-all font-semibold"
+                  className="px-4 py-2 border border-gray-200 rounded-xl text-button text-gray-500 hover:bg-gray-50 transition-all font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 active:scale-95 rounded-xl text-xs text-white font-bold transition-all"
+                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 active:scale-95 rounded-xl text-button text-white font-bold transition-all"
                 >
                   Compartilhar Arquivo
                 </button>

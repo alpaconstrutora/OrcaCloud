@@ -345,7 +345,7 @@ const OfficesCRM: React.FC<OfficesCRMProps> = ({ userId }) => {
                       placeholder={f.placeholder}
                       value={f.value}
                       onChange={e => f.setter(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-xs text-slate-700 outline-none focus:border-[#D47A55] focus:bg-white transition-colors font-medium"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55] focus:bg-white transition-colors font-medium"
                       required={f.required}
                     />
                   </div>
@@ -359,7 +359,7 @@ const OfficesCRM: React.FC<OfficesCRMProps> = ({ userId }) => {
                   <select
                     value={status}
                     onChange={e => setStatus(e.target.value as OfficesLeadStatus)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-xs text-slate-700 outline-none focus:border-[#D47A55] font-medium"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55] font-medium"
                   >
                     {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </select>
@@ -375,7 +375,7 @@ const OfficesCRM: React.FC<OfficesCRMProps> = ({ userId }) => {
                     placeholder="Descreva o que o cliente busca..."
                     value={briefing}
                     onChange={e => setBriefing(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-xs text-slate-700 outline-none focus:border-[#D47A55] resize-none font-medium"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55] resize-none font-medium"
                   />
                 </div>
               </div>
@@ -386,12 +386,12 @@ const OfficesCRM: React.FC<OfficesCRMProps> = ({ userId }) => {
                 <button
                   type="button"
                   onClick={() => handleDelete(editingLead.id!)}
-                  className="py-2.5 px-4 bg-rose-50 hover:bg-rose-100 text-rose-500 font-bold text-xs rounded-xl border border-rose-100 transition-colors flex items-center gap-1"
+                  className="py-2.5 px-4 bg-rose-50 hover:bg-rose-100 text-rose-500 font-bold text-button rounded-xl border border-rose-100 transition-colors flex items-center gap-1"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Deletar
                 </button>
               )}
-              <button type="submit" className="flex-1 py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-md active:scale-95 transition-all">
+              <button type="submit" className="flex-1 py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-button uppercase tracking-widest rounded-xl shadow-md active:scale-95 transition-all">
                 Salvar Lead
               </button>
             </div>

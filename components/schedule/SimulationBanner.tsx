@@ -76,7 +76,7 @@ const SimulationBanner: React.FC<SimulationBannerProps> = ({
                             onChange={e => setScenarioName(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter') handleConfirmSave(); if (e.key === 'Escape') setNamingOpen(false); }}
                             placeholder="Nome do cenário…"
-                            className="text-xs border-none outline-none w-44 text-gray-800 placeholder:text-gray-400"
+                            className="text-form-input border-none outline-none w-44 text-gray-800 placeholder:text-gray-400"
                         />
                         <button
                             onClick={handleConfirmSave}
@@ -93,7 +93,7 @@ const SimulationBanner: React.FC<SimulationBannerProps> = ({
 
                 <button
                     onClick={handleToggleSimulation}
-                    className="px-4 py-2 text-xs font-bold text-purple-600 bg-white hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
+                    className="px-4 py-2 text-button font-bold text-purple-600 bg-white hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
                 >
                     Descartar
                 </button>
@@ -101,7 +101,7 @@ const SimulationBanner: React.FC<SimulationBannerProps> = ({
                 {onSaveAsScenario && !namingOpen && (
                     <button
                         onClick={() => { setNamingOpen(true); setScenarioName(''); }}
-                        className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 border border-purple-300 rounded-lg transition-colors"
+                        className="flex items-center gap-1.5 px-4 py-2 text-button font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 border border-purple-300 rounded-lg transition-colors"
                     >
                         <BookmarkPlus className="w-3.5 h-3.5" />
                         Salvar como Cenário
@@ -110,7 +110,7 @@ const SimulationBanner: React.FC<SimulationBannerProps> = ({
 
                 <button
                     onClick={handleSaveSimulation}
-                    className="px-4 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md rounded-lg transition-colors flex items-center gap-2"
+                    className="px-4 py-2 text-button font-bold text-white bg-purple-600 hover:bg-purple-700 shadow-md rounded-lg transition-colors flex items-center gap-2"
                 >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                     Confirmar Alterações

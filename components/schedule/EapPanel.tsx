@@ -581,7 +581,7 @@ const LocationForm: React.FC<{
                         value={form[key] ?? ''}
                         onChange={e => setForm({ ...form, [key]: e.target.value })}
                         placeholder={placeholder}
-                        className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                        className="w-full text-form-input border border-gray-200 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                         onKeyDown={e => { if (e.key === 'Enter') onSave(); if (e.key === 'Escape') onCancel(); }}
                     />
                 </div>

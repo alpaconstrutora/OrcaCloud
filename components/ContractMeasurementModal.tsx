@@ -372,7 +372,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                 </>
                             ) : (
                                 <button onClick={() => document.getElementById('invoice-upload')?.click()}
-                                    className="flex items-center gap-2 px-8 py-3 bg-white text-gray-900 rounded-xl text-xs font-medium uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-gray-200">
+                                    className="flex items-center gap-2 px-8 py-3 bg-white text-gray-900 rounded-xl text-button font-medium uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-gray-200">
                                     <Upload className="w-4 h-4" /> Anexar Nota Fiscal
                                 </button>
                             )}
@@ -419,17 +419,17 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-[#f8fafc] border-b border-gray-100">
                                 <tr>
-                                    <th className="px-8 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest">Item / Descrição</th>
-                                    <th className="px-6 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest">Unid.</th>
-                                    <th className="px-6 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest text-right">Qtd. Contrato</th>
-                                    <th className="px-6 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest text-right">
+                                    <th className="px-8 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Item / Descrição</th>
+                                    <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Unid.</th>
+                                    <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Qtd. Contrato</th>
+                                    <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">
                                         {measurementMode === 'QUANTITATIVO' ? 'Saldo Ant.' : '% Ant.'}
                                     </th>
-                                    <th className="px-6 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest text-right">
+                                    <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">
                                         {measurementMode === 'QUANTITATIVO' ? 'Qtd. Medida' : measurementMode === 'PERCENTUAL' ? '% Período' : 'Medição'}
                                     </th>
-                                    <th className="px-6 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest">Anexo / Foto</th>
-                                    <th className="px-8 py-5 text-xs font-medium text-gray-400 uppercase tracking-widest text-right">Valor Período</th>
+                                    <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Anexo / Foto</th>
+                                    <th className="px-8 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Valor Período</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-gray-700">
@@ -451,7 +451,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                                 <p className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">{item.description}</p>
                                                 <p className="text-xs text-gray-400 font-medium">ID: {item.id.slice(0, 8)}</p>
                                             </td>
-                                            <td className="px-6 py-5 font-medium text-xs uppercase text-gray-400">{item.unit}</td>
+                                            <td className="px-6 py-5 font-medium text-table-body uppercase text-gray-400">{item.unit}</td>
                                             <td className="px-6 py-5 text-right font-medium text-sm text-gray-700">{item.quantity.toLocaleString('pt-BR')}</td>
 
                                             {/* Saldo anterior — qty ou % conforme modo */}
@@ -574,7 +574,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                                             ))}
                                                             <button
                                                                 onClick={() => document.getElementById(`file-${item.id}`)?.click()}
-                                                                className="flex items-center gap-2 px-3 py-2 bg-white text-blue-600 rounded-xl text-xs font-medium uppercase tracking-widest border border-blue-100 hover:bg-blue-50 transition-all shadow-sm"
+                                                                className="flex items-center gap-2 px-3 py-2 bg-white text-blue-600 rounded-xl text-button font-medium uppercase tracking-widest border border-blue-100 hover:bg-blue-50 transition-all shadow-sm"
                                                             >
                                                                 <Upload className="w-3 h-3" />
                                                                 {attachments[item.id]?.length > 0 ? 'Add' : 'Anexar'}
@@ -625,14 +625,14 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                             )}
                             <button
                                 onClick={onClose}
-                                className="px-8 py-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-all font-medium text-xs uppercase tracking-widest"
+                                className="px-8 py-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-all font-medium text-button uppercase tracking-widest"
                             >
                                 Cancelar
                             </button>
                             <button
                                 onClick={handleSave}
                                 disabled={loading}
-                                className="flex items-center gap-2 px-10 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 font-medium text-xs uppercase tracking-widest disabled:opacity-50 group active:scale-95"
+                                className="flex items-center gap-2 px-10 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 font-medium text-button uppercase tracking-widest disabled:opacity-50 group active:scale-95"
                             >
                                 {loading ? (
                                     <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />

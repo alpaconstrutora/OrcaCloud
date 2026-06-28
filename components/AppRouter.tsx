@@ -600,14 +600,14 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setIsImportModalOpenPlanning(true)}
-                className="flex items-center gap-3 px-6 py-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[1.25rem] hover:bg-emerald-600 hover:text-white font-black text-xs uppercase tracking-widest transition-all shadow-sm active:scale-95"
+                className="flex items-center gap-3 px-6 py-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[1.25rem] hover:bg-emerald-600 hover:text-white font-black text-button uppercase tracking-widest transition-all shadow-sm active:scale-95"
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 Importar Excel
               </button>
               <button
                 onClick={() => handleNewProject('PLANEJAMENTO')}
-                className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 Novo Planejamento
@@ -650,14 +650,14 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             <div className="flex justify-end gap-4 pr-4">
               <button
                 onClick={() => setActiveView('labor-analytics')}
-                className="flex items-center gap-3 px-6 py-3 bg-white text-blue-600 border-2 border-blue-50 rounded-[1.25rem] hover:bg-blue-50 font-black text-xs uppercase tracking-widest transition-all shadow-lg active:scale-95"
+                className="flex items-center gap-3 px-6 py-3 bg-white text-blue-600 border-2 border-blue-50 rounded-[1.25rem] hover:bg-blue-50 font-black text-button uppercase tracking-widest transition-all shadow-lg active:scale-95"
               >
                 <TrendingUp className="w-4 h-4" />
                 Análise de Equipes
               </button>
               <button
                 onClick={() => handleNewProject('DIARIO')}
-                className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 Novo Diário

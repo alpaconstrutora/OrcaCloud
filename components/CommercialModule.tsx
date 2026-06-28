@@ -471,7 +471,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                 </div>
                 <button
                     onClick={onRegisterDeal}
-                    className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-600 transition-all active:scale-95 shadow-xl shadow-gray-900/10 hover:shadow-blue-600/20"
+                    className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-button uppercase tracking-[0.2em] hover:bg-blue-600 transition-all active:scale-95 shadow-xl shadow-gray-900/10 hover:shadow-blue-600/20"
                 >
                     Registrar Negócio
                 </button>
@@ -690,14 +690,14 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                                                         <div className="flex items-center justify-end gap-3">
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setEditingProperty(property); setIsPropertyModalOpen(true); }}
-                                                                className="text-blue-600 hover:text-blue-800 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1.5"
+                                                                className="text-blue-600 hover:text-blue-800 text-button font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1.5"
                                                             >
                                                                 <Edit className="w-3.5 h-3.5" />
                                                                 Editar
                                                             </button>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleDeleteProperty(property.id); }}
-                                                                className="text-red-400 hover:text-red-600 text-xs font-black uppercase tracking-widest p-1.5 hover:bg-red-50 rounded-lg transition-all"
+                                                                className="text-red-400 hover:text-red-600 text-button font-black uppercase tracking-widest p-1.5 hover:bg-red-50 rounded-lg transition-all"
                                                             >
                                                                 Excluir
                                                             </button>
@@ -966,7 +966,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                                                     <td className="px-8 py-6 font-mono font-black text-gray-900">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value)}
                                                     </td>
-                                                    <td className="px-8 py-6 text-xs font-bold text-gray-400 uppercase tracking-tighter">
+                                                    <td className="px-8 py-6 text-table-body font-bold text-gray-400 uppercase tracking-tighter">
                                                         {new Date(deal.date).toLocaleDateString('pt-BR')}
                                                     </td>
                                                     <td className="px-8 py-6 font-mono font-bold text-blue-600">
@@ -993,7 +993,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                                         setEditingDeal(undefined);
                                         setIsDealModalOpen(true);
                                     }}
-                                    className="w-full py-8 bg-gray-50/50 hover:bg-gray-50 text-gray-400 font-black uppercase tracking-[0.3em] text-xs transition-all border-t border-gray-100 flex items-center justify-center gap-3 group"
+                                    className="w-full py-8 bg-gray-50/50 hover:bg-gray-50 text-gray-400 font-black uppercase tracking-[0.3em] text-button transition-all border-t border-gray-100 flex items-center justify-center gap-3 group"
                                 >
                                     <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
                                     Registrar Nova Negociação

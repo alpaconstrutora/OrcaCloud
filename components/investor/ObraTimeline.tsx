@@ -139,11 +139,11 @@ const ObraTimeline: React.FC<Props> = ({ projectId, organizationId, isAdmin }) =
                         onChange={e => setNewName(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }}
                         placeholder="Novo marco (ex: Fundação)"
-                        className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button
                         onClick={handleAdd}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700"
+                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-button font-bold hover:bg-blue-700"
                     >
                         <Plus className="w-4 h-4" /> Marco
                     </button>

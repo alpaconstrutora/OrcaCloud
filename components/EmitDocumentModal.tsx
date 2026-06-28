@@ -172,7 +172,7 @@ const EmitDocumentModal: React.FC<Props> = ({
                         <>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Modelo *</label>
+                                    <label className="block text-form-label font-medium text-gray-500 mb-1">Modelo *</label>
                                     <select
                                         value={templateId}
                                         onChange={e => setTemplateId(e.target.value)}
@@ -183,7 +183,7 @@ const EmitDocumentModal: React.FC<Props> = ({
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Cliente</label>
+                                    <label className="block text-form-label font-medium text-gray-500 mb-1">Cliente</label>
                                     <select
                                         value={clientId}
                                         onChange={e => setClientId(e.target.value)}
@@ -205,7 +205,7 @@ const EmitDocumentModal: React.FC<Props> = ({
                                         </div>
                                     </div>
                                     {onManageTemplates && (
-                                        <button onClick={onManageTemplates} className="self-start flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700">
+                                        <button onClick={onManageTemplates} className="self-start flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-button font-medium hover:bg-red-700">
                                             <Settings className="w-3.5 h-3.5" /> Editar modelo agora
                                         </button>
                                     )}

@@ -189,7 +189,7 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
                                                         <select
                                                             value={row.issue ?? 'faltando'}
                                                             onChange={e => updateRow(idx, { issue: e.target.value as any })}
-                                                            className="bg-white rounded-lg border border-amber-200 text-xs font-bold text-amber-800 p-2 outline-none focus:ring-2 focus:ring-amber-300"
+                                                            className="bg-white rounded-lg border border-amber-200 text-form-input font-bold text-amber-800 p-2 outline-none focus:ring-2 focus:ring-amber-300"
                                                         >
                                                             <option value="faltando">Em falta / Menor Qtd</option>
                                                             <option value="quebrado">Quebrado / Avariado</option>
@@ -218,7 +218,7 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
 
                     {/* Photo Upload */}
                     <div className="space-y-2">
-                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Foto do Comprovante / Carga</label>
+                        <label className="text-form-label font-black text-gray-400 uppercase tracking-widest">Foto do Comprovante / Carga</label>
                         <div className="relative group">
                             <input
                                 type="file"
@@ -243,7 +243,7 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
 
                     {/* Notes */}
                     <div className="space-y-2">
-                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Observações Adicionais</label>
+                        <label className="text-form-label font-black text-gray-400 uppercase tracking-widest">Observações Adicionais</label>
                         <textarea
                             value={receiptNotes}
                             onChange={e => setReceiptNotes(e.target.value)}
@@ -257,14 +257,14 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
                 <div className="p-6 border-t border-gray-50 bg-white flex gap-4 shrink-0">
                     <button
                         onClick={onClose}
-                        className="flex-1 py-4 bg-gray-50 text-gray-400 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-gray-100 transition-all active:scale-95"
+                        className="flex-1 py-4 bg-gray-50 text-gray-400 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-gray-100 transition-all active:scale-95"
                     >
                         Cancelar
                     </button>
                     <button
                         onClick={handleConfirmReceipt}
                         disabled={isSaving}
-                        className={`flex-2 py-4 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl transition-all active:scale-95 disabled:opacity-50 px-8 ${
+                        className={`flex-2 py-4 text-white rounded-2xl text-form-label font-black uppercase tracking-widest shadow-xl transition-all active:scale-95 disabled:opacity-50 px-8 ${
                             statusBadge === 'Recebido' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-100' :
                             statusBadge === 'Parcial'  ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-100' :
                                                          'bg-amber-500 hover:bg-amber-600 shadow-amber-100'

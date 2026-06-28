@@ -122,7 +122,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
           onClick={() => { setEditing(null); setIsFormOpen(true); }}
           disabled={isWriteDisabled}
           title={isWriteDisabled ? 'Selecione uma organização específica' : 'Novo empreendimento'}
-          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-[1.25rem] font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-blue-900/10 active:scale-95"
+          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-[1.25rem] font-black text-button uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-blue-900/10 active:scale-95"
         >
           <Plus className="w-4 h-4" /> Novo Empreendimento
         </button>

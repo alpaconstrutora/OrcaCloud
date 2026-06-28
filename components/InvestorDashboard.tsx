@@ -575,7 +575,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id as TabId)}
                                     title={hidden ? 'Oculta para o investidor' : undefined}
-                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all duration-200 uppercase tracking-widest whitespace-nowrap ${
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-button font-black transition-all duration-200 uppercase tracking-widest whitespace-nowrap ${
                                         activeTab === tab.id
                                             ? 'bg-blue-600 text-white shadow-md'
                                             : hidden
@@ -697,7 +697,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                                             ))
                                                             .catch(e => console.error(e));
                                                     }}
-                                                    className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all"
+                                                    className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-button font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all"
                                                 >
                                                     <CheckCircle2 className="w-3.5 h-3.5" />
                                                     Confirmar

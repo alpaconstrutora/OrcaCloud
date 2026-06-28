@@ -92,7 +92,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                 {/* Form */}
                 <div className="p-10 space-y-8 overflow-y-auto">
                     <div className="space-y-2">
-                        <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Descrição do Aditivo</label>
+                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Descrição do Aditivo</label>
                         <div className="relative">
                             <FileText className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                             <input
@@ -107,7 +107,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
 
                     <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Impacto Financeiro (R$)</label>
+                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Impacto Financeiro (R$)</label>
                             <div className="relative">
                                 <DollarSign className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500" />
                                 <input
@@ -121,7 +121,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                             <p className="text-xs text-gray-400 font-medium ml-1 uppercase">Use valores negativos para descontos.</p>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-gray-400 uppercase tracking-widest ml-1">Nova Data de Término</label>
+                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Nova Data de Término</label>
                             <div className="relative">
                                 <Calendar className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                 <input
@@ -156,14 +156,14 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                 <div className="p-8 bg-gray-50 border-t border-gray-100 shrink-0 flex justify-end gap-4">
                     <button
                         onClick={onClose}
-                        className="px-8 py-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-600 transition-all font-medium text-xs uppercase tracking-widest"
+                        className="px-8 py-4 bg-white border border-gray-200 rounded-2xl text-gray-400 hover:text-gray-600 transition-all font-medium text-button uppercase tracking-widest"
                     >
                         Cancelar
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={loading}
-                        className="flex items-center gap-2 px-10 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 font-medium text-xs uppercase tracking-widest active:scale-95 group"
+                        className="flex items-center gap-2 px-10 py-4 bg-gray-900 text-white rounded-2xl hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 font-medium text-button uppercase tracking-widest active:scale-95 group"
                     >
                         {loading ? (
                             <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />

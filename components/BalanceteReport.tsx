@@ -152,7 +152,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                 <button
                     onClick={load}
                     disabled={loading}
-                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-colors"
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-button font-black uppercase tracking-widest rounded-xl transition-colors"
                 >
                     {loading ? 'Carregando…' : 'Atualizar'}
                 </button>
@@ -205,16 +205,16 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                                                     {GROUP_LABEL[grp]}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-2.5 text-xs text-right text-slate-500 tabular-nums">
+                                            <td className="px-4 py-2.5 text-table-body text-right text-slate-500 tabular-nums">
                                                 {fmt(sub.creditos)}
                                             </td>
-                                            <td className="px-4 py-2.5 text-xs text-right text-slate-500 tabular-nums">
+                                            <td className="px-4 py-2.5 text-table-body text-right text-slate-500 tabular-nums">
                                                 {fmt(sub.debitos)}
                                             </td>
-                                            <td className={`px-4 py-2.5 text-xs text-right tabular-nums ${colorSaldo(sub.saldo)}`}>
+                                            <td className={`px-4 py-2.5 text-form-label text-right tabular-nums ${colorSaldo(sub.saldo)}`}>
                                                 {fmt(sub.saldo)}
                                             </td>
-                                            <td className="px-4 py-2.5 text-xs text-right text-slate-400">
+                                            <td className="px-4 py-2.5 text-table-body text-right text-slate-400">
                                                 {sub.n.toLocaleString('pt-BR')}
                                             </td>
                                         </tr>
@@ -248,7 +248,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                         {/* Totais */}
                         <tfoot>
                             <tr className="border-t-2 border-slate-200 bg-slate-50">
-                                <td className="px-5 py-3 text-xs font-black text-slate-700 uppercase tracking-widest">
+                                <td className="px-5 py-3 text-table-body font-black text-slate-700 uppercase tracking-widest">
                                     Total Geral
                                 </td>
                                 <td className="px-4 py-3 text-sm font-bold text-right text-slate-700 tabular-nums">

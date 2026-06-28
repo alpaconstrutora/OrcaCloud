@@ -80,6 +80,11 @@ export const investorService = {
 
     async saveInvestor(investor: Partial<Investor>) {
         const INVESTOR_COLS = 'id, name, email, phone, document, organization_id, settings, created_at';
+        // Coerce empty strings to null so UNIQUE constraint works correctly
+        investor = {
+            ...investor,
+            email: investor.email?.trim() || null,
+        };
         if (investor.id) {
             // Strip immutable fields from update payload
             const { id, created_at, ...updatePayload } = investor;

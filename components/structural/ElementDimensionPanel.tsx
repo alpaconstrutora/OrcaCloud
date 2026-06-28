@@ -13,6 +13,7 @@ import {
   dimensionarSapata,
   dimensionarVigaContinua,
   dimensionarVigaBaldrame,
+  dimensionarLajeTrelicada,
   DimensionResult
 } from '../../utils/structuralMath'
 import type {
@@ -81,15 +82,31 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
           bitolaLongitudinalMm: Number(geometria.bitolaLongitudinalMm ?? 10)
         })
       } else if (element.tipo === 'LAJE') {
-        calcRes = dimensionarLaje({
-          lxM: Number(geometria.lxM ?? 3.5),
-          lyM: Number(geometria.lyM ?? 4.0),
-          hCm: Number(geometria.hCm ?? 10),
-          fckMpa: Number(geometria.fckMpa ?? 25),
-          caa: project.caa,
-          cargaRevestimentoKnm2: Number(cargas.cargaRevestimentoKnm2 ?? 1.0),
-          cargaVariavelKnm2: Number(cargas.cargaVariavelKnm2 ?? 1.5)
-        })
+        if (geometria.tipoLaje === 'trelicada') {
+          calcRes = dimensionarLajeTrelicada({
+            htrCm: Number(geometria.htrCm ?? 12),
+            hcCm: Number(geometria.hcCm ?? 5),
+            bwCm: Number(geometria.bwCm ?? 12),
+            beCm: Number(geometria.beCm ?? 30),
+            tipoEnchimento: (geometria.tipoEnchimento ?? 'EPS') as 'EPS' | 'CERAMICA',
+            fckMpa: Number(geometria.fckMpa ?? 25),
+            caa: project.caa,
+            lxM: Number(geometria.lxM ?? 3.5),
+            cargaRevestimentoKnm2: Number(cargas.cargaRevestimentoKnm2 ?? 1.0),
+            cargaVariavelKnm2: Number(cargas.cargaVariavelKnm2 ?? 1.5),
+            trelicaAdotada: (geometria.trelicaAdotada ?? 'TR12645') as 'TR08644' | 'TR12645' | 'TR16745'
+          })
+        } else {
+          calcRes = dimensionarLaje({
+            lxM: Number(geometria.lxM ?? 3.5),
+            lyM: Number(geometria.lyM ?? 4.0),
+            hCm: Number(geometria.hCm ?? 10),
+            fckMpa: Number(geometria.fckMpa ?? 25),
+            caa: project.caa,
+            cargaRevestimentoKnm2: Number(cargas.cargaRevestimentoKnm2 ?? 1.0),
+            cargaVariavelKnm2: Number(cargas.cargaVariavelKnm2 ?? 1.5)
+          })
+        }
       } else if (element.tipo === 'VIGA_BALDRAME') {
         calcRes = dimensionarVigaBaldrame({
           bCm: Number(geometria.bCm ?? 15),
@@ -128,7 +145,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
   }, [geometria, cargas, isContinua])
 
   // 2. Handler de Mudança de Geometria/Cargas
-  const updateGeometria = (k: string, v: number) => {
+  const updateGeometria = (k: string, v: any) => {
     setGeometria(prev => ({ ...prev, [k]: v }))
   }
 
@@ -191,20 +208,46 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
       }
       alert('Não foi encontrada seção viável. Reduza a carga ou aumente o fck.')
     } else if (element.tipo === 'LAJE') {
-      // Varre h de 7cm a 25cm
-      for (let h = 7; h <= 25; h += 1) {
-        const res = dimensionarLaje({
-          lxM: Number(geometria.lxM ?? 3.5),
-          lyM: Number(geometria.lyM ?? 4.0),
-          hCm: h,
-          fckMpa: Number(geometria.fckMpa ?? 25),
-          caa: project.caa,
-          cargaRevestimentoKnm2: Number(cargas.cargaRevestimentoKnm2 ?? 1.0),
-          cargaVariavelKnm2: Number(cargas.cargaVariavelKnm2 ?? 1.5)
-        })
-        if (res.status === 'OK') {
-          setGeometria(prev => ({ ...prev, hCm: h }))
-          return
+      if (geometria.tipoLaje === 'trelicada') {
+        const alturasTr = [8, 12, 16]
+        const capas = [4, 5]
+        for (const htr of alturasTr) {
+          for (const hc of capas) {
+            const res = dimensionarLajeTrelicada({
+              htrCm: htr,
+              hcCm: hc,
+              bwCm: Number(geometria.bwCm ?? 12),
+              beCm: Number(geometria.beCm ?? 30),
+              tipoEnchimento: (geometria.tipoEnchimento ?? 'EPS') as 'EPS' | 'CERAMICA',
+              fckMpa: Number(geometria.fckMpa ?? 25),
+              caa: project.caa,
+              lxM: Number(geometria.lxM ?? 3.5),
+              cargaRevestimentoKnm2: Number(cargas.cargaRevestimentoKnm2 ?? 1.0),
+              cargaVariavelKnm2: Number(cargas.cargaVariavelKnm2 ?? 1.5),
+              trelicaAdotada: htr === 8 ? 'TR08644' : htr === 12 ? 'TR12645' : 'TR16745'
+            })
+            if (res.status === 'OK') {
+              setGeometria(prev => ({ ...prev, htrCm: htr, hcCm: hc }))
+              return
+            }
+          }
+        }
+        alert('Não foi encontrada altura viável nos limites comerciais.')
+      } else {
+        for (let h = 7; h <= 25; h += 1) {
+          const res = dimensionarLaje({
+            lxM: Number(geometria.lxM ?? 3.5),
+            lyM: Number(geometria.lyM ?? 4.0),
+            hCm: h,
+            fckMpa: Number(geometria.fckMpa ?? 25),
+            caa: project.caa,
+            cargaRevestimentoKnm2: Number(cargas.cargaRevestimentoKnm2 ?? 1.0),
+            cargaVariavelKnm2: Number(cargas.cargaVariavelKnm2 ?? 1.5)
+          })
+          if (res.status === 'OK') {
+            setGeometria(prev => ({ ...prev, hCm: h }))
+            return
+          }
         }
       }
     } else if (element.tipo === 'VIGA_BALDRAME') {
@@ -557,32 +600,123 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
             {/* Geometria de Lajes */}
             {element.tipo === 'LAJE' && (
               <>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block text-xs font-black text-slate-500 space-y-1">
-                    Vão Menor Lx (m)
-                    <input
-                      type="number" step="0.1" value={geometria.lxM ?? 3.5}
-                      onChange={e => updateGeometria('lxM', Number(e.target.value))}
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
-                    />
-                  </label>
-                  <label className="block text-xs font-black text-slate-500 space-y-1">
-                    Vão Maior Ly (m)
-                    <input
-                      type="number" step="0.1" value={geometria.lyM ?? 4.0}
-                      onChange={e => updateGeometria('lyM', Number(e.target.value))}
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
-                    />
-                  </label>
-                </div>
-                <label className="block text-xs font-black text-slate-500 space-y-1">
-                  Espessura h (cm)
-                  <input
-                    type="number" value={geometria.hCm ?? 10}
-                    onChange={e => updateGeometria('hCm', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
-                  />
+                <label className="block text-xs font-black text-slate-500 space-y-1 col-span-2">
+                  Tipo de Laje
+                  <select
+                    value={geometria.tipoLaje ?? 'macica'}
+                    onChange={e => updateGeometria('tipoLaje', e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
+                  >
+                    <option value="macica">Laje Maciça (Marcus 2D)</option>
+                    <option value="trelicada">Laje Treliçada Unidirecional (NBR 14859)</option>
+                  </select>
                 </label>
+
+                {geometria.tipoLaje === 'trelicada' ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-3 col-span-2">
+                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                        Vão Unidirecional Lx (m)
+                        <input
+                          type="number" step="0.1" value={geometria.lxM ?? 3.5}
+                          onChange={e => updateGeometria('lxM', Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                        />
+                      </label>
+                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                        Treliça de Catálogo
+                        <select
+                          value={geometria.trelicaAdotada ?? 'TR12645'}
+                          onChange={e => updateGeometria('trelicaAdotada', e.target.value)}
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
+                        >
+                          <option value="TR08644">TR 08644 (h=8cm, Ø4.0mm)</option>
+                          <option value="TR12645">TR 12645 (h=12cm, Ø5.0mm)</option>
+                          <option value="TR16745">TR 16745 (h=16cm, Ø6.0mm)</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 col-span-2">
+                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                        Altura da Treliça h_tr (cm)
+                        <input
+                          type="number" value={geometria.htrCm ?? 12}
+                          onChange={e => updateGeometria('htrCm', Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                        />
+                      </label>
+                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                        Espessura Capa h_c (cm)
+                        <input
+                          type="number" value={geometria.hcCm ?? 5}
+                          onChange={e => updateGeometria('hcCm', Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 col-span-2">
+                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                        Largura Vigota b_w (cm)
+                        <input
+                          type="number" value={geometria.bwCm ?? 12}
+                          onChange={e => updateGeometria('bwCm', Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                        />
+                      </label>
+                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                        Largura Bloco b_e (cm)
+                        <input
+                          type="number" value={geometria.beCm ?? 30}
+                          onChange={e => updateGeometria('beCm', Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                        />
+                      </label>
+                    </div>
+
+                    <label className="block text-xs font-black text-slate-500 space-y-1 col-span-2">
+                      Tipo de Enchimento (Material)
+                      <select
+                        value={geometria.tipoEnchimento ?? 'EPS'}
+                        onChange={e => updateGeometria('tipoEnchimento', e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
+                      >
+                        <option value="EPS">Blocos de EPS (Isopor - Leve)</option>
+                        <option value="CERAMICA">Lajota Cerâmica (Mais pesado)</option>
+                      </select>
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-3 col-span-2">
+                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                        Vão Menor Lx (m)
+                        <input
+                          type="number" step="0.1" value={geometria.lxM ?? 3.5}
+                          onChange={e => updateGeometria('lxM', Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                        />
+                      </label>
+                      <label className="block text-xs font-black text-slate-500 space-y-1">
+                        Vão Maior Ly (m)
+                        <input
+                          type="number" step="0.1" value={geometria.lyM ?? 4.0}
+                          onChange={e => updateGeometria('lyM', Number(e.target.value))}
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                        />
+                      </label>
+                    </div>
+                    <label className="block text-xs font-black text-slate-500 space-y-1 col-span-2">
+                      Espessura h (cm)
+                      <input
+                        type="number" value={geometria.hCm ?? 10}
+                        onChange={e => updateGeometria('hCm', Number(e.target.value))}
+                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                      />
+                    </label>
+                  </>
+                )}
               </>
             )}
 
@@ -909,7 +1043,20 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         <div>Estribo: c/{result.armaduraSugerida.transversal.espaçamentoCm} cm</div>
                       </div>
                     )}
-                    {element.tipo === 'LAJE' && `Ø${result.armaduraSugerida.flexao.bitolaMm} c/${result.armaduraSugerida.flexao.espaçamentoCm}`}
+                    {element.tipo === 'LAJE' && (
+                      geometria.tipoLaje === 'trelicada' ? (
+                        <div className="text-[9px] text-left leading-normal font-semibold">
+                          <div>Treliça: {geometria.trelicaAdotada ?? 'TR12645'} (e={result.armaduraSugerida.flexao.espaçamentoCm}cm)</div>
+                          {result.armaduraSugerida.flexao.quantidade > 0 ? (
+                            <div className="text-blue-600 font-bold">Reforço: +{result.armaduraSugerida.flexao.quantidade}Ø{result.armaduraSugerida.flexao.bitolaReforçoMm} / vigota</div>
+                          ) : (
+                            <div className="text-emerald-600 font-bold">Sem reforço adicional</div>
+                          )}
+                        </div>
+                      ) : (
+                        `Ø${result.armaduraSugerida.flexao.bitolaMm} c/${result.armaduraSugerida.flexao.espaçamentoCm}`
+                      )
+                    )}
                     {element.tipo === 'SAPATA' && `${result.armaduraSugerida.direcaoA.quantidade}Ø${result.armaduraSugerida.direcaoA.bitolaMm} + ${result.armaduraSugerida.direcaoB.quantidade}Ø${result.armaduraSugerida.direcaoB.bitolaMm}`}
                   </div>
                 </div>
@@ -935,6 +1082,18 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     <div>Tensão Mínima (σ_min): <span className="font-bold text-slate-900">{(result.detalhesTecnicos.esforcos.sigmaMinKnc2 * 10).toFixed(2)} kgf/cm²</span></div>
                     <div>Momento Mk,A: <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.mkAKnm.toFixed(1)} kN.m</span></div>
                     <div>Momento Mk,B: <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.mkBKnm.toFixed(1)} kN.m</span></div>
+                  </div>
+                </div>
+              )}
+
+              {element.tipo === 'LAJE' && geometria.tipoLaje === 'trelicada' && result.detalhesTecnicos.esforcos && (
+                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mt-3 space-y-2">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Detalhamento Técnico da Nervura (NBR 14859)</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-semibold text-slate-700">
+                    <div>Peso Próprio (g_pp): <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.ppLajeKnm2.toFixed(2)} kN/m²</span></div>
+                    <div>Carga de Projeto / vigota: <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.fdNervuraKnm.toFixed(2)} kN/m</span></div>
+                    <div>Momento Máx. (Md): <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.mdKnm.toFixed(2)} kN.m</span></div>
+                    <div>Cisalhamento Máx. (Vd): <span className="font-bold text-slate-900">{result.detalhesTecnicos.esforcos.vdKn.toFixed(2)} kN</span></div>
                   </div>
                 </div>
               )}

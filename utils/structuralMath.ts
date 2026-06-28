@@ -1238,6 +1238,236 @@ export function dimensionarVigaBaldrame(params: {
   }
 }
 
+/**
+ * Dimensionamento de Laje Treliçada Unidirecional (NBR 14859 e NBR 6118)
+ */
+export function dimensionarLajeTrelicada(params: {
+  htrCm: number         // Altura da treliça / bloco de enchimento (ex: 8, 12, 16)
+  hcCm: number          // Espessura da capa de concreto (ex: 4, 5)
+  bwCm: number          // Largura da vigota na base (ex: 12)
+  beCm: number          // Largura do bloco de enchimento (ex: 30 para EPS, 20 para cerâmica)
+  tipoEnchimento: 'EPS' | 'CERAMICA'
+  fckMpa: number
+  caa: 'I' | 'II' | 'III' | 'IV'
+  lxM: number           // Vão unidirecional (comprimento da vigota)
+  cargaRevestimentoKnm2: number
+  cargaVariavelKnm2: number
+  trelicaAdotada: 'TR08644' | 'TR12645' | 'TR16745' // Tipo de treliça de catálogo
+}): DimensionResult {
+  const {
+    htrCm, hcCm, bwCm, beCm, tipoEnchimento,
+    fckMpa, caa, lxM, cargaRevestimentoKnm2, cargaVariavelKnm2,
+    trelicaAdotada
+  } = params
+  const diagnosticos: DiagnosticItem[] = []
+
+  const cNomCm = getCobrimentoNominalCm(caa, 'laje')
+  const fcd = fckMpa / 1.4
+  const fyd = 500 / 1.15
+  const fydKnc2 = fyd / 10
+  const fcdKnc2 = fcd / 10
+
+  const H = htrCm + hcCm
+  const btCm = bwCm + beCm // Intereixo
+
+  // 1. Definição do banzo inferior padrão da treliça adotada
+  let areaAcoTrelicaCm2 = 0.39 // Padrão TR08644 (2 fios Ø 5.0 mm)
+  let bitolaTrelicaMm = 5.0
+  if (trelicaAdotada === 'TR12645') {
+    areaAcoTrelicaCm2 = 0.39 // 2 Ø 5.0 mm
+    bitolaTrelicaMm = 5.0
+  } else if (trelicaAdotada === 'TR16745') {
+    areaAcoTrelicaCm2 = 0.56 // 2 Ø 6.0 mm (ou similar dependendo do catálogo)
+    bitolaTrelicaMm = 6.0
+  } else if (trelicaAdotada === 'TR08644') {
+    areaAcoTrelicaCm2 = 0.25 // 2 Ø 4.0 mm
+    bitolaTrelicaMm = 4.0
+  }
+
+  // 2. Peso próprio e análise de cargas
+  const volCapam3 = (1.0 * 1.0 * hcCm) / 100
+  const volNervuram3 = (bwCm / 100) * (htrCm / 100) * (1.0 / (btCm / 100))
+  const volConcretoM3m2 = volCapam3 + volNervuram3
+
+  const volEnchimentoM3m2 = (beCm / 100) * (htrCm / 100) * (1.0 / (btCm / 100))
+
+  const gammaConcreto = 25.0 // kN/m³
+  const gammaEnchimento = tipoEnchimento === 'EPS' ? 0.2 : 8.0 // kN/m³
+
+  const ppConcreto = volConcretoM3m2 * gammaConcreto
+  const ppEnchimento = volEnchimentoM3m2 * gammaEnchimento
+  const ppLajeKnm2 = ppConcreto + ppEnchimento
+
+  const gTotalKnm2 = ppLajeKnm2 + cargaRevestimentoKnm2
+  const qKnm2 = cargaVariavelKnm2
+  const fdKnm2 = 1.4 * gTotalKnm2 + 1.4 * qKnm2
+
+  const fdNervuraKnm = fdKnm2 * (btCm / 100)
+  const fkNervuraKnm = (gTotalKnm2 + qKnm2) * (btCm / 100)
+
+  const mdKnm = (fdNervuraKnm * Math.pow(lxM, 2)) / 8
+  const vdKn = (fdNervuraKnm * lxM) / 2
+
+  // 3. Dimensionamento da Seção T (Flexão Simples)
+  const bitolaAdotadaMm = 8.0
+  const dCm = H - cNomCm - (bitolaAdotadaMm / 20)
+
+  const mdKncm = mdKnm * 100
+  const A_eq = 0.272 * btCm * fcdKnc2
+  const B_eq = -0.68 * btCm * fcdKnc2 * dCm
+  const C_eq = mdKncm
+
+  let asPosFinal = 0.0015 * bwCm * H
+  let flexStatus: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
+  let flexMsg = 'Seção T de concreto e treliça adequadas para flexão.'
+  let xCm = 0
+
+  const delta = B_eq * B_eq - 4 * A_eq * C_eq
+  if (delta < 0 || dCm <= 0) {
+    flexStatus = 'REPROVADO'
+    flexMsg = 'Esmagamento do concreto. Aumente a espessura da capa (hc) ou a altura da treliça.'
+  } else {
+    xCm = (-B_eq - Math.sqrt(delta)) / (2 * A_eq)
+    const betaX = xCm / dCm
+
+    if (betaX > 0.45) {
+      flexStatus = 'REPROVADO'
+      flexMsg = `Linha neutra (x/d = ${betaX.toFixed(2)}) excede o limite de ductilidade (0.45).`
+    } else {
+      const asNec = mdKncm / (fydKnc2 * (dCm - 0.4 * xCm))
+      asPosFinal = Math.max(asNec, 0.0015 * bwCm * H)
+
+      if (xCm > hcCm) {
+        flexStatus = 'ATENCAO'
+        flexMsg = `Linha neutra entra na alma da nervura (x = ${xCm.toFixed(2)} cm > hc = ${hcCm} cm).`
+      }
+    }
+  }
+
+  const asReforcoNecessaria = Math.max(0, asPosFinal - areaAcoTrelicaCm2)
+  let numBarrasReforço = 0
+  let bitolaReforçoMm = 8.0
+  let areaReforçoAdotada = 0
+
+  if (asReforcoNecessaria > 0) {
+    const areaBarraRef = (Math.PI * Math.pow(bitolaReforçoMm / 10, 2)) / 4
+    numBarrasReforço = Math.ceil(asReforcoNecessaria / areaBarraRef)
+    areaReforçoAdotada = numBarrasReforço * areaBarraRef
+  }
+
+  diagnosticos.push({
+    criterio: 'Resistência à flexão na nervura (ELU)',
+    status: flexStatus,
+    valorCalculado: flexStatus === 'REPROVADO' ? 'Inviável' : `${asPosFinal.toFixed(2)} cm² / vigota`,
+    valorLimite: `Banzo treliça: ${areaAcoTrelicaCm2.toFixed(2)} cm²`,
+    referenciaNormativa: 'NBR 6118 Art. 17.2',
+    mensagem: flexStatus === 'OK' && numBarrasReforço > 0
+      ? `Aço da treliça insuficiente. Necessário reforço de ${numBarrasReforço} Ø ${bitolaReforçoMm} mm.`
+      : flexMsg
+  })
+
+  // 4. Cisalhamento da Nervura (Sem estribo adicional)
+  const fctkInf = 0.21 * Math.pow(fckMpa, 2 / 3)
+  const fctd = fctkInf / 1.4
+  const k = Math.min(2.0, 1 + Math.sqrt(20 / dCm))
+  const rhoL = Math.min(0.02, asPosFinal / (bwCm * dCm))
+  const trd = 0.25 * (fctd / 10)
+  const vrd1 = (trd * k * (1.2 + 40 * rhoL)) * bwCm * dCm
+
+  let cisStatus: 'OK' | 'REPROVADO' = 'OK'
+  let cisMsg = 'A alma da vigota de concreto resiste ao esforço cortante de serviço.'
+  if (vdKn > vrd1) {
+    cisStatus = 'REPROVADO'
+    cisMsg = `Esforço cortante de projeto (Vd = ${vdKn.toFixed(1)} kN) excede a capacidade sem estribos adicionais (Vrd1 = ${vrd1.toFixed(1)} kN).`
+  }
+
+  diagnosticos.push({
+    criterio: 'Resistência ao cisalhamento na vigota',
+    status: cisStatus,
+    valorCalculado: `${vdKn.toFixed(2)} kN`,
+    valorLimite: `${vrd1.toFixed(2)} kN (Vrd1)`,
+    referenciaNormativa: 'Art. 19.4',
+    mensagem: cisMsg
+  })
+
+  // 5. Verificação de Flecha ELS (Branson)
+  const Ec = 4760 * Math.sqrt(fckMpa)
+  const EcKnc2 = Ec / 10
+  const areaT = (btCm * hcCm) + bwCm * htrCm
+  const ycg = ((btCm * hcCm * (hcCm / 2)) + (bwCm * htrCm * (hcCm + htrCm / 2))) / areaT
+  const Ic = ((btCm * Math.pow(hcCm, 3)) / 12) + (btCm * hcCm * Math.pow(ycg - hcCm / 2, 2)) +
+             ((bwCm * Math.pow(htrCm, 3)) / 12) + (bwCm * htrCm * Math.pow(ycg - (hcCm + htrCm / 2), 2))
+
+  const fctm = 0.3 * Math.pow(fckMpa, 2 / 3)
+  const mcr = (1.2 * (fctm / 10) * Ic) / (H - ycg)
+  const ma = (fkNervuraKnm * Math.pow(lxM, 2) / 8) * 100
+
+  let Ieq = Ic
+  if (ma > mcr) {
+    const maRatio = Math.pow(mcr / ma, 3)
+    Ieq = maRatio * Ic + (1 - maRatio) * (0.3 * Ic)
+  }
+
+  const q_cm = fkNervuraKnm / 100
+  const L_cm = lxM * 100
+  const flechaImediata = (5 * q_cm * Math.pow(L_cm, 4)) / (384 * EcKnc2 * Ieq)
+  const flechaLonga = flechaImediata * 3.0
+  const flechaLim = L_cm / 250
+
+  const statusFlecha = flechaLonga <= flechaLim ? 'OK' : 'REPROVADO'
+
+  diagnosticos.push({
+    criterio: 'Limite de flecha diferida (ELS)',
+    status: statusFlecha,
+    valorCalculado: `${flechaLonga.toFixed(2)} cm`,
+    valorLimite: `${flechaLim.toFixed(2)} cm (L/250)`,
+    referenciaNormativa: 'Art. 13.3',
+    mensagem: statusFlecha === 'OK'
+      ? 'Deformação de longo prazo dentro do limite normativo.'
+      : 'Flecha excessiva! Aumente a espessura da capa ou da treliça.'
+  })
+
+  // Status Geral do Semáforo
+  let overallStatus: 'OK' | 'ATENCAO' | 'REPROVADO' = 'OK'
+  if (diagnosticos.some(d => d.status === 'REPROVADO')) {
+    overallStatus = 'REPROVADO'
+  } else if (diagnosticos.some(d => d.status === 'ATENCAO')) {
+    overallStatus = 'ATENCAO'
+  }
+
+  const volumeConcretoM3 = volConcretoM3m2
+  const pesoAcoTrelicaKg = 0.8 * lxM * (1.0 / (btCm / 100))
+  const pesoAcoReforcoKg = numBarrasReforço * lxM * areaReforçoAdotada * 100 * 0.00785 * (1.0 / (btCm / 100))
+  const pesoAcoKg = pesoAcoTrelicaKg + pesoAcoReforcoKg
+
+  return {
+    status: overallStatus,
+    diagnosticos,
+    armaduraSugerida: {
+      flexao: {
+        bitolaMm: bitolaTrelicaMm,
+        espaçamentoCm: btCm,
+        quantidade: numBarrasReforço,
+        bitolaReforçoMm,
+        reforçoCm2: asReforcoNecessaria
+      }
+    },
+    detalhesTecnicos: {
+      cobrimentoNominalCm: cNomCm,
+      alturaUtilCm: dCm,
+      esforcos: {
+        ppLajeKnm2,
+        fdNervuraKnm,
+        mdKnm,
+        vdKn
+      },
+      volumeConcretoM3,
+      pesoAcoKg,
+      areaFormaM2: 1.0
+    }
+  }
+}
+
 // ── Funções de ajuda internas ───────────────────────────────────
 
 function fcdMpaToKnc2(fckMpa: number): number {

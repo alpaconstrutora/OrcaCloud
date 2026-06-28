@@ -7,6 +7,7 @@ import {
   dimensionarSapata,
   dimensionarVigaContinua,
   dimensionarVigaBaldrame,
+  dimensionarLajeTrelicada,
 } from '../utils/structuralMath'
 
 describe('getCobrimentoNominalCm', () => {
@@ -292,6 +293,49 @@ describe('dimensionarVigaBaldrame', () => {
     expect(result.detalhesTecnicos.cobrimentoNominalCm).toBe(5.0) // NBR 6118 exige 50mm
     expect(result.armaduraSugerida.longitudinal.quantidade).toBeGreaterThanOrEqual(2)
     expect(result.armaduraSugerida.longitudinalSuperior.quantidade).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe('dimensionarLajeTrelicada', () => {
+  it('Laje treliçada leve de EPS que atende sem aço adicional de reforço (Vão=2.2m, carga=1.5kN/m², TR12645)', () => {
+    const result = dimensionarLajeTrelicada({
+      htrCm: 12,
+      hcCm: 5,
+      bwCm: 12,
+      beCm: 30, // EPS 30cm
+      tipoEnchimento: 'EPS',
+      fckMpa: 25,
+      caa: 'II',
+      lxM: 2.2, // vão reduzido para passar sem reforço
+      cargaRevestimentoKnm2: 1.0,
+      cargaVariavelKnm2: 1.5,
+      trelicaAdotada: 'TR12645',
+    })
+
+    expect(result.status).toBe('OK')
+    expect(result.detalhesTecnicos.dimensaoACm).toBeUndefined()
+    expect(result.armaduraSugerida.flexao.quantidade).toBe(0)
+    expect(result.diagnosticos.some(d => d.criterio.includes('flexão') && d.status === 'OK')).toBe(true)
+  })
+
+  it('Laje treliçada pesada de Lajota Cerâmica que exige barras adicionais de reforço', () => {
+    const result = dimensionarLajeTrelicada({
+      htrCm: 8,
+      hcCm: 4,
+      bwCm: 12,
+      beCm: 20, // cerâmica 20cm
+      tipoEnchimento: 'CERAMICA', // mais pesada
+      fckMpa: 20,
+      caa: 'II',
+      lxM: 2.2, // vão adequado para flecha passar e exigir reforço fletor
+      cargaRevestimentoKnm2: 1.5,
+      cargaVariavelKnm2: 2.0,
+      trelicaAdotada: 'TR08644',
+    })
+
+    expect(result.status).toBe('OK')
+    expect(result.armaduraSugerida.flexao.quantidade).toBeGreaterThan(0) // Precisa de barras adicionais de reforço!
+    expect(result.armaduraSugerida.flexao.bitolaReforçoMm).toBe(8.0)
   })
 })
 

@@ -131,7 +131,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                     )}
                 </div>
 
-                {isAdmin && adminTab === 'opportunities' && (
+                {isAdmin && adminTab === 'opportunities' && organizationId && (
                     <button
                         onClick={() => setEditing('new')}
                         className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md hover:bg-blue-700 transition-colors"
@@ -196,7 +196,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                             <p className="text-sm font-bold text-gray-400">
                                 {isAdmin ? 'Nenhuma oportunidade cadastrada' : 'Nenhuma oportunidade disponível no momento'}
                             </p>
-                            {isAdmin && (
+                            {isAdmin && organizationId && (
                                 <button
                                     onClick={() => setEditing('new')}
                                     className="mt-4 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors"

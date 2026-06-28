@@ -74,7 +74,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
 }) => {
     // Org canônica: prop activeOrganizationId tem precedência; settings.organizationId
     // só existe quando um projeto está carregado, então sem ele o portal não salvava.
-    const orgId = organizationId ?? settings?.organizationId;
+    const orgId = organizationId ?? settings?.organizationId ?? investorProfile?.organization_id;
     const [activeTab, setActiveTab] = React.useState<TabId>(initialTab || 'dashboard');
     const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
     const [filterStatus, setFilterStatus] = React.useState('Todos');

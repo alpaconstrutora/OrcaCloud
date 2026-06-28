@@ -14,6 +14,7 @@ import BoletoFormModal, { formatBRL } from './BoletoFormModal';
 import BoletoLoteModal from './BoletoLoteModal';
 import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
 import { useStore } from '../store/useStore';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 
 interface BoletoManagerProps {
     organizationId: string;
@@ -41,6 +42,16 @@ const STATUS_COLORS: Record<BoletoStatus, string> = {
     cancelado: 'bg-red-100 text-red-700',
 };
 
+const BOLETO_COLUMNS: ColumnConfig[] = [
+    { key: 'numero', label: 'Código', sortable: true },
+    { key: 'beneficiario', label: 'Beneficiário', sortable: true },
+    { key: 'obra', label: 'Obra', sortable: true },
+    { key: 'centro_custo', label: 'Centro de Custo', sortable: true },
+    { key: 'valor', label: 'Valor', sortable: true },
+    { key: 'vencimento', label: 'Vencimento', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+];
+
 const BoletoManager: React.FC<BoletoManagerProps> = ({
     organizationId, userEmail, projectId, organizations = [], onOrgChange,
 }) => {
@@ -56,6 +67,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [exporting, setExporting] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isLoteEditOpen, setIsLoteEditOpen] = useState(false);
+    const tableColumns = useTableColumns(BOLETO_COLUMNS);
 
     // Raw arrays kept alongside maps for the bulk-edit modal dropdowns
     const [supplierList, setSupplierList] = useState<{ id: string; name: string }[]>([]);
@@ -197,23 +209,26 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         // Ordenação
         list = [...list].sort((a, b) => {
             let va: string | number, vb: string | number;
-            switch (ordenarPor) {
+            const sortCol = tableColumns.sortColumn || ordenarPor;
+            const sortDir = tableColumns.sortColumn ? tableColumns.sortDirection : ordenarDir;
+
+            switch (sortCol) {
                 case 'numero':        va = a.numero ?? 0;                       vb = b.numero ?? 0;                       break;
                 case 'vencimento':    va = a.vencimento ?? '';                  vb = b.vencimento ?? '';                  break;
                 case 'valor':         va = a.valor ?? 0;                        vb = b.valor ?? 0;                        break;
-                case 'project_id':    va = projectMap[a.project_id ?? ''] ?? ''; vb = projectMap[b.project_id ?? ''] ?? ''; break;
-                case 'cost_center_id':va = ccMap[a.cost_center_id ?? ''] ?? '';  vb = ccMap[b.cost_center_id ?? ''] ?? '';  break;
-                case 'beneficiario_nome': va = (a.beneficiario_nome ?? '').toLowerCase(); vb = (b.beneficiario_nome ?? '').toLowerCase(); break;
+                case 'obra':          va = projectMap[a.project_id ?? ''] ?? ''; vb = projectMap[b.project_id ?? ''] ?? ''; break;
+                case 'centro_custo':  va = ccMap[a.cost_center_id ?? ''] ?? '';  vb = ccMap[b.cost_center_id ?? ''] ?? '';  break;
+                case 'beneficiario':  va = (a.beneficiario_nome ?? '').toLowerCase(); vb = (b.beneficiario_nome ?? '').toLowerCase(); break;
                 case 'status':        va = a.status;                            vb = b.status;                            break;
                 default:              va = a.created_at;                        vb = b.created_at;
             }
-            if (va < vb) return ordenarDir === 'asc' ? -1 : 1;
-            if (va > vb) return ordenarDir === 'asc' ? 1 : -1;
+            if (va < vb) return sortDir === 'asc' ? -1 : 1;
+            if (va > vb) return sortDir === 'asc' ? 1 : -1;
             return 0;
         });
 
         return list;
-    }, [boletos, busca, vencDe, vencAte, valorMin, valorMax, ordenarPor, ordenarDir, supplierMap]);
+    }, [boletos, busca, vencDe, vencAte, valorMin, valorMax, ordenarPor, ordenarDir, supplierMap, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const counts = useMemo(() => {
         const c: Record<string, number> = { todos: boletos.length };
@@ -454,7 +469,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     )}
                 </button>
                 {/* Toggle grid / lista */}
-                <div className="flex bg-white border border-gray-100 rounded-2xl overflow-hidden">
+                <div className="flex bg-white border border-gray-100 rounded-2xl overflow-hidden gap-1">
                     <button
                         onClick={() => setViewMode('grid')}
                         title="Visualização em blocos"
@@ -470,6 +485,16 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         <List className="w-4 h-4" />
                     </button>
                 </div>
+                {viewMode === 'list' && (
+                    <ColumnConfigButton
+                        columns={BOLETO_COLUMNS}
+                        visibleColumns={tableColumns.visibleColumns}
+                        showColumnConfig={tableColumns.showColumnConfig}
+                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                        onToggleColumn={tableColumns.toggleColumn}
+                        onReset={tableColumns.resetColumns}
+                    />
+                )}
             </div>
 
             {/* Painel de filtros avançados */}
@@ -700,13 +725,83 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         title="Selecionar todos"
                                     />
                                 </th>
-                                <th className="text-left px-4 py-3 w-20">Código</th>
-                                <th className="text-left px-4 py-3">Beneficiário</th>
-                                <th className="text-left px-4 py-3">Obra</th>
-                                <th className="text-left px-4 py-3">Centro de Custo</th>
-                                <th className="text-right px-4 py-3">Valor</th>
-                                <th className="text-center px-4 py-3">Vencimento</th>
-                                <th className="text-center px-4 py-3">Status</th>
+                                {tableColumns.visibleColumns.includes('numero') && (
+                                    <SortableHeader
+                                        label="Código"
+                                        colKey="numero"
+                                        sortable={true}
+                                        sortColumn={tableColumns.sortColumn}
+                                        sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort}
+                                        className="text-left px-4 py-3 w-20"
+                                    />
+                                )}
+                                {tableColumns.visibleColumns.includes('beneficiario') && (
+                                    <SortableHeader
+                                        label="Beneficiário"
+                                        colKey="beneficiario"
+                                        sortable={true}
+                                        sortColumn={tableColumns.sortColumn}
+                                        sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort}
+                                        className="text-left px-4 py-3"
+                                    />
+                                )}
+                                {tableColumns.visibleColumns.includes('obra') && (
+                                    <SortableHeader
+                                        label="Obra"
+                                        colKey="obra"
+                                        sortable={true}
+                                        sortColumn={tableColumns.sortColumn}
+                                        sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort}
+                                        className="text-left px-4 py-3"
+                                    />
+                                )}
+                                {tableColumns.visibleColumns.includes('centro_custo') && (
+                                    <SortableHeader
+                                        label="Centro de Custo"
+                                        colKey="centro_custo"
+                                        sortable={true}
+                                        sortColumn={tableColumns.sortColumn}
+                                        sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort}
+                                        className="text-left px-4 py-3"
+                                    />
+                                )}
+                                {tableColumns.visibleColumns.includes('valor') && (
+                                    <SortableHeader
+                                        label="Valor"
+                                        colKey="valor"
+                                        sortable={true}
+                                        sortColumn={tableColumns.sortColumn}
+                                        sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort}
+                                        className="text-right px-4 py-3"
+                                    />
+                                )}
+                                {tableColumns.visibleColumns.includes('vencimento') && (
+                                    <SortableHeader
+                                        label="Vencimento"
+                                        colKey="vencimento"
+                                        sortable={true}
+                                        sortColumn={tableColumns.sortColumn}
+                                        sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort}
+                                        className="text-center px-4 py-3"
+                                    />
+                                )}
+                                {tableColumns.visibleColumns.includes('status') && (
+                                    <SortableHeader
+                                        label="Status"
+                                        colKey="status"
+                                        sortable={true}
+                                        sortColumn={tableColumns.sortColumn}
+                                        sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort}
+                                        className="text-center px-4 py-3"
+                                    />
+                                )}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -730,44 +825,58 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                                 className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
                                             />
                                         </td>
-                                        <td className="px-4 py-3 whitespace-nowrap">
-                                            <span className="text-xs font-black text-gray-500 tracking-widest">
-                                                {b.numero != null ? `#${String(b.numero).padStart(4, '0')}` : '—'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-gray-700 max-w-[200px]">
-                                            <p className="font-medium truncate">
-                                                {b.supplier_id
-                                                    ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
-                                                    : (b.beneficiario_nome ?? b.documento_nome)}
-                                            </p>
-                                            {b.beneficiario_cnpj && !b.supplier_id && (
-                                                <p className="text-[11px] text-gray-400 font-mono truncate">{b.beneficiario_cnpj}</p>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px]">
-                                            <p className="truncate">{b.project_id ? (projectMap[b.project_id] ?? '—') : '—'}</p>
-                                        </td>
-                                        <td className="px-4 py-3 text-xs text-gray-500 max-w-[140px]">
-                                            <p className="truncate">{b.cost_center_id ? (ccMap[b.cost_center_id] ?? '—') : '—'}</p>
-                                        </td>
-                                        <td className="px-4 py-3 text-right font-bold text-gray-900 whitespace-nowrap">
-                                            {formatBRL(b.valor)}
-                                        </td>
-                                        <td className={`px-4 py-3 text-center text-sm font-semibold whitespace-nowrap ${atrasado ? 'text-red-600' : 'text-gray-700'}`}>
-                                            {b.vencimento ? new Date(b.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
-                                            {atrasado && <div className="text-[10px] text-red-400 font-bold">ATRASADO</div>}
-                                        </td>
-                                        <td className="px-4 py-3 text-center">
-                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
-                                                {STATUS_LABELS[b.status]}
-                                            </span>
-                                            {b.confidence_score !== undefined && b.confidence_score < 80 && (
-                                                <div className="mt-0.5 flex items-center justify-center gap-0.5 text-[9px] font-bold text-amber-600">
-                                                    <AlertTriangle className="w-2.5 h-2.5" /> {b.confidence_score}%
-                                                </div>
-                                            )}
-                                        </td>
+                                        {tableColumns.visibleColumns.includes('numero') && (
+                                            <td className="px-4 py-3 whitespace-nowrap">
+                                                <span className="text-xs font-black text-gray-500 tracking-widest">
+                                                    {b.numero != null ? `#${String(b.numero).padStart(4, '0')}` : '—'}
+                                                </span>
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('beneficiario') && (
+                                            <td className="px-4 py-3 text-gray-700 max-w-[200px]">
+                                                <p className="font-medium truncate">
+                                                    {b.supplier_id
+                                                        ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
+                                                        : (b.beneficiario_nome ?? b.documento_nome)}
+                                                </p>
+                                                {b.beneficiario_cnpj && !b.supplier_id && (
+                                                    <p className="text-[11px] text-gray-400 font-mono truncate">{b.beneficiario_cnpj}</p>
+                                                )}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('obra') && (
+                                            <td className="px-4 py-3 text-xs text-gray-500 max-w-[160px]">
+                                                <p className="truncate">{b.project_id ? (projectMap[b.project_id] ?? '—') : '—'}</p>
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('centro_custo') && (
+                                            <td className="px-4 py-3 text-xs text-gray-500 max-w-[140px]">
+                                                <p className="truncate">{b.cost_center_id ? (ccMap[b.cost_center_id] ?? '—') : '—'}</p>
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('valor') && (
+                                            <td className="px-4 py-3 text-right font-bold text-gray-900 whitespace-nowrap">
+                                                {formatBRL(b.valor)}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('vencimento') && (
+                                            <td className={`px-4 py-3 text-center text-sm font-semibold whitespace-nowrap ${atrasado ? 'text-red-600' : 'text-gray-700'}`}>
+                                                {b.vencimento ? new Date(b.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                                                {atrasado && <div className="text-[10px] text-red-400 font-bold">ATRASADO</div>}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('status') && (
+                                            <td className="px-4 py-3 text-center">
+                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
+                                                    {STATUS_LABELS[b.status]}
+                                                </span>
+                                                {b.confidence_score !== undefined && b.confidence_score < 80 && (
+                                                    <div className="mt-0.5 flex items-center justify-center gap-0.5 text-[9px] font-bold text-amber-600">
+                                                        <AlertTriangle className="w-2.5 h-2.5" /> {b.confidence_score}%
+                                                    </div>
+                                                )}
+                                            </td>
+                                        )}
                                     </tr>
                                 );
                             })}

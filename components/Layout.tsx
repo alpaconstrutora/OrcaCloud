@@ -829,48 +829,37 @@ const Layout: React.FC<LayoutProps> = ({
               <NavGroup label="Controladoria" />
               <NavItem id="controladoria" icon={BarChart3} label="Controladoria" />
 
-              {(mod.crm || mod.incorporacao || mod.broker_portal || isDev) && (
+              {(mod.crm || mod.incorporacao || isDev) && (
                 <>
-                  <NavDropdown
-                    label="Comercial"
-                    icon={TrendingUp}
-                    isOpen={isVendasOpen}
-                    onToggle={() => setIsVendasOpen(!isVendasOpen)}
-                    hasActiveChild={['gestao-vendas','sales','rentals','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations','imovib','empreendimentos'].includes(activeView)}
-                  >
-                    {(mod.crm || isDev) && (
-                      <>
-                        <DropdownItem id="sales" label="Vendas de Ativos" icon={Building2} />
-                        <DropdownItem id="rentals" label="Locações" icon={Building2} />
-                        <DropdownItem id="service-contracts" label="Contratos de Serviço" icon={FileText} />
-                        <DropdownItem id="services-commercial" label="CRM Serviços" icon={Briefcase} />
-                      </>
-                    )}
-                    {(mod.incorporacao || isDev) && (
-                      <>
-                        <DropdownItem id="empreendimentos" label="Empreendimentos" icon={Building2} />
-                        <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
-                      </>
-                    )}
-                  </NavDropdown>
+                  <NavGroup label="Comercial" />
+                  {(mod.crm || isDev) && (
+                    <>
+                      <NavItem id="sales" icon={Building2} label="Vendas de Ativos" />
+                      <NavItem id="rentals" icon={Building2} label="Locações" />
+                      <NavItem id="service-contracts" icon={FileText} label="Contratos de Serviço" />
+                      <NavItem id="services-commercial" icon={Briefcase} label="CRM Serviços" />
+                    </>
+                  )}
+                  {(mod.incorporacao || isDev) && (
+                    <>
+                      <NavItem id="empreendimentos" icon={Building2} label="Empreendimentos" />
+                      <NavItem id="imovib" icon={BarChart3} label="Estudos de Viabilidade" />
+                    </>
+                  )}
                 </>
               )}
 
               {isDev ? (
-                <NavDropdown
-                  label="Portais"
-                  icon={Shield}
-                  isOpen={isPortalsOpen}
-                  onToggle={() => setIsPortalsOpen(!isPortalsOpen)}
-                >
-                  <DropdownItem id="client-properties" label="Portal do Cliente" icon={Building2} />
-                  <DropdownItem id="investor-portal" label="Portal do Investidor" icon={TrendingUp} />
-                  <DropdownItem id="supplier-area" label="Portal do Fornecedor" icon={Truck} />
-                  <DropdownItem id="partner-workspaces-admin" label="Portal de Parceiros" icon={Users} />
+                <>
+                  <NavGroup label="Portais" />
+                  <NavItem id="client-properties" icon={Building2} label="Portal do Cliente" />
+                  <NavItem id="investor-portal" icon={TrendingUp} label="Portal do Investidor" />
+                  <NavItem id="supplier-area" icon={Truck} label="Portal do Fornecedor" />
+                  <NavItem id="partner-workspaces-admin" icon={Users} label="Portal de Parceiros" />
                   {(mod.broker_portal || isDev) && (
-                    <DropdownItem id="broker-area" label="Portal do Corretor" icon={Briefcase} />
+                    <NavItem id="broker-area" icon={Briefcase} label="Portal do Corretor" />
                   )}
-                </NavDropdown>
+                </>
               ) : (
                 <>
                   <NavItem id="client-area" icon={User} label="Visão do Cliente" />

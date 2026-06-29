@@ -355,6 +355,7 @@ const Layout: React.FC<LayoutProps> = ({
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
   const [isVendasOpen, setIsVendasOpen] = React.useState(false);
+  const [isInteligenciaNegociosOpen, setIsInteligenciaNegociosOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
@@ -581,12 +582,23 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
-              <NavItem id="bi-executivo" icon={BarChart3} label="BI Executivo" />
-              <NavItem id="opura-reports" icon={BarChart3} label="ÒPURA Relatórios" />
-              <NavItem id="opura-central-obra" icon={Building2} label="Central de Obras" />
-              <NavItem id="opura-central-cliente" icon={Users} label="Central de Clientes" />
-              <NavItem id="opura-central-fornecedor" icon={Truck} label="Central de Fornecedores" />
-              <NavItem id="opura-market" icon={Search} label="ÒPURA Market" />
+              <NavDropdown
+                label="Inteligência de Negócios"
+                icon={BarChart3}
+                isOpen={isInteligenciaNegociosOpen}
+                onToggle={() => {
+                  if (isCollapsed) { onChangeView('bi-executivo'); }
+                  else { setIsInteligenciaNegociosOpen(o => !o); }
+                }}
+                hasActiveChild={['bi-executivo','opura-reports','opura-central-obra','opura-central-cliente','opura-central-fornecedor','opura-market'].includes(activeView)}
+              >
+                <DropdownItem id="bi-executivo" label="BI Executivo" icon={BarChart3} />
+                <DropdownItem id="opura-reports" label="ÒPURA Relatórios" icon={BarChart3} />
+                <DropdownItem id="opura-central-obra" label="Central de Obras" icon={Building2} />
+                <DropdownItem id="opura-central-cliente" label="Central de Clientes" icon={Users} />
+                <DropdownItem id="opura-central-fornecedor" label="Central de Fornecedores" icon={Truck} />
+                <DropdownItem id="opura-market" label="ÒPURA Market" icon={Search} />
+              </NavDropdown>
 
               <NavGroup label="Corporativo" />
 

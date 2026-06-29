@@ -371,7 +371,7 @@ const Layout: React.FC<LayoutProps> = ({
   const suprimentosViews = ['fluxo-p2p','supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
-  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-cashflow','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial','fiscal-nfe','automation'];
+  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-cashflow','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
@@ -814,13 +814,15 @@ const Layout: React.FC<LayoutProps> = ({
                         <DropdownItem id="financial-intelligence" label="Inteligência" icon={Brain} />
                       </>
                     )}
-                    {(mod.fiscal || isDev) && (
-                      <>
-                        <DropdownItem id="fiscal-nfe" label="Fiscal & NF-e" icon={Receipt} />
-                        <DropdownItem id="automation" label="Automação" icon={Zap} />
-                      </>
-                    )}
                   </NavDropdown>
+                </>
+              )}
+
+              {(mod.fiscal || isDev) && (
+                <>
+                  <NavGroup label="Fiscal" />
+                  <NavItem id="fiscal-nfe" icon={Receipt} label="Fiscal e NF-e" />
+                  <NavItem id="automation" icon={Zap} label="Automação" />
                 </>
               )}
 

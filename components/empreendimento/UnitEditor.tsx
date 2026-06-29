@@ -3,8 +3,23 @@ import React from 'react';
 import { Plus, Trash2, Loader2, Layers, Edit, Copy, X, Check, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import {
-  EmpreendimentoTower, EmpreendimentoUnit, UnitStatus, EmpreendimentoUnitInsert,
+  EmpreendimentoTower, EmpreendimentoUnit, EmpreendimentoFloor, FloorTipo, UnitStatus, EmpreendimentoUnitInsert,
 } from '../../types';
+
+const FLOOR_TIPO_LABEL: Record<FloorTipo, string> = {
+  SUBSOLO: 'Subsolo', TERREO: 'Térreo', MEZANINO: 'Mezanino', TIPO: 'Tipo',
+  COBERTURA: 'Cobertura', TECNICO: 'Técnico', GARAGEM: 'Garagem', OUTRO: 'Outro',
+};
+const FLOOR_TIPO_STYLE: Record<FloorTipo, string> = {
+  SUBSOLO:   'bg-slate-500/10 text-slate-600',
+  TERREO:    'bg-lime-500/10 text-lime-700',
+  MEZANINO:  'bg-teal-500/10 text-teal-700',
+  TIPO:      'bg-blue-500/10 text-blue-600',
+  COBERTURA: 'bg-amber-500/10 text-amber-700',
+  TECNICO:   'bg-gray-500/10 text-gray-600',
+  GARAGEM:   'bg-orange-500/10 text-orange-600',
+  OUTRO:     'bg-purple-500/10 text-purple-600',
+};
 
 interface Props {
   tower: EmpreendimentoTower;
@@ -26,11 +41,12 @@ const STATUS_STYLE: Record<UnitStatus, string> = {
 };
 
 const emptyForm = () => ({
-  name: '', floor: '', typology: '', private_area: '', common_area: '', price: '', parking_spaces: '',
+  name: '', floor: '', typology: '', private_area: '', common_area: '', price: '', parking_spaces: '', floor_id: '',
 });
 
 export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   const [units, setUnits] = React.useState<EmpreendimentoUnit[]>([]);
+  const [floors, setFloors] = React.useState<EmpreendimentoFloor[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [form, setForm] = React.useState(emptyForm());
@@ -57,7 +73,12 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
-      setUnits(await empreendimentoService.listUnits(tower.id));
+      const [u, f] = await Promise.all([
+        empreendimentoService.listUnits(tower.id),
+        empreendimentoService.listFloors(tower.id),
+      ]);
+      setUnits(u);
+      setFloors(f);
     } catch (err) {
       console.error('[UnitEditor] erro ao carregar unidades:', err);
     } finally {
@@ -102,6 +123,11 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
     }
   };
 
+  const floorMap = React.useMemo(
+    () => Object.fromEntries(floors.map(f => [f.id, f])) as Record<string, EmpreendimentoFloor>,
+    [floors],
+  );
+
   const startEdit = (u: EmpreendimentoUnit) => {
     setEditingId(u.id);
     setEditForm({
@@ -112,6 +138,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       common_area: u.common_area?.toString() ?? '',
       price: u.price?.toString() ?? '',
       parking_spaces: u.parking_spaces?.toString() ?? '',
+      floor_id: u.floor_id ?? '',
     });
   };
 
@@ -129,6 +156,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         total_area: priv !== undefined || common !== undefined ? (priv ?? 0) + (common ?? 0) : undefined,
         price: editForm.price ? Number(editForm.price) : undefined,
         parking_spaces: editForm.parking_spaces ? Number(editForm.parking_spaces) : undefined,
+        floor_id: editForm.floor_id || null,
       };
       await empreendimentoService.updateUnit(u.id, updated);
       setUnits(prev => prev.map(x => x.id === u.id ? { ...x, ...updated } : x));
@@ -350,6 +378,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
               <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider bg-gray-50/50">
                 <th className="py-3 px-4">Unidade</th>
                 <th className="py-3 px-4">Pav.</th>
+                <th className="py-3 px-4">Tipo Pav.</th>
                 <th className="py-3 px-4">Tipologia</th>
                 <th className="py-3 px-4">Priv. m²</th>
                 <th className="py-3 px-4">Comum m²</th>
@@ -368,6 +397,20 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                       <>
                         <td className="py-2 px-3"><input className={editCls} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} autoFocus /></td>
                         <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.floor} onChange={e => setEditForm(p => ({ ...p, floor: e.target.value }))} /></td>
+                        <td className="py-2 px-3">
+                          <select
+                            value={editForm.floor_id}
+                            onChange={e => setEditForm(p => ({ ...p, floor_id: e.target.value }))}
+                            className={editCls}
+                          >
+                            <option value="">— Sem vínculo</option>
+                            {floors.map(f => (
+                              <option key={f.id} value={f.id}>
+                                {FLOOR_TIPO_LABEL[f.tipo]} — {f.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
                         <td className="py-2 px-3"><input className={editCls} value={editForm.typology} onChange={e => setEditForm(p => ({ ...p, typology: e.target.value }))} /></td>
                         <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.private_area} onChange={e => setEditForm(p => ({ ...p, private_area: e.target.value }))} /></td>
                         <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.common_area} onChange={e => setEditForm(p => ({ ...p, common_area: e.target.value }))} /></td>
@@ -395,6 +438,15 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                       <>
                         <td className="py-3 px-4 font-bold text-gray-800">{u.name}</td>
                         <td className="py-3 px-4 text-gray-500">{u.floor ?? '—'}</td>
+                        <td className="py-3 px-4">
+                          {u.floor_id && floorMap[u.floor_id] ? (
+                            <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${FLOOR_TIPO_STYLE[floorMap[u.floor_id].tipo]}`}>
+                              {FLOOR_TIPO_LABEL[floorMap[u.floor_id].tipo]}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300 text-[10px]">—</span>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-gray-500">{u.typology || '—'}</td>
                         <td className="py-3 px-4 text-gray-500">{u.private_area ?? '—'}</td>
                         <td className="py-3 px-4 text-gray-500">{u.common_area ?? '—'}</td>
@@ -440,7 +492,7 @@ const TotalsRow: React.FC<{ units: EmpreendimentoUnit[] }> = ({ units }) => {
   const fmt = (v: number) => v > 0 ? v.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—';
   return (
     <tr className="border-t-2 border-gray-200 bg-gray-50/70 font-bold text-xs text-gray-700">
-      <td className="py-2.5 px-4" colSpan={3}>
+      <td className="py-2.5 px-4" colSpan={4}>
         <span className="text-xs font-black uppercase tracking-widest text-gray-400">Total ({units.length} unid.)</span>
       </td>
       <td className="py-2.5 px-4">{fmt(totalPriv)} m²</td>

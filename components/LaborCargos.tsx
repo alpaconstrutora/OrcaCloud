@@ -61,18 +61,27 @@ function buildOrgTree(roles: OrgRole[]): { trees: RoleNode[]; isolated: OrgRole[
             childrenOf.get(r.proximo_cargo_id)!.push(r);
         }
     });
-    // Roots = roles with no parent in tree (top of career chain)
+    // Roots = roles with no parent in-company (top of career chain)
     const isRoot = (r: OrgRole) => !r.proximo_cargo_id || !roleSet.has(r.proximo_cargo_id);
-    const roots = roles.filter(isRoot);
-    const isolated = roots.filter(r => !childrenOf.has(r.id));
-    const treeRoots = roots.filter(r => childrenOf.has(r.id));
+    const treeRoots = roles.filter(r => isRoot(r) && childrenOf.has(r.id));
+    const standaloneRoots = roles.filter(r => isRoot(r) && !childrenOf.has(r.id));
 
-    function buildNode(role: OrgRole, visited: Set<string>): RoleNode {
+    // Track visited to detect cycles — unvisited roles (caught in a cycle) fall back to isolated
+    const visited = new Set<string>();
+
+    function buildNode(role: OrgRole): RoleNode {
         visited.add(role.id);
         const children = (childrenOf.get(role.id) || []).filter(c => !visited.has(c.id));
-        return { role, children: children.map(c => buildNode(c, new Set(visited))) };
+        return { role, children: children.map(buildNode) };
     }
-    return { trees: treeRoots.map(r => buildNode(r, new Set())), isolated };
+
+    const trees = treeRoots.map(buildNode);
+    standaloneRoots.forEach(r => visited.add(r.id));
+
+    // Any role not yet visited (cycle or orphan) also becomes isolated
+    const missed = roles.filter(r => !visited.has(r.id));
+
+    return { trees, isolated: [...standaloneRoots, ...missed] };
 }
 
 // ── Compact org chart card ──────────────────────────────────────────────────

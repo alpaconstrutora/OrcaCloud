@@ -269,19 +269,12 @@ const OrgChartView: React.FC<OrgChartViewProps> = ({ roles, employees, funcaoByI
         );
     }
 
-    if (trees.length === 0) {
-        return (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center text-amber-700 text-sm">
-                <GitBranch className="w-8 h-8 mx-auto mb-2 text-amber-400" />
-                <p className="font-bold">Nenhum cargo possui trilha de carreira configurada.</p>
-                <p className="text-xs mt-1">Edite os cargos e defina o campo <strong>Próximo Cargo</strong> para visualizar o organograma.</p>
-            </div>
-        );
-    }
+    // Render isolated roles as single-node trees alongside connected trees
+    const isolatedNodes: RoleNode[] = isolated.map(r => ({ role: r, children: [] }));
+    const allTrees = [...trees, ...isolatedNodes];
 
     return (
         <div className="space-y-6">
-            {/* Scrollable org chart container */}
             <div
                 ref={containerRef}
                 className="relative overflow-x-auto overflow-y-visible rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-white"
@@ -293,16 +286,10 @@ const OrgChartView: React.FC<OrgChartViewProps> = ({ roles, employees, funcaoByI
                     width={svgDims.w}
                     height={svgDims.h}
                 >
-                    <defs>
-                        <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
-                            <circle cx="3" cy="3" r="2" fill="#94a3b8" />
-                        </marker>
-                    </defs>
                     {lines.map(line => {
                         const midY = (line.y1 + line.y2) / 2;
                         return (
                             <g key={line.id}>
-                                {/* Shadow line for depth */}
                                 <path
                                     d={`M ${line.x1} ${line.y1} C ${line.x1} ${midY} ${line.x2} ${midY} ${line.x2} ${line.y2}`}
                                     stroke="#e2e8f0"
@@ -310,7 +297,6 @@ const OrgChartView: React.FC<OrgChartViewProps> = ({ roles, employees, funcaoByI
                                     fill="none"
                                     strokeLinecap="round"
                                 />
-                                {/* Main connection line */}
                                 <path
                                     d={`M ${line.x1} ${line.y1} C ${line.x1} ${midY} ${line.x2} ${midY} ${line.x2} ${line.y2}`}
                                     stroke="#6366f1"
@@ -320,16 +306,15 @@ const OrgChartView: React.FC<OrgChartViewProps> = ({ roles, employees, funcaoByI
                                     strokeLinecap="round"
                                     opacity={0.6}
                                 />
-                                {/* Dot at child end */}
                                 <circle cx={line.x2} cy={line.y2} r={3} fill="#6366f1" opacity={0.5} />
                             </g>
                         );
                     })}
                 </svg>
 
-                {/* Tree nodes */}
-                <div className="flex items-start justify-center gap-16 p-10 flex-wrap" style={{ minWidth: 'fit-content' }}>
-                    {trees.map(tree => (
+                {/* All trees (connected + isolated) side by side */}
+                <div className="flex items-start justify-center gap-10 p-10 flex-wrap" style={{ minWidth: 'fit-content' }}>
+                    {allTrees.map(tree => (
                         <OrgNode
                             key={tree.role.id}
                             node={tree}
@@ -343,30 +328,6 @@ const OrgChartView: React.FC<OrgChartViewProps> = ({ roles, employees, funcaoByI
                     ))}
                 </div>
             </div>
-
-            {/* Isolated roles (not connected to any chain) */}
-            {isolated.length > 0 && (
-                <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
-                        Sem trilha definida
-                    </p>
-                    <div className="flex flex-wrap gap-3">
-                        {isolated.map(role => (
-                            <div key={role.id} ref={el => { nodeRefs.current[role.id] = el; }}>
-                                <OrgCard
-                                    role={role}
-                                    nodeRef={el => { nodeRefs.current[role.id] = el; }}
-                                    funcaoById={funcaoById}
-                                    catById={catById}
-                                    employees={employees}
-                                    onEdit={() => onEdit(role)}
-                                    onDelete={() => onDelete(role)}
-                                />
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

@@ -1,48 +1,56 @@
 // components/empreendimento/UnitEditor.tsx
 import React from 'react';
-import { Plus, Trash2, Loader2, Layers, Edit, Copy, X, Check, Zap, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  Plus, Trash2, Loader2, Layers, Edit, Copy, X, Check, Zap,
+  ChevronDown, ChevronUp, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown,
+} from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import {
   EmpreendimentoTower, EmpreendimentoUnit, FloorTipo, UnitStatus, EmpreendimentoUnitInsert,
 } from '../../types';
+
+// ── Constantes de exibição ───────────────────────────────────────────────────
 
 const FLOOR_TIPO_LABEL: Record<FloorTipo, string> = {
   SUBSOLO: 'Subsolo', TERREO: 'Térreo', MEZANINO: 'Mezanino', TIPO: 'Tipo',
   COBERTURA: 'Cobertura', TECNICO: 'Técnico', GARAGEM: 'Garagem', OUTRO: 'Outro',
 };
 const FLOOR_TIPO_STYLE: Record<FloorTipo, string> = {
-  SUBSOLO:   'bg-slate-500/10 text-slate-600',
-  TERREO:    'bg-lime-500/10 text-lime-700',
-  MEZANINO:  'bg-teal-500/10 text-teal-700',
-  TIPO:      'bg-blue-500/10 text-blue-600',
-  COBERTURA: 'bg-amber-500/10 text-amber-700',
-  TECNICO:   'bg-gray-500/10 text-gray-600',
-  GARAGEM:   'bg-orange-500/10 text-orange-600',
-  OUTRO:     'bg-purple-500/10 text-purple-600',
+  SUBSOLO: 'bg-slate-500/10 text-slate-600', TERREO: 'bg-lime-500/10 text-lime-700',
+  MEZANINO: 'bg-teal-500/10 text-teal-700', TIPO: 'bg-blue-500/10 text-blue-600',
+  COBERTURA: 'bg-amber-500/10 text-amber-700', TECNICO: 'bg-gray-500/10 text-gray-600',
+  GARAGEM: 'bg-orange-500/10 text-orange-600', OUTRO: 'bg-purple-500/10 text-purple-600',
 };
+const STATUS_LABELS: Record<UnitStatus, string> = {
+  DISPONIVEL: 'Disponível', RESERVADO: 'Reservado', PERMUTADO: 'Permutado', VENDIDO: 'Vendido',
+};
+const STATUS_STYLE: Record<UnitStatus, string> = {
+  DISPONIVEL: 'bg-emerald-500/10 text-emerald-600', RESERVADO: 'bg-amber-500/10 text-amber-600',
+  PERMUTADO: 'bg-violet-500/10 text-violet-600', VENDIDO: 'bg-blue-500/10 text-blue-600',
+};
+
+type SortCol = 'name' | 'floor' | 'floor_tipo' | 'typology' | 'private_area' | 'common_area' | 'parking_spaces' | 'price' | 'status';
+
+const emptyForm = () => ({
+  name: '', floor: '', typology: '', private_area: '', common_area: '',
+  price: '', parking_spaces: '', floor_tipo: '' as FloorTipo | '',
+});
+const emptyBulkForm = () => ({
+  status: '' as UnitStatus | '', floor_tipo: '' as FloorTipo | '',
+  typology: '', private_area: '', common_area: '', price: '', parking_spaces: '',
+});
+
+const fmtArea = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+const fmtPrice = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+
+// ── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
   tower: EmpreendimentoTower;
   onUnitsChange?: (towerId: string, units: EmpreendimentoUnit[]) => void;
 }
 
-const STATUS_LABELS: Record<UnitStatus, string> = {
-  DISPONIVEL: 'Disponível',
-  RESERVADO: 'Reservado',
-  PERMUTADO: 'Permutado',
-  VENDIDO: 'Vendido',
-};
-
-const STATUS_STYLE: Record<UnitStatus, string> = {
-  DISPONIVEL: 'bg-emerald-500/10 text-emerald-600',
-  RESERVADO: 'bg-amber-500/10 text-amber-600',
-  PERMUTADO: 'bg-violet-500/10 text-violet-600',
-  VENDIDO: 'bg-blue-500/10 text-blue-600',
-};
-
-const emptyForm = () => ({
-  name: '', floor: '', typology: '', private_area: '', common_area: '', price: '', parking_spaces: '', floor_id: '', floor_tipo: '' as FloorTipo | '',
-});
+// ── Componente principal ─────────────────────────────────────────────────────
 
 export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   const [units, setUnits] = React.useState<EmpreendimentoUnit[]>([]);
@@ -50,24 +58,33 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   const [saving, setSaving] = React.useState(false);
   const [form, setForm] = React.useState(emptyForm());
 
-  // Edição inline
+  // Inline edit
   const [editingId, setEditingId] = React.useState<string | null>(null);
-  const [editForm, setEditForm] = React.useState(emptyForm());
+  const [editForm, setEditForm] = React.useState({ ...emptyForm(), floor_id: '' });
 
   // Geração automática
   const [genOpen, setGenOpen] = React.useState(false);
   const [genForm, setGenForm] = React.useState({
     floors_count: tower.floors_count?.toString() ?? '',
     units_per_floor: tower.units_per_floor?.toString() ?? '',
-    start_floor: '1',
-    prefix: '',
-    typology: '',
-    private_area: '',
-    common_area: '',
-    parking_spaces: '',
-    price: '',
+    start_floor: '1', prefix: '', typology: '',
+    private_area: '', common_area: '', parking_spaces: '', price: '',
   });
   const [generating, setGenerating] = React.useState(false);
+
+  // Ordenação
+  const [sortCol, setSortCol] = React.useState<SortCol>('floor');
+  const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('asc');
+
+  // Grupos colapsados
+  const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
+
+  // Seleção em lote
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [bulkForm, setBulkForm] = React.useState(emptyBulkForm());
+  const [bulkSaving, setBulkSaving] = React.useState(false);
+
+  // ── Load ────────────────────────────────────────────────────────────────────
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -81,24 +98,84 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   }, [tower.id]);
 
   React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => { onUnitsChange?.(tower.id, units); }, [units, tower.id, onUnitsChange]);
 
-  React.useEffect(() => {
-    onUnitsChange?.(tower.id, units);
-  }, [units, tower.id, onUnitsChange]);
+  // ── Sort + Group ────────────────────────────────────────────────────────────
+
+  const sortFn = React.useCallback((a: EmpreendimentoUnit, b: EmpreendimentoUnit) => {
+    let va: any, vb: any;
+    switch (sortCol) {
+      case 'name':          va = a.name;              vb = b.name; break;
+      case 'floor':         va = a.floor ?? -999;     vb = b.floor ?? -999; break;
+      case 'floor_tipo':    va = a.floor_tipo ?? '';  vb = b.floor_tipo ?? ''; break;
+      case 'typology':      va = a.typology ?? '';    vb = b.typology ?? ''; break;
+      case 'private_area':  va = a.private_area ?? 0; vb = b.private_area ?? 0; break;
+      case 'common_area':   va = a.common_area ?? 0;  vb = b.common_area ?? 0; break;
+      case 'parking_spaces':va = a.parking_spaces ?? 0; vb = b.parking_spaces ?? 0; break;
+      case 'price':         va = a.price ?? 0;        vb = b.price ?? 0; break;
+      case 'status':        va = a.status;            vb = b.status; break;
+    }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  }, [sortCol, sortDir]);
+
+  const groups = React.useMemo(() => {
+    const map = new Map<string, EmpreendimentoUnit[]>();
+    for (const u of units) {
+      const key = u.floor != null ? String(u.floor) : '__null__';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(u);
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => {
+        if (a === '__null__') return 1;
+        if (b === '__null__') return -1;
+        return Number(a) - Number(b);
+      })
+      .map(([key, grpUnits]) => ({
+        key,
+        label: key === '__null__' ? 'Sem Pavimento' : `Pavimento ${key}`,
+        units: [...grpUnits].sort(sortFn),
+        totalPriv: grpUnits.reduce((s, u) => s + (u.private_area ?? 0), 0),
+        totalComum: grpUnits.reduce((s, u) => s + (u.common_area ?? 0), 0),
+      }));
+  }, [units, sortFn]);
+
+  // ── Seleção ─────────────────────────────────────────────────────────────────
+
+  const allSelected = units.length > 0 && units.every(u => selected.has(u.id));
+  const someSelected = units.some(u => selected.has(u.id)) && !allSelected;
+
+  const toggleSelectAll = () => {
+    setSelected(allSelected ? new Set() : new Set(units.map(u => u.id)));
+  };
+  const toggleSelectGroup = (grpUnits: EmpreendimentoUnit[]) => {
+    const allInGroup = grpUnits.every(u => selected.has(u.id));
+    setSelected(prev => {
+      const next = new Set(prev);
+      grpUnits.forEach(u => allInGroup ? next.delete(u.id) : next.add(u.id));
+      return next;
+    });
+  };
+  const toggleSelect = (id: string) => {
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+
+  // ── Handlers CRUD ──────────────────────────────────────────────────────────
 
   const buildPayload = (f: typeof form): Omit<EmpreendimentoUnitInsert, 'tower_id' | 'name'> => {
     const priv = f.private_area ? Number(f.private_area) : undefined;
     const common = f.common_area ? Number(f.common_area) : undefined;
     return {
       floor: f.floor ? Number(f.floor) : undefined,
+      floor_tipo: (f.floor_tipo || undefined) as FloorTipo | undefined,
       typology: f.typology || undefined,
-      private_area: priv,
-      common_area: common,
+      private_area: priv, common_area: common,
       total_area: priv !== undefined || common !== undefined ? (priv ?? 0) + (common ?? 0) : undefined,
       price: f.price ? Number(f.price) : undefined,
       parking_spaces: f.parking_spaces ? Number(f.parking_spaces) : undefined,
-      status: 'DISPONIVEL',
-      is_vendavel: true,
+      status: 'DISPONIVEL', is_vendavel: true,
     };
   };
 
@@ -110,25 +187,18 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       await empreendimentoService.createUnit({ tower_id: tower.id, name: form.name.trim(), ...buildPayload(form) });
       setForm(emptyForm());
       await load();
-    } catch (err: any) {
-      alert(`Erro ao adicionar unidade: ${err.message}`);
-    } finally {
-      setSaving(false);
-    }
+    } catch (err: any) { alert(`Erro ao adicionar: ${err.message}`); }
+    finally { setSaving(false); }
   };
 
   const startEdit = (u: EmpreendimentoUnit) => {
     setEditingId(u.id);
     setEditForm({
-      name: u.name,
-      floor: u.floor?.toString() ?? '',
-      typology: u.typology ?? '',
-      private_area: u.private_area?.toString() ?? '',
-      common_area: u.common_area?.toString() ?? '',
-      price: u.price?.toString() ?? '',
+      name: u.name, floor: u.floor?.toString() ?? '',
+      typology: u.typology ?? '', private_area: u.private_area?.toString() ?? '',
+      common_area: u.common_area?.toString() ?? '', price: u.price?.toString() ?? '',
       parking_spaces: u.parking_spaces?.toString() ?? '',
-      floor_id: u.floor_id ?? '',
-      floor_tipo: u.floor_tipo ?? '',
+      floor_tipo: u.floor_tipo ?? '', floor_id: u.floor_id ?? '',
     });
   };
 
@@ -138,214 +208,216 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       const priv = editForm.private_area ? Number(editForm.private_area) : undefined;
       const common = editForm.common_area ? Number(editForm.common_area) : undefined;
       const updated = {
-        name: editForm.name.trim(),
-        floor: editForm.floor ? Number(editForm.floor) : undefined,
-        typology: editForm.typology || undefined,
-        private_area: priv,
-        common_area: common,
+        name: editForm.name.trim(), floor: editForm.floor ? Number(editForm.floor) : undefined,
+        floor_tipo: (editForm.floor_tipo || null) as FloorTipo | null,
+        typology: editForm.typology || undefined, private_area: priv, common_area: common,
         total_area: priv !== undefined || common !== undefined ? (priv ?? 0) + (common ?? 0) : undefined,
         price: editForm.price ? Number(editForm.price) : undefined,
         parking_spaces: editForm.parking_spaces ? Number(editForm.parking_spaces) : undefined,
         floor_id: editForm.floor_id || null,
-        floor_tipo: (editForm.floor_tipo || null) as FloorTipo | null,
       };
       await empreendimentoService.updateUnit(u.id, updated);
       setUnits(prev => prev.map(x => x.id === u.id ? { ...x, ...updated } : x));
       setEditingId(null);
-    } catch (err: any) {
-      alert(`Erro ao salvar unidade: ${err.message}`);
-    }
+    } catch (err: any) { alert(`Erro ao salvar: ${err.message}`); }
   };
 
   const handleDuplicate = async (u: EmpreendimentoUnit) => {
     try {
-      const payload: EmpreendimentoUnitInsert = {
-        tower_id: tower.id,
-        name: `${u.name} (cópia)`,
-        floor: u.floor ?? undefined,
-        typology: u.typology ?? undefined,
-        private_area: u.private_area ?? undefined,
-        common_area: u.common_area ?? undefined,
-        total_area: u.total_area ?? undefined,
-        price: u.price ?? undefined,
-        parking_spaces: u.parking_spaces ?? undefined,
-        position_type: u.position_type ?? undefined,
-        sun_orientation: u.sun_orientation ?? undefined,
-        status: 'DISPONIVEL',
-        is_vendavel: true,
-        sort_order: units.length,
-      };
-      await empreendimentoService.createUnit(payload);
+      await empreendimentoService.createUnit({
+        tower_id: tower.id, name: `${u.name} (cópia)`,
+        floor: u.floor ?? undefined, floor_tipo: u.floor_tipo ?? undefined,
+        typology: u.typology ?? undefined, private_area: u.private_area ?? undefined,
+        common_area: u.common_area ?? undefined, total_area: u.total_area ?? undefined,
+        price: u.price ?? undefined, parking_spaces: u.parking_spaces ?? undefined,
+        status: 'DISPONIVEL', is_vendavel: true, sort_order: units.length,
+      });
       await load();
-    } catch (err: any) {
-      alert(`Erro ao duplicar unidade: ${err.message}`);
-    }
+    } catch (err: any) { alert(`Erro ao duplicar: ${err.message}`); }
   };
 
   const handleStatusChange = async (unit: EmpreendimentoUnit, status: UnitStatus) => {
     try {
       await empreendimentoService.updateUnit(unit.id, { status });
       setUnits(prev => prev.map(u => u.id === unit.id ? { ...u, status } : u));
-    } catch (err: any) {
-      alert(`Erro ao atualizar status: ${err.message}`);
-    }
+    } catch (err: any) { alert(`Erro ao atualizar status: ${err.message}`); }
   };
 
   const handleDelete = async (unit: EmpreendimentoUnit) => {
-    if (!window.confirm(`Excluir a unidade "${unit.name}"?`)) return;
+    if (!window.confirm(`Excluir "${unit.name}"?`)) return;
     try {
       await empreendimentoService.deleteUnit(unit.id);
       setUnits(prev => prev.filter(u => u.id !== unit.id));
-    } catch (err: any) {
-      alert(`Erro ao excluir unidade: ${err.message}`);
-    }
+      setSelected(prev => { const n = new Set(prev); n.delete(unit.id); return n; });
+    } catch (err: any) { alert(`Erro ao excluir: ${err.message}`); }
   };
+
+  // ── Bulk save ───────────────────────────────────────────────────────────────
+
+  const handleBulkSave = async () => {
+    const hasAny = bulkForm.status || bulkForm.floor_tipo || bulkForm.typology.trim()
+      || bulkForm.price || bulkForm.private_area || bulkForm.common_area || bulkForm.parking_spaces;
+    if (!hasAny) { alert('Preencha pelo menos um campo para aplicar em lote.'); return; }
+    setBulkSaving(true);
+    try {
+      await Promise.all(Array.from(selected).map(id => {
+        const unit = units.find(u => u.id === id)!;
+        const upd: Record<string, any> = {};
+        if (bulkForm.status) upd.status = bulkForm.status;
+        if (bulkForm.floor_tipo) upd.floor_tipo = bulkForm.floor_tipo;
+        if (bulkForm.typology.trim()) upd.typology = bulkForm.typology.trim();
+        if (bulkForm.price) upd.price = Number(bulkForm.price);
+        if (bulkForm.parking_spaces) upd.parking_spaces = Number(bulkForm.parking_spaces);
+        const priv = bulkForm.private_area ? Number(bulkForm.private_area) : unit.private_area;
+        const comum = bulkForm.common_area ? Number(bulkForm.common_area) : unit.common_area;
+        if (bulkForm.private_area) upd.private_area = priv;
+        if (bulkForm.common_area) upd.common_area = comum;
+        if (bulkForm.private_area || bulkForm.common_area) upd.total_area = (priv ?? 0) + (comum ?? 0);
+        return empreendimentoService.updateUnit(id, upd);
+      }));
+      setUnits(prev => prev.map(u => {
+        if (!selected.has(u.id)) return u;
+        const upd: Record<string, any> = {};
+        if (bulkForm.status) upd.status = bulkForm.status;
+        if (bulkForm.floor_tipo) upd.floor_tipo = bulkForm.floor_tipo;
+        if (bulkForm.typology.trim()) upd.typology = bulkForm.typology.trim();
+        if (bulkForm.price) upd.price = Number(bulkForm.price);
+        if (bulkForm.parking_spaces) upd.parking_spaces = Number(bulkForm.parking_spaces);
+        if (bulkForm.private_area) upd.private_area = Number(bulkForm.private_area);
+        if (bulkForm.common_area) upd.common_area = Number(bulkForm.common_area);
+        return { ...u, ...upd };
+      }));
+      setSelected(new Set());
+      setBulkForm(emptyBulkForm());
+    } catch (err: any) { alert(`Erro ao salvar em lote: ${err.message}`); }
+    finally { setBulkSaving(false); }
+  };
+
+  // ── Geração automática ──────────────────────────────────────────────────────
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const floors = Number(genForm.floors_count);
-    const perFloor = Number(genForm.units_per_floor);
+    const floors = Number(genForm.floors_count), perFloor = Number(genForm.units_per_floor);
     const startFloor = Number(genForm.start_floor);
     if (!floors || !perFloor) { alert('Informe número de pavimentos e unidades por pavimento.'); return; }
-    if (floors > 100 || perFloor > 50) { alert('Valores muito grandes (máx 100 pav / 50 un/pav).'); return; }
-
-    const total = floors * perFloor;
-    if (!window.confirm(`Gerar ${total} unidades para a torre "${tower.name}"?`)) return;
-
+    if (floors > 100 || perFloor > 50) { alert('Máx 100 pav / 50 un/pav.'); return; }
+    if (!window.confirm(`Gerar ${floors * perFloor} unidades para "${tower.name}"?`)) return;
     setGenerating(true);
     try {
       const toCreate: EmpreendimentoUnitInsert[] = [];
       for (let f = 0; f < floors; f++) {
         const floorNum = startFloor + f;
         for (let u = 1; u <= perFloor; u++) {
-          const unitNum = String(u).padStart(2, '0');
           const priv = genForm.private_area ? Number(genForm.private_area) : undefined;
           const common = genForm.common_area ? Number(genForm.common_area) : undefined;
           const prefix = genForm.prefix ? `${genForm.prefix}-` : '';
           toCreate.push({
             tower_id: tower.id,
-            name: `${prefix}${floorNum}${unitNum}`,
-            floor: floorNum,
-            typology: genForm.typology || undefined,
-            private_area: priv,
-            common_area: common,
+            name: `${prefix}${floorNum}${String(u).padStart(2, '0')}`,
+            floor: floorNum, typology: genForm.typology || undefined,
+            private_area: priv, common_area: common,
             total_area: priv !== undefined || common !== undefined ? (priv ?? 0) + (common ?? 0) : undefined,
             price: genForm.price ? Number(genForm.price) : undefined,
             parking_spaces: genForm.parking_spaces ? Number(genForm.parking_spaces) : undefined,
-            status: 'DISPONIVEL',
-            is_vendavel: true,
-            sort_order: units.length + toCreate.length,
+            status: 'DISPONIVEL', is_vendavel: true, sort_order: units.length + toCreate.length,
           });
         }
       }
       await empreendimentoService.bulkUpsertUnits(toCreate);
       setGenOpen(false);
       await load();
-    } catch (err: any) {
-      alert(`Erro ao gerar unidades: ${err.message}`);
-    } finally {
-      setGenerating(false);
-    }
+    } catch (err: any) { alert(`Erro ao gerar: ${err.message}`); }
+    finally { setGenerating(false); }
   };
+
+  // ── Utilidades de ordenação ─────────────────────────────────────────────────
+
+  const handleSort = (col: SortCol) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
+  };
+
+  const genTotal = (Number(genForm.floors_count) || 0) * (Number(genForm.units_per_floor) || 0);
 
   const inputCls = 'px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium outline-none focus:border-blue-400';
   const editCls = 'px-2 py-1 border border-blue-200 rounded-lg text-xs font-medium outline-none focus:border-blue-400 bg-white w-full';
 
-  const genTotal = (Number(genForm.floors_count) || 0) * (Number(genForm.units_per_floor) || 0);
+  // Totais gerais
+  const totalPriv = units.reduce((s, u) => s + (u.private_area ?? 0), 0);
+  const totalComum = units.reduce((s, u) => s + (u.common_area ?? 0), 0);
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-4">
-      {/* Formulário de adição individual */}
-      <form onSubmit={handleAdd} className="bg-gray-50/60 border border-gray-100 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-8 gap-3 items-end">
+      {/* Add form */}
+      <form onSubmit={handleAdd} className="bg-gray-50/60 border border-gray-100 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-9 gap-3 items-end">
         <input className={inputCls} placeholder="Unidade (ex: 101)" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
         <input className={inputCls} placeholder="Pav." type="number" value={form.floor} onChange={e => setForm(p => ({ ...p, floor: e.target.value }))} />
+        <select className={inputCls} value={form.floor_tipo} onChange={e => setForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))}>
+          <option value="">Tipo Pav.</option>
+          {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>)}
+        </select>
         <input className={inputCls} placeholder="Tipologia" value={form.typology} onChange={e => setForm(p => ({ ...p, typology: e.target.value }))} />
         <input className={inputCls} placeholder="Priv. m²" type="number" step="0.01" value={form.private_area} onChange={e => setForm(p => ({ ...p, private_area: e.target.value }))} />
         <input className={inputCls} placeholder="Comum m²" type="number" step="0.01" value={form.common_area} onChange={e => setForm(p => ({ ...p, common_area: e.target.value }))} />
         <input className={inputCls} placeholder="Vagas" type="number" value={form.parking_spaces} onChange={e => setForm(p => ({ ...p, parking_spaces: e.target.value }))} />
         <input className={inputCls} placeholder="Preço R$" type="number" step="0.01" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} />
-        <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-form-input uppercase tracking-wider flex items-center justify-center gap-1.5">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-          Add
+        <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Add
         </button>
       </form>
 
-      {/* Painel de geração automática */}
+      {/* Geração automática */}
       <div className="border border-dashed border-blue-200 rounded-2xl overflow-hidden">
-        <button
-          onClick={() => setGenOpen(v => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 text-blue-600 hover:bg-blue-50/50 transition-colors"
-        >
+        <button onClick={() => setGenOpen(v => !v)} className="w-full flex items-center justify-between px-4 py-3 text-blue-600 hover:bg-blue-50/50 transition-colors">
           <span className="flex items-center gap-2 text-xs font-black uppercase tracking-widest">
             <Zap className="w-4 h-4" /> Gerar Unidades Automaticamente
           </span>
           {genOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
-
         {genOpen && (
           <form onSubmit={handleGenerate} className="px-4 pb-4 space-y-4 border-t border-blue-100 pt-4 bg-blue-50/20">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Nº Pavimentos *</label>
-                <input type="number" min="1" className={inputCls + ' w-full'} value={genForm.floors_count}
-                  onChange={e => setGenForm(p => ({ ...p, floors_count: e.target.value }))} />
-              </div>
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Unid./Pavimento *</label>
-                <input type="number" min="1" className={inputCls + ' w-full'} value={genForm.units_per_floor}
-                  onChange={e => setGenForm(p => ({ ...p, units_per_floor: e.target.value }))} />
-              </div>
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Pav. Inicial</label>
-                <input type="number" min="0" className={inputCls + ' w-full'} value={genForm.start_floor}
-                  onChange={e => setGenForm(p => ({ ...p, start_floor: e.target.value }))} />
-              </div>
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Prefixo (opcional)</label>
-                <input className={inputCls + ' w-full'} placeholder="ex: A" value={genForm.prefix}
-                  onChange={e => setGenForm(p => ({ ...p, prefix: e.target.value }))} />
-              </div>
+              {[
+                { label: 'Nº Pavimentos *', key: 'floors_count', type: 'number' },
+                { label: 'Unid./Pavimento *', key: 'units_per_floor', type: 'number' },
+                { label: 'Pav. Inicial', key: 'start_floor', type: 'number' },
+                { label: 'Prefixo (opcional)', key: 'prefix', type: 'text', placeholder: 'ex: A' },
+              ].map(({ label, key, type, placeholder }) => (
+                <div key={key}>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">{label}</label>
+                  <input type={type} min={type === 'number' ? '0' : undefined} className={inputCls + ' w-full'} placeholder={placeholder}
+                    value={(genForm as any)[key]} onChange={e => setGenForm(p => ({ ...p, [key]: e.target.value }))} />
+                </div>
+              ))}
             </div>
-            <div className="text-xs text-gray-500 font-medium">
-              {genTotal > 0 ? (
-                <>
-                  Exemplo: <span className="font-bold text-gray-700">{genForm.prefix ? `${genForm.prefix}-` : ''}{genForm.start_floor || 1}01</span>
-                  {' '}a{' '}
-                  <span className="font-bold text-gray-700">
-                    {genForm.prefix ? `${genForm.prefix}-` : ''}{(Number(genForm.start_floor) || 1) + (Number(genForm.floors_count) || 1) - 1}{String(Number(genForm.units_per_floor)).padStart(2, '0')}
-                  </span>
-                  {' '}— <span className="font-bold text-blue-600">{genTotal} unidades</span>
-                </>
-              ) : 'Preencha pavimentos e unidades/pav para ver o total.'}
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Tipologia</label>
-                <input className={inputCls + ' w-full'} placeholder="ex: 2 Quartos" value={genForm.typology}
-                  onChange={e => setGenForm(p => ({ ...p, typology: e.target.value }))} />
-              </div>
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Área Privativa (m²)</label>
-                <input type="number" step="0.01" className={inputCls + ' w-full'} value={genForm.private_area}
-                  onChange={e => setGenForm(p => ({ ...p, private_area: e.target.value }))} />
-              </div>
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Vagas</label>
-                <input type="number" className={inputCls + ' w-full'} value={genForm.parking_spaces}
-                  onChange={e => setGenForm(p => ({ ...p, parking_spaces: e.target.value }))} />
-              </div>
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Preço Padrão (R$)</label>
-                <input type="number" step="0.01" className={inputCls + ' w-full'} value={genForm.price}
-                  onChange={e => setGenForm(p => ({ ...p, price: e.target.value }))} />
-              </div>
+            {genTotal > 0 && (
+              <p className="text-xs text-gray-500 font-medium">
+                Exemplo: <b className="text-gray-700">{genForm.prefix ? `${genForm.prefix}-` : ''}{genForm.start_floor || 1}01</b>
+                {' '}a{' '}
+                <b className="text-gray-700">{genForm.prefix ? `${genForm.prefix}-` : ''}{(Number(genForm.start_floor) || 1) + (Number(genForm.floors_count) || 1) - 1}{String(Number(genForm.units_per_floor)).padStart(2, '0')}</b>
+                {' '}— <b className="text-blue-600">{genTotal} unidades</b>
+              </p>
+            )}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {[
+                { label: 'Tipologia', key: 'typology', type: 'text', placeholder: 'ex: 2 Quartos' },
+                { label: 'Área Priv. (m²)', key: 'private_area', type: 'number' },
+                { label: 'Área Comum (m²)', key: 'common_area', type: 'number' },
+                { label: 'Vagas', key: 'parking_spaces', type: 'number' },
+                { label: 'Preço Padrão (R$)', key: 'price', type: 'number' },
+              ].map(({ label, key, type, placeholder }) => (
+                <div key={key}>
+                  <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">{label}</label>
+                  <input type={type} step={type === 'number' ? '0.01' : undefined} className={inputCls + ' w-full'} placeholder={placeholder}
+                    value={(genForm as any)[key]} onChange={e => setGenForm(p => ({ ...p, [key]: e.target.value }))} />
+                </div>
+              ))}
             </div>
             <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={generating || genTotal === 0}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-button uppercase tracking-wider flex items-center gap-2"
-              >
+              <button type="submit" disabled={generating || genTotal === 0}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2">
                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                 Gerar {genTotal > 0 ? `${genTotal} unidades` : 'Unidades'}
               </button>
@@ -354,7 +426,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         )}
       </div>
 
-      {/* Tabela de unidades */}
+      {/* Tabela */}
       {loading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-600" /></div>
       ) : units.length === 0 ? (
@@ -367,127 +439,229 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider bg-gray-50/50">
-                <th className="py-3 px-4">Unidade</th>
-                <th className="py-3 px-4">Pav.</th>
-                <th className="py-3 px-4">Tipo Pav.</th>
-                <th className="py-3 px-4">Tipologia</th>
-                <th className="py-3 px-4">Priv. m²</th>
-                <th className="py-3 px-4">Comum m²</th>
-                <th className="py-3 px-4">Vagas</th>
-                <th className="py-3 px-4">Preço</th>
-                <th className="py-3 px-4">Status</th>
+                {/* Checkbox select-all */}
+                <th className="py-3 px-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={el => { if (el) el.indeterminate = someSelected; }}
+                    onChange={toggleSelectAll}
+                    className="w-3.5 h-3.5 rounded accent-blue-600 cursor-pointer"
+                  />
+                </th>
+                <SortableHeader col="name" current={sortCol} dir={sortDir} onSort={handleSort}>Unidade</SortableHeader>
+                <SortableHeader col="floor" current={sortCol} dir={sortDir} onSort={handleSort}>Pav.</SortableHeader>
+                <SortableHeader col="floor_tipo" current={sortCol} dir={sortDir} onSort={handleSort}>Tipo Pav.</SortableHeader>
+                <SortableHeader col="typology" current={sortCol} dir={sortDir} onSort={handleSort}>Tipologia</SortableHeader>
+                <SortableHeader col="private_area" current={sortCol} dir={sortDir} onSort={handleSort}>Priv. m²</SortableHeader>
+                <SortableHeader col="common_area" current={sortCol} dir={sortDir} onSort={handleSort}>Comum m²</SortableHeader>
+                <SortableHeader col="parking_spaces" current={sortCol} dir={sortDir} onSort={handleSort}>Vagas</SortableHeader>
+                <SortableHeader col="price" current={sortCol} dir={sortDir} onSort={handleSort}>Preço</SortableHeader>
+                <SortableHeader col="status" current={sortCol} dir={sortDir} onSort={handleSort}>Status</SortableHeader>
                 <th className="py-3 px-4 text-center">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {units.map(u => {
-                const isEditingUnit = editingId === u.id;
+              {groups.map(group => {
+                const collapsed = collapsedGroups.has(group.key);
+                const allGroupSelected = group.units.every(u => selected.has(u.id));
                 return (
-                  <tr key={u.id} className={`border-b border-gray-50 ${isEditingUnit ? 'bg-blue-50/30' : 'hover:bg-gray-50/40'}`}>
-                    {isEditingUnit ? (
-                      <>
-                        <td className="py-2 px-3"><input className={editCls} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} autoFocus /></td>
-                        <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.floor} onChange={e => setEditForm(p => ({ ...p, floor: e.target.value }))} /></td>
-                        <td className="py-2 px-3">
-                          <select
-                            value={editForm.floor_tipo}
-                            onChange={e => setEditForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))}
-                            className={editCls}
-                          >
-                            <option value="">— Tipo</option>
-                            {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => (
-                              <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="py-2 px-3"><input className={editCls} value={editForm.typology} onChange={e => setEditForm(p => ({ ...p, typology: e.target.value }))} /></td>
-                        <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.private_area} onChange={e => setEditForm(p => ({ ...p, private_area: e.target.value }))} /></td>
-                        <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.common_area} onChange={e => setEditForm(p => ({ ...p, common_area: e.target.value }))} /></td>
-                        <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.parking_spaces} onChange={e => setEditForm(p => ({ ...p, parking_spaces: e.target.value }))} /></td>
-                        <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.price} onChange={e => setEditForm(p => ({ ...p, price: e.target.value }))} /></td>
-                        <td className="py-2 px-3">
-                          <select
-                            value={u.status}
-                            onChange={e => handleStatusChange(u, e.target.value as UnitStatus)}
-                            className={`text-xs font-black uppercase tracking-wider px-2 py-1 rounded-lg border-none outline-none cursor-pointer ${STATUS_STYLE[u.status]}`}
-                          >
-                            {(Object.keys(STATUS_LABELS) as UnitStatus[]).map(s => (
-                              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="py-2 px-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => handleSaveEdit(u)} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg"><Check className="w-3.5 h-3.5" /></button>
-                            <button onClick={() => setEditingId(null)} className="p-1.5 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-lg"><X className="w-3.5 h-3.5" /></button>
-                          </div>
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="py-3 px-4 font-bold text-gray-800">{u.name}</td>
-                        <td className="py-3 px-4 text-gray-500">{u.floor ?? '—'}</td>
-                        <td className="py-3 px-4">
-                          {u.floor_tipo ? (
-                            <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${FLOOR_TIPO_STYLE[u.floor_tipo]}`}>
-                              {FLOOR_TIPO_LABEL[u.floor_tipo]}
-                            </span>
+                  <React.Fragment key={group.key}>
+                    {/* Cabeçalho do grupo */}
+                    <tr className="bg-gray-50/70 border-b border-gray-100 hover:bg-gray-100/60 transition-colors">
+                      {/* Checkbox do grupo */}
+                      <td className="py-2 px-3 w-10">
+                        <input
+                          type="checkbox"
+                          checked={allGroupSelected}
+                          onChange={() => toggleSelectGroup(group.units)}
+                          className="w-3.5 h-3.5 rounded accent-blue-600 cursor-pointer"
+                        />
+                      </td>
+                      {/* Label + toggle */}
+                      <td colSpan={4} className="py-2 px-3">
+                        <button
+                          onClick={() => setCollapsedGroups(prev => {
+                            const n = new Set(prev);
+                            n.has(group.key) ? n.delete(group.key) : n.add(group.key);
+                            return n;
+                          })}
+                          className="flex items-center gap-2 hover:text-blue-600 transition-colors"
+                        >
+                          {collapsed
+                            ? <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                            : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                          }
+                          <span className="font-black text-gray-700 text-xs">{group.label}</span>
+                          <span className="bg-gray-200 text-gray-600 text-[9px] font-black px-1.5 py-0.5 rounded-full">
+                            {group.units.length}
+                          </span>
+                        </button>
+                      </td>
+                      {/* Somatório de áreas por pavimento */}
+                      <td className="py-2 px-4 text-xs font-bold text-blue-600">
+                        {group.totalPriv > 0 ? `${fmtArea(group.totalPriv)} m²` : '—'}
+                      </td>
+                      <td className="py-2 px-4 text-xs font-bold text-teal-600">
+                        {group.totalComum > 0 ? `${fmtArea(group.totalComum)} m²` : '—'}
+                      </td>
+                      <td colSpan={4} />
+                    </tr>
+
+                    {/* Unidades do grupo */}
+                    {!collapsed && group.units.map(u => {
+                      const isEditing = editingId === u.id;
+                      const isSelected = selected.has(u.id);
+                      return (
+                        <tr key={u.id} className={`border-b border-gray-50 transition-colors ${isEditing ? 'bg-blue-50/30' : isSelected ? 'bg-blue-50/20' : 'hover:bg-gray-50/40'}`}>
+                          {/* Checkbox */}
+                          <td className="py-2 px-3 w-10">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelect(u.id)}
+                              className="w-3.5 h-3.5 rounded accent-blue-600 cursor-pointer"
+                            />
+                          </td>
+
+                          {isEditing ? (
+                            <>
+                              <td className="py-2 px-3"><input className={editCls} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} autoFocus /></td>
+                              <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.floor} onChange={e => setEditForm(p => ({ ...p, floor: e.target.value }))} /></td>
+                              <td className="py-2 px-3">
+                                <select value={editForm.floor_tipo} onChange={e => setEditForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))} className={editCls}>
+                                  <option value="">— Tipo</option>
+                                  {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>)}
+                                </select>
+                              </td>
+                              <td className="py-2 px-3"><input className={editCls} value={editForm.typology} onChange={e => setEditForm(p => ({ ...p, typology: e.target.value }))} /></td>
+                              <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.private_area} onChange={e => setEditForm(p => ({ ...p, private_area: e.target.value }))} /></td>
+                              <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.common_area} onChange={e => setEditForm(p => ({ ...p, common_area: e.target.value }))} /></td>
+                              <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.parking_spaces} onChange={e => setEditForm(p => ({ ...p, parking_spaces: e.target.value }))} /></td>
+                              <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.price} onChange={e => setEditForm(p => ({ ...p, price: e.target.value }))} /></td>
+                              <td className="py-2 px-3">
+                                <select value={u.status} onChange={e => handleStatusChange(u, e.target.value as UnitStatus)}
+                                  className={`text-xs font-black uppercase tracking-wider px-2 py-1 rounded-lg border-none outline-none cursor-pointer ${STATUS_STYLE[u.status]}`}>
+                                  {(Object.keys(STATUS_LABELS) as UnitStatus[]).map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                                </select>
+                              </td>
+                              <td className="py-2 px-3 text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button onClick={() => handleSaveEdit(u)} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg"><Check className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => setEditingId(null)} className="p-1.5 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-lg"><X className="w-3.5 h-3.5" /></button>
+                                </div>
+                              </td>
+                            </>
                           ) : (
-                            <span className="text-gray-300 text-[10px]">—</span>
+                            <>
+                              <td className="py-3 px-4 font-bold text-gray-800">{u.name}</td>
+                              <td className="py-3 px-4 text-gray-500">{u.floor ?? '—'}</td>
+                              <td className="py-3 px-4">
+                                {u.floor_tipo
+                                  ? <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${FLOOR_TIPO_STYLE[u.floor_tipo]}`}>{FLOOR_TIPO_LABEL[u.floor_tipo]}</span>
+                                  : <span className="text-gray-300 text-[10px]">—</span>}
+                              </td>
+                              <td className="py-3 px-4 text-gray-500">{u.typology || '—'}</td>
+                              <td className="py-3 px-4 text-gray-500">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>
+                              <td className="py-3 px-4 text-gray-500">{u.common_area != null ? `${u.common_area} m²` : '—'}</td>
+                              <td className="py-3 px-4 text-gray-500">{u.parking_spaces ?? '—'}</td>
+                              <td className="py-3 px-4 text-gray-700 font-semibold">{u.price != null ? fmtPrice(u.price) : '—'}</td>
+                              <td className="py-3 px-4">
+                                <select value={u.status} onChange={e => handleStatusChange(u, e.target.value as UnitStatus)}
+                                  className={`text-xs font-black uppercase tracking-wider px-2 py-1 rounded-lg border-none outline-none cursor-pointer ${STATUS_STYLE[u.status]}`}>
+                                  {(Object.keys(STATUS_LABELS) as UnitStatus[]).map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                                </select>
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button onClick={() => startEdit(u)} className="p-1.5 hover:bg-blue-50 text-blue-500 rounded-lg" title="Editar"><Edit className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => handleDuplicate(u)} className="p-1.5 hover:bg-violet-50 text-violet-500 rounded-lg" title="Duplicar"><Copy className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => handleDelete(u)} className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                              </td>
+                            </>
                           )}
-                        </td>
-                        <td className="py-3 px-4 text-gray-500">{u.typology || '—'}</td>
-                        <td className="py-3 px-4 text-gray-500">{u.private_area ?? '—'}</td>
-                        <td className="py-3 px-4 text-gray-500">{u.common_area ?? '—'}</td>
-                        <td className="py-3 px-4 text-gray-500">{u.parking_spaces ?? '—'}</td>
-                        <td className="py-3 px-4 text-gray-700 font-semibold">{u.price != null ? `R$ ${u.price.toLocaleString('pt-BR')}` : '—'}</td>
-                        <td className="py-3 px-4">
-                          <select
-                            value={u.status}
-                            onChange={e => handleStatusChange(u, e.target.value as UnitStatus)}
-                            className={`text-xs font-black uppercase tracking-wider px-2 py-1 rounded-lg border-none outline-none cursor-pointer ${STATUS_STYLE[u.status]}`}
-                          >
-                            {(Object.keys(STATUS_LABELS) as UnitStatus[]).map(s => (
-                              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => startEdit(u)} className="p-1.5 hover:bg-blue-50 text-blue-500 rounded-lg" title="Editar"><Edit className="w-3.5 h-3.5" /></button>
-                            <button onClick={() => handleDuplicate(u)} className="p-1.5 hover:bg-violet-50 text-violet-500 rounded-lg" title="Duplicar"><Copy className="w-3.5 h-3.5" /></button>
-                            <button onClick={() => handleDelete(u)} className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
-                          </div>
-                        </td>
-                      </>
-                    )}
-                  </tr>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
                 );
               })}
             </tbody>
             <tfoot>
-              <TotalsRow units={units} />
+              <tr className="border-t-2 border-gray-200 bg-gray-50/70 font-bold text-xs text-gray-700">
+                <td className="py-2.5 px-3" />
+                <td className="py-2.5 px-4" colSpan={4}>
+                  <span className="text-xs font-black uppercase tracking-widest text-gray-400">Total ({units.length} unid.)</span>
+                </td>
+                <td className="py-2.5 px-4 text-blue-600">{totalPriv > 0 ? `${fmtArea(totalPriv)} m²` : '—'}</td>
+                <td className="py-2.5 px-4 text-teal-600">{totalComum > 0 ? `${fmtArea(totalComum)} m²` : '—'}</td>
+                <td colSpan={4} />
+              </tr>
             </tfoot>
           </table>
+        </div>
+      )}
+
+      {/* Barra de edição em lote */}
+      {selected.size > 0 && (
+        <div className="sticky bottom-4 z-20 bg-white border border-blue-200 shadow-xl rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black uppercase tracking-widest text-blue-600">
+              {selected.size} unidade{selected.size > 1 ? 's' : ''} selecionada{selected.size > 1 ? 's' : ''}
+            </span>
+            <button onClick={() => { setSelected(new Set()); setBulkForm(emptyBulkForm()); }}
+              className="p-1.5 hover:bg-gray-100 text-gray-400 rounded-lg">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400 font-medium -mt-1">Campos em branco não serão alterados.</p>
+          <div className="grid grid-cols-2 md:grid-cols-7 gap-2">
+            <select value={bulkForm.status} onChange={e => setBulkForm(p => ({ ...p, status: e.target.value as UnitStatus | '' }))}
+              className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-400">
+              <option value="">Status...</option>
+              {(Object.keys(STATUS_LABELS) as UnitStatus[]).map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+            </select>
+            <select value={bulkForm.floor_tipo} onChange={e => setBulkForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))}
+              className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-400">
+              <option value="">Tipo Pav....</option>
+              {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>)}
+            </select>
+            <input className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Tipologia..." value={bulkForm.typology} onChange={e => setBulkForm(p => ({ ...p, typology: e.target.value }))} />
+            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Priv. m²" value={bulkForm.private_area} onChange={e => setBulkForm(p => ({ ...p, private_area: e.target.value }))} />
+            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Comum m²" value={bulkForm.common_area} onChange={e => setBulkForm(p => ({ ...p, common_area: e.target.value }))} />
+            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Preço R$" value={bulkForm.price} onChange={e => setBulkForm(p => ({ ...p, price: e.target.value }))} />
+            <button onClick={handleBulkSave} disabled={bulkSaving}
+              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5">
+              {bulkSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              Aplicar
+            </button>
+          </div>
         </div>
       )}
     </div>
   );
 };
 
-const TotalsRow: React.FC<{ units: EmpreendimentoUnit[] }> = ({ units }) => {
-  const totalPriv = units.reduce((s, u) => s + (u.private_area ?? 0), 0);
-  const totalComum = units.reduce((s, u) => s + (u.common_area ?? 0), 0);
-  const fmt = (v: number) => v > 0 ? v.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—';
+// ── SortableHeader ────────────────────────────────────────────────────────────
+
+const SortableHeader: React.FC<{
+  col: SortCol; current: SortCol; dir: 'asc' | 'desc';
+  onSort: (col: SortCol) => void; children: React.ReactNode;
+}> = ({ col, current, dir, onSort, children }) => {
+  const active = col === current;
   return (
-    <tr className="border-t-2 border-gray-200 bg-gray-50/70 font-bold text-xs text-gray-700">
-      <td className="py-2.5 px-4" colSpan={4}>
-        <span className="text-xs font-black uppercase tracking-widest text-gray-400">Total ({units.length} unid.)</span>
-      </td>
-      <td className="py-2.5 px-4">{fmt(totalPriv)} m²</td>
-      <td className="py-2.5 px-4">{fmt(totalComum)} m²</td>
-      <td className="py-2.5 px-4" colSpan={4} />
-    </tr>
+    <th
+      onClick={() => onSort(col)}
+      className={`py-3 px-4 cursor-pointer select-none transition-colors ${active ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {active
+          ? (dir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)
+          : <ArrowUpDown className="w-3 h-3 opacity-30" />}
+      </div>
+    </th>
   );
 };
 

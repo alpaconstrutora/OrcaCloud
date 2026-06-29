@@ -261,7 +261,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   const editCls = 'px-2 py-1 border border-blue-200 rounded-lg text-xs font-medium outline-none focus:border-blue-400 bg-white w-full';
 
   const genTotal = (Number(genForm.floors_count) || 0) * (Number(genForm.units_per_floor) || 0);
-  const hasPavimentos = floors.length > 0;
 
   return (
     <div className="space-y-4">
@@ -379,7 +378,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
               <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider bg-gray-50/50">
                 <th className="py-3 px-4">Unidade</th>
                 <th className="py-3 px-4">Pav.</th>
-                {hasPavimentos && <th className="py-3 px-4">Tipo Pav.</th>}
+                <th className="py-3 px-4">Tipo Pav.</th>
                 <th className="py-3 px-4">Tipologia</th>
                 <th className="py-3 px-4">Priv. m²</th>
                 <th className="py-3 px-4">Comum m²</th>
@@ -398,8 +397,8 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                       <>
                         <td className="py-2 px-3"><input className={editCls} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} autoFocus /></td>
                         <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.floor} onChange={e => setEditForm(p => ({ ...p, floor: e.target.value }))} /></td>
-                        {hasPavimentos && (
-                          <td className="py-2 px-3">
+                        <td className="py-2 px-3">
+                          {floors.length > 0 ? (
                             <select
                               value={editForm.floor_id}
                               onChange={e => setEditForm(p => ({ ...p, floor_id: e.target.value }))}
@@ -412,8 +411,10 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                                 </option>
                               ))}
                             </select>
-                          </td>
-                        )}
+                          ) : (
+                            <span className="text-gray-300 text-[10px]">Crie pavimentos no ⚡</span>
+                          )}
+                        </td>
                         <td className="py-2 px-3"><input className={editCls} value={editForm.typology} onChange={e => setEditForm(p => ({ ...p, typology: e.target.value }))} /></td>
                         <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.private_area} onChange={e => setEditForm(p => ({ ...p, private_area: e.target.value }))} /></td>
                         <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.common_area} onChange={e => setEditForm(p => ({ ...p, common_area: e.target.value }))} /></td>
@@ -441,17 +442,15 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                       <>
                         <td className="py-3 px-4 font-bold text-gray-800">{u.name}</td>
                         <td className="py-3 px-4 text-gray-500">{u.floor ?? '—'}</td>
-                        {hasPavimentos && (
-                          <td className="py-3 px-4">
-                            {u.floor_id && floorMap[u.floor_id] ? (
-                              <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${FLOOR_TIPO_STYLE[floorMap[u.floor_id].tipo]}`}>
-                                {FLOOR_TIPO_LABEL[floorMap[u.floor_id].tipo]}
-                              </span>
-                            ) : (
-                              <span className="text-gray-300 text-[10px]">—</span>
-                            )}
-                          </td>
-                        )}
+                        <td className="py-3 px-4">
+                          {u.floor_id && floorMap[u.floor_id] ? (
+                            <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${FLOOR_TIPO_STYLE[floorMap[u.floor_id].tipo]}`}>
+                              {FLOOR_TIPO_LABEL[floorMap[u.floor_id].tipo]}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300 text-[10px]">—</span>
+                          )}
+                        </td>
                         <td className="py-3 px-4 text-gray-500">{u.typology || '—'}</td>
                         <td className="py-3 px-4 text-gray-500">{u.private_area ?? '—'}</td>
                         <td className="py-3 px-4 text-gray-500">{u.common_area ?? '—'}</td>
@@ -482,7 +481,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
               })}
             </tbody>
             <tfoot>
-              <TotalsRow units={units} hasPavimentos={hasPavimentos} />
+              <TotalsRow units={units} />
             </tfoot>
           </table>
         </div>
@@ -491,15 +490,13 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   );
 };
 
-const TotalsRow: React.FC<{ units: EmpreendimentoUnit[]; hasPavimentos: boolean }> = ({ units, hasPavimentos }) => {
+const TotalsRow: React.FC<{ units: EmpreendimentoUnit[] }> = ({ units }) => {
   const totalPriv = units.reduce((s, u) => s + (u.private_area ?? 0), 0);
   const totalComum = units.reduce((s, u) => s + (u.common_area ?? 0), 0);
   const fmt = (v: number) => v > 0 ? v.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : '—';
-  // Unidade + Pav. + (Tipo Pav. se hasPavimentos) + Tipologia = 3 ou 4
-  const leadingCols = hasPavimentos ? 4 : 3;
   return (
     <tr className="border-t-2 border-gray-200 bg-gray-50/70 font-bold text-xs text-gray-700">
-      <td className="py-2.5 px-4" colSpan={leadingCols}>
+      <td className="py-2.5 px-4" colSpan={4}>
         <span className="text-xs font-black uppercase tracking-widest text-gray-400">Total ({units.length} unid.)</span>
       </td>
       <td className="py-2.5 px-4">{fmt(totalPriv)} m²</td>

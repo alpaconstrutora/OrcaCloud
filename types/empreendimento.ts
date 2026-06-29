@@ -122,6 +122,7 @@ export interface EmpreendimentoUnit {
     id: string;
     tower_id: string;
     floor_id?: string | null;
+    floor_tipo?: FloorTipo | null;
     imovib_unit_id?: string | null;
     imovib_instance_id?: string | null;
     name: string;

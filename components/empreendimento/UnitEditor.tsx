@@ -3,7 +3,7 @@ import React from 'react';
 import { Plus, Trash2, Loader2, Layers, Edit, Copy, X, Check, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import {
-  EmpreendimentoTower, EmpreendimentoUnit, EmpreendimentoFloor, FloorTipo, UnitStatus, EmpreendimentoUnitInsert,
+  EmpreendimentoTower, EmpreendimentoUnit, FloorTipo, UnitStatus, EmpreendimentoUnitInsert,
 } from '../../types';
 
 const FLOOR_TIPO_LABEL: Record<FloorTipo, string> = {
@@ -41,12 +41,11 @@ const STATUS_STYLE: Record<UnitStatus, string> = {
 };
 
 const emptyForm = () => ({
-  name: '', floor: '', typology: '', private_area: '', common_area: '', price: '', parking_spaces: '', floor_id: '',
+  name: '', floor: '', typology: '', private_area: '', common_area: '', price: '', parking_spaces: '', floor_id: '', floor_tipo: '' as FloorTipo | '',
 });
 
 export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   const [units, setUnits] = React.useState<EmpreendimentoUnit[]>([]);
-  const [floors, setFloors] = React.useState<EmpreendimentoFloor[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [form, setForm] = React.useState(emptyForm());
@@ -73,12 +72,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
-      const [u, f] = await Promise.all([
-        empreendimentoService.listUnits(tower.id),
-        empreendimentoService.listFloors(tower.id),
-      ]);
-      setUnits(u);
-      setFloors(f);
+      setUnits(await empreendimentoService.listUnits(tower.id));
     } catch (err) {
       console.error('[UnitEditor] erro ao carregar unidades:', err);
     } finally {
@@ -123,11 +117,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
     }
   };
 
-  const floorMap = React.useMemo(
-    () => Object.fromEntries(floors.map(f => [f.id, f])) as Record<string, EmpreendimentoFloor>,
-    [floors],
-  );
-
   const startEdit = (u: EmpreendimentoUnit) => {
     setEditingId(u.id);
     setEditForm({
@@ -139,6 +128,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       price: u.price?.toString() ?? '',
       parking_spaces: u.parking_spaces?.toString() ?? '',
       floor_id: u.floor_id ?? '',
+      floor_tipo: u.floor_tipo ?? '',
     });
   };
 
@@ -157,6 +147,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         price: editForm.price ? Number(editForm.price) : undefined,
         parking_spaces: editForm.parking_spaces ? Number(editForm.parking_spaces) : undefined,
         floor_id: editForm.floor_id || null,
+        floor_tipo: (editForm.floor_tipo || null) as FloorTipo | null,
       };
       await empreendimentoService.updateUnit(u.id, updated);
       setUnits(prev => prev.map(x => x.id === u.id ? { ...x, ...updated } : x));
@@ -398,22 +389,16 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                         <td className="py-2 px-3"><input className={editCls} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} autoFocus /></td>
                         <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.floor} onChange={e => setEditForm(p => ({ ...p, floor: e.target.value }))} /></td>
                         <td className="py-2 px-3">
-                          {floors.length > 0 ? (
-                            <select
-                              value={editForm.floor_id}
-                              onChange={e => setEditForm(p => ({ ...p, floor_id: e.target.value }))}
-                              className={editCls}
-                            >
-                              <option value="">— Sem vínculo</option>
-                              {floors.map(f => (
-                                <option key={f.id} value={f.id}>
-                                  {FLOOR_TIPO_LABEL[f.tipo]} — {f.name}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <span className="text-gray-300 text-[10px]">Crie pavimentos no ⚡</span>
-                          )}
+                          <select
+                            value={editForm.floor_tipo}
+                            onChange={e => setEditForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))}
+                            className={editCls}
+                          >
+                            <option value="">— Tipo</option>
+                            {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => (
+                              <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>
+                            ))}
+                          </select>
                         </td>
                         <td className="py-2 px-3"><input className={editCls} value={editForm.typology} onChange={e => setEditForm(p => ({ ...p, typology: e.target.value }))} /></td>
                         <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.private_area} onChange={e => setEditForm(p => ({ ...p, private_area: e.target.value }))} /></td>
@@ -443,9 +428,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                         <td className="py-3 px-4 font-bold text-gray-800">{u.name}</td>
                         <td className="py-3 px-4 text-gray-500">{u.floor ?? '—'}</td>
                         <td className="py-3 px-4">
-                          {u.floor_id && floorMap[u.floor_id] ? (
-                            <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${FLOOR_TIPO_STYLE[floorMap[u.floor_id].tipo]}`}>
-                              {FLOOR_TIPO_LABEL[floorMap[u.floor_id].tipo]}
+                          {u.floor_tipo ? (
+                            <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${FLOOR_TIPO_STYLE[u.floor_tipo]}`}>
+                              {FLOOR_TIPO_LABEL[u.floor_tipo]}
                             </span>
                           ) : (
                             <span className="text-gray-300 text-[10px]">—</span>

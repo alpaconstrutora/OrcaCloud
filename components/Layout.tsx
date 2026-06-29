@@ -371,7 +371,7 @@ const Layout: React.FC<LayoutProps> = ({
   const suprimentosViews = ['fluxo-p2p','supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
-  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-cashflow','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial','controladoria','fiscal-nfe','automation'];
+  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-cashflow','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial','fiscal-nfe','automation'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
@@ -812,7 +812,6 @@ const Layout: React.FC<LayoutProps> = ({
                         <DropdownItem id="dunning" label="Cobrança Auto." icon={Bell} />
                         <DropdownItem id="financial-approval" label="Aprovações" icon={Shield} />
                         <DropdownItem id="financial-intelligence" label="Inteligência" icon={Brain} />
-                        <DropdownItem id="controladoria" label="Controladoria" icon={BarChart3} />
                       </>
                     )}
                     {(mod.fiscal || isDev) && (
@@ -824,6 +823,9 @@ const Layout: React.FC<LayoutProps> = ({
                   </NavDropdown>
                 </>
               )}
+
+              <NavGroup label="Controladoria" />
+              <NavItem id="controladoria" icon={BarChart3} label="Controladoria" />
 
               {(mod.crm || mod.incorporacao || mod.broker_portal || isDev) && (
                 <>

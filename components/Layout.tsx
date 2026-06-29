@@ -832,20 +832,28 @@ const Layout: React.FC<LayoutProps> = ({
               {(mod.crm || mod.incorporacao || isDev) && (
                 <>
                   <NavGroup label="Comercial" />
-                  {(mod.crm || isDev) && (
-                    <>
-                      <NavItem id="sales" icon={Building2} label="Vendas de Ativos" />
-                      <NavItem id="rentals" icon={Building2} label="Locações" />
-                      <NavItem id="service-contracts" icon={FileText} label="Contratos de Serviço" />
-                      <NavItem id="services-commercial" icon={Briefcase} label="CRM Serviços" />
-                    </>
-                  )}
-                  {(mod.incorporacao || isDev) && (
-                    <>
-                      <NavItem id="empreendimentos" icon={Building2} label="Empreendimentos" />
-                      <NavItem id="imovib" icon={BarChart3} label="Estudos de Viabilidade" />
-                    </>
-                  )}
+                  <NavDropdown
+                    label="Comercial"
+                    icon={TrendingUp}
+                    isOpen={isVendasOpen}
+                    onToggle={() => setIsVendasOpen(o => !o)}
+                    hasActiveChild={['gestao-vendas','sales','rentals','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations','imovib','empreendimentos'].includes(activeView)}
+                  >
+                    {(mod.crm || isDev) && (
+                      <>
+                        <DropdownItem id="sales" label="Vendas de Ativos" icon={Building2} />
+                        <DropdownItem id="rentals" label="Locações" icon={Building2} />
+                        <DropdownItem id="service-contracts" label="Contratos de Serviço" icon={FileText} />
+                        <DropdownItem id="services-commercial" label="CRM Serviços" icon={Briefcase} />
+                      </>
+                    )}
+                    {(mod.incorporacao || isDev) && (
+                      <>
+                        <DropdownItem id="empreendimentos" label="Empreendimentos" icon={Building2} />
+                        <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
+                      </>
+                    )}
+                  </NavDropdown>
                 </>
               )}
 

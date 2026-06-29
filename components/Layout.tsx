@@ -580,6 +580,7 @@ const Layout: React.FC<LayoutProps> = ({
               </NavDropdown>
 
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
+              <NavItem id="notifications-center" icon={Bell} label="Central de Notificações" badge={unreadCount > 0 ? unreadCount : undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
               <NavDropdown
@@ -939,7 +940,6 @@ const Layout: React.FC<LayoutProps> = ({
           )}
 
           <NavGroup label="Sistema" />
-          <NavItem id="notifications-center" icon={Bell} label="Notificações" badge={unreadCount > 0 ? unreadCount : undefined} />
           <NavItem id="master-data" icon={Database} label="Dados Mestres" />
           <NavItem id="settings" icon={Settings} label="Configurações" />
         </nav>
@@ -1043,6 +1043,7 @@ const Layout: React.FC<LayoutProps> = ({
               </div>
 
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
+              <NavItem id="notifications-center" icon={Bell} label="Central de Notificações" badge={unreadCount > 0 ? unreadCount : undefined} forceFull />
               {profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br') ? (
                 <div className="space-y-1 mb-4">
                   <div className="px-4 py-2 text-xs font-black text-gray-500 uppercase tracking-widest">Portais</div>

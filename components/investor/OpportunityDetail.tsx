@@ -11,6 +11,7 @@ import {
     investorPortalService,
 } from '../../services/investorPortalService';
 import { Investor } from '../../services/investorService';
+import { investorPortalTokenService } from '../../services/investorPortalTokenService';
 import ScenarioComparison from './ScenarioComparison';
 import LinkedProjectPanel from './LinkedProjectPanel';
 import DataRoomPanel from './DataRoomPanel';
@@ -31,6 +32,7 @@ interface Props {
     isAdmin?: boolean;
     uploadedBy?: string;
     investorProfile?: Investor | null;
+    portalToken?: string;
     onClose: () => void;
 }
 
@@ -40,7 +42,7 @@ const ROLES: InterestRole[] = ['investidor', 'arquiteto', 'engenheiro', 'projeti
 type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'documentos' | 'interesses';
 type FormStep = 'view' | 'form' | 'success';
 
-const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, isAdmin = false, uploadedBy, investorProfile, onClose }) => {
+const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, isAdmin = false, uploadedBy, investorProfile, portalToken, onClose }) => {
     const [formStep, setFormStep] = React.useState<FormStep>('view');
     const [pitchTab, setPitchTab] = React.useState<PitchTab>('pitch');
     const [saving, setSaving] = React.useState(false);
@@ -60,12 +62,16 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
     React.useEffect(() => {
         if (op.imovib_study_id) {
             setLoadingStudy(true);
-            imovibService.getStudyById(op.imovib_study_id, true)
+            const loadPromise = portalToken
+                ? investorPortalTokenService.getStudyByToken(portalToken, op.imovib_study_id)
+                : imovibService.getStudyById(op.imovib_study_id, true);
+
+            loadPromise
                 .then(setStudy)
                 .catch(err => console.error('Erro ao carregar estudo do IMOVIB para o prospecto', err))
                 .finally(() => setLoadingStudy(false));
         }
-    }, [op.imovib_study_id]);
+    }, [op.imovib_study_id, portalToken]);
 
     const [sliderCostPct, setSliderCostPct] = React.useState(0);
     const [sliderVgvPct, setSliderVgvPct] = React.useState(0);

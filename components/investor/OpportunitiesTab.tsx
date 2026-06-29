@@ -18,6 +18,7 @@ interface Props {
     viewMode: 'grid' | 'list';
     organizationId?: string;
     investorProfile?: Investor | null;
+    portalToken?: string;
     onViewModeChange: (mode: 'grid' | 'list') => void;
     onDelete: (id: string) => void;
     onUpdate: (updated: InvestorOpportunity) => void;
@@ -34,7 +35,7 @@ const fmtBRL = (v: number | null | undefined) => {
 type AdminTab = 'opportunities' | 'interests';
 
 const OpportunitiesTab: React.FC<Props> = ({
-    opportunities, isAdmin, viewMode, organizationId, investorProfile,
+    opportunities, isAdmin, viewMode, organizationId, investorProfile, portalToken,
     onViewModeChange, onDelete, onUpdate, openConfirm,
 }) => {
     const [detail, setDetail] = React.useState<InvestorOpportunity | null>(null);
@@ -443,6 +444,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                     organizationId={organizationId}
                     isAdmin={isAdmin}
                     investorProfile={investorProfile}
+                    portalToken={portalToken}
                     onClose={() => setDetail(null)}
                 />
             )}

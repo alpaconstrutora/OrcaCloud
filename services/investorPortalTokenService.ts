@@ -95,4 +95,13 @@ export const investorPortalTokenService = {
         if (error) throw error;
         return (data as any)?.milestones ?? [];
     },
+
+    async getStudyByToken(token: string, studyId: string): Promise<any> {
+        const { data, error } = await supabase.rpc('fn_investor_portal_get_study', {
+            p_token: token,
+            p_study_id: studyId
+        });
+        if (error) throw error;
+        return (data as any)?.study ?? null;
+    },
 };

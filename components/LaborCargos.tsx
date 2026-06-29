@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import {
     Briefcase, Plus, Trash2, Pencil, X, Building2, Loader2, AlertCircle,
-    Layers, DollarSign, Star, ChevronRight, Wrench, Tag, Settings
+    Layers, DollarSign, Star, ChevronRight, Wrench, Tag, Settings, LayoutGrid, GitBranch
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { orgGovernanceService } from '../services/orgGovernanceService';
@@ -18,12 +18,10 @@ interface RoleForm {
     salario_minimo: string; salario_maximo: string;
     competencias: string; proximo_cargo_id: string; funcao_id: string;
 }
-interface FuncaoForm {
-    id?: string; nome: string; descricao: string; categoria_id: string;
-}
-interface CatForm {
-    id?: string; nome: string; cor: string;
-}
+interface FuncaoForm { id?: string; nome: string; descricao: string; categoria_id: string; }
+interface CatForm { id?: string; nome: string; cor: string; }
+interface RoleNode { role: OrgRole; children: RoleNode[]; }
+interface SvgLine { x1: number; y1: number; x2: number; y2: number; id: string; }
 
 const EMPTY_ROLE: RoleForm = {
     nome: '', codigo: '', descricao: '', nivel_hierarquico: 3,
@@ -33,30 +31,351 @@ const EMPTY_ROLE: RoleForm = {
 const EMPTY_FUNCAO: FuncaoForm = { nome: '', descricao: '', categoria_id: '' };
 const EMPTY_CAT: CatForm = { nome: '', cor: 'slate' };
 
-// Color map — full class strings (Tailwind safelist)
 const COLORS: { value: string; label: string; bg: string; text: string; border: string; dot: string }[] = [
-    { value: 'slate',   label: 'Cinza',    bg: 'bg-slate-50',   text: 'text-slate-700',   border: 'border-slate-200',  dot: 'bg-slate-400' },
-    { value: 'orange',  label: 'Laranja',  bg: 'bg-orange-50',  text: 'text-orange-700',  border: 'border-orange-200', dot: 'bg-orange-400' },
-    { value: 'blue',    label: 'Azul',     bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200',   dot: 'bg-blue-400' },
-    { value: 'indigo',  label: 'Índigo',   bg: 'bg-indigo-50',  text: 'text-indigo-700',  border: 'border-indigo-200', dot: 'bg-indigo-400' },
-    { value: 'emerald', label: 'Verde',    bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200',dot: 'bg-emerald-400' },
-    { value: 'violet',  label: 'Violeta',  bg: 'bg-violet-50',  text: 'text-violet-700',  border: 'border-violet-200', dot: 'bg-violet-400' },
-    { value: 'rose',    label: 'Rosa',     bg: 'bg-rose-50',    text: 'text-rose-700',    border: 'border-rose-200',   dot: 'bg-rose-400' },
-    { value: 'amber',   label: 'Âmbar',   bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',  dot: 'bg-amber-400' },
-    { value: 'teal',    label: 'Teal',     bg: 'bg-teal-50',    text: 'text-teal-700',    border: 'border-teal-200',   dot: 'bg-teal-400' },
-    { value: 'cyan',    label: 'Ciano',    bg: 'bg-cyan-50',    text: 'text-cyan-700',    border: 'border-cyan-200',   dot: 'bg-cyan-400' },
+    { value: 'slate',   label: 'Cinza',   bg: 'bg-slate-50',   text: 'text-slate-700',   border: 'border-slate-200',  dot: 'bg-slate-400' },
+    { value: 'orange',  label: 'Laranja', bg: 'bg-orange-50',  text: 'text-orange-700',  border: 'border-orange-200', dot: 'bg-orange-400' },
+    { value: 'blue',    label: 'Azul',    bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200',   dot: 'bg-blue-400' },
+    { value: 'indigo',  label: 'Índigo',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  border: 'border-indigo-200', dot: 'bg-indigo-400' },
+    { value: 'emerald', label: 'Verde',   bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200',dot: 'bg-emerald-400' },
+    { value: 'violet',  label: 'Violeta', bg: 'bg-violet-50',  text: 'text-violet-700',  border: 'border-violet-200', dot: 'bg-violet-400' },
+    { value: 'rose',    label: 'Rosa',    bg: 'bg-rose-50',    text: 'text-rose-700',    border: 'border-rose-200',   dot: 'bg-rose-400' },
+    { value: 'amber',   label: 'Âmbar',  bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',  dot: 'bg-amber-400' },
+    { value: 'teal',    label: 'Teal',    bg: 'bg-teal-50',    text: 'text-teal-700',    border: 'border-teal-200',   dot: 'bg-teal-400' },
+    { value: 'cyan',    label: 'Ciano',   bg: 'bg-cyan-50',    text: 'text-cyan-700',    border: 'border-cyan-200',   dot: 'bg-cyan-400' },
 ];
 const colorOf = (cor: string) => COLORS.find(c => c.value === cor) ?? COLORS[0];
-
 const BRL = (v: number | null | undefined) =>
     v != null ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 }) : null;
 
 const inputCls = "w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 focus:ring-0 text-slate-900 outline-none text-sm";
 const labelCls = "text-[10px] text-slate-500 font-black uppercase tracking-widest";
 
+// ── Org chart tree builder ──────────────────────────────────────────────────
+function buildOrgTree(roles: OrgRole[]): { trees: RoleNode[]; isolated: OrgRole[] } {
+    const roleSet = new Set(roles.map(r => r.id));
+    // childrenOf[X] = roles that promote INTO X
+    const childrenOf = new Map<string, OrgRole[]>();
+    roles.forEach(r => {
+        if (r.proximo_cargo_id && roleSet.has(r.proximo_cargo_id)) {
+            if (!childrenOf.has(r.proximo_cargo_id)) childrenOf.set(r.proximo_cargo_id, []);
+            childrenOf.get(r.proximo_cargo_id)!.push(r);
+        }
+    });
+    // Roots = roles with no parent in tree (top of career chain)
+    const isRoot = (r: OrgRole) => !r.proximo_cargo_id || !roleSet.has(r.proximo_cargo_id);
+    const roots = roles.filter(isRoot);
+    const isolated = roots.filter(r => !childrenOf.has(r.id));
+    const treeRoots = roots.filter(r => childrenOf.has(r.id));
+
+    function buildNode(role: OrgRole, visited: Set<string>): RoleNode {
+        visited.add(role.id);
+        const children = (childrenOf.get(role.id) || []).filter(c => !visited.has(c.id));
+        return { role, children: children.map(c => buildNode(c, new Set(visited))) };
+    }
+    return { trees: treeRoots.map(r => buildNode(r, new Set())), isolated };
+}
+
+// ── Compact org chart card ──────────────────────────────────────────────────
+interface OrgCardProps {
+    role: OrgRole;
+    nodeRef: (el: HTMLDivElement | null) => void;
+    funcaoById: Record<string, OrgFuncao>;
+    catById: Record<string, OrgFuncaoCategoria>;
+    employees: Employee[];
+    onEdit: () => void;
+    onDelete: () => void;
+    isRoot?: boolean;
+}
+const OrgCard: React.FC<OrgCardProps> = ({ role, nodeRef, funcaoById, catById, employees, onEdit, onDelete, isRoot }) => {
+    const [hovered, setHovered] = useState(false);
+    const occupants = employees.filter(e => e.role_id === role.id && e.status === 'ATIVO');
+    const funcao = role.funcao_id ? funcaoById[role.funcao_id] : null;
+    const cat = funcao?.categoria_id ? catById[funcao.categoria_id] : null;
+    const clr = cat ? colorOf(cat.cor) : null;
+
+    return (
+        <div
+            ref={nodeRef}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+            className={`
+                relative w-48 select-none rounded-2xl border-2 p-3 transition-all duration-200 bg-white text-left
+                ${isRoot
+                    ? 'border-indigo-300 shadow-lg shadow-indigo-900/10'
+                    : 'border-slate-200 shadow-sm hover:border-indigo-200 hover:shadow-md'}
+            `}
+            style={{ minHeight: 80 }}
+        >
+            {/* Nivel badge */}
+            <div className="flex items-center justify-between mb-1.5">
+                <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md ${isRoot ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>
+                    Nível {role.nivel_hierarquico}
+                </span>
+                {role.codigo && (
+                    <span className="text-[9px] text-slate-400 font-mono">{role.codigo}</span>
+                )}
+            </div>
+
+            {/* Nome */}
+            <h4 className="font-black text-[13px] text-slate-900 leading-tight">{role.nome}</h4>
+
+            {/* Funcao chip */}
+            {funcao && (
+                <div className={`mt-1.5 flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit ${clr ? `${clr.bg} ${clr.text} ${clr.border} border` : 'bg-slate-50 text-slate-500 border border-slate-200'}`}>
+                    <Wrench className="w-2 h-2 shrink-0" />
+                    <span className="truncate max-w-[90px]">{funcao.nome}</span>
+                </div>
+            )}
+
+            {/* Salary */}
+            {BRL(role.salario_minimo) && (
+                <div className="mt-1.5 flex items-center gap-1 text-[9px] text-violet-700 font-bold">
+                    <DollarSign className="w-2.5 h-2.5" />
+                    {BRL(role.salario_minimo)}{role.salario_maximo ? `–${BRL(role.salario_maximo)}` : ''}
+                </div>
+            )}
+
+            {/* Occupants */}
+            <div className="mt-2 flex flex-wrap gap-1">
+                {occupants.length === 0
+                    ? <span className="text-[9px] bg-rose-50 text-rose-500 border border-rose-100 px-1.5 py-0.5 rounded-md font-bold">Vago</span>
+                    : occupants.slice(0, 2).map(occ => (
+                        <span key={occ.id} className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded-md font-bold truncate max-w-[80px]">
+                            {occ.name.split(' ')[0]}
+                        </span>
+                    ))
+                }
+                {occupants.length > 2 && (
+                    <span className="text-[9px] text-slate-400 font-bold">+{occupants.length - 2}</span>
+                )}
+            </div>
+
+            {/* Action buttons on hover */}
+            {hovered && (
+                <div className="absolute top-2 right-2 flex gap-1 bg-white/90 rounded-lg border border-slate-100 shadow-sm p-0.5">
+                    <button onClick={e => { e.stopPropagation(); onEdit(); }}
+                        className="text-slate-400 hover:text-indigo-600 p-1 rounded-md hover:bg-slate-50">
+                        <Pencil className="w-3 h-3" />
+                    </button>
+                    <button onClick={e => { e.stopPropagation(); onDelete(); }}
+                        className="text-slate-400 hover:text-rose-600 p-1 rounded-md hover:bg-slate-50">
+                        <Trash2 className="w-3 h-3" />
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ── Recursive org tree node ─────────────────────────────────────────────────
+interface OrgNodeProps {
+    node: RoleNode;
+    nodeRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+    funcaoById: Record<string, OrgFuncao>;
+    catById: Record<string, OrgFuncaoCategoria>;
+    employees: Employee[];
+    onEdit: (r: OrgRole) => void;
+    onDelete: (r: OrgRole) => void;
+    depth?: number;
+}
+const OrgNode: React.FC<OrgNodeProps> = ({ node, nodeRefs, funcaoById, catById, employees, onEdit, onDelete, depth = 0 }) => (
+    <div className="flex flex-col items-center" style={{ gap: 0 }}>
+        <OrgCard
+            role={node.role}
+            nodeRef={el => { nodeRefs.current[node.role.id] = el; }}
+            funcaoById={funcaoById}
+            catById={catById}
+            employees={employees}
+            onEdit={() => onEdit(node.role)}
+            onDelete={() => onDelete(node.role)}
+            isRoot={depth === 0}
+        />
+        {node.children.length > 0 && (
+            <div className="flex items-start justify-center gap-6" style={{ paddingTop: 48 }}>
+                {node.children.map(child => (
+                    <OrgNode
+                        key={child.role.id}
+                        node={child}
+                        nodeRefs={nodeRefs}
+                        funcaoById={funcaoById}
+                        catById={catById}
+                        employees={employees}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        depth={depth + 1}
+                    />
+                ))}
+            </div>
+        )}
+    </div>
+);
+
+// ── Org Chart View ──────────────────────────────────────────────────────────
+interface OrgChartViewProps {
+    roles: OrgRole[];
+    employees: Employee[];
+    funcaoById: Record<string, OrgFuncao>;
+    catById: Record<string, OrgFuncaoCategoria>;
+    onEdit: (r: OrgRole) => void;
+    onDelete: (r: OrgRole) => void;
+}
+const OrgChartView: React.FC<OrgChartViewProps> = ({ roles, employees, funcaoById, catById, onEdit, onDelete }) => {
+    const { trees, isolated } = useMemo(() => buildOrgTree(roles), [roles]);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
+    const [lines, setLines] = useState<SvgLine[]>([]);
+    const [svgDims, setSvgDims] = useState({ w: 0, h: 0 });
+
+    const measure = useCallback(() => {
+        const container = containerRef.current;
+        if (!container) return;
+        const cRect = container.getBoundingClientRect();
+        const scrollLeft = container.scrollLeft;
+        const scrollTop = container.scrollTop;
+        const newLines: SvgLine[] = [];
+
+        roles.forEach(role => {
+            if (!role.proximo_cargo_id) return;
+            const childEl = nodeRefs.current[role.id];
+            const parentEl = nodeRefs.current[role.proximo_cargo_id];
+            if (!childEl || !parentEl) return;
+            const childRect = childEl.getBoundingClientRect();
+            const parentRect = parentEl.getBoundingClientRect();
+            newLines.push({
+                id: `${role.id}->${role.proximo_cargo_id}`,
+                x1: parentRect.left + parentRect.width / 2 - cRect.left + scrollLeft,
+                y1: parentRect.bottom - cRect.top + scrollTop,
+                x2: childRect.left + childRect.width / 2 - cRect.left + scrollLeft,
+                y2: childRect.top - cRect.top + scrollTop,
+            });
+        });
+
+        setSvgDims({ w: container.scrollWidth, h: container.scrollHeight });
+        setLines(newLines);
+    }, [roles]);
+
+    useLayoutEffect(() => {
+        measure();
+        const ro = new ResizeObserver(measure);
+        if (containerRef.current) ro.observe(containerRef.current);
+        return () => ro.disconnect();
+    }, [measure]);
+
+    if (trees.length === 0 && isolated.length === 0) {
+        return (
+            <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-400 text-sm">
+                Nenhum cargo cadastrado. Clique em <strong>Novo Cargo</strong> para começar.
+            </div>
+        );
+    }
+
+    if (trees.length === 0) {
+        return (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center text-amber-700 text-sm">
+                <GitBranch className="w-8 h-8 mx-auto mb-2 text-amber-400" />
+                <p className="font-bold">Nenhum cargo possui trilha de carreira configurada.</p>
+                <p className="text-xs mt-1">Edite os cargos e defina o campo <strong>Próximo Cargo</strong> para visualizar o organograma.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            {/* Scrollable org chart container */}
+            <div
+                ref={containerRef}
+                className="relative overflow-x-auto overflow-y-visible rounded-2xl border border-slate-100 bg-gradient-to-br from-slate-50 to-white"
+                style={{ minHeight: 200 }}
+            >
+                {/* SVG overlay for connections */}
+                <svg
+                    style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', overflow: 'visible' }}
+                    width={svgDims.w}
+                    height={svgDims.h}
+                >
+                    <defs>
+                        <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+                            <circle cx="3" cy="3" r="2" fill="#94a3b8" />
+                        </marker>
+                    </defs>
+                    {lines.map(line => {
+                        const midY = (line.y1 + line.y2) / 2;
+                        return (
+                            <g key={line.id}>
+                                {/* Shadow line for depth */}
+                                <path
+                                    d={`M ${line.x1} ${line.y1} C ${line.x1} ${midY} ${line.x2} ${midY} ${line.x2} ${line.y2}`}
+                                    stroke="#e2e8f0"
+                                    strokeWidth={4}
+                                    fill="none"
+                                    strokeLinecap="round"
+                                />
+                                {/* Main connection line */}
+                                <path
+                                    d={`M ${line.x1} ${line.y1} C ${line.x1} ${midY} ${line.x2} ${midY} ${line.x2} ${line.y2}`}
+                                    stroke="#6366f1"
+                                    strokeWidth={1.5}
+                                    strokeDasharray="4 3"
+                                    fill="none"
+                                    strokeLinecap="round"
+                                    opacity={0.6}
+                                />
+                                {/* Dot at child end */}
+                                <circle cx={line.x2} cy={line.y2} r={3} fill="#6366f1" opacity={0.5} />
+                            </g>
+                        );
+                    })}
+                </svg>
+
+                {/* Tree nodes */}
+                <div className="flex items-start justify-center gap-16 p-10 flex-wrap" style={{ minWidth: 'fit-content' }}>
+                    {trees.map(tree => (
+                        <OrgNode
+                            key={tree.role.id}
+                            node={tree}
+                            nodeRefs={nodeRefs}
+                            funcaoById={funcaoById}
+                            catById={catById}
+                            employees={employees}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
+                        />
+                    ))}
+                </div>
+            </div>
+
+            {/* Isolated roles (not connected to any chain) */}
+            {isolated.length > 0 && (
+                <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
+                        Sem trilha definida
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                        {isolated.map(role => (
+                            <div key={role.id} ref={el => { nodeRefs.current[role.id] = el; }}>
+                                <OrgCard
+                                    role={role}
+                                    nodeRef={el => { nodeRefs.current[role.id] = el; }}
+                                    funcaoById={funcaoById}
+                                    catById={catById}
+                                    employees={employees}
+                                    onEdit={() => onEdit(role)}
+                                    onDelete={() => onDelete(role)}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ── Main Component ──────────────────────────────────────────────────────────
 const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
     const confirm = useConfirm();
     const [activeTab, setActiveTab] = useState<'cargos' | 'funcoes'>('cargos');
+    const [cargosView, setCargosView] = useState<'organograma' | 'lista'>('organograma');
     const [companies, setCompanies] = useState<CompanyOption[]>([]);
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [roles, setRoles] = useState<OrgRole[]>([]);
@@ -227,7 +546,6 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
 
     const vacantCount = roles.filter(r => !employees.some(e => e.role_id === r.id && e.status === 'ATIVO')).length;
     const niveis = Array.from(new Set(roles.map(r => r.nivel_hierarquico))).sort((a, b) => a - b);
-    const roleById = Object.fromEntries(roles.map(r => [r.id, r]));
     const funcaoById = Object.fromEntries(funcoes.map(f => [f.id, f]));
     const catById = Object.fromEntries(categorias.map(c => [c.id, c]));
 
@@ -287,11 +605,12 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                 </div>
             ) : activeTab === 'cargos' ? (
                 <>
+                    {/* Metrics */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {[
                             { label: 'Cargos', val: roles.length, icon: Briefcase, color: 'indigo' },
-                            { label: 'Níveis Hierárquicos', val: niveis.length, icon: Layers, color: 'emerald' },
-                            { label: 'Cargos Vagos', val: vacantCount, icon: AlertCircle, color: 'amber' },
+                            { label: 'Níveis', val: niveis.length, icon: Layers, color: 'emerald' },
+                            { label: 'Vagos', val: vacantCount, icon: AlertCircle, color: 'amber' },
                             { label: 'Com Faixa Salarial', val: roles.filter(r => r.salario_minimo != null).length, icon: DollarSign, color: 'violet' },
                         ].map(({ label, val, icon: Icon, color }) => (
                             <div key={label} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
@@ -303,11 +622,41 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                             </div>
                         ))}
                     </div>
+
+                    {/* View toggle */}
+                    {roles.length > 0 && (
+                        <div className="flex items-center gap-2">
+                            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                                <button
+                                    onClick={() => setCargosView('organograma')}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${cargosView === 'organograma' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                                    <GitBranch className="w-3.5 h-3.5" /> Organograma
+                                </button>
+                                <button
+                                    onClick={() => setCargosView('lista')}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${cargosView === 'lista' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                                    <LayoutGrid className="w-3.5 h-3.5" /> Lista
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Content */}
                     {roles.length === 0 ? (
                         <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-400 text-sm">
                             Nenhum cargo estruturado. Clique em <strong>Novo Cargo</strong> para começar.
                         </div>
+                    ) : cargosView === 'organograma' ? (
+                        <OrgChartView
+                            roles={roles}
+                            employees={employees}
+                            funcaoById={funcaoById}
+                            catById={catById}
+                            onEdit={openEditRole}
+                            onDelete={handleDeleteRole}
+                        />
                     ) : (
+                        // Lista view
                         <div className="space-y-6">
                             {niveis.map(nivel => (
                                 <div key={nivel}>
@@ -315,7 +664,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                         {roles.filter(r => r.nivel_hierarquico === nivel).map(role => {
                                             const occupants = employees.filter(e => e.role_id === role.id && e.status === 'ATIVO');
-                                            const proximo = role.proximo_cargo_id ? roleById[role.proximo_cargo_id] : null;
+                                            const proximo = role.proximo_cargo_id ? roles.find(r => r.id === role.proximo_cargo_id) : null;
                                             const funcao = role.funcao_id ? funcaoById[role.funcao_id] : null;
                                             const cat = funcao?.categoria_id ? catById[funcao.categoria_id] : null;
                                             const clr = cat ? colorOf(cat.cor) : null;
@@ -373,8 +722,8 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                     )}
                 </>
             ) : (
+                /* ── FUNÇÕES TAB ─────────────────────────────────── */
                 <>
-                    {/* Funções tab header */}
                     <div className="flex items-center justify-between">
                         <div className="grid grid-cols-3 gap-4 flex-1">
                             {[
@@ -402,8 +751,6 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                     {catPanelOpen && (
                         <div className="bg-white border border-violet-100 rounded-2xl p-5 space-y-4 shadow-sm">
                             <h4 className="text-sm font-black text-slate-800 flex items-center gap-2"><Tag className="w-4 h-4 text-violet-600" /> Gerenciar Categorias</h4>
-
-                            {/* Lista de categorias */}
                             <div className="space-y-2">
                                 {categorias.map(cat => {
                                     const clr = colorOf(cat.cor);
@@ -417,9 +764,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                                         className="flex-1 min-w-[140px] bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-violet-400" />
                                                     <div className="flex gap-1.5">
                                                         {COLORS.map(c => (
-                                                            <button key={c.value} type="button"
-                                                                onClick={() => setCatForm({ ...catForm, cor: c.value })}
-                                                                title={c.label}
+                                                            <button key={c.value} type="button" onClick={() => setCatForm({ ...catForm, cor: c.value })} title={c.label}
                                                                 className={`w-6 h-6 rounded-full ${c.dot} transition-all ${catForm.cor === c.value ? 'ring-2 ring-offset-1 ring-slate-400 scale-110' : 'opacity-60 hover:opacity-100'}`} />
                                                         ))}
                                                     </div>
@@ -444,8 +789,6 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                     );
                                 })}
                             </div>
-
-                            {/* Form nova categoria */}
                             {editingCatId === null && (
                                 <form onSubmit={handleSaveCat} className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100">
                                     <input required placeholder="Nome da nova categoria..." value={catForm.nome}
@@ -453,9 +796,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                         className="flex-1 min-w-[160px] bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-violet-400" />
                                     <div className="flex gap-1.5">
                                         {COLORS.map(c => (
-                                            <button key={c.value} type="button"
-                                                onClick={() => setCatForm({ ...catForm, cor: c.value })}
-                                                title={c.label}
+                                            <button key={c.value} type="button" onClick={() => setCatForm({ ...catForm, cor: c.value })} title={c.label}
                                                 className={`w-6 h-6 rounded-full ${c.dot} transition-all ${catForm.cor === c.value ? 'ring-2 ring-offset-1 ring-slate-400 scale-110' : 'opacity-60 hover:opacity-100'}`} />
                                         ))}
                                     </div>
@@ -467,15 +808,13 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                         </div>
                     )}
 
-                    {/* Grid de funções agrupado por categoria */}
+                    {/* Funções grid agrupado por categoria */}
                     {funcoes.length === 0 ? (
                         <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-400 text-sm">
                             Nenhuma função cadastrada. Funções são categorias reutilizáveis atribuídas a múltiplos cargos.
-                            <br /><strong className="text-slate-500">Ex: Função "Pedreiro" → Cargos "Pedreiro Jr", "Pedreiro Pleno", "Pedreiro Sênior".</strong>
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            {/* Funções com categoria */}
                             {categorias.map(cat => {
                                 const catFuncoes = funcoes.filter(f => f.categoria_id === cat.id);
                                 if (catFuncoes.length === 0) return null;
@@ -514,7 +853,6 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                     </div>
                                 );
                             })}
-                            {/* Funções sem categoria */}
                             {funcoes.filter(f => !f.categoria_id).length > 0 && (
                                 <div>
                                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-3">Sem categoria</span>
@@ -548,7 +886,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                 </>
             )}
 
-            {/* ── Modal: Cargo ─────────────────────────────────────── */}
+            {/* ── Modal: Cargo ─────────────────────────────────── */}
             {isRoleOpen && (
                 <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
@@ -558,7 +896,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                         </div>
                         <form onSubmit={handleSaveRole} className="space-y-5 text-sm">
                             <div className="space-y-3">
-                                <p className={`${labelCls} text-slate-400`}>Identificação</p>
+                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Identificação</p>
                                 <div className="space-y-1">
                                     <label className={labelCls}>Nome do Cargo *</label>
                                     <input type="text" required autoFocus placeholder="Ex: Engenheiro Civil Pleno" value={roleForm.nome}
@@ -605,7 +943,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                 </div>
                             </div>
                             <div className="space-y-3">
-                                <p className={`${labelCls} text-slate-400 flex items-center gap-1.5`}><DollarSign className="w-3 h-3" /> Faixa Salarial</p>
+                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest flex items-center gap-1.5"><DollarSign className="w-3 h-3" /> Faixa Salarial</p>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1">
                                         <label className={labelCls}>Piso (R$)</label>
@@ -620,7 +958,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                 </div>
                             </div>
                             <div className="space-y-3">
-                                <p className={`${labelCls} text-slate-400 flex items-center gap-1.5`}><Star className="w-3 h-3" /> Perfil do Cargo</p>
+                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest flex items-center gap-1.5"><Star className="w-3 h-3" /> Perfil do Cargo</p>
                                 <div className="space-y-1">
                                     <label className={labelCls}>Responsabilidades</label>
                                     <textarea placeholder="Uma por linha..." value={roleForm.responsabilidades}
@@ -634,7 +972,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                             </div>
                             {roles.filter(r => r.id !== roleForm.id).length > 0 && (
                                 <div className="space-y-3">
-                                    <p className={`${labelCls} text-slate-400 flex items-center gap-1.5`}><ChevronRight className="w-3 h-3" /> Trilha de Carreira</p>
+                                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest flex items-center gap-1.5"><ChevronRight className="w-3 h-3" /> Trilha de Carreira</p>
                                     <div className="space-y-1">
                                         <label className={labelCls}>Próximo Cargo (promoção)</label>
                                         <select value={roleForm.proximo_cargo_id} onChange={e => setRoleForm({ ...roleForm, proximo_cargo_id: e.target.value })} className={inputCls}>
@@ -657,7 +995,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                 </div>
             )}
 
-            {/* ── Modal: Função ────────────────────────────────────── */}
+            {/* ── Modal: Função ─────────────────────────────────── */}
             {isFuncaoOpen && (
                 <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4">

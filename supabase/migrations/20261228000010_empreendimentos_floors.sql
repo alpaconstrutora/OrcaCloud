@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS public.empreendimento_floors (
 
 CREATE INDEX IF NOT EXISTS empr_floors_tower_idx ON public.empreendimento_floors (tower_id);
 
+DROP TRIGGER IF EXISTS update_empreendimento_floors_updated_at ON public.empreendimento_floors;
 CREATE TRIGGER update_empreendimento_floors_updated_at
     BEFORE UPDATE ON public.empreendimento_floors
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -41,6 +42,7 @@ CREATE INDEX IF NOT EXISTS empr_units_floor_idx ON public.empreendimento_units (
 -- ─────────────────────────────────────────────────────────────────────────────
 ALTER TABLE public.empreendimento_floors ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "org_access_empr_floors" ON public.empreendimento_floors;
 CREATE POLICY "org_access_empr_floors" ON public.empreendimento_floors
     FOR ALL TO authenticated
     USING (

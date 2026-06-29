@@ -4,6 +4,7 @@ import {
     InvestorOpportunity, OpportunityStatus,
     OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_STATUS_COLORS,
     OPPORTUNITY_TYPE_LABELS,
+    OpportunityCompetitor,
     investorPortalService,
 } from '../../services/investorPortalService';
 import { Investor } from '../../services/investorService';
@@ -41,17 +42,42 @@ const OpportunitiesTab: React.FC<Props> = ({
     const [saving, setSaving] = React.useState(false);
     const [adminTab, setAdminTab] = React.useState<AdminTab>('opportunities');
 
-    const handleSave = async (data: Omit<InvestorOpportunity, 'id' | 'created_at'>) => {
+    const handleSave = async (
+        data: Omit<InvestorOpportunity, 'id' | 'created_at'>,
+        competitors: Omit<OpportunityCompetitor, 'id' | 'created_at' | 'opportunity_id'>[]
+    ) => {
         if (!organizationId) return;
         setSaving(true);
         try {
+            let saved: InvestorOpportunity;
             if (editing === 'new') {
-                const saved = await investorPortalService.addOpportunity(data);
+                saved = await investorPortalService.addOpportunity(data);
                 onUpdate(saved);
             } else if (editing && editing.id) {
-                const saved = await investorPortalService.updateOpportunity(editing.id, data);
+                saved = await investorPortalService.updateOpportunity(editing.id, data);
                 onUpdate(saved);
+                if (detail && detail.id === editing.id) {
+                    setDetail(saved);
+                }
             }
+
+            // Salvar concorrentes
+            if (saved! && saved.id) {
+                // Remove concorrentes existentes para evitar duplicados ou conflitos
+                const existing = await investorPortalService.listCompetitors(saved.id);
+                for (const item of existing) {
+                    if (item.id) await investorPortalService.deleteCompetitor(item.id);
+                }
+                // Insere a nova lista de concorrentes
+                for (const item of competitors) {
+                    await investorPortalService.saveCompetitor({
+                        ...item,
+                        opportunity_id: saved.id,
+                        organization_id: organizationId,
+                    });
+                }
+            }
+
             setEditing(null);
         } catch (err) {
             console.error('Erro ao salvar oportunidade', err);
@@ -66,6 +92,9 @@ const OpportunitiesTab: React.FC<Props> = ({
         try {
             const saved = await investorPortalService.updateOpportunity(op.id, { is_published: !op.is_published });
             onUpdate(saved);
+            if (detail && detail.id === op.id) {
+                setDetail(saved);
+            }
         } catch (err) {
             console.error('Erro ao publicar', err);
         }

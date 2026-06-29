@@ -92,6 +92,27 @@ export interface InvestorOpportunity {
     scenario_cost_opt_pct?: number | null;
     scenario_vgv_opt_pct?: number | null;
     scenario_notes?: string | null;
+    // novos campos de marketing, RI e vínculo ao IMOVIB
+    imovib_study_id?: string | null;
+    target_funding_value?: number | null;
+    current_funding_value?: number | null;
+    gallery_urls?: string[] | null;
+    distances_json?: any[] | null;
+    risks_json?: any[] | null;
+    team_json?: any[] | null;
+    simulation_params_json?: any | null;
+    created_at?: string;
+}
+
+export interface OpportunityCompetitor {
+    id?: string;
+    organization_id: string;
+    opportunity_id: string;
+    name: string;
+    price_per_m2: number;
+    sales_velocity_pct?: number | null;
+    appreciation_pct?: number | null;
+    distance_km?: number | null;
     created_at?: string;
 }
 
@@ -148,10 +169,14 @@ const OPP_COLS = [
     'expected_start', 'project_id', 'is_published',
     'duration_months', 'scenario_cost_cons_pct', 'scenario_vgv_cons_pct',
     'scenario_cost_opt_pct', 'scenario_vgv_opt_pct', 'scenario_notes',
+    'imovib_study_id', 'target_funding_value', 'current_funding_value',
+    'gallery_urls', 'distances_json', 'risks_json', 'team_json', 'simulation_params_json',
     'created_at',
 ].join(', ');
 
 const INTEREST_COLS = 'id, organization_id, opportunity_id, contact_name, contact_email, contact_phone, role, message, stage, created_at';
+
+const COMPETITOR_COLS = 'id, organization_id, opportunity_id, name, price_per_m2, sales_velocity_pct, appreciation_pct, distance_km, created_at';
 
 export const investorPortalService = {
     // ─── Reports ─────────────────────────────────────────────────────────────
@@ -275,6 +300,47 @@ export const investorPortalService = {
         const { error } = await supabase
             .from('opportunity_interests')
             .update({ stage })
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    // ─── Competitors ──────────────────────────────────────────────────────────
+
+    async listCompetitors(opportunityId: string): Promise<OpportunityCompetitor[]> {
+        const { data, error } = await supabase
+            .from('investor_opportunity_competitors')
+            .select(COMPETITOR_COLS)
+            .eq('opportunity_id', opportunityId)
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+        return (data ?? []) as OpportunityCompetitor[];
+    },
+
+    async saveCompetitor(competitor: Omit<OpportunityCompetitor, 'id' | 'created_at'> & { id?: string }): Promise<OpportunityCompetitor> {
+        if (competitor.id) {
+            const { data, error } = await supabase
+                .from('investor_opportunity_competitors')
+                .update(competitor)
+                .eq('id', competitor.id)
+                .select(COMPETITOR_COLS)
+                .single();
+            if (error) throw error;
+            return data as OpportunityCompetitor;
+        } else {
+            const { data, error } = await supabase
+                .from('investor_opportunity_competitors')
+                .insert(competitor)
+                .select(COMPETITOR_COLS)
+                .single();
+            if (error) throw error;
+            return data as OpportunityCompetitor;
+        }
+    },
+
+    async deleteCompetitor(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('investor_opportunity_competitors')
+            .delete()
             .eq('id', id);
         if (error) throw error;
     },

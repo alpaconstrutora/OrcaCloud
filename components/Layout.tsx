@@ -883,13 +883,11 @@ const Layout: React.FC<LayoutProps> = ({
 
               {(mod.fiscal || isDev) && (
                 <>
-                  <NavGroup label="Fiscal" />
                   <NavItem id="fiscal-nfe" icon={Receipt} label="Fiscal e NF-e" />
                   <NavItem id="automation" icon={Zap} label="Automação" />
                 </>
               )}
 
-              <NavGroup label="Controladoria" />
               <NavItem id="controladoria" icon={BarChart3} label="Controladoria" />
             </>
           )}

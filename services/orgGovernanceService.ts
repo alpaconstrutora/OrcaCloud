@@ -3,6 +3,8 @@ import {
   OrgRole,
   OrgFuncao,
   OrgFuncaoInsert,
+  OrgFuncaoCategoria,
+  OrgFuncaoCategoriaInsert,
   OrgRelationship,
   OrgRelationshipType,
   OrgAuthorityLimit,
@@ -19,6 +21,35 @@ export const orgGovernanceService = {
   // ==========================================
   // FUNÇÕES (org_funcoes)
   // ==========================================
+  async listCategorias(companyId: string): Promise<OrgFuncaoCategoria[]> {
+    const { data, error } = await supabase
+      .from('org_funcao_categorias')
+      .select('*')
+      .eq('company_id', companyId)
+      .order('nome');
+    if (error) throw error;
+    return data || [];
+  },
+
+  async saveCategoria(cat: OrgFuncaoCategoriaInsert & { id?: string }): Promise<OrgFuncaoCategoria> {
+    const payload = { company_id: cat.company_id, nome: cat.nome, cor: cat.cor };
+    if (cat.id) {
+      const { data, error } = await supabase
+        .from('org_funcao_categorias').update(payload).eq('id', cat.id).select().single();
+      if (error) throw error;
+      return data;
+    }
+    const { data, error } = await supabase
+      .from('org_funcao_categorias').insert(payload).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteCategoria(id: string): Promise<void> {
+    const { error } = await supabase.from('org_funcao_categorias').delete().eq('id', id);
+    if (error) throw error;
+  },
+
   async listFuncoes(companyId: string): Promise<OrgFuncao[]> {
     const { data, error } = await supabase
       .from('org_funcoes')
@@ -34,7 +65,7 @@ export const orgGovernanceService = {
       company_id: funcao.company_id,
       nome: funcao.nome,
       descricao: funcao.descricao || null,
-      categoria: funcao.categoria,
+      categoria_id: funcao.categoria_id || null,
     };
     if (funcao.id) {
       const { data, error } = await supabase

@@ -8,14 +8,22 @@ export type RaciRoleType = 'R' | 'A' | 'C' | 'I';
 
 // ─── 0. FUNÇÕES (org_funcoes) ────────────────────────────────
 
-export type OrgFuncaoCategoria = 'operacional' | 'tecnica' | 'administrativa' | 'gerencial' | 'comercial';
+export interface OrgFuncaoCategoria {
+  id: string;
+  company_id: string;
+  nome: string;
+  cor: string;
+  created_at: string;
+}
+
+export type OrgFuncaoCategoriaInsert = Omit<OrgFuncaoCategoria, 'id' | 'created_at'>;
 
 export interface OrgFuncao {
   id: string;
   company_id: string;
   nome: string;
   descricao?: string | null;
-  categoria: OrgFuncaoCategoria;
+  categoria_id?: string | null;
   created_at: string;
   updated_at: string;
 }

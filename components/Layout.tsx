@@ -830,20 +830,8 @@ const Layout: React.FC<LayoutProps> = ({
                 </>
               )}
 
-              {(mod.fiscal || isDev) && (
-                <>
-                  <NavGroup label="Fiscal" />
-                  <NavItem id="fiscal-nfe" icon={Receipt} label="Fiscal e NF-e" />
-                  <NavItem id="automation" icon={Zap} label="Automação" />
-                </>
-              )}
-
-              <NavGroup label="Controladoria" />
-              <NavItem id="controladoria" icon={BarChart3} label="Controladoria" />
-
               {(mod.crm || mod.incorporacao || isDev) && (
                 <>
-                  <NavGroup label="Comercial" />
                   <NavDropdown
                     label="Comercial"
                     icon={TrendingUp}
@@ -871,7 +859,6 @@ const Layout: React.FC<LayoutProps> = ({
 
               {isDev ? (
                 <>
-                  <NavGroup label="Portais" />
                   <NavDropdown
                     label="Portais"
                     icon={Shield}
@@ -893,6 +880,17 @@ const Layout: React.FC<LayoutProps> = ({
                   <NavItem id="client-area" icon={User} label="Visão do Cliente" />
                 </>
               )}
+
+              {(mod.fiscal || isDev) && (
+                <>
+                  <NavGroup label="Fiscal" />
+                  <NavItem id="fiscal-nfe" icon={Receipt} label="Fiscal e NF-e" />
+                  <NavItem id="automation" icon={Zap} label="Automação" />
+                </>
+              )}
+
+              <NavGroup label="Controladoria" />
+              <NavItem id="controladoria" icon={BarChart3} label="Controladoria" />
             </>
           )}
 

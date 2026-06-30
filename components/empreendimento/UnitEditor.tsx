@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import {
-  EmpreendimentoTower, EmpreendimentoUnit, FloorTipo, UnitStatus, EmpreendimentoUnitInsert,
+  EmpreendimentoTower, EmpreendimentoUnit, FloorTipo, EmpreendimentoUnitInsert,
   UnitPositionType, UnitSunOrientation, UnitViewType,
 } from '../../types';
 import {
@@ -25,15 +25,7 @@ const FLOOR_TIPO_STYLE: Record<FloorTipo, string> = {
   COBERTURA: 'bg-amber-500/10 text-amber-700', TECNICO: 'bg-gray-500/10 text-gray-600',
   GARAGEM: 'bg-orange-500/10 text-orange-600', OUTRO: 'bg-purple-500/10 text-purple-600',
 };
-const STATUS_LABELS: Record<UnitStatus, string> = {
-  DISPONIVEL: 'Disponível', RESERVADO: 'Reservado', PERMUTADO: 'Permutado', VENDIDO: 'Vendido',
-};
-const STATUS_STYLE: Record<UnitStatus, string> = {
-  DISPONIVEL: 'bg-emerald-500/10 text-emerald-600', RESERVADO: 'bg-amber-500/10 text-amber-600',
-  PERMUTADO: 'bg-violet-500/10 text-violet-600', VENDIDO: 'bg-blue-500/10 text-blue-600',
-};
-
-type SortCol = 'name' | 'floor' | 'floor_tipo' | 'typology' | 'private_area' | 'common_area' | 'parking_spaces' | 'price' | 'status' | 'position_type' | 'view_type' | 'sun_orientation';
+type SortCol = 'name' | 'floor' | 'floor_tipo' | 'typology' | 'private_area' | 'common_area' | 'parking_spaces' | 'price' | 'position_type' | 'view_type' | 'sun_orientation';
 
 const emptyForm = () => ({
   name: '', floor: '', typology: '', private_area: '', common_area: '',
@@ -42,7 +34,7 @@ const emptyForm = () => ({
   sun_orientation: '' as UnitSunOrientation | '',
 });
 const emptyBulkForm = () => ({
-  status: '' as UnitStatus | '', floor: '', floor_tipo: '' as FloorTipo | '',
+  floor: '', floor_tipo: '' as FloorTipo | '',
   typology: '', private_area: '', common_area: '', parking_spaces: '', price: '',
   position_type: '' as UnitPositionType | '', view_type: '' as UnitViewType | '',
   sun_orientation: '' as UnitSunOrientation | '',
@@ -121,7 +113,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       case 'common_area':   va = a.common_area ?? 0;  vb = b.common_area ?? 0; break;
       case 'parking_spaces':va = a.parking_spaces ?? 0; vb = b.parking_spaces ?? 0; break;
       case 'price':         va = a.price ?? 0;        vb = b.price ?? 0; break;
-      case 'status':        va = a.status;            vb = b.status; break;
       case 'position_type': va = a.position_type ?? ''; vb = b.position_type ?? ''; break;
       case 'view_type':     va = a.view_type ?? '';   vb = b.view_type ?? ''; break;
       case 'sun_orientation': va = a.sun_orientation ?? ''; vb = b.sun_orientation ?? ''; break;
@@ -255,13 +246,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
     } catch (err: any) { alert(`Erro ao duplicar: ${err.message}`); }
   };
 
-  const handleStatusChange = async (unit: EmpreendimentoUnit, status: UnitStatus) => {
-    try {
-      await empreendimentoService.updateUnit(unit.id, { status });
-      setUnits(prev => prev.map(u => u.id === unit.id ? { ...u, status } : u));
-    } catch (err: any) { alert(`Erro ao atualizar status: ${err.message}`); }
-  };
-
   const handleDelete = async (unit: EmpreendimentoUnit) => {
     if (!window.confirm(`Excluir "${unit.name}"?`)) return;
     try {
@@ -274,7 +258,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   // ── Bulk save ───────────────────────────────────────────────────────────────
 
   const handleBulkSave = async () => {
-    const hasAny = bulkForm.status || bulkForm.floor || bulkForm.floor_tipo || bulkForm.typology.trim()
+    const hasAny = bulkForm.floor || bulkForm.floor_tipo || bulkForm.typology.trim()
       || bulkForm.price || bulkForm.private_area || bulkForm.common_area || bulkForm.parking_spaces
       || bulkForm.position_type || bulkForm.view_type || bulkForm.sun_orientation;
     if (!hasAny) { alert('Preencha pelo menos um campo para aplicar em lote.'); return; }
@@ -282,7 +266,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
     // Monta o patch de uma unidade aplicando só os campos preenchidos no bulkForm
     const buildUpd = (unit: EmpreendimentoUnit): Record<string, any> => {
       const upd: Record<string, any> = {};
-      if (bulkForm.status) upd.status = bulkForm.status;
       if (bulkForm.floor) upd.floor = Number(bulkForm.floor);
       if (bulkForm.floor_tipo) upd.floor_tipo = bulkForm.floor_tipo;
       if (bulkForm.typology.trim()) upd.typology = bulkForm.typology.trim();
@@ -489,7 +472,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                 <SortableHeader col="view_type" current={sortCol} dir={sortDir} onSort={handleSort}>Vista</SortableHeader>
                 <SortableHeader col="sun_orientation" current={sortCol} dir={sortDir} onSort={handleSort}>Orient.</SortableHeader>
                 <SortableHeader col="price" current={sortCol} dir={sortDir} onSort={handleSort}>Preço</SortableHeader>
-                <SortableHeader col="status" current={sortCol} dir={sortDir} onSort={handleSort}>Status</SortableHeader>
                 <th className="py-3 px-4 text-center">Ações</th>
               </tr>
             </thead>
@@ -537,7 +519,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                       <td className="py-2 px-4 text-xs font-bold text-teal-600">
                         {group.totalComum > 0 ? `${fmtArea(group.totalComum)} m²` : '—'}
                       </td>
-                      <td colSpan={7} />
+                      <td colSpan={6} />
                     </tr>
 
                     {/* Unidades do grupo */}
@@ -589,12 +571,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                                 </select>
                               </td>
                               <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.price} onChange={e => setEditForm(p => ({ ...p, price: e.target.value }))} /></td>
-                              <td className="py-2 px-3">
-                                <select value={u.status} onChange={e => handleStatusChange(u, e.target.value as UnitStatus)}
-                                  className={`text-xs font-black uppercase tracking-wider px-2 py-1 rounded-lg border-none outline-none cursor-pointer ${STATUS_STYLE[u.status]}`}>
-                                  {(Object.keys(STATUS_LABELS) as UnitStatus[]).map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-                                </select>
-                              </td>
                               <td className="py-2 px-3 text-center">
                                 <div className="flex items-center justify-center gap-1">
                                   <button onClick={() => handleSaveEdit(u)} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg"><Check className="w-3.5 h-3.5" /></button>
@@ -631,12 +607,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                                   : <span className="text-gray-300 text-[10px]">—</span>}
                               </td>
                               <td className="py-3 px-4 text-gray-700 font-semibold">{u.price != null ? fmtPrice(u.price) : '—'}</td>
-                              <td className="py-3 px-4">
-                                <select value={u.status} onChange={e => handleStatusChange(u, e.target.value as UnitStatus)}
-                                  className={`text-xs font-black uppercase tracking-wider px-2 py-1 rounded-lg border-none outline-none cursor-pointer ${STATUS_STYLE[u.status]}`}>
-                                  {(Object.keys(STATUS_LABELS) as UnitStatus[]).map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-                                </select>
-                              </td>
                               <td className="py-3 px-4 text-center">
                                 <div className="flex items-center justify-center gap-1">
                                   <button onClick={() => startEdit(u)} className="p-1.5 hover:bg-blue-50 text-blue-500 rounded-lg" title="Editar"><Edit className="w-3.5 h-3.5" /></button>
@@ -682,11 +652,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
           </div>
           <p className="text-[10px] text-gray-400 font-medium -mt-1">Campos em branco não serão alterados.</p>
           <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-            <select value={bulkForm.status} onChange={e => setBulkForm(p => ({ ...p, status: e.target.value as UnitStatus | '' }))}
-              className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-400">
-              <option value="">Status...</option>
-              {(Object.keys(STATUS_LABELS) as UnitStatus[]).map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-            </select>
             <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Pav. nº" value={bulkForm.floor} onChange={e => setBulkForm(p => ({ ...p, floor: e.target.value }))} />
             <select value={bulkForm.floor_tipo} onChange={e => setBulkForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))}
               className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-400">

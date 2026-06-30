@@ -24,6 +24,7 @@ interface CommercialSnap {
   status: string;
   price: number;
   name: string;
+  specs?: Record<string, unknown>;
 }
 
 // ── Status mapping ────────────────────────────────────────────────────────────
@@ -90,7 +91,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
       if (ids.length) {
         const { data } = await supabase
           .from('commercial_properties')
-          .select('id, name, status, price')
+          .select('id, name, status, price, specs')
           .eq('organization_id', organizationId)
           .in('id', ids);
         const map: Record<string, CommercialSnap> = {};
@@ -138,7 +139,10 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
         bedrooms: unit.bedrooms,
         block: unit._tower_name,
         project_id: unit._tower_project_id || undefined,
-        specs: { parkingSpaces: unit.parking_spaces },
+        specs: {
+          parkingSpaces: unit.parking_spaces,
+          ...(unit.floor_tipo ? { floorTipo: unit.floor_tipo } : {}),
+        },
       } as any);
       await empreendimentoService.updateUnit(unit.id, { commercial_property_id: prop.id });
       await load();
@@ -216,7 +220,10 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
           typology: unit.typology || undefined,
           block: unit._tower_name,
           project_id: unit._tower_project_id || undefined,
-          specs: { parkingSpaces: unit.parking_spaces },
+          specs: {
+            parkingSpaces: unit.parking_spaces,
+            ...(unit.floor_tipo ? { floorTipo: unit.floor_tipo } : {}),
+          },
         } as any);
         await empreendimentoService.updateUnit(unit.id, { commercial_property_id: prop.id });
       }
@@ -343,14 +350,22 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
                 const busy = busyId === u.id;
                 const isOrphan = !!u.commercial_property_id && !!orphanIds.has(u.commercial_property_id);
                 const statusDiverge = snap && mapCommercialToEmpr(snap.status) !== u.status;
+                const priceDiverge = snap && u.price != null && Math.abs(snap.price - u.price) > 0.01;
                 return (
                   <tr key={u.id} className={`border-b border-gray-50 hover:bg-gray-50/30 ${isOrphan ? 'bg-rose-50/40' : ''}`}>
                     <td className="py-3 px-4 font-bold text-gray-800">{u.name}</td>
                     <td className="py-3 px-4 text-gray-500">{u._tower_name}</td>
                     <td className="py-3 px-4 text-gray-500">{u.floor ?? '—'}</td>
                     <td className="py-3 px-4 text-gray-500">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>
-                    <td className="py-3 px-4 text-gray-700 font-semibold">
-                      {u.price != null ? fmt(u.price) : '—'}
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-gray-700 font-semibold">{u.price != null ? fmt(u.price) : '—'}</span>
+                        {priceDiverge && (
+                          <span title={`Comercial: ${fmt(snap!.price)}`}>
+                            <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${UNIT_STATUS_STYLE[u.status]}`}>

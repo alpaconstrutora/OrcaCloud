@@ -312,7 +312,58 @@ export const empreendimentoService = {
             .select(UNIT_COLS)
             .single();
         if (error) throw new Error(`Failed to update unit: ${error.message}`);
+        // Propaga campos comerciais para a property vinculada (best-effort, não bloqueia)
+        if (data.commercial_property_id) {
+            this.pushCommercialFieldsFromUnit(data, updates).catch(err =>
+                console.error('[empreendimentoService] erro ao propagar para Comercial:', err)
+            );
+        }
         return data;
+    },
+
+    // Campos da unit que têm mapeamento direto para commercial_properties
+    async pushCommercialFieldsFromUnit(
+        unit: EmpreendimentoUnit,
+        changed: EmpreendimentoUnitUpdate,
+    ): Promise<void> {
+        if (!unit.commercial_property_id) return;
+        const propUpdate: Record<string, unknown> = {};
+        if ('price'         in changed) propUpdate.price         = unit.price ?? 0;
+        if ('private_area'  in changed) propUpdate.private_area  = unit.private_area;
+        if ('common_area'   in changed) propUpdate.common_area   = unit.common_area;
+        if ('total_area'    in changed) propUpdate.total_area    = unit.total_area;
+        if ('typology'      in changed) propUpdate.typology      = unit.typology;
+        if ('floor'         in changed) propUpdate.floor         = unit.floor;
+
+        // floor_tipo vive em specs (JSONB) — merge para não destruir os outros campos
+        if ('floor_tipo' in changed) {
+            const { data: prop } = await supabase
+                .from('commercial_properties')
+                .select('specs')
+                .eq('id', unit.commercial_property_id)
+                .single();
+            propUpdate.specs = { ...(prop?.specs ?? {}), floorTipo: unit.floor_tipo };
+        }
+
+        // parking_spaces vive em specs.parkingSpaces (sem coluna direta)
+        if ('parking_spaces' in changed) {
+            if (propUpdate.specs) {
+                (propUpdate.specs as Record<string, unknown>).parkingSpaces = unit.parking_spaces;
+            } else {
+                const { data: prop } = await supabase
+                    .from('commercial_properties')
+                    .select('specs')
+                    .eq('id', unit.commercial_property_id)
+                    .single();
+                propUpdate.specs = { ...(prop?.specs ?? {}), parkingSpaces: unit.parking_spaces };
+            }
+        }
+
+        if (!Object.keys(propUpdate).length) return;
+        await supabase
+            .from('commercial_properties')
+            .update(propUpdate)
+            .eq('id', unit.commercial_property_id);
     },
 
     async deleteUnit(id: string): Promise<void> {

@@ -78,6 +78,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [syncingAll, setSyncingAll] = React.useState(false);
   const [publishingAll, setPublishingAll] = React.useState(false);
+  const [orphanIds, setOrphanIds] = React.useState<Set<string>>(new Set());
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -90,19 +91,23 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
         const { data } = await supabase
           .from('commercial_properties')
           .select('id, name, status, price')
+          .eq('organization_id', organizationId)
           .in('id', ids);
         const map: Record<string, CommercialSnap> = {};
         (data || []).forEach(p => { map[p.id] = p; });
         setCommSnaps(map);
+        // Vínculo aponta para property inexistente ou de outra org → órfão
+        setOrphanIds(new Set(ids.filter(id => !map[id])));
       } else {
         setCommSnaps({});
+        setOrphanIds(new Set());
       }
     } catch (err) {
       console.error('[EspelhoVendas] erro ao carregar:', err);
     } finally {
       setLoading(false);
     }
-  }, [e.id]);
+  }, [e.id, organizationId]);
 
   React.useEffect(() => { load(); }, [load]);
 
@@ -150,6 +155,21 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
       await load();
     } catch (err: any) {
       alert(`Erro ao desvincular: ${err.message}`);
+    } finally { setBusyId(null); }
+  };
+
+  // Limpa vínculos órfãos: commercial_property_id aponta para property inexistente
+  // (excluída no Comercial) ou de outra organização.
+  const handleClearOrphans = async () => {
+    const orphanUnits = units.filter(u => u.commercial_property_id && orphanIds.has(u.commercial_property_id));
+    if (!orphanUnits.length) return;
+    if (!window.confirm(`${orphanUnits.length} unidade(s) apontam para imóveis que não existem mais no Comercial. Desvincular?`)) return;
+    setBusyId('__orphans__');
+    try {
+      await Promise.all(orphanUnits.map(u => empreendimentoService.updateUnit(u.id, { commercial_property_id: null })));
+      await load();
+    } catch (err: any) {
+      alert(`Erro ao limpar vínculos órfãos: ${err.message}`);
     } finally { setBusyId(null); }
   };
 
@@ -230,6 +250,26 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
 
   return (
     <div className="space-y-6">
+      {/* Alerta de vínculos órfãos */}
+      {orphanIds.size > 0 && (
+        <div className="flex items-center justify-between gap-3 bg-rose-50 border border-rose-200 rounded-2xl px-4 py-3">
+          <div className="flex items-center gap-2 text-rose-700">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span className="text-xs font-bold">
+              {orphanIds.size} unidade{orphanIds.size > 1 ? 's' : ''} vinculada{orphanIds.size > 1 ? 's' : ''} a imóve{orphanIds.size > 1 ? 'is' : 'l'} que não existe{orphanIds.size > 1 ? 'm' : ''} mais no Comercial.
+            </span>
+          </div>
+          <button
+            onClick={handleClearOrphans}
+            disabled={busyId === '__orphans__'}
+            className="shrink-0 px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg bg-rose-600 hover:bg-rose-700 text-white disabled:opacity-40 flex items-center gap-1.5"
+          >
+            {busyId === '__orphans__' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unlink className="w-3 h-3" />}
+            Limpar vínculos
+          </button>
+        </div>
+      )}
+
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Total Unidades" value={String(totalUnits)} sub={`${linkedCount} no Comercial`} />
@@ -301,9 +341,10 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
               {units.map(u => {
                 const snap = u.commercial_property_id ? commSnaps[u.commercial_property_id] : null;
                 const busy = busyId === u.id;
+                const isOrphan = !!u.commercial_property_id && !!orphanIds.has(u.commercial_property_id);
                 const statusDiverge = snap && mapCommercialToEmpr(snap.status) !== u.status;
                 return (
-                  <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50/30">
+                  <tr key={u.id} className={`border-b border-gray-50 hover:bg-gray-50/30 ${isOrphan ? 'bg-rose-50/40' : ''}`}>
                     <td className="py-3 px-4 font-bold text-gray-800">{u.name}</td>
                     <td className="py-3 px-4 text-gray-500">{u._tower_name}</td>
                     <td className="py-3 px-4 text-gray-500">{u.floor ?? '—'}</td>
@@ -326,6 +367,10 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
                             <span title="Status diverge do Empreendimento"><AlertCircle className="w-3.5 h-3.5 text-amber-500" /></span>
                           )}
                         </div>
+                      ) : isOrphan ? (
+                        <span className="flex items-center gap-1.5 text-rose-600 text-xs font-bold">
+                          <AlertCircle className="w-3.5 h-3.5" /> Vínculo quebrado
+                        </span>
                       ) : (
                         <span className="text-gray-300 text-xs">Não publicado</span>
                       )}
@@ -334,6 +379,14 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
                       <div className="flex items-center justify-center gap-1">
                         {busy ? (
                           <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                        ) : isOrphan ? (
+                          <button
+                            onClick={() => handleUnlink(u)}
+                            className="p-1.5 hover:bg-rose-100 text-rose-500 rounded-lg"
+                            title="Remover vínculo quebrado"
+                          >
+                            <Unlink className="w-3.5 h-3.5" />
+                          </button>
                         ) : snap ? (
                           <button
                             onClick={() => handleUnlink(u)}

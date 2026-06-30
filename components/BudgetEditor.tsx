@@ -1,7 +1,7 @@
 import React from 'react';
 import { BudgetEntry, ProjectSettings, SinapiItem, WBSPhase, SinapiType, BudgetVersion, WBSGroup, CustomDatabase, CompositionComponent } from '../types';
 import { sinapiService, SinapiReference, resolveReferenceDate } from '../services/sinapiService'; // Importação do Serviço
-import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard } from 'lucide-react';
+import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench } from 'lucide-react';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { parametricService } from '../services/parametricService';
 import { BudgetRow } from './BudgetRow';
@@ -88,6 +88,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
   const [manageEapMenuOpen, setManageEapMenuOpen] = React.useState(false);
+  const [toolsMenuOpen, setToolsMenuOpen] = React.useState(false);
 
   const [expandedGroups, setExpandedGroups] = React.useState<string[]>([]);
   const [expandedPhases, setExpandedPhases] = React.useState<string[]>([]);
@@ -650,6 +651,24 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       setExpandedGroups([]);
       setExpandedPhases([]);
       setExpandedSubPhases([]);
+    }
+  };
+
+  // --- Gerar Contrato de Serviço a partir do orçamento ---
+  const canGenerateContract = !!(projectId || (settings as any).id) && !!(organizationId || (settings as any).organizationId) && budget.length > 0;
+  const handleGenerateContract = async () => {
+    const pid = projectId || (settings as any).id;
+    const oid = organizationId || (settings as any).organizationId;
+    if (!pid || !oid) return;
+    setGeneratingContract(true);
+    try {
+      const { contractService } = await import('../services/contractService');
+      const contract = await contractService.generateFromBudget(pid, oid, budget);
+      alert(`Contrato ${contract.number} gerado com sucesso! Acesse em Gestão de Vendas → Contratos de Serviço.`);
+    } catch (e) {
+      alert(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`);
+    } finally {
+      setGeneratingContract(false);
     }
   };
 
@@ -1675,10 +1694,11 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             </button>
             <button
               onClick={() => setIsVersionModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-md hover:bg-emerald-100 transition-all text-button font-bold"
+              className="flex items-center gap-2 px-3 py-1.5 bg-white text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50 transition-all text-button font-bold"
+              title="Salvar uma nova versão (snapshot) deste orçamento"
             >
               <Save className="w-3.5 h-3.5" />
-              Salvar
+              Salvar versão
             </button>
             {(() => {
               const activeVersion = settings.versions?.find(v => v.id === settings.activeVersionId);
@@ -1693,122 +1713,113 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Grupo 3: Ferramentas & Exportação */}
-          <div className="flex items-center gap-1.5 p-1.5 rounded-lg border border-dashed border-gray-200">
+        <div className="flex items-center gap-2">
+          {/* Grupo 3: Menu de Ferramentas (análise + import/export + contrato) */}
+          <div className="relative">
             <button
-              onClick={() => handleOpenParametric()}
-              className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md text-button font-bold transition-all border border-indigo-100"
-              title="Estimativa CUB/NBR"
+              onClick={() => setToolsMenuOpen(!toolsMenuOpen)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-button font-bold border transition-all ${toolsMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              title="Ferramentas de análise, importação e exportação"
             >
-              <Box className="w-4 h-4" />
-              Paramétrico
+              <Wrench className="w-3.5 h-3.5" />
+              Ferramentas
+              <ChevronDown className={`w-3 h-3 transition-transform ${toolsMenuOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {onOpenDashboard && (
-              <button
-                onClick={onOpenDashboard}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-md text-button font-bold transition-all border border-blue-100"
-                title="Curva ABC"
-              >
-                <LayoutDashboard className="w-4 h-4" />
-                Curva ABC
-              </button>
-            )}
-
-            <button
-              onClick={() => setIsImportModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-md hover:bg-gray-50 transition-all text-button font-bold"
-            >
-              <FileDown className="w-3.5 h-3.5" />
-              Importar
-            </button>
-
-            <button
-              onClick={handleExportWBS}
-              className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-md hover:bg-gray-50 transition-all text-button font-bold"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              Exportar
-            </button>
-          </div>
-
-          <div className="h-8 w-px bg-gray-100 mx-1" />
-
-          {/* Gerar Contrato de Serviço — visível quando há project e org */}
-          {(projectId || (settings as any).id) && (organizationId || (settings as any).organizationId) && budget.length > 0 && (
-            <>
-              <div className="h-8 w-px bg-gray-100 mx-1" />
-              <button
-                disabled={generatingContract}
-                onClick={async () => {
-                  const pid = projectId || (settings as any).id;
-                  const oid = organizationId || (settings as any).organizationId;
-                  if (!pid || !oid) return;
-                  setGeneratingContract(true);
-                  try {
-                    const { contractService } = await import('../services/contractService');
-                    const contract = await contractService.generateFromBudget(pid, oid, budget);
-                    alert(`Contrato ${contract.number} gerado com sucesso! Acesse em Gestão de Vendas → Contratos de Serviço.`);
-                  } catch (e) {
-                    alert(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`);
-                  } finally {
-                    setGeneratingContract(false);
-                  }
-                }}
-                className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-button font-bold transition-all disabled:opacity-50"
-                title="Gerar Contrato de Serviço a partir deste orçamento"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                {generatingContract ? 'Gerando...' : 'Gerar Contrato'}
-              </button>
-            </>
-          )}
-
-          <div className="h-8 w-px bg-gray-100 mx-1" />
-
-          {/* Grupo 4: Gestão da EAP */}
-          <div className="flex items-center gap-1.5 p-1.5 bg-blue-50/30 border border-blue-100 rounded-lg">
-            <div className="relative">
-              <button
-                onClick={() => setManageEapMenuOpen(!manageEapMenuOpen)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-all text-button font-bold border ${manageEapMenuOpen ? 'bg-white border-blue-300 text-blue-700 shadow-sm' : 'bg-transparent text-blue-600 border-transparent hover:bg-blue-50'}`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                Gerenciar EAP
-                <ChevronDown className={`w-3 h-3 transition-transform ${manageEapMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {manageEapMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setManageEapMenuOpen(false)}></div>
-                  <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+            {toolsMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setToolsMenuOpen(false)}></div>
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <p className="px-4 pt-1 pb-1.5 text-xs font-black text-gray-400 uppercase tracking-wider">Análise</p>
+                  <button
+                    onClick={() => { handleOpenParametric(); setToolsMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2 transition-colors"
+                  >
+                    <Box className="w-4 h-4 text-indigo-500" /> Paramétrico
+                  </button>
+                  {onOpenDashboard && (
                     <button
-                      onClick={() => { setIsTemplateModalOpen(true); setManageEapMenuOpen(false); }}
+                      onClick={() => { onOpenDashboard(); setToolsMenuOpen(false); }}
                       className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
                     >
-                      <Save className="w-4 h-4 text-blue-500" /> Modelos de EAP
+                      <LayoutDashboard className="w-4 h-4 text-blue-500" /> Curva ABC
                     </button>
-                    <div className="border-t border-gray-100 my-1"></div>
-                    <button
-                      onClick={() => { handleClearWBS(); setManageEapMenuOpen(false); }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" /> Limpar Toda EAP
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+                  )}
 
-            <button
-              onClick={handleAddGroup}
-              className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-all text-button font-bold shadow-sm"
-            >
-              <Plus className="w-4 h-4 stroke-[3]" />
-              Novo Grupo
-            </button>
+                  <div className="border-t border-gray-100 my-1"></div>
+                  <p className="px-4 pt-1 pb-1.5 text-xs font-black text-gray-400 uppercase tracking-wider">Importar / Exportar</p>
+                  <button
+                    onClick={() => { setIsImportModalOpen(true); setToolsMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                  >
+                    <FileDown className="w-4 h-4 text-gray-500" /> Importar EAP
+                  </button>
+                  <button
+                    onClick={() => { handleExportWBS(); setToolsMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                  >
+                    <FileText className="w-4 h-4 text-gray-500" /> Exportar EAP
+                  </button>
+
+                  {canGenerateContract && (
+                    <>
+                      <div className="border-t border-gray-100 my-1"></div>
+                      <button
+                        disabled={generatingContract}
+                        onClick={() => { handleGenerateContract(); setToolsMenuOpen(false); }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 transition-colors disabled:opacity-50"
+                      >
+                        <FileText className="w-4 h-4 text-emerald-500" /> {generatingContract ? 'Gerando contrato...' : 'Gerar Contrato'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
+
+          {/* Grupo 4: Gestão da EAP */}
+          <div className="relative">
+            <button
+              onClick={() => setManageEapMenuOpen(!manageEapMenuOpen)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-button font-bold border ${manageEapMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              title="Gerenciar estrutura da EAP"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              Gerenciar EAP
+              <ChevronDown className={`w-3 h-3 transition-transform ${manageEapMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {manageEapMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setManageEapMenuOpen(false)}></div>
+                <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <button
+                    onClick={() => { setIsTemplateModalOpen(true); setManageEapMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
+                  >
+                    <Save className="w-4 h-4 text-blue-500" /> Modelos de EAP
+                  </button>
+                  <div className="border-t border-gray-100 my-1"></div>
+                  <button
+                    onClick={() => { handleClearWBS(); setManageEapMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" /> Limpar Toda EAP
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Ação primária */}
+          <button
+            onClick={handleAddGroup}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-button font-bold shadow-sm"
+          >
+            <Plus className="w-4 h-4 stroke-[3]" />
+            Novo Grupo
+          </button>
         </div>
       </div>
 

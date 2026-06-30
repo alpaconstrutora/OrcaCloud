@@ -42,8 +42,8 @@ const emptyForm = () => ({
   sun_orientation: '' as UnitSunOrientation | '',
 });
 const emptyBulkForm = () => ({
-  status: '' as UnitStatus | '', floor_tipo: '' as FloorTipo | '',
-  typology: '', private_area: '', common_area: '', price: '', parking_spaces: '',
+  status: '' as UnitStatus | '', floor: '', floor_tipo: '' as FloorTipo | '',
+  typology: '', private_area: '', common_area: '', parking_spaces: '', price: '',
   position_type: '' as UnitPositionType | '', view_type: '' as UnitViewType | '',
   sun_orientation: '' as UnitSunOrientation | '',
 });
@@ -274,7 +274,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   // ── Bulk save ───────────────────────────────────────────────────────────────
 
   const handleBulkSave = async () => {
-    const hasAny = bulkForm.status || bulkForm.floor_tipo || bulkForm.typology.trim()
+    const hasAny = bulkForm.status || bulkForm.floor || bulkForm.floor_tipo || bulkForm.typology.trim()
       || bulkForm.price || bulkForm.private_area || bulkForm.common_area || bulkForm.parking_spaces
       || bulkForm.position_type || bulkForm.view_type || bulkForm.sun_orientation;
     if (!hasAny) { alert('Preencha pelo menos um campo para aplicar em lote.'); return; }
@@ -283,10 +283,11 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
     const buildUpd = (unit: EmpreendimentoUnit): Record<string, any> => {
       const upd: Record<string, any> = {};
       if (bulkForm.status) upd.status = bulkForm.status;
+      if (bulkForm.floor) upd.floor = Number(bulkForm.floor);
       if (bulkForm.floor_tipo) upd.floor_tipo = bulkForm.floor_tipo;
       if (bulkForm.typology.trim()) upd.typology = bulkForm.typology.trim();
-      if (bulkForm.price) upd.price = Number(bulkForm.price);
       if (bulkForm.parking_spaces) upd.parking_spaces = Number(bulkForm.parking_spaces);
+      if (bulkForm.price) upd.price = Number(bulkForm.price);
       if (bulkForm.position_type) upd.position_type = bulkForm.position_type;
       if (bulkForm.view_type) upd.view_type = bulkForm.view_type;
       if (bulkForm.sun_orientation) upd.sun_orientation = bulkForm.sun_orientation;
@@ -680,17 +681,23 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
             </button>
           </div>
           <p className="text-[10px] text-gray-400 font-medium -mt-1">Campos em branco não serão alterados.</p>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
             <select value={bulkForm.status} onChange={e => setBulkForm(p => ({ ...p, status: e.target.value as UnitStatus | '' }))}
               className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-400">
               <option value="">Status...</option>
               {(Object.keys(STATUS_LABELS) as UnitStatus[]).map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
             </select>
+            <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Pav. nº" value={bulkForm.floor} onChange={e => setBulkForm(p => ({ ...p, floor: e.target.value }))} />
             <select value={bulkForm.floor_tipo} onChange={e => setBulkForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))}
               className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-400">
               <option value="">Tipo Pav....</option>
               {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>)}
             </select>
+            <input className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Tipologia..." value={bulkForm.typology} onChange={e => setBulkForm(p => ({ ...p, typology: e.target.value }))} />
+            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Priv. m²" value={bulkForm.private_area} onChange={e => setBulkForm(p => ({ ...p, private_area: e.target.value }))} />
+            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Comum m²" value={bulkForm.common_area} onChange={e => setBulkForm(p => ({ ...p, common_area: e.target.value }))} />
+            <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Vagas" value={bulkForm.parking_spaces} onChange={e => setBulkForm(p => ({ ...p, parking_spaces: e.target.value }))} />
+            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Preço R$" value={bulkForm.price} onChange={e => setBulkForm(p => ({ ...p, price: e.target.value }))} />
             <select value={bulkForm.position_type} onChange={e => setBulkForm(p => ({ ...p, position_type: e.target.value as UnitPositionType | '' }))}
               className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-400">
               <option value="">Posição...</option>
@@ -706,10 +713,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
               <option value="">Orientação...</option>
               {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
             </select>
-            <input className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Tipologia..." value={bulkForm.typology} onChange={e => setBulkForm(p => ({ ...p, typology: e.target.value }))} />
-            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Priv. m²" value={bulkForm.private_area} onChange={e => setBulkForm(p => ({ ...p, private_area: e.target.value }))} />
-            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Comum m²" value={bulkForm.common_area} onChange={e => setBulkForm(p => ({ ...p, common_area: e.target.value }))} />
-            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Preço R$" value={bulkForm.price} onChange={e => setBulkForm(p => ({ ...p, price: e.target.value }))} />
             <button onClick={handleBulkSave} disabled={bulkSaving}
               className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5">
               {bulkSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}

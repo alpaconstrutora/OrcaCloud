@@ -14,6 +14,7 @@ import { Empreendimento, EmpreendimentoUnit, UnitStatus } from '../../types';
 import {
   UNMAPPABLE_COMMERCIAL_STATUSES, mapCommercialToEmpr, mapEmprToCommercial,
   UNIT_STATUS_LABEL, UNIT_STATUS_STYLE, COMM_STATUS_LABEL, COMM_STATUS_STYLE,
+  mapPositionToCommercial, mapViewToCommercial, mapSunToCommercial,
 } from '../../utils/empreendimentoComercial';
 
 interface Props {
@@ -106,6 +107,9 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
         bedrooms: unit.bedrooms,
         block: unit._tower_name,
         project_id: unit._tower_project_id || undefined,
+        position_type: mapPositionToCommercial(unit.position_type),
+        view_type: mapViewToCommercial(unit.view_type),
+        sun_orientation: mapSunToCommercial(unit.sun_orientation),
         specs: {
           parkingSpaces: unit.parking_spaces,
           ...(unit.floor_tipo ? { floorTipo: unit.floor_tipo } : {}),
@@ -229,6 +233,9 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
           typology: unit.typology || undefined,
           block: unit._tower_name,
           project_id: unit._tower_project_id || undefined,
+          position_type: mapPositionToCommercial(unit.position_type),
+          view_type: mapViewToCommercial(unit.view_type),
+          sun_orientation: mapSunToCommercial(unit.sun_orientation),
           specs: {
             parkingSpaces: unit.parking_spaces,
             ...(unit.floor_tipo ? { floorTipo: unit.floor_tipo } : {}),

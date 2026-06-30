@@ -10,7 +10,10 @@ import {
     UnitStatus, CommonAreaCategory,
     ImovibStudy, ImovibUnit, ImovibUnitInstance,
 } from '../types';
-import { mapCommercialToEmpr, UNMAPPABLE_COMMERCIAL_STATUSES } from '../utils/empreendimentoComercial';
+import {
+    mapCommercialToEmpr, UNMAPPABLE_COMMERCIAL_STATUSES,
+    mapPositionToCommercial, mapViewToCommercial, mapSunToCommercial,
+} from '../utils/empreendimentoComercial';
 
 // Resumo de divergências entre as unidades do empreendimento e suas properties no Comercial.
 export interface CommercialDivergenceSummary {
@@ -52,7 +55,7 @@ const TOWER_COLS = 'id, empreendimento_id, project_id, imovib_block_id, name, fl
 
 const FLOOR_COLS = 'id, tower_id, name, tipo, floor_number, repeat_count, units_per_floor, prefix, sort_order, created_at, updated_at';
 
-const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_instance_id, name, floor, typology, private_area, common_area, total_area, bedrooms, bathrooms, parking_spaces, position_type, sun_orientation, price, status, is_vendavel, commercial_property_id, sort_order, created_at, updated_at';
+const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_instance_id, name, floor, typology, private_area, common_area, total_area, bedrooms, bathrooms, parking_spaces, position_type, sun_orientation, view_type, price, status, is_vendavel, commercial_property_id, sort_order, created_at, updated_at';
 
 const COMMON_AREA_COLS = 'id, empreendimento_id, tower_id, name, category, area, floor, description, is_vendavel, sort_order, created_at, updated_at';
 
@@ -452,6 +455,10 @@ export const empreendimentoService = {
         if ('total_area'    in changed) propUpdate.total_area    = unit.total_area;
         if ('typology'      in changed) propUpdate.typology      = unit.typology;
         if ('floor'         in changed) propUpdate.floor         = unit.floor;
+        // Atributos de precificação — traduzidos PT→EN
+        if ('position_type'   in changed) propUpdate.position_type   = mapPositionToCommercial(unit.position_type) ?? null;
+        if ('view_type'       in changed) propUpdate.view_type       = mapViewToCommercial(unit.view_type) ?? null;
+        if ('sun_orientation' in changed) propUpdate.sun_orientation = mapSunToCommercial(unit.sun_orientation) ?? null;
 
         // floor_tipo vive em specs (JSONB) — merge para não destruir os outros campos
         if ('floor_tipo' in changed) {

@@ -13,6 +13,7 @@ export type FloorTipo =
 
 export type UnitPositionType = 'FRENTE' | 'LATERAL' | 'FUNDOS';
 export type UnitSunOrientation = 'NORTE' | 'SUL' | 'LESTE' | 'OESTE';
+export type UnitViewType = 'SEM_VISTA' | 'PARCIAL' | 'PLENA';
 export type UnitStatus = 'DISPONIVEL' | 'RESERVADO' | 'PERMUTADO' | 'VENDIDO';
 export type CommonAreaCategory = 'LAZER' | 'COMUM' | 'TECNICA' | 'CIRCULACAO' | 'GARAGEM' | 'OUTRO';
 
@@ -135,8 +136,9 @@ export interface EmpreendimentoUnit {
     bedrooms?: number;
     bathrooms?: number;
     parking_spaces?: number;
-    position_type?: UnitPositionType;
-    sun_orientation?: UnitSunOrientation;
+    position_type?: UnitPositionType | null;
+    sun_orientation?: UnitSunOrientation | null;
+    view_type?: UnitViewType | null;
     price?: number;
     status: UnitStatus;
     is_vendavel?: boolean;

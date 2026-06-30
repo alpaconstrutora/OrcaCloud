@@ -348,7 +348,66 @@ const OpportunitiesTab: React.FC<Props> = ({
                         </div>
                     ) : (
                         /* Modo lista */
-                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                        <>
+                            <div className="md:hidden space-y-4">
+                                {visibleOpportunities.map(op => (
+                                    <div key={op.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="font-black text-gray-900 leading-tight">{op.title}</p>
+                                                {op.subtitle && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{op.subtitle}</p>}
+                                                {isAdmin && !op.is_published && (
+                                                    <span className="inline-flex mt-2 text-xs text-yellow-600 font-bold">Rascunho</span>
+                                                )}
+                                            </div>
+                                            {op.status && (
+                                                <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-widest whitespace-nowrap ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
+                                                    {OPPORTUNITY_STATUS_LABELS[op.status]}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3 text-sm">
+                                            <div>
+                                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">VGV</p>
+                                                <p className="font-black text-gray-900">{fmtBRL(op.vgv) ?? '—'}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">ROI / TIR</p>
+                                                <p className="font-black">
+                                                    {op.roi_pct != null && <span className="text-emerald-600">{op.roi_pct.toFixed(1)}%</span>}
+                                                    {op.roi_pct != null && op.tir_pct != null && <span className="text-gray-300 mx-1">/</span>}
+                                                    {op.tir_pct != null && <span className="text-blue-600">{op.tir_pct.toFixed(1)}%</span>}
+                                                    {op.roi_pct == null && op.tir_pct == null && <span className="text-gray-400">—</span>}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-3 pt-3 border-t border-gray-50">
+                                            <span className="text-xs font-bold text-gray-400 truncate">
+                                                {[op.location_city, op.location_state].filter(Boolean).join(', ') || 'Local não informado'}
+                                            </span>
+                                            <div className="flex items-center gap-1 flex-shrink-0">
+                                                <button
+                                                    onClick={() => setDetail(op)}
+                                                    className="px-3 py-1.5 bg-blue-50 text-blue-600 text-button font-bold rounded-lg"
+                                                >
+                                                    Ver
+                                                </button>
+                                                {isAdmin && (
+                                                    <>
+                                                        <button onClick={() => handleTogglePublish(op)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                                                            {op.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                                        </button>
+                                                        <button onClick={() => setEditing(op)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                                                            <Pencil className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                             <table className="w-full text-left">
                                 <thead className="bg-gray-50/50 border-b border-gray-100">
                                     <tr className="text-xs font-black text-gray-400 uppercase tracking-widest">
@@ -432,7 +491,8 @@ const OpportunitiesTab: React.FC<Props> = ({
                                     ))}
                                 </tbody>
                             </table>
-                        </div>
+                            </div>
+                        </>
                     )}
                 </>
             )}

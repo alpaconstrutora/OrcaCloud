@@ -1,34 +1,22 @@
-// ÒPURA Organization & Governance — Interfaces de Dados (Fase 2)
-
-export type OrgRelationshipType = 'hierarquico' | 'funcional' | 'operacional' | 'comunicacao' | 'consulta' | 'auditoria';
-export type AuthorityFlowType = 'compras' | 'pagamentos' | 'contratos' | 'investimentos';
-export type ReadinessLevel = 'imediato' | '1_a_2_anos' | '3_a_5_anos' | 'longo_prazo';
-export type RiskLevel = 'baixo' | 'medio' | 'alto' | 'critico';
-export type RaciRoleType = 'R' | 'A' | 'C' | 'I';
-
-// ─── 0. FUNÇÕES (org_funcoes) ────────────────────────────────
-
-export interface OrgFuncaoCategoria {
-  id: string;
-  company_id: string;
-  nome: string;
-  cor: string;
-  created_at: string;
-}
-
-export type OrgFuncaoCategoriaInsert = Omit<OrgFuncaoCategoria, 'id' | 'created_at'>;
+// --- 0. FUNÇÕES (org_funcoes) --------------------------------
 
 export interface OrgFuncao {
   id: string;
   company_id: string;
   nome: string;
   descricao?: string | null;
-  categoria_id?: string | null;
+  department_id?: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export type OrgFuncaoInsert = Omit<OrgFuncao, 'id' | 'created_at' | 'updated_at'>;
+
+export type OrgRelationshipType = 'hierarquico' | 'funcional' | 'operacional' | 'comunicacao' | 'consulta' | 'auditoria';
+export type AuthorityFlowType = 'compras' | 'pagamentos' | 'contratos' | 'investimentos';
+export type ReadinessLevel = 'imediato' | '1_a_2_anos' | '3_a_5_anos' | 'longo_prazo';
+export type RiskLevel = 'baixo' | 'medio' | 'alto' | 'critico';
+export type RaciRoleType = 'R' | 'A' | 'C' | 'I';
 
 // ─── 1. CARGOS (org_roles) ───────────────────────────────────
 
@@ -45,6 +33,7 @@ export interface OrgRole {
   competencias: string[];
   proximo_cargo_id?: string | null;
   funcao_id?: string | null;
+  department_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -201,3 +190,8 @@ export interface OrgSandboxScenario {
 
 export type OrgSandboxScenarioInsert = Omit<OrgSandboxScenario, 'id' | 'created_at' | 'updated_at'>;
 export type OrgSandboxScenarioUpdate = Partial<OrgSandboxScenarioInsert>;
+
+
+
+
+

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import type { InterestRole } from './investorPortalService';
 
 export interface InvestorPortalToken {
     id: string;
@@ -9,6 +10,15 @@ export interface InvestorPortalToken {
     last_used_at?: string;
     is_active: boolean;
     created_at?: string;
+}
+
+export interface SubmitInvestorPortalInterestPayload {
+    opportunityId: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    role?: InterestRole;
+    message?: string;
 }
 
 export const investorPortalTokenService = {
@@ -103,5 +113,34 @@ export const investorPortalTokenService = {
         });
         if (error) throw error;
         return (data as any)?.study ?? null;
+    },
+
+    async submitInterestByToken(token: string, payload: SubmitInvestorPortalInterestPayload): Promise<string> {
+        const { data, error } = await supabase.rpc('fn_investor_portal_submit_interest', {
+            p_token: token,
+            p_opportunity_id: payload.opportunityId,
+            p_name: payload.name,
+            p_email: payload.email ?? null,
+            p_phone: payload.phone ?? null,
+            p_role: payload.role ?? 'investidor',
+            p_message: payload.message ?? null,
+        });
+        if (error) throw error;
+        if (!data || !(data as any).valid) {
+            throw new Error((data as any)?.error ?? 'Erro ao registrar interesse');
+        }
+
+        const interestId = (data as any).id as string;
+        const organizationId = (data as any).organization_id as string;
+
+        supabase.functions.invoke('notify-opportunity-interest', {
+            body: {
+                interestId,
+                opportunityId: payload.opportunityId,
+                organizationId,
+            },
+        }).catch(() => {/* notificacao nao bloqueia o fluxo */});
+
+        return interestId;
     },
 };

@@ -1,10 +1,12 @@
 import { supabase } from '../lib/supabase';
 import { BrokerProposal, BrokerProfile } from '../types';
+import { supplierService } from './supplierService';
 
 export const brokerService = {
     // --- Broker Profiles (Gestão de Corretores) ---
     async listProfiles(organizationId?: string) {
         if (!organizationId) return [] as BrokerProfile[];
+        await supplierService.syncRealEstateBrokerProfiles(organizationId);
         const { data, error } = await supabase
             .from('broker_profiles')
             .select('id, email, name, phone, cpf, creci, agency_name, organization_id, commission_rate, is_active, settings, created_at, updated_at')
@@ -20,6 +22,10 @@ export const brokerService = {
     },
 
     async saveProfile(profile: Partial<BrokerProfile>) {
+        if (!profile.id && !profile.organization_id) {
+            throw new Error('Nenhuma organização selecionada para cadastrar o corretor.');
+        }
+
         if (profile.id) {
             const { data, error } = await supabase
                 .from('broker_profiles')

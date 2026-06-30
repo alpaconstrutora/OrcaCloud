@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Table2, Building2, Menu, X, Save, Trash2, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, Landmark, ArrowRightLeft, Banknote, LineChart, Workflow } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -110,6 +110,14 @@ const DropdownGroupLabel = ({ label }: { label: string }) => {
   return <div className="px-4 pt-3 pb-1"><span className={`text-[9px] font-black uppercase tracking-[0.15em] ${t.dropdownGroupLabel}`}>{label}</span></div>;
 };
 
+
+type CommandItem = {
+  id: string;
+  label: string;
+  group: string;
+  icon: React.ElementType;
+  shortcut?: string;
+};
 interface LayoutProps {
   children: React.ReactNode;
   activeView: string;
@@ -142,6 +150,7 @@ const Layout: React.FC<LayoutProps> = ({
   const { logout, companies, activeEmpresaId, setActiveEmpresaId } = useStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isEmpresaDropdownOpen, setIsEmpresaDropdownOpen] = React.useState(false);
+  const [isHeaderEmpresaDropdownOpen, setIsHeaderEmpresaDropdownOpen] = React.useState(false);
   const activeEmpresa = companies.find(c => c.id === activeEmpresaId) ?? null;
 
   // Obter organização e membros para calcular permissões dinâmicas
@@ -356,7 +365,9 @@ const Layout: React.FC<LayoutProps> = ({
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
   const [isVendasOpen, setIsVendasOpen] = React.useState(false);
   const [isInteligenciaNegociosOpen, setIsInteligenciaNegociosOpen] = React.useState(false);
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const [isCommandOpen, setIsCommandOpen] = React.useState(false);
+  const [commandQuery, setCommandQuery] = React.useState('');
+  const commandInputRef = React.useRef<HTMLInputElement>(null);
   const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
@@ -375,6 +386,9 @@ const Layout: React.FC<LayoutProps> = ({
   const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-cashflow','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
+  const systemConfigViews = ['settings','master-data'];
+  const [isSystemConfigOpen, setIsSystemConfigOpen] = React.useState(() => systemConfigViews.includes(activeView));
+  React.useEffect(() => { if (systemConfigViews.includes(activeView)) setIsSystemConfigOpen(true); }, [activeView]);
   const [isLaborOpen, setIsLaborOpen] = React.useState(() => activeView.startsWith('labor-'));
   React.useEffect(() => { if (activeView.startsWith('labor-')) setIsLaborOpen(true); }, [activeView]);
 
@@ -390,6 +404,93 @@ const Layout: React.FC<LayoutProps> = ({
     if (saved > 0) navRef.current.scrollTop = saved;
   });
 
+  const commandItems = React.useMemo<CommandItem[]>(() => {
+    const items: CommandItem[] = [
+      { id: 'dashboard', label: 'Dashboard', group: 'Geral', icon: LayoutDashboard },
+      { id: 'tarefas', label: 'Minhas tarefas', group: 'Geral', icon: CheckSquare, shortcut: 'N' },
+      { id: 'notifications-center', label: 'Central de notificações', group: 'Geral', icon: Bell },
+      { id: 'eng-obras', label: 'Obras', group: 'Engenharia', icon: Building2 },
+      { id: 'eng-orcamentos', label: 'Orcamentos', group: 'Engenharia', icon: FolderOpen },
+      { id: 'eng-planejamento', label: 'Planejamento', group: 'Engenharia', icon: Calendar },
+      { id: 'measure-ai', label: 'Medição inteligente', group: 'Engenharia', icon: Calculator },
+      { id: 'supplies-contracts', label: 'Contratos', group: 'Suprimentos', icon: FileText },
+      { id: 'supplies-quotations', label: 'Cotações', group: 'Suprimentos', icon: FileText },
+      { id: 'supplies-orders', label: 'Pedidos', group: 'Suprimentos', icon: Package },
+      { id: 'financial-dashboard', label: 'Dashboard financeiro', group: 'Financeiro', icon: DollarSign },
+      { id: 'project-financial', label: 'Contas a pagar', group: 'Financeiro', icon: DollarSign },
+      { id: 'contas-a-receber', label: 'Contas a receber', group: 'Financeiro', icon: TrendingUp },
+      { id: 'financial-cashflow', label: 'Fluxo de caixa', group: 'Financeiro', icon: LineChart },
+      { id: 'sales', label: 'Vendas de ativos', group: 'Comercial', icon: Building2 },
+      { id: 'empreendimentos', label: 'Empreendimentos', group: 'Comercial', icon: Building2 },
+      { id: 'imovib', label: 'Estudos de viabilidade', group: 'Comercial', icon: BarChart3 },
+      { id: 'opura-docs', label: 'Documentos', group: 'Corporativo', icon: FolderOpen },
+      { id: 'opura-assets', label: 'Ativos', group: 'Corporativo', icon: Package },
+      { id: 'settings', label: 'Configurações', group: 'Sistema', icon: Settings },
+      { id: 'master-data', label: 'Cadastros', group: 'Sistema', icon: Database },
+      { id: 'action-new-record', label: 'Novo registro', group: 'Ação rápida', icon: Plus, shortcut: 'N' },
+      { id: 'action-focus-filters', label: 'Abrir filtros da lista', group: 'Ação rápida', icon: Filter },
+      { id: 'action-config-columns', label: 'Configurar colunas', group: 'Ação rápida', icon: Columns3 },
+      { id: 'action-sort', label: 'Ordenar dados', group: 'Ação rápida', icon: ArrowUpDown },
+    ];
+
+    return items;
+  }, []);
+
+  const activeCommand = React.useMemo(
+    () => commandItems.find(item => item.id === activeView),
+    [activeView, commandItems]
+  );
+
+  const filteredCommands = React.useMemo(() => {
+    const q = commandQuery.trim().toLowerCase();
+    if (!q) return commandItems.slice(0, 12);
+    return commandItems
+      .filter(item => `${item.label} ${item.group}`.toLowerCase().includes(q))
+      .slice(0, 18);
+  }, [commandItems, commandQuery]);
+
+  const openCommandPalette = React.useCallback(() => {
+    setIsCommandOpen(true);
+    setCommandQuery('');
+    window.setTimeout(() => commandInputRef.current?.focus(), 0);
+  }, []);
+
+  const runCommand = React.useCallback((item: CommandItem) => {
+    if (item.id.startsWith('action-')) {
+      setToast({
+        title: item.label,
+        message: 'Use a toolbar do módulo atual para executar esta ação quando disponível.'
+      });
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+      toastTimeoutRef.current = setTimeout(() => setToast(null), 4500);
+    } else {
+      onChangeView(item.id);
+    }
+    setIsCommandOpen(false);
+  }, [onChangeView]);
+
+  React.useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTyping = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        openCommandPalette();
+      } else if (event.key === '/' && !isTyping) {
+        event.preventDefault();
+        openCommandPalette();
+      } else if (event.key === 'Escape') {
+        setIsCommandOpen(false);
+        setIsMobileMenuOpen(false);
+      } else if (!isTyping && event.key.toLowerCase() === 'n') {
+        const quick = commandItems.find(item => item.id === 'action-new-record');
+        if (quick) runCommand(quick);
+      }
+    };
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [commandItems, openCommandPalette, runCommand]);
   const [unreadCount, setUnreadCount] = React.useState(0);
   const [openTaskCount, setOpenTaskCount] = React.useState(0);
   const [toast, setToast] = React.useState<{ title: string; message: string } | null>(null);
@@ -518,17 +619,17 @@ const Layout: React.FC<LayoutProps> = ({
     <NavContext.Provider value={{ activeView, isCollapsed, t, onChangeView, setIsMobileMenuOpen }}>
     <div className={`flex h-screen overflow-hidden font-sans relative ${w.shell}`}>
       {/* Sidebar - Desktop */}
-      <aside className={`hidden md:flex flex-col border-r shadow-2xl relative z-20 transition-all duration-300 ease-in-out ${t.shell} ${isCollapsed ? 'w-20' : 'w-72'}`}>
+      <aside className={`hidden md:flex flex-col border-r shadow-2xl relative z-20 transition-all duration-300 ease-in-out ${t.shell} ${isCollapsed ? 'w-[68px]' : 'w-[260px]'}`}>
         {/* Collapse Toggle */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute -right-3 top-10 w-6 h-6 bg-orange-500 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-30"
+          className="absolute -right-3 top-9 w-6 h-6 bg-slate-900 text-white rounded-full flex items-center justify-center shadow-md hover:bg-slate-700 transition-colors z-30"
         >
           {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
 
         {/* Header Logo */}
-        <div className={`flex items-center h-16 relative overflow-hidden ${isCollapsed ? 'justify-center' : 'px-4 pt-4'}`}>
+        <div className={`flex items-center h-[60px] relative overflow-hidden ${isCollapsed ? 'justify-center' : 'px-4'}`}>
           {isCollapsed ? (
             <div className="w-9 h-9 rounded-lg bg-[#0F172A] flex items-center justify-center shadow-lg">
               <span className="text-white font-bold text-lg" style={{ fontFamily: 'Inter, sans-serif' }}>O</span>
@@ -543,21 +644,21 @@ const Layout: React.FC<LayoutProps> = ({
           )}
         </div>
 
-        {/* Search */}
+        {/* Global Search */}
         {!isCollapsed && (
-          <div className="px-3 pt-3 pb-2">
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${t.searchWrap}`}>
+          <div className="px-3 pt-2 pb-2">
+            <button
+              type="button"
+              onClick={openCommandPalette}
+              className={`flex h-10 w-full items-center gap-2 rounded-lg border px-3 text-left ${t.searchWrap}`}
+              title="Busca global (Ctrl/Cmd+K)"
+            >
               <Search className={`w-4 h-4 ${t.searchIcon}`} strokeWidth={2} />
-              <input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`flex-1 bg-transparent outline-none text-sm ${t.searchText}`}
-                placeholder="Buscar..."
-              />
-            </div>
+              <span className={`flex-1 text-sm ${t.searchText}`}>Buscar no Opura...</span>
+              <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${t.groupLabel}`}>Ctrl K</span>
+            </button>
           </div>
         )}
-
         {/* Navigation */}
         <nav ref={navRef} onScroll={handleNavScroll} className={`flex-1 overflow-y-auto scrollbar-hide ${isCollapsed ? 'px-2' : 'px-3'} py-2`}>
           {(profile.group === 'USUARIO' || profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br')) && (
@@ -940,8 +1041,19 @@ const Layout: React.FC<LayoutProps> = ({
           )}
 
           <NavGroup label="Sistema" />
-          <NavItem id="master-data" icon={Database} label="Dados Mestres" />
-          <NavItem id="settings" icon={Settings} label="Configurações" />
+          <NavDropdown
+            label="Configurações"
+            icon={Settings}
+            isOpen={isSystemConfigOpen}
+            onToggle={() => {
+              if (isCollapsed) { onChangeView('settings'); }
+              else { setIsSystemConfigOpen(o => !o); }
+            }}
+            hasActiveChild={systemConfigViews.includes(activeView)}
+          >
+            <DropdownItem id="settings" icon={Settings} label="Configurações" />
+            <DropdownItem id="master-data" icon={Database} label="Cadastros" />
+          </NavDropdown>
         </nav>
 
         {/* Footer - User profile */}
@@ -1013,8 +1125,8 @@ const Layout: React.FC<LayoutProps> = ({
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setIsMobileMenuOpen(false)}></div>
-          <aside className={`relative flex flex-col w-72 h-full shadow-2xl animate-in slide-in-from-left duration-300 ${t.shell}`}>
-            <div className={`flex items-center justify-between h-16 px-4 border-b ${t.footerBorder}`}>
+          <aside className={`relative flex flex-col w-[280px] h-full shadow-2xl animate-in slide-in-from-left duration-300 ${t.shell}`}>
+            <div className={`flex items-center justify-between h-[60px] px-4 border-b ${t.footerBorder}`}>
               <div className="flex items-center">
                 <img
                   src="/opura-logo.svg"
@@ -1087,90 +1199,176 @@ const Layout: React.FC<LayoutProps> = ({
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header with Project Actions */}
-        <header className={`flex h-16 border-b items-center justify-between px-4 md:px-8 shrink-0 relative z-30 ${w.header}`}>
-          <div className="flex items-center gap-4 flex-1">
-            <button className="md:hidden" onClick={() => setIsMobileMenuOpen(true)}>
-              <Menu className={`w-6 h-6 ${w.headerIcon}`} />
-            </button>
+        {/* Utility Header */}
+        <header className={`flex h-[60px] border-b items-center gap-3 px-4 md:px-6 shrink-0 sticky top-0 z-30 ${w.header}`}>
+          <button className="md:hidden rounded-lg p-2 hover:bg-slate-100" onClick={() => setIsMobileMenuOpen(true)} title="Abrir menu">
+            <Menu className={`w-5 h-5 ${w.headerIcon}`} />
+          </button>
 
-            {(activeView === 'analytic' || activeView === 'abc-curve' || activeView === 'parametric' || activeView === 'project-settings' || activeView === 'reports') && (
-              <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3 bg-blue-50/50 px-3 py-1.5 rounded-lg border border-blue-100/50">
-                {(() => {
-                  const childProps = React.isValidElement(children) ? (children.props as Record<string, unknown>) : {};
-                  const childSettings = childProps?.settings as Record<string, unknown> | undefined;
-                  const classification = childSettings?.classification as string | undefined;
-                  return (
-                    <>
-                      <span className="text-xs md:text-xs font-bold text-blue-500 uppercase tracking-tighter">
-                        {classification === 'OBRA' ? 'Obra Atual' : 'Orçamento Atual'}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-gray-900 truncate max-w-[120px] md:max-w-xs">{projectName}</span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => onChangeView(classification === 'OBRA' ? 'project-overview' : 'dashboard')}
-                            className="p-1 text-indigo-600 hover:bg-indigo-100 rounded-md transition-colors"
-                            title="Central do Projeto"
-                          >
-                            <LayoutDashboard className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => onChangeView('project-settings')}
-                            className="p-1 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"
-                            title={classification === 'OBRA' ? 'Configurações da Obra' : 'Configurações do Orçamento'}
-                          >
-                            <Settings className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="min-w-0 hidden sm:block">
+              <div className="truncate text-sm font-semibold text-slate-900">
+                {activeCommand?.label ?? 'Opura'}
               </div>
-            )}
+              <div className="truncate text-xs text-slate-500">
+                {activeCommand?.group ?? profile.role}
+              </div>
+            </div>
+
+            <div className="relative hidden min-w-[180px] max-w-[320px] flex-1 lg:block">
+              <button
+                type="button"
+                onClick={() => setIsHeaderEmpresaDropdownOpen(o => !o)}
+                className="flex h-10 w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-sm text-slate-700 hover:bg-slate-50"
+                title="Empresa ou obra ativa"
+              >
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: activeEmpresa?.cor_sistema ?? '#2563EB' }}
+                />
+                <span className="min-w-0 flex-1 truncate">
+                  {activeEmpresa?.nome_fantasia ?? activeEmpresa?.razao_social ?? projectName ?? 'Contexto atual'}
+                </span>
+                <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isHeaderEmpresaDropdownOpen ? 'rotate-90' : ''}`} />
+              </button>
+              {isHeaderEmpresaDropdownOpen && companies.length > 0 && (
+                <div className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+                  {companies.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => { setActiveEmpresaId(c.id); setIsHeaderEmpresaDropdownOpen(false); }}
+                      className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-slate-50 ${c.id === activeEmpresaId ? 'bg-slate-100 text-slate-950' : 'text-slate-700'}`}
+                    >
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.cor_sistema ?? '#2563EB' }} />
+                      <span className="min-w-0 flex-1 truncate">{c.nome_fantasia ?? c.razao_social}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={openCommandPalette}
+            className="hidden h-10 w-[280px] items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-left text-sm text-slate-500 hover:border-slate-300 hover:bg-white md:flex xl:w-[360px]"
+            title="Busca global (Ctrl/Cmd+K)"
+          >
+            <Search className="h-4 w-4 text-slate-400" />
+            <span className="flex-1 truncate">Buscar contratos, obras, fornecedores...</span>
+            <span className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">Ctrl K</span>
+          </button>
+
+          <div className="flex items-center gap-1.5">
             <button
-              onClick={() => {
-                setIsNotificationOpen(!isNotificationOpen);
-              }}
-              className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all relative group/bell"
+              type="button"
+              onClick={openCommandPalette}
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 md:hidden"
+              title="Buscar"
+            >
+              <Search className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              title="Ajuda e atalhos"
+              onClick={openCommandPalette}
+            >
+              <HelpCircle className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+              className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               title="Notificações"
             >
-              <Bell className="w-5 h-5 group-hover/bell:scale-110 transition-transform" />
-              {unreadCount > 0 && (
-                <>
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white z-10" />
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-400 rounded-full animate-ping" />
-                </>
-              )}
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />}
             </button>
 
             {activeView === 'analytic' && (
               <button
                 onClick={onSaveProject}
                 disabled={isSaving}
-                className="px-3 py-1.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg hover:bg-emerald-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                className="flex h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
               >
-                {isSaving ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
-                ) : (
-                  <Cloud className="w-4 h-4" />
-                )}
-                <span className="text-xs font-bold uppercase hidden sm:inline">{isSaving ? 'Salvando...' : 'Salvar'}</span>
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cloud className="h-4 w-4" />}
+                <span className="hidden sm:inline">{isSaving ? 'Salvando' : 'Salvar'}</span>
               </button>
             )}
+
+            <div className="hidden h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white sm:flex" title={profile.email ?? profile.role}>
+              {(profile.email?.[0] ?? 'U').toUpperCase()}
+            </div>
           </div>
         </header>
-
         {/* Content Body */}
         <main className={`flex-1 overflow-y-auto p-4 md:p-8 scrollbar-hide relative ${w.main}`}>
           {children}
         </main>
       </div>
 
+      {/* Command Palette */}
+      {isCommandOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-start justify-center bg-slate-950/35 px-4 pt-[12vh] backdrop-blur-sm" onMouseDown={() => setIsCommandOpen(false)}>
+          <div className="w-full max-w-2xl overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="flex h-14 items-center gap-3 border-b border-slate-200 px-4">
+              <Command className="h-5 w-5 text-slate-400" />
+              <input
+                ref={commandInputRef}
+                value={commandQuery}
+                onChange={(e) => setCommandQuery(e.target.value)}
+                className="h-full flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                placeholder="Buscar modulo, obra, contrato ou comando..."
+              />
+              <button
+                type="button"
+                onClick={() => setIsCommandOpen(false)}
+                className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                title="Fechar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[420px] overflow-y-auto p-2">
+              {filteredCommands.length === 0 ? (
+                <div className="px-4 py-10 text-center">
+                  <div className="text-sm font-semibold text-slate-900">Nenhum resultado encontrado.</div>
+                  <div className="mt-1 text-sm text-slate-500">Tente buscar por modulo, rotina ou acao.</div>
+                </div>
+              ) : (
+                filteredCommands.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => runCommand(item)}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-slate-100"
+                    >
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-slate-900">{item.label}</span>
+                        <span className="block truncate text-xs text-slate-500">{item.group}</span>
+                      </span>
+                      {item.shortcut && <span className="rounded-md border border-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{item.shortcut}</span>}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-500">
+              <span>Ctrl/Cmd K busca global</span>
+              <span>/ foca busca</span>
+              <span>Esc fecha</span>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Notification Toast Portal-like position */}
       {toast && (
         <div className="fixed top-24 right-8 z-[500] max-w-xs animate-in slide-in-from-right-full duration-500">

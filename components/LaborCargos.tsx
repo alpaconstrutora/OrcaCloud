@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import {
     Briefcase, Plus, Trash2, Pencil, X, Building2, Loader2, AlertCircle,
-    Layers, DollarSign, Star, ChevronRight, Wrench, Tag, Settings, LayoutGrid, GitBranch
+    Layers, DollarSign, Star, ChevronRight, Wrench, LayoutGrid, GitBranch
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { orgGovernanceService } from '../services/orgGovernanceService';
+import { companyService } from '../services/companyService';
 import { laborService, Employee } from '../services/laborService';
 import { useConfirm } from './ui/confirm';
-import { OrgRole, OrgFuncao, OrgFuncaoCategoria } from '../types';
+import { CompanyDepartment, OrgRole, OrgFuncao } from '../types';
 
 interface LaborCargosProps { orgId: string; }
 interface CompanyOption { id: string; razao_social: string; tipo: string; }
@@ -16,34 +17,19 @@ interface RoleForm {
     id?: string; nome: string; codigo: string; descricao: string;
     nivel_hierarquico: number; responsabilidades: string;
     salario_minimo: string; salario_maximo: string;
-    competencias: string; proximo_cargo_id: string; funcao_id: string;
+    competencias: string; proximo_cargo_id: string; funcao_id: string; department_id: string;
 }
-interface FuncaoForm { id?: string; nome: string; descricao: string; categoria_id: string; }
-interface CatForm { id?: string; nome: string; cor: string; }
+interface FuncaoForm { id?: string; nome: string; descricao: string; department_id: string; }
 interface RoleNode { role: OrgRole; children: RoleNode[]; }
 interface SvgLine { x1: number; y1: number; x2: number; y2: number; id: string; }
 
 const EMPTY_ROLE: RoleForm = {
     nome: '', codigo: '', descricao: '', nivel_hierarquico: 3,
     responsabilidades: '', salario_minimo: '', salario_maximo: '',
-    competencias: '', proximo_cargo_id: '', funcao_id: '',
+    competencias: '', proximo_cargo_id: '', funcao_id: '', department_id: '',
 };
-const EMPTY_FUNCAO: FuncaoForm = { nome: '', descricao: '', categoria_id: '' };
-const EMPTY_CAT: CatForm = { nome: '', cor: 'slate' };
+const EMPTY_FUNCAO: FuncaoForm = { nome: '', descricao: '', department_id: '' };
 
-const COLORS: { value: string; label: string; bg: string; text: string; border: string; dot: string }[] = [
-    { value: 'slate',   label: 'Cinza',   bg: 'bg-slate-50',   text: 'text-slate-700',   border: 'border-slate-200',  dot: 'bg-slate-400' },
-    { value: 'orange',  label: 'Laranja', bg: 'bg-orange-50',  text: 'text-orange-700',  border: 'border-orange-200', dot: 'bg-orange-400' },
-    { value: 'blue',    label: 'Azul',    bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200',   dot: 'bg-blue-400' },
-    { value: 'indigo',  label: 'Índigo',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  border: 'border-indigo-200', dot: 'bg-indigo-400' },
-    { value: 'emerald', label: 'Verde',   bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200',dot: 'bg-emerald-400' },
-    { value: 'violet',  label: 'Violeta', bg: 'bg-violet-50',  text: 'text-violet-700',  border: 'border-violet-200', dot: 'bg-violet-400' },
-    { value: 'rose',    label: 'Rosa',    bg: 'bg-rose-50',    text: 'text-rose-700',    border: 'border-rose-200',   dot: 'bg-rose-400' },
-    { value: 'amber',   label: 'Âmbar',  bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',  dot: 'bg-amber-400' },
-    { value: 'teal',    label: 'Teal',    bg: 'bg-teal-50',    text: 'text-teal-700',    border: 'border-teal-200',   dot: 'bg-teal-400' },
-    { value: 'cyan',    label: 'Ciano',   bg: 'bg-cyan-50',    text: 'text-cyan-700',    border: 'border-cyan-200',   dot: 'bg-cyan-400' },
-];
-const colorOf = (cor: string) => COLORS.find(c => c.value === cor) ?? COLORS[0];
 const BRL = (v: number | null | undefined) =>
     v != null ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 }) : null;
 
@@ -88,19 +74,17 @@ function buildOrgTree(roles: OrgRole[]): { trees: RoleNode[]; isolated: OrgRole[
 interface OrgCardProps {
     role: OrgRole;
     nodeRef: (el: HTMLDivElement | null) => void;
-    funcaoById: Record<string, OrgFuncao>;
-    catById: Record<string, OrgFuncaoCategoria>;
+    funcaoById: Record<string, OrgFuncao>;    deptById: Record<string, CompanyDepartment>;
     employees: Employee[];
     onEdit: () => void;
     onDelete: () => void;
     isRoot?: boolean;
 }
-const OrgCard: React.FC<OrgCardProps> = ({ role, nodeRef, funcaoById, catById, employees, onEdit, onDelete, isRoot }) => {
+const OrgCard: React.FC<OrgCardProps> = ({ role, nodeRef, funcaoById, deptById, employees, onEdit, onDelete, isRoot }) => {
     const [hovered, setHovered] = useState(false);
     const occupants = employees.filter(e => e.role_id === role.id && e.status === 'ATIVO');
     const funcao = role.funcao_id ? funcaoById[role.funcao_id] : null;
-    const cat = funcao?.categoria_id ? catById[funcao.categoria_id] : null;
-    const clr = cat ? colorOf(cat.cor) : null;
+    const department = role.department_id ? deptById[role.department_id] : null;
 
     return (
         <div
@@ -130,9 +114,16 @@ const OrgCard: React.FC<OrgCardProps> = ({ role, nodeRef, funcaoById, catById, e
 
             {/* Funcao chip */}
             {funcao && (
-                <div className={`mt-1.5 flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit ${clr ? `${clr.bg} ${clr.text} ${clr.border} border` : 'bg-slate-50 text-slate-500 border border-slate-200'}`}>
+                <div className="mt-1.5 flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit bg-slate-50 text-slate-600 border border-slate-200">
                     <Wrench className="w-2 h-2 shrink-0" />
                     <span className="truncate max-w-[90px]">{funcao.nome}</span>
+                </div>
+            )}
+
+            {department && (
+                <div className="mt-1.5 flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit bg-slate-50 text-slate-600 border border-slate-200">
+                    <Building2 className="w-2 h-2 shrink-0" />
+                    <span className="truncate max-w-[100px]">{department.nome}</span>
                 </div>
             )}
 
@@ -180,20 +171,18 @@ const OrgCard: React.FC<OrgCardProps> = ({ role, nodeRef, funcaoById, catById, e
 interface OrgNodeProps {
     node: RoleNode;
     nodeRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
-    funcaoById: Record<string, OrgFuncao>;
-    catById: Record<string, OrgFuncaoCategoria>;
+    funcaoById: Record<string, OrgFuncao>;    deptById: Record<string, CompanyDepartment>;
     employees: Employee[];
     onEdit: (r: OrgRole) => void;
     onDelete: (r: OrgRole) => void;
     depth?: number;
 }
-const OrgNode: React.FC<OrgNodeProps> = ({ node, nodeRefs, funcaoById, catById, employees, onEdit, onDelete, depth = 0 }) => (
+const OrgNode: React.FC<OrgNodeProps> = ({ node, nodeRefs, funcaoById, deptById, employees, onEdit, onDelete, depth = 0 }) => (
     <div className="flex flex-col items-center" style={{ gap: 0 }}>
         <OrgCard
             role={node.role}
             nodeRef={el => { nodeRefs.current[node.role.id] = el; }}
-            funcaoById={funcaoById}
-            catById={catById}
+            funcaoById={funcaoById}            deptById={deptById}
             employees={employees}
             onEdit={() => onEdit(node.role)}
             onDelete={() => onDelete(node.role)}
@@ -206,8 +195,7 @@ const OrgNode: React.FC<OrgNodeProps> = ({ node, nodeRefs, funcaoById, catById, 
                         key={child.role.id}
                         node={child}
                         nodeRefs={nodeRefs}
-                        funcaoById={funcaoById}
-                        catById={catById}
+                        funcaoById={funcaoById}                        deptById={deptById}
                         employees={employees}
                         onEdit={onEdit}
                         onDelete={onDelete}
@@ -223,12 +211,11 @@ const OrgNode: React.FC<OrgNodeProps> = ({ node, nodeRefs, funcaoById, catById, 
 interface OrgChartViewProps {
     roles: OrgRole[];
     employees: Employee[];
-    funcaoById: Record<string, OrgFuncao>;
-    catById: Record<string, OrgFuncaoCategoria>;
+    funcaoById: Record<string, OrgFuncao>;    deptById: Record<string, CompanyDepartment>;
     onEdit: (r: OrgRole) => void;
     onDelete: (r: OrgRole) => void;
 }
-const OrgChartView: React.FC<OrgChartViewProps> = ({ roles, employees, funcaoById, catById, onEdit, onDelete }) => {
+const OrgChartView: React.FC<OrgChartViewProps> = ({ roles, employees, funcaoById, deptById, onEdit, onDelete }) => {
     const { trees, isolated } = useMemo(() => buildOrgTree(roles), [roles]);
     const containerRef = useRef<HTMLDivElement>(null);
     const nodeRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -328,9 +315,8 @@ const OrgChartView: React.FC<OrgChartViewProps> = ({ roles, employees, funcaoByI
                             key={tree.role.id}
                             node={tree}
                             nodeRefs={nodeRefs}
-                            funcaoById={funcaoById}
-                            catById={catById}
-                            employees={employees}
+                            funcaoById={funcaoById}                            deptById={deptById}
+                        employees={employees}
                             onEdit={onEdit}
                             onDelete={onDelete}
                         />
@@ -349,8 +335,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
     const [companies, setCompanies] = useState<CompanyOption[]>([]);
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
     const [roles, setRoles] = useState<OrgRole[]>([]);
-    const [funcoes, setFuncoes] = useState<OrgFuncao[]>([]);
-    const [categorias, setCategorias] = useState<OrgFuncaoCategoria[]>([]);
+    const [funcoes, setFuncoes] = useState<OrgFuncao[]>([]);    const [departments, setDepartments] = useState<CompanyDepartment[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -364,13 +349,6 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
     const [isFuncaoOpen, setIsFuncaoOpen] = useState(false);
     const [funcaoForm, setFuncaoForm] = useState<FuncaoForm>(EMPTY_FUNCAO);
     const [savingFuncao, setSavingFuncao] = useState(false);
-
-    // Categorias painel
-    const [catPanelOpen, setCatPanelOpen] = useState(false);
-    const [catForm, setCatForm] = useState<CatForm>(EMPTY_CAT);
-    const [editingCatId, setEditingCatId] = useState<string | null>(null);
-    const [savingCat, setSavingCat] = useState(false);
-
     useEffect(() => {
         let cancelled = false;
         if (!orgId) { setLoading(false); return; }
@@ -392,23 +370,23 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
         Promise.all([
             orgGovernanceService.listRoles(selectedCompanyId),
             orgGovernanceService.listFuncoes(selectedCompanyId),
-            orgGovernanceService.listCategorias(selectedCompanyId),
+            companyService.listDepartments(selectedCompanyId),
             laborService.listEmployees(orgId || undefined, selectedCompanyId),
-        ]).then(([r, f, c, e]) => {
+        ]).then(([r, f, d, e]) => {
             if (cancelled) return;
-            setRoles(r); setFuncoes(f); setCategorias(c); setEmployees(e);
+            setRoles(r); setFuncoes(f); setDepartments(d); setEmployees(e);
         }).catch(err => { if (!cancelled) setError((err as Error).message); })
           .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
     }, [selectedCompanyId, orgId]);
 
     const reloadAll = async () => {
-        const [r, f, c] = await Promise.all([
+        const [r, f, d] = await Promise.all([
             orgGovernanceService.listRoles(selectedCompanyId),
             orgGovernanceService.listFuncoes(selectedCompanyId),
-            orgGovernanceService.listCategorias(selectedCompanyId),
+            companyService.listDepartments(selectedCompanyId),
         ]);
-        setRoles(r); setFuncoes(f); setCategorias(c);
+        setRoles(r); setFuncoes(f); setDepartments(d);
     };
 
     // ── Cargo ──────────────────────────────────────────────
@@ -423,6 +401,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
             competencias: (role.competencias || []).join('\n'),
             proximo_cargo_id: role.proximo_cargo_id || '',
             funcao_id: role.funcao_id || '',
+            department_id: role.department_id || '',
         });
         setIsRoleOpen(true);
     };
@@ -441,6 +420,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                 competencias: roleForm.competencias.split('\n').map(s => s.trim()).filter(Boolean),
                 proximo_cargo_id: roleForm.proximo_cargo_id || null,
                 funcao_id: roleForm.funcao_id || null,
+                department_id: roleForm.department_id || null,
             });
             setIsRoleOpen(false); setRoleForm(EMPTY_ROLE); await reloadAll();
         } catch (err) { alert('Erro ao salvar cargo: ' + (err as Error).message); }
@@ -457,7 +437,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
     // ── Função ─────────────────────────────────────────────
     const openCreateFuncao = () => { setFuncaoForm(EMPTY_FUNCAO); setIsFuncaoOpen(true); };
     const openEditFuncao = (f: OrgFuncao) => {
-        setFuncaoForm({ id: f.id, nome: f.nome, descricao: f.descricao || '', categoria_id: f.categoria_id || '' });
+        setFuncaoForm({ id: f.id, nome: f.nome, descricao: f.descricao || '', department_id: f.department_id || '' });
         setIsFuncaoOpen(true);
     };
     const handleSaveFuncao = async (e: React.FormEvent) => {
@@ -468,7 +448,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
             await orgGovernanceService.saveFuncao({
                 id: funcaoForm.id, company_id: selectedCompanyId,
                 nome: funcaoForm.nome, descricao: funcaoForm.descricao || null,
-                categoria_id: funcaoForm.categoria_id || null,
+                department_id: funcaoForm.department_id || null,
             });
             setIsFuncaoOpen(false); setFuncaoForm(EMPTY_FUNCAO); await reloadAll();
         } catch (err) { alert('Erro ao salvar função: ' + (err as Error).message); }
@@ -486,26 +466,6 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
     };
 
     // ── Categoria ───────────────────────────────────────────
-    const startCreateCat = () => { setCatForm(EMPTY_CAT); setEditingCatId(null); };
-    const startEditCat = (c: OrgFuncaoCategoria) => { setCatForm({ id: c.id, nome: c.nome, cor: c.cor }); setEditingCatId(c.id); };
-    const cancelCat = () => { setCatForm(EMPTY_CAT); setEditingCatId(null); };
-    const handleSaveCat = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!catForm.nome || !selectedCompanyId) return;
-        setSavingCat(true);
-        try {
-            await orgGovernanceService.saveCategoria({ id: catForm.id, company_id: selectedCompanyId, nome: catForm.nome, cor: catForm.cor });
-            setCatForm(EMPTY_CAT); setEditingCatId(null); await reloadAll();
-        } catch (err) { alert('Erro ao salvar categoria: ' + (err as Error).message); }
-        finally { setSavingCat(false); }
-    };
-    const handleDeleteCat = async (cat: OrgFuncaoCategoria) => {
-        const used = funcoes.filter(f => f.categoria_id === cat.id).length;
-        const msg = used > 0 ? `Esta categoria é usada por ${used} função(ões). Elas ficarão sem categoria.` : 'Isso removerá a categoria definitivamente.';
-        if (!await confirm({ title: `Excluir categoria ${cat.nome}?`, message: msg, variant: 'danger', confirmLabel: 'Excluir' })) return;
-        try { await orgGovernanceService.deleteCategoria(cat.id); setCategorias(categorias.filter(c => c.id !== cat.id)); }
-        catch (err) { alert('Erro: ' + (err as Error).message); }
-    };
 
     if (!orgId) return (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center text-amber-800 max-w-lg mx-auto mt-10">
@@ -516,8 +476,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
 
     const vacantCount = roles.filter(r => !employees.some(e => e.role_id === r.id && e.status === 'ATIVO')).length;
     const niveis = Array.from(new Set(roles.map(r => r.nivel_hierarquico))).sort((a, b) => a - b);
-    const funcaoById = Object.fromEntries(funcoes.map(f => [f.id, f]));
-    const catById = Object.fromEntries(categorias.map(c => [c.id, c]));
+    const funcaoById = Object.fromEntries(funcoes.map(f => [f.id, f]));    const deptById = Object.fromEntries(departments.map(d => [d.id, d]));
 
     return (
         <div className="space-y-6">
@@ -620,8 +579,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                         <OrgChartView
                             roles={roles}
                             employees={employees}
-                            funcaoById={funcaoById}
-                            catById={catById}
+                            funcaoById={funcaoById}                            deptById={deptById}
                             onEdit={openEditRole}
                             onDelete={handleDeleteRole}
                         />
@@ -636,8 +594,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                             const occupants = employees.filter(e => e.role_id === role.id && e.status === 'ATIVO');
                                             const proximo = role.proximo_cargo_id ? roles.find(r => r.id === role.proximo_cargo_id) : null;
                                             const funcao = role.funcao_id ? funcaoById[role.funcao_id] : null;
-                                            const cat = funcao?.categoria_id ? catById[funcao.categoria_id] : null;
-                                            const clr = cat ? colorOf(cat.cor) : null;
+                                            const department = role.department_id ? deptById[role.department_id] : null;
                                             return (
                                                 <div key={role.id} className="bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-md p-4 rounded-2xl transition-all flex items-start justify-between gap-3">
                                                     <div className="min-w-0 flex-1">
@@ -646,8 +603,13 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                                             <h4 className="font-black text-sm text-slate-900">{role.nome}</h4>
                                                         </div>
                                                         {funcao && (
-                                                            <div className={`mt-1.5 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md w-fit ${clr ? `${clr.bg} ${clr.text} ${clr.border} border` : 'bg-slate-50 text-slate-600 border border-slate-200'}`}>
-                                                                <Wrench className="w-2.5 h-2.5" />{funcao.nome}{cat ? ` · ${cat.nome}` : ''}
+                                                            <div className="mt-1.5 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md w-fit bg-slate-50 text-slate-600 border border-slate-200">
+                                                                <Wrench className="w-2.5 h-2.5" />{funcao.nome}
+                                                            </div>
+                                                        )}
+                                                        {department && (
+                                                            <div className="mt-1.5 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md w-fit bg-slate-50 text-slate-600 border border-slate-200">
+                                                                <Building2 className="w-2.5 h-2.5" />{department.nome}
                                                             </div>
                                                         )}
                                                         {role.descricao && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{role.descricao}</p>}
@@ -692,116 +654,48 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                     )}
                 </>
             ) : (
-                /* ── FUNÇÕES TAB ─────────────────────────────────── */
+                                                /* -- FUNÇÕES TAB ----------------------------------- */
                 <>
-                    <div className="flex items-center justify-between">
-                        <div className="grid grid-cols-3 gap-4 flex-1">
-                            {[
-                                { label: 'Funções', val: funcoes.length, icon: Wrench, color: 'indigo' },
-                                { label: 'Vinculadas a Cargos', val: funcoes.filter(f => roles.some(r => r.funcao_id === f.id)).length, icon: Briefcase, color: 'emerald' },
-                                { label: 'Categorias', val: categorias.length, icon: Tag, color: 'violet' },
-                            ].map(({ label, val, icon: Icon, color }) => (
-                                <div key={label} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
-                                    <div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
-                                        <h3 className="text-3xl font-black text-slate-900 mt-1">{val}</h3>
-                                    </div>
-                                    <div className={`p-3 bg-${color}-50 rounded-xl`}><Icon className={`w-6 h-6 text-${color}-600`} /></div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {[
+                            { label: 'Funções', val: funcoes.length, icon: Wrench, color: 'indigo' },
+                            { label: 'Vinculadas a Cargos', val: funcoes.filter(f => roles.some(r => r.funcao_id === f.id)).length, icon: Briefcase, color: 'emerald' },
+                            { label: 'Com Departamento', val: funcoes.filter(f => !!f.department_id).length, icon: Building2, color: 'blue' },
+                        ].map(({ label, val, icon: Icon, color }) => (
+                            <div key={label} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between">
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+                                    <h3 className="text-3xl font-black text-slate-900 mt-1">{val}</h3>
                                 </div>
-                            ))}
-                        </div>
-                        <button
-                            onClick={() => { setCatPanelOpen(!catPanelOpen); cancelCat(); }}
-                            className={`ml-4 flex items-center gap-2 px-4 py-2.5 rounded-xl border font-bold text-sm transition-all ${catPanelOpen ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300 hover:text-violet-700'}`}>
-                            <Settings className="w-4 h-4" /> Categorias
-                        </button>
+                                <div className={`p-3 bg-${color}-50 rounded-xl`}><Icon className={`w-6 h-6 text-${color}-600`} /></div>
+                            </div>
+                        ))}
                     </div>
 
-                    {/* Painel Categorias */}
-                    {catPanelOpen && (
-                        <div className="bg-white border border-violet-100 rounded-2xl p-5 space-y-4 shadow-sm">
-                            <h4 className="text-sm font-black text-slate-800 flex items-center gap-2"><Tag className="w-4 h-4 text-violet-600" /> Gerenciar Categorias</h4>
-                            <div className="space-y-2">
-                                {categorias.map(cat => {
-                                    const clr = colorOf(cat.cor);
-                                    const isEditing = editingCatId === cat.id;
-                                    return (
-                                        <div key={cat.id} className="flex items-center gap-3">
-                                            {isEditing ? (
-                                                <form onSubmit={handleSaveCat} className="flex-1 flex items-center gap-2 flex-wrap">
-                                                    <input autoFocus required value={catForm.nome}
-                                                        onChange={e => setCatForm({ ...catForm, nome: e.target.value })}
-                                                        className="flex-1 min-w-[140px] bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-violet-400" />
-                                                    <div className="flex gap-1.5">
-                                                        {COLORS.map(c => (
-                                                            <button key={c.value} type="button" onClick={() => setCatForm({ ...catForm, cor: c.value })} title={c.label}
-                                                                className={`w-6 h-6 rounded-full ${c.dot} transition-all ${catForm.cor === c.value ? 'ring-2 ring-offset-1 ring-slate-400 scale-110' : 'opacity-60 hover:opacity-100'}`} />
-                                                        ))}
-                                                    </div>
-                                                    <button type="submit" disabled={savingCat} className="px-3 py-2 bg-violet-600 text-white rounded-xl text-xs font-bold hover:bg-violet-700">
-                                                        {savingCat ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Salvar'}
-                                                    </button>
-                                                    <button type="button" onClick={cancelCat} className="px-3 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200">Cancelar</button>
-                                                </form>
-                                            ) : (
-                                                <>
-                                                    <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border ${clr.bg} ${clr.text} ${clr.border}`}>
-                                                        <span className={`w-2 h-2 rounded-full ${clr.dot}`} />{cat.nome}
-                                                    </span>
-                                                    <span className="text-[10px] text-slate-400">{funcoes.filter(f => f.categoria_id === cat.id).length} função(ões)</span>
-                                                    <div className="flex gap-1 ml-auto">
-                                                        <button onClick={() => startEditCat(cat)} className="text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-slate-50"><Pencil className="w-3.5 h-3.5" /></button>
-                                                        <button onClick={() => handleDeleteCat(cat)} className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-slate-50"><Trash2 className="w-3.5 h-3.5" /></button>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                            {editingCatId === null && (
-                                <form onSubmit={handleSaveCat} className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100">
-                                    <input required placeholder="Nome da nova categoria..." value={catForm.nome}
-                                        onChange={e => setCatForm({ ...catForm, nome: e.target.value })}
-                                        className="flex-1 min-w-[160px] bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-violet-400" />
-                                    <div className="flex gap-1.5">
-                                        {COLORS.map(c => (
-                                            <button key={c.value} type="button" onClick={() => setCatForm({ ...catForm, cor: c.value })} title={c.label}
-                                                className={`w-6 h-6 rounded-full ${c.dot} transition-all ${catForm.cor === c.value ? 'ring-2 ring-offset-1 ring-slate-400 scale-110' : 'opacity-60 hover:opacity-100'}`} />
-                                        ))}
-                                    </div>
-                                    <button type="submit" disabled={savingCat} className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 text-white rounded-xl text-xs font-bold hover:bg-violet-700">
-                                        {savingCat ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Plus className="w-3.5 h-3.5" /> Adicionar</>}
-                                    </button>
-                                </form>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Funções grid agrupado por categoria */}
                     {funcoes.length === 0 ? (
                         <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-400 text-sm">
-                            Nenhuma função cadastrada. Funções são categorias reutilizáveis atribuídas a múltiplos cargos.
+                            Nenhuma função cadastrada. Funções descrevem o trabalho exercido e podem ser atribuídas a múltiplos cargos.
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            {categorias.map(cat => {
-                                const catFuncoes = funcoes.filter(f => f.categoria_id === cat.id);
-                                if (catFuncoes.length === 0) return null;
-                                const clr = colorOf(cat.cor);
+                            {departments.map(dept => {
+                                const deptFuncoes = funcoes.filter(f => f.department_id === dept.id);
+                                if (deptFuncoes.length === 0) return null;
                                 return (
-                                    <div key={cat.id}>
-                                        <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 mb-3 ${clr.text}`}>
-                                            <span className={`w-2 h-2 rounded-full ${clr.dot}`} />{cat.nome}
+                                    <div key={dept.id}>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-3">
+                                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: dept.cor }} />{dept.nome}
                                         </span>
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                            {catFuncoes.map(f => {
+                                            {deptFuncoes.map(f => {
                                                 const cargosCount = roles.filter(r => r.funcao_id === f.id).length;
                                                 return (
                                                     <div key={f.id} className="bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-md p-4 rounded-2xl transition-all flex items-start justify-between gap-3">
                                                         <div className="min-w-0 flex-1">
                                                             <div className="flex items-center gap-2 flex-wrap">
-                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${clr.bg} ${clr.text} ${clr.border}`}>{cat.nome}</span>
+                                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-slate-50 text-slate-600 border-slate-200 flex items-center gap-1">
+                                                                    <Building2 className="w-2.5 h-2.5" />{dept.nome}
+                                                                </span>
                                                                 <h4 className="font-black text-sm text-slate-900">{f.nome}</h4>
                                                             </div>
                                                             {f.descricao && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{f.descricao}</p>}
@@ -823,11 +717,11 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                     </div>
                                 );
                             })}
-                            {funcoes.filter(f => !f.categoria_id).length > 0 && (
+                            {funcoes.filter(f => !f.department_id).length > 0 && (
                                 <div>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-3">Sem categoria</span>
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5 mb-3">Sem departamento</span>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                        {funcoes.filter(f => !f.categoria_id).map(f => {
+                                        {funcoes.filter(f => !f.department_id).map(f => {
                                             const cargosCount = roles.filter(r => r.funcao_id === f.id).length;
                                             return (
                                                 <div key={f.id} className="bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-md p-4 rounded-2xl transition-all flex items-start justify-between gap-3">
@@ -889,20 +783,19 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                         <label className={labelCls}>Função (catálogo)</label>
                                         <select value={roleForm.funcao_id} onChange={e => setRoleForm({ ...roleForm, funcao_id: e.target.value })} className={inputCls}>
                                             <option value="">— Nenhuma —</option>
-                                            {categorias.map(cat => {
-                                                const cats = funcoes.filter(f => f.categoria_id === cat.id);
-                                                if (cats.length === 0) return null;
-                                                return (
-                                                    <optgroup key={cat.id} label={cat.nome}>
-                                                        {cats.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
-                                                    </optgroup>
-                                                );
+                                            {funcoes.map(f => {
+                                                const dept = f.department_id ? deptById[f.department_id] : null;
+                                                return <option key={f.id} value={f.id}>{f.nome}{dept ? ` - ${dept.nome}` : ''}</option>;
                                             })}
-                                            {funcoes.filter(f => !f.categoria_id).length > 0 && (
-                                                <optgroup label="Sem categoria">
-                                                    {funcoes.filter(f => !f.categoria_id).map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
-                                                </optgroup>
-                                            )}
+                                        </select>
+                                    </div>
+                                )}
+                                {departments.length > 0 && (
+                                    <div className="space-y-1">
+                                        <label className={labelCls}>Departamento</label>
+                                        <select value={roleForm.department_id} onChange={e => setRoleForm({ ...roleForm, department_id: e.target.value })} className={inputCls}>
+                                            <option value="">-- Sem departamento --</option>
+                                            {departments.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
                                         </select>
                                     </div>
                                 )}
@@ -980,13 +873,15 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                 <input type="text" required autoFocus placeholder="Ex: Pedreiro, Mestre de Obras" value={funcaoForm.nome}
                                     onChange={e => setFuncaoForm({ ...funcaoForm, nome: e.target.value })} className={inputCls} />
                             </div>
-                            <div className="space-y-1">
-                                <label className={labelCls}>Categoria</label>
-                                <select value={funcaoForm.categoria_id} onChange={e => setFuncaoForm({ ...funcaoForm, categoria_id: e.target.value })} className={inputCls}>
-                                    <option value="">— Sem categoria —</option>
-                                    {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                                </select>
-                            </div>
+                            {departments.length > 0 && (
+                                <div className="space-y-1">
+                                    <label className={labelCls}>Departamento</label>
+                                    <select value={funcaoForm.department_id} onChange={e => setFuncaoForm({ ...funcaoForm, department_id: e.target.value })} className={inputCls}>
+                                        <option value="">-- Sem departamento --</option>
+                                        {departments.map(d => <option key={d.id} value={d.id}>{d.nome}</option>)}
+                                    </select>
+                                </div>
+                            )}
                             <div className="space-y-1">
                                 <label className={labelCls}>Descrição</label>
                                 <textarea placeholder="O que faz quem exerce essa função..." value={funcaoForm.descricao}
@@ -1007,3 +902,12 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
 };
 
 export default LaborCargos;
+
+
+
+
+
+
+
+
+

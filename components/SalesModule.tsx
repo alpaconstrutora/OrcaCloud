@@ -1423,24 +1423,17 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Parceiros e Comissionamento</p>
                             </div>
                         </div>
-                        <button
-                            onClick={() => {
-                                setEditingBroker(undefined);
-                                setIsBrokerModalOpen(true);
-                            }}
-                            className="flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black shadow-xl shadow-blue-600/20 hover:scale-105 active:scale-95 transition-all group"
-                        >
-                            <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
-                            Novo Corretor
-                        </button>
+                        <div className="px-5 py-3 bg-amber-50 text-amber-700 border border-amber-100 rounded-[1.25rem] text-xs font-black uppercase tracking-widest">
+                            Cadastre em Minha Organização &gt; Fornecedores &gt; Corretor Imobiliário
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {brokers.filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase()) || b.email.toLowerCase().includes(searchTerm.toLowerCase())).map(broker => (
                             <div key={broker.id} className="bg-white p-8 rounded-[2.5rem] border border-gray-200 shadow-xl shadow-gray-200/10 hover:border-blue-200 transition-all group relative overflow-hidden">
                                 <div className="absolute top-0 right-0 p-6 flex gap-2">
-                                    <button onClick={() => { setEditingBroker(broker); setIsBrokerModalOpen(true); }} className="p-2.5 bg-gray-50 text-gray-400 hover:text-blue-600 rounded-xl transition-all shadow-sm"><Edit className="w-4 h-4" /></button>
-                                    <button onClick={() => handleDeleteBroker(broker.id)} className="p-2.5 bg-gray-50 text-gray-400 hover:text-red-500 rounded-xl transition-all shadow-sm"><Trash2 className="w-4 h-4" /></button>
+                                    
+                                    
                                 </div>
 
                                 <div className="flex items-center gap-4 mb-6">
@@ -1484,21 +1477,10 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 </div>
                             </div>
                         ))}
-
-                        {/* Card Vazio / Adicionar */}
-                        <button
-                            onClick={() => {
-                                setEditingBroker(undefined);
-                                setIsBrokerModalOpen(true);
-                            }}
-                            className="bg-blue-50/30 border-4 border-dashed border-blue-100 rounded-[2.5rem] p-8 flex flex-col items-center justify-center group hover:bg-blue-50 hover:border-blue-200 transition-all min-h-[300px]"
-                        >
-                            <div className="w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                                <Plus className="w-8 h-8 text-blue-400" />
-                            </div>
-                            <span className="text-lg font-black text-blue-600">Conectar Novo Corretor</span>
-                            <p className="text-xs font-bold text-blue-400 text-center mt-2 px-10">Expanda sua rede de vendas cadastrando novos parceiros.</p>
-                        </button>
+                        <div className="bg-amber-50/40 border-2 border-dashed border-amber-100 rounded-[2.5rem] p-8 flex flex-col items-center justify-center min-h-[300px]">
+                            <span className="text-lg font-black text-amber-700">Cadastro centralizado</span>
+                            <p className="text-xs font-bold text-amber-600 text-center mt-2 px-10">Novos corretores devem ser fornecedores na categoria Corretor Imobiliário.</p>
+                        </div>
                     </div>
                 </div>
             )}

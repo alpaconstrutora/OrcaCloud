@@ -1,6 +1,21 @@
 import { supabase } from '../lib/supabase';
 import { SupplierCategory } from '../types';
+import { DEFAULT_SUPPLIER_CATEGORIES } from '../constants/supplierCategories';
 
+
+const withDefaultCategories = (categories: SupplierCategory[], organizationId?: string): SupplierCategory[] => {
+    const existing = new Set(categories.map(c => c.name.trim().toLocaleLowerCase('pt-BR')));
+    const defaults = DEFAULT_SUPPLIER_CATEGORIES
+        .filter(name => !existing.has(name.toLocaleLowerCase('pt-BR')))
+        .map(name => ({
+            id: `default-${name.toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, '-')}`,
+            name,
+            organization_id: organizationId,
+            created_at: undefined,
+        }));
+
+    return [...categories, ...defaults].sort((a, b) => a.name.localeCompare(b.name));
+};
 // Helper to generate a unique ID for fallback
 const generateId = () => Math.random().toString(36).substring(2, 11) + '-' + Date.now().toString(36);
 
@@ -28,7 +43,7 @@ export const supplierCategoryService = {
                         allCats = [...allCats, ...cats];
                     }
                 }
-                return allCats.sort((a, b) => a.name.localeCompare(b.name));
+                return withDefaultCategories(allCats, organizationId);
             }
             console.error('[SUPPLIER CATEGORY SERVICE] Error listing categories:', error);
             return [];
@@ -38,7 +53,7 @@ export const supplierCategoryService = {
         if (organizationId) {
             filtered = filtered.filter((c) => !c.organization_id || c.organization_id === organizationId);
         }
-        return filtered.sort((a, b) => a.name.localeCompare(b.name));
+        return withDefaultCategories(filtered, organizationId);
     },
 
     async createCategory(category: Omit<SupplierCategory, 'id' | 'created_at'>): Promise<SupplierCategory> {

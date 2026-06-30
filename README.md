@@ -150,7 +150,7 @@ orçacloud-saas/
 
 ## Setup local
 
-**Pré-requisitos:** Node.js 20+ · Conta Supabase
+**Pré-requisitos:** Node.js 24+ · Conta Supabase
 
 ```bash
 npm install
@@ -173,6 +173,44 @@ npm run build      # TypeCheck + build produção
 npm run test       # Roda todos os testes
 npm run ci         # typecheck + test + build (pipeline completo)
 ```
+
+---
+
+## Deploy
+
+O runtime de deploy deve usar Node.js 24.x. Essa configuração fica versionada em
+`package.json` (`engines.node`) e `.nvmrc`; mantenha os dois arquivos alinhados
+quando houver troca de versão.
+
+Checklist antes de produção:
+
+```bash
+npm install
+npm run build
+```
+
+Quando houver migrações SQL novas, aplique-as antes do deploy da aplicação:
+
+```bash
+supabase db push
+# ou aplique os arquivos em supabase/migrations/ em ordem sequencial
+```
+
+Deploy de produção:
+
+```bash
+vercel deploy --prod --yes
+```
+
+Se o build avisar que o Browserslist está desatualizado, atualize a base local e
+versione o `package-lock.json` resultante:
+
+```bash
+npx update-browserslist-db@latest
+```
+
+Avisos de chunks grandes no Vite não bloqueiam deploy; tratá-los como otimização
+de performance futura, não como erro operacional.
 
 ---
 
@@ -199,3 +237,4 @@ supabase db push
 | Make.com | Automações via webhook (`VITE_MAKE_WEBHOOK_URL`) |
 | Z-API | WhatsApp (módulo Suprimentos — planejado) |
 | Gemini API | IA assistiva — desabilitada por padrão (`GEMINI_API_KEY`) |
+

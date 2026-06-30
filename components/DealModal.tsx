@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine } from 'lucide-react';
-import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile } from '../types';
+import { Property, PropertyDeal, Client, Organization, PaymentInstallment, Supplier } from '../types';
 import { commercialService } from '../services/commercialService';
 import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
 import { propertyExportService } from '../services/propertyExportService';
 import { projectService, ProjectData } from '../services/projectService';
-import { brokerService } from '../services/brokerService';
+import { supplierService } from '../services/supplierService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { contractService } from '../services/contractService';
 import { Contract } from '../types';
@@ -71,7 +71,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [properties, setProperties] = useState<Property[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [projects, setProjects] = useState<ProjectData[]>([]);
-    const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
+    const [brokers, setBrokers] = useState<Supplier[]>([]);
     const [loading, setLoading] = useState(false);
     const [org, setOrg] = useState<Organization | null>(null);
 
@@ -144,8 +144,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     if (!formData.id && !formData.organization_id) {
                         setFormData(prev => ({ ...prev, organization_id: o[0].id }));
                     }
-                    const brokerData = await brokerService.listProfiles(organizationId);
-                    setBrokers(brokerData.filter(b => b.is_active));
+                    const brokerData = await supplierService.listRealEstateBrokers(organizationId);
+                    setBrokers(brokerData);
                 }
             } catch (err) {
                 console.error('Error loading DealModal data:', err);
@@ -699,12 +699,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     onChange={(e) => {
                                         const brokerId = e.target.value;
                                         const broker = brokers.find(b => b.id === brokerId);
-                                        const commissionPct = broker?.commission_rate || 0;
+                                        const commissionPct = 0;
                                         const commissionValue = recalcCommission(formData.value || 0, commissionPct);
                                         setFormData({
                                             ...formData,
                                             broker_id: brokerId || undefined,
-                                            broker_name: broker?.name || undefined,
+                                            broker_name: (broker?.contact_name || broker?.name) || undefined,
                                             broker_commission_pct: commissionPct,
                                             broker_commission_value: commissionValue
                                         });
@@ -714,7 +714,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     <option value="">Sem corretor / Venda direta</option>
                                     {brokers.map(b => (
                                         <option key={b.id} value={b.id}>
-                                            {b.name}{b.creci ? ` — CRECI: ${b.creci}` : ''}{b.commission_rate ? ` (${b.commission_rate}%)` : ''}
+                                            {b.contact_name || b.name}{b.contact_name && b.name ? ` - ${b.name}` : ''}
                                         </option>
                                     ))}
                                 </select>
@@ -725,19 +725,19 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             <UserCheck className="w-5 h-5 text-amber-600" />
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-black text-gray-900 truncate">{selectedBroker.name}</p>
+                                            <p className="text-sm font-black text-gray-900 truncate">{selectedBroker.contact_name || selectedBroker.name}</p>
                                             <div className="flex items-center gap-3 mt-0.5">
-                                                {selectedBroker.creci && (
-                                                    <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">CRECI: {selectedBroker.creci}</span>
+                                                {selectedBroker.document && (
+                                                    <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">Doc: {selectedBroker.document}</span>
                                                 )}
-                                                {selectedBroker.agency_name && (
-                                                    <span className="text-xs font-bold text-gray-400 truncate">{selectedBroker.agency_name}</span>
+                                                {selectedBroker.type === 'PJ' && (
+                                                    <span className="text-xs font-bold text-gray-400 truncate">{selectedBroker.name}</span>
                                                 )}
                                             </div>
                                         </div>
                                         <div className="text-right shrink-0">
-                                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest block">Comissão padrão</span>
-                                            <span className="text-lg font-black text-amber-600">{selectedBroker.commission_rate || 0}%</span>
+                                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest block">Comissão inicial</span>
+                                            <span className="text-lg font-black text-amber-600">0%</span>
                                         </div>
                                     </div>
                                 )}

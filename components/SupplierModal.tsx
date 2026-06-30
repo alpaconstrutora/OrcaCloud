@@ -6,6 +6,7 @@ import { organizationService } from '../services/organizationService';
 import { useStore } from '../store/useStore';
 import SupplierBankAccountsTab from './SupplierBankAccountsTab';
 import CityStateSelect from './CityStateSelect';
+import { DEFAULT_SUPPLIER_CATEGORIES } from '../constants/supplierCategories';
 import { Sheet, SheetHeader } from './ui/sheet';
 
 interface SupplierModalProps {
@@ -15,14 +16,7 @@ interface SupplierModalProps {
     initialData?: Supplier;
 }
 
-const DEFAULT_CATEGORIES = [
-    'Materiais de Construção',
-    'Mão de Obra / Serviços',
-    'Equipamentos / Ferramentas',
-    'Consultoria / Projetos',
-    'Transporte / Logística',
-    'Outros'
-];
+const DEFAULT_CATEGORIES = DEFAULT_SUPPLIER_CATEGORIES;
 
 function maskCNPJ(value: string): string {
     const d = value.replace(/\D/g, '').slice(0, 14);

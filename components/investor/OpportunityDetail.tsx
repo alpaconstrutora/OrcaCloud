@@ -139,11 +139,22 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
         if (!interest.contact_name.trim()) return;
         setSaving(true);
         try {
-            await investorPortalService.addInterest({
-                organization_id: organizationId,
-                opportunity_id: op.id!,
-                ...interest,
-            });
+            if (portalToken) {
+                await investorPortalTokenService.submitInterestByToken(portalToken, {
+                    opportunityId: op.id!,
+                    name: interest.contact_name,
+                    email: interest.contact_email,
+                    phone: interest.contact_phone,
+                    role: interest.role,
+                    message: interest.message,
+                });
+            } else {
+                await investorPortalService.addInterest({
+                    organization_id: organizationId,
+                    opportunity_id: op.id!,
+                    ...interest,
+                });
+            }
             setFormStep('success');
         } catch (err) {
             console.error('Erro ao registrar interesse', err);
@@ -169,12 +180,24 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
 
     const hasLinkedProject = !!op.project_id;
 
+    const locationLabel = [op.location_city, op.location_state].filter(Boolean).join(', ');
+    const opportunityPresentation = [
+        `${op.title} está em fase de ${op.status ? OPPORTUNITY_STATUS_LABELS[op.status].toLowerCase() : 'avaliação'}${op.opportunity_type ? ` no formato ${OPPORTUNITY_TYPE_LABELS[op.opportunity_type].toLowerCase()}` : ''}.`,
+        locationLabel ? `Localização: ${locationLabel}.` : null,
+        op.vgv != null ? `VGV estimado de ${fmtBRL(op.vgv)}.` : null,
+        op.cost_estimate != null ? `Custo estimado de ${fmtBRL(op.cost_estimate)}.` : null,
+        op.ticket_min != null ? `Ticket mínimo de ${fmtBRL(op.ticket_min)}.` : null,
+        (op.duration_months || studyMath?.duration) ? `Prazo previsto de ${op.duration_months || studyMath?.duration} meses.` : null,
+        op.roi_pct != null || op.tir_pct != null
+            ? `Indicadores projetados: ${op.roi_pct != null ? `ROI de ${fmtPct(op.roi_pct)}` : ''}${op.roi_pct != null && op.tir_pct != null ? ' e ' : ''}${op.tir_pct != null ? `TIR de ${fmtPct(op.tir_pct)}` : ''}.`
+            : null,
+    ].filter(Boolean).join(' ');
     const ADMIN_TABS: { id: PitchTab; label: string }[] = [
         { id: 'pitch', label: 'Detalhes' },
         { id: 'cenarios', label: 'Viabilidade & Investimento' },
         ...(hasLinkedProject ? [{ id: 'obra' as PitchTab, label: 'Obra' }] : []),
         { id: 'documentos', label: 'Data Room' },
-        { id: 'interesses', label: `Interesses (${interests.length || '…'})` },
+        { id: 'interesses', label: interests.length > 0 ? `Interesses (${interests.length})` : 'Interesses' },
     ];
     const PUBLIC_TABS: { id: PitchTab; label: string }[] = [
         { id: 'pitch', label: 'Detalhes' },
@@ -299,7 +322,32 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
             </div>
 
             {/* ── Corpo (fundo cinza) ── */}
-            <div className="max-w-5xl mx-auto px-6 py-8">
+            <div className="max-w-5xl mx-auto px-6 py-8 pb-28 sm:pb-8">
+                {formStep === 'view' && (
+                    <div className="hidden sm:flex sticky top-4 z-30 mb-6 items-center justify-between gap-4 bg-white/95 backdrop-blur border border-gray-100 shadow-lg rounded-2xl p-4">
+                        <div className="min-w-0">
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Oportunidade</p>
+                            <p className="font-black text-gray-900 truncate">{op.title}</p>
+                        </div>
+                        <div className="flex items-center gap-6 text-sm flex-shrink-0">
+                            <div>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Ticket mín.</p>
+                                <p className="font-black text-gray-900">{op.ticket_min != null ? fmtBRL(op.ticket_min) : '—'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">TIR</p>
+                                <p className="font-black text-emerald-600">{studyMath?.annualIrr ? fmtPct(studyMath.annualIrr) : op.tir_pct != null ? fmtPct(op.tir_pct) : '—'}</p>
+                            </div>
+                            <button
+                                onClick={() => setFormStep('form')}
+                                className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white text-button font-black uppercase tracking-widest rounded-xl shadow-md transition-colors"
+                            >
+                                <Handshake className="w-4 h-4" />
+                                Manifestar Interesse
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {formStep === 'view' && (
                     <>
@@ -319,7 +367,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                     </div>
                                 )}
                                 {op.tir_pct != null && (
-                                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                                    <div className="sm:hidden bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                                         <p className="text-[9px] font-black text-indigo-600 uppercase tracking-wider mb-1">TIR</p>
                                         <p className="text-lg font-black text-indigo-700 leading-none">{fmtPct(op.tir_pct)}</p>
                                     </div>
@@ -337,7 +385,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                     </div>
                                 )}
                                 {op.ticket_min != null && (
-                                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                                    <div className="sm:hidden bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                                         <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Ticket mín.</p>
                                         <p className="text-lg font-black text-gray-700 leading-none">{fmtBRL(op.ticket_min)}</p>
                                     </div>
@@ -372,10 +420,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                         {/* Resumo Executivo / Descrição */}
                                         <div className="bg-gray-50/50 rounded-3xl p-6 border border-gray-100 space-y-3">
                                             <h4 className="text-sm font-black text-gray-900 uppercase tracking-wider">Apresentação do Empreendimento</h4>
-                                            <p className="text-sm text-gray-600 leading-relaxed font-medium">
-                                                Este empreendimento inovador oferece uma proposta moderna de moradia e investimento.
-                                                Com localização estratégica e projeto arquitetônico diferenciado, visa proporcionar altos índices de liquidez e retorno sobre o capital investido.
-                                            </p>
+                                            <p className="text-sm text-gray-600 leading-relaxed font-medium">{opportunityPresentation}</p>
                                         </div>
 
                                         {/* Ficha Técnica & Dados Técnicos */}
@@ -756,8 +801,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                     <SlidersHorizontal className="w-4 h-4 text-blue-600" />
                                                     <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Matriz de Riscos e Mitigações</span>
                                                 </div>
-                                                <div className="border border-gray-100 rounded-3xl overflow-hidden bg-white shadow-sm">
-                                                    <table className="w-full text-left text-xs sm:text-sm">
+                                                <div className="border border-gray-100 rounded-3xl overflow-x-auto bg-white shadow-sm">
+                                                    <table className="min-w-[640px] w-full text-left text-xs sm:text-sm">
                                                         <thead className="bg-gray-50/80 text-gray-500 font-black uppercase tracking-wider border-b border-gray-100">
                                                             <tr>
                                                                 <th className="p-4">Risco Identificado</th>
@@ -1002,6 +1047,23 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                     </div>
                 )}
             </div>
+            {formStep === 'view' && (
+                <div className="sm:hidden fixed inset-x-0 bottom-0 z-[80] bg-white border-t border-gray-200 shadow-2xl p-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Ticket mín.</p>
+                            <p className="font-black text-gray-900 truncate">{op.ticket_min != null ? fmtBRL(op.ticket_min) : op.target_funding_value ? fmtBRL(Number(op.target_funding_value)) : 'Consultar'}</p>
+                        </div>
+                        <button
+                            onClick={() => setFormStep('form')}
+                            className="flex-shrink-0 flex items-center gap-2 px-5 py-3 bg-blue-600 text-white text-button font-black uppercase tracking-widest rounded-xl shadow-lg"
+                        >
+                            <Handshake className="w-4 h-4" />
+                            Interesse
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

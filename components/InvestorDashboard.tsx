@@ -55,6 +55,20 @@ const TABS = [
     { id: 'relatorios', label: 'Relatórios', icon: <RefreshCw className="w-4 h-4" /> },
 ] as const;
 
+const PUBLIC_RENDERABLE_TAB_IDS: TabId[] = [
+    'dashboard',
+    'holdings',
+    'opportunities',
+    'reports',
+];
+
+const PUBLIC_TAB_LABELS: Partial<Record<TabId, string>> = {
+    dashboard: 'Resumo',
+    holdings: 'Carteira',
+    opportunities: 'Oportunidades',
+    reports: 'Documentos',
+};
+
 const TAB_TITLES: Record<TabId, string> = {
     dashboard: 'Meu Patrimônio',
     holdings: 'Minhas Cotas',
@@ -102,10 +116,13 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         || profile?.role === UserProfile.DEVELOPER
         || profile?.group === 'DESENVOLVEDOR'
     );
+    const isPublicExperience = isPreview || !!portalToken;
 
     const [showMobilePreview, setShowMobilePreview] = React.useState(false);
     const [showTabConfig, setShowTabConfig] = React.useState(false);
     const [portalAnnouncements, setPortalAnnouncements] = React.useState<any[]>([]);
+    const [dataLoading, setDataLoading] = React.useState(true);
+    const [dataError, setDataError] = React.useState<string | null>(null);
 
     // Tab visibility: estado local inicializado do investorProfile.settings
     const investorSettings = investorProfile?.settings ?? {};
@@ -121,8 +138,23 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         setEnabledTabIds(deriveTabIds());
     }, [investorProfile?.id, overrideEnabledTabIds?.join(',')]);
 
-    // admin vê todas (para configurar); investidor vê só as habilitadas
-    const navTabs = isAdmin ? TABS : TABS.filter(t => enabledTabIds.includes(t.id));
+    const renderableTabs = React.useMemo(() => {
+        if (!isPublicExperience) return TABS;
+        return TABS.filter(t => PUBLIC_RENDERABLE_TAB_IDS.includes(t.id as TabId));
+    }, [isPublicExperience]);
+
+    // Admin ve todas para configurar; investidor ve so as habilitadas e renderizaveis.
+    const navTabs = React.useMemo(() => {
+        const visibleTabs = isAdmin ? TABS : renderableTabs.filter(t => enabledTabIds.includes(t.id));
+        return visibleTabs.length > 0 ? visibleTabs : renderableTabs.filter(t => t.id === 'dashboard');
+    }, [enabledTabIds, isAdmin, renderableTabs]);
+
+    React.useEffect(() => {
+        const canRenderActiveTab = navTabs.some(t => t.id === activeTab);
+        if (!canRenderActiveTab) {
+            setActiveTab((navTabs[0]?.id as TabId) ?? 'dashboard');
+        }
+    }, [activeTab, navTabs]);
 
     const toggleTabVisibility = async (tabId: string) => {
         if (!investorProfile?.id) return;
@@ -323,6 +355,9 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     // Carregamento via portalToken (anon) — substitui os effects autenticados
     React.useEffect(() => {
         if (!portalToken) return;
+        let cancelled = false;
+        setDataLoading(true);
+        setDataError(null);
         (async () => {
             try {
                 const [summary, rpts, opps, anns] = await Promise.all([
@@ -331,24 +366,61 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     investorPortalTokenService.getOpportunitiesByToken(portalToken),
                     investorPortalTokenService.getAnnouncementsByToken(portalToken),
                 ]);
+                const parts = summary.participations as import('../services/investorContributionsService').InvestorParticipation[];
+                const contribs = summary.contributions as import('../services/investorContributionsService').InvestorContribution[];
+                if (cancelled) return;
                 setRealProjects(summary.projects as unknown as ProjectData[]);
+                setInvestorParticipations(parts);
+                setInvestorContributions(contribs);
+                const projectIds = new Set([
+                    ...parts.map(p => p.project_id),
+                    ...contribs.map(c => c.project_id),
+                ]);
+                const computedSummaries: Record<string, InvestorFinancialSummary> = {};
+                projectIds.forEach(pid => {
+                    const cs = contribs.filter(c => c.project_id === pid);
+                    const part = parts.find(p => p.project_id === pid);
+                    const sum = (type: string, status?: string) =>
+                        cs.filter(c => c.type === type && (!status || c.status === status))
+                            .reduce((acc, c) => acc + Number(c.amount), 0);
+                    const totalContributed = sum('aporte', 'liquidado');
+                    const totalDividends = sum('dividendo', 'liquidado');
+                    const totalWithdrawn = sum('retirada', 'liquidado') + sum('distribuicao', 'liquidado');
+                    const pendingAmount = cs.filter(c => c.type === 'aporte' && (c.status === 'pendente' || c.status === 'atrasado')).reduce((acc, c) => acc + Number(c.amount), 0);
+                    computedSummaries[pid] = {
+                        totalContributed, totalWithdrawn, totalDividends, pendingAmount,
+                        ownershipPct: part?.ownership_pct ?? 0,
+                        committedAmount: part?.committed_amount ?? 0,
+                        roiRealized: (currentValue: number) =>
+                            totalContributed > 0 ? ((currentValue + totalDividends - totalContributed) / totalContributed) * 100 : 0,
+                    };
+                });
+                setSummaries(computedSummaries);
                 setReports(rpts);
                 setOpportunities(opps);
                 setPortalAnnouncements(anns);
             } catch (err) {
                 console.error('Erro ao carregar portal do investidor:', err);
+                if (!cancelled) setDataError('Não foi possível carregar os dados do portal. Tente novamente em alguns instantes.');
+            } finally {
+                if (!cancelled) setDataLoading(false);
             }
         })();
+        return () => { cancelled = true; };
     }, [portalToken]);
 
     React.useEffect(() => {
         if (portalToken) return; // modo anon: carregado acima
+        let cancelled = false;
         async function loadData() {
+            setDataLoading(true);
+            setDataError(null);
             try {
                 const [cub, projectsList] = await Promise.all([
                     investorService.calculateCUB(),
                     projectService.listProjects(),
                 ]);
+                if (cancelled) return;
                 setCubValue(cub);
                 setRealProjects((projectsList || []) as unknown as ProjectData[]);
                 setBenchmarkSeries(marketDataService.getBenchmarkSeries(12));
@@ -400,9 +472,13 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 }
             } catch (err) {
                 console.error('Error loading dashboard data', err);
+                if (!cancelled) setDataError('Não foi possível carregar os dados do portal. Tente novamente em alguns instantes.');
+            } finally {
+                if (!cancelled) setDataLoading(false);
             }
         }
         loadData();
+        return () => { cancelled = true; };
     }, [orgId, investorProfile?.id, portalToken]);
 
     React.useEffect(() => {
@@ -570,6 +646,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                         {navTabs.map(tab => {
                             const hidden = isAdmin && !enabledTabIds.includes(tab.id);
+                            const label = isPublicExperience ? (PUBLIC_TAB_LABELS[tab.id as TabId] ?? tab.label) : tab.label;
                             return (
                                 <button
                                     key={tab.id}
@@ -584,7 +661,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                     }`}
                                 >
                                     {tab.icon}
-                                    {tab.label}
+                                    {label}
                                     {hidden && <EyeOff className="w-3 h-3 ml-0.5 opacity-60" />}
                                 </button>
                             );
@@ -594,6 +671,29 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             </div>
 
             {/* Content */}
+            {dataLoading ? (
+                <main className="min-h-[500px] animate-in fade-in duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                        {[0, 1, 2, 3].map(i => (
+                            <div key={i} className="h-32 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                                <div className="h-full animate-pulse bg-gradient-to-r from-gray-50 via-gray-100 to-gray-50" />
+                            </div>
+                        ))}
+                    </div>
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
+                        <div className="h-4 w-40 bg-gray-100 rounded-full animate-pulse mb-6" />
+                        <div className="h-64 bg-gray-50 rounded-2xl animate-pulse" />
+                    </div>
+                </main>
+            ) : dataError ? (
+                <main className="min-h-[500px] flex items-center justify-center">
+                    <div className="bg-white rounded-3xl border border-red-100 shadow-sm p-8 max-w-md text-center">
+                        <XCircle className="w-10 h-10 text-red-500 mx-auto mb-4" />
+                        <h3 className="text-lg font-black text-gray-900 mb-2">Dados indisponíveis</h3>
+                        <p className="text-sm text-gray-500 leading-relaxed">{dataError}</p>
+                    </div>
+                </main>
+            ) : (
             <main className="min-h-[500px]">
                 {activeTab === 'dashboard' && (
                     <InvestorSummaryDashboard
@@ -659,17 +759,66 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     />
                 )}
                 {activeTab === 'reports' && (
-                    <ReportsTab
-                        reports={reports}
-                        isAdmin={isAdmin}
-                        viewMode={viewMode}
-                        uploadCategory={uploadCategory}
-                        onViewModeChange={setViewMode}
-                        onUploadCategoryChange={setUploadCategory}
-                        onUpload={handleUploadReport}
-                        onDelete={handleDeleteReport}
-                        openConfirm={openConfirm}
-                    />
+                    <div className="space-y-6">
+                        <ReportsTab
+                            reports={reports}
+                            isAdmin={isAdmin}
+                            viewMode={viewMode}
+                            uploadCategory={uploadCategory}
+                            onViewModeChange={setViewMode}
+                            onUploadCategoryChange={setUploadCategory}
+                            onUpload={handleUploadReport}
+                            onDelete={handleDeleteReport}
+                            openConfirm={openConfirm}
+                        />
+                        {portalToken && (
+                            <section className="space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <Bell className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-lg font-black text-gray-900">Comunicados</h3>
+                                </div>
+                                {portalAnnouncements.length === 0 ? (
+                                    <div className="text-center py-12 bg-white rounded-3xl border border-gray-100">
+                                        <Bell className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                                        <p className="font-bold text-gray-500">Nenhum comunicado publicado.</p>
+                                    </div>
+                                ) : portalAnnouncements.map((ann: any) => (
+                                    <div key={ann.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 space-y-3">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div>
+                                                <span className="text-xs font-bold text-blue-500 uppercase tracking-widest">{ann.type}</span>
+                                                <h4 className="text-lg font-black text-gray-900 mt-0.5">{ann.title}</h4>
+                                                <p className="text-sm text-gray-500 mt-2 leading-relaxed">{ann.body}</p>
+                                            </div>
+                                            {ann.acknowledged
+                                                ? <CheckCircle2 className="w-6 h-6 text-emerald-500 flex-shrink-0 mt-1" />
+                                                : ann.requires_acknowledgment && (
+                                                    <button
+                                                        onClick={() => {
+                                                            investorPortalTokenService.acknowledgeByToken(portalToken, ann.id)
+                                                                .then(() => setPortalAnnouncements(prev =>
+                                                                    prev.map(a => a.id === ann.id ? { ...a, acknowledged: true } : a)
+                                                                ))
+                                                                .catch(e => console.error(e));
+                                                        }}
+                                                        className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-button font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all"
+                                                    >
+                                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                                        Confirmar
+                                                    </button>
+                                                )
+                                            }
+                                        </div>
+                                        {ann.published_at && (
+                                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                                                {new Date(ann.published_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                            </p>
+                                        )}
+                                    </div>
+                                ))}
+                            </section>
+                        )}
+                    </div>
                 )}
                 {activeTab === 'comunicados' && (
                     portalToken ? (
@@ -734,6 +883,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     />
                 )}
             </main>
+            )}
 
             <div className="pt-12 text-center opacity-30 select-none pointer-events-none">
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.3em]">Gestão de Ativos Premium • Opura Platinum</p>

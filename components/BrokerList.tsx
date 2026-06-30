@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, LayoutDashboard, Table2, Link2, Copy, Check, RefreshCw, X, LayoutGrid } from 'lucide-react';
+import { User, Mail, Phone, Trash2, Search, Loader2, LayoutDashboard, Table2, Link2, Copy, Check, RefreshCw, X, LayoutGrid } from 'lucide-react';
 import { BrokerProfile } from '../types';
 import { brokerService } from '../services/brokerService';
 import { brokerPortalService, BrokerPortalToken } from '../services/brokerPortalService';
@@ -69,7 +69,14 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
     };
 
     const handleSave = async (data: Partial<BrokerProfile>) => {
-        await brokerService.saveProfile(data);
+        if (!orgId) {
+            throw new Error('Nenhuma organiza��o selecionada para cadastrar o corretor.');
+        }
+
+        await brokerService.saveProfile({
+            ...data,
+            organization_id: data.organization_id || orgId,
+        });
         setIsModalOpen(false);
         loadData();
     };
@@ -168,20 +175,6 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
             >
                 <Link2 className="w-4 h-4" />
             </button>
-            <button
-                onClick={() => handleOpenModal(broker)}
-                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                title="Editar"
-            >
-                <Edit2 className="w-4 h-4" />
-            </button>
-            <button
-                onClick={() => handleDelete(broker.id, broker.name)}
-                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                title="Excluir"
-            >
-                <Trash2 className="w-4 h-4" />
-            </button>
         </div>
     );
 
@@ -193,13 +186,9 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Meus Corretores</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua equipe de corretores e acesso ao portal.</p>
                 </div>
-                <button
-                    onClick={() => handleOpenModal()}
-                    className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
-                >
-                    <Plus className="w-4 h-4" />
-                    Novo Corretor
-                </button>
+                <div className="px-5 py-3 bg-amber-50 text-amber-700 border border-amber-100 rounded-[1.25rem] text-xs font-black uppercase tracking-widest">
+                    Cadastre em Minha Organização &gt; Fornecedores &gt; Corretor Imobiliário
+                </div>
             </div>
 
             {/* Barra de filtros */}

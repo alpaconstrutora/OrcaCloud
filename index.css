@@ -23,6 +23,14 @@
     --bg-main: #f8fafc;
     --sidebar-bg: #ffffff;
     --card-bg: #ffffff;
+    --opura-header-height: 60px;
+    --opura-sidebar-width: 260px;
+    --opura-sidebar-collapsed: 68px;
+    --opura-radius: 8px;
+    --opura-border: #e2e8f0;
+    --opura-muted: #64748b;
+    --opura-surface: #ffffff;
+    --opura-row-height: 52px;
   }
 
   * {
@@ -80,12 +88,82 @@
   }
 }
 
-/* Portal do Cliente — tipografia DM Sans SOMENTE no mobile (< md / 768px).
+/* Portal do Cliente â€” tipografia DM Sans SOMENTE no mobile (< md / 768px).
    No desktop o portal mantém Inter. font-family herda para toda a subárvore,
    inclusive nav fixa e bottom-sheets. */
 @media (max-width: 767px) {
   .portal-mobile-font,
   .portal-mobile-font * {
     font-family: 'DM Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer components {
+  .opura-page {
+    @apply mx-auto flex w-full max-w-[1440px] flex-col gap-6;
+  }
+
+  .opura-page-header {
+    @apply flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-start md:justify-between;
+  }
+
+  .opura-page-title {
+    @apply text-xl font-semibold text-slate-950;
+  }
+
+  .opura-page-description {
+    @apply mt-1 max-w-3xl text-sm text-slate-500;
+  }
+
+  .opura-toolbar {
+    @apply flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 md:flex-row md:items-center md:justify-between;
+  }
+
+  .opura-toolbar-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .opura-button-primary {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .opura-button-secondary {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .opura-button-ghost {
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .opura-table-shell {
+    @apply overflow-hidden rounded-lg border border-slate-200 bg-white;
+  }
+
+  .opura-table-scroll {
+    @apply max-h-[calc(100vh-260px)] overflow-auto;
+  }
+
+  .opura-table {
+    @apply min-w-full border-separate border-spacing-0 text-sm;
+  }
+
+  .opura-table thead th {
+    @apply sticky top-0 z-10 h-12 border-b border-slate-200 bg-slate-50 px-4 text-left text-xs font-semibold uppercase text-slate-500;
+  }
+
+  .opura-table tbody td {
+    @apply h-[52px] border-b border-slate-100 px-4 text-slate-700;
+  }
+
+  .opura-table tbody tr {
+    @apply hover:bg-slate-50;
+  }
+
+  .opura-empty-state {
+    @apply flex min-h-[220px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center;
+  }
+
+  .opura-skeleton {
+    @apply animate-pulse rounded-lg bg-slate-200;
   }
 }

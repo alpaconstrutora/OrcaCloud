@@ -2,15 +2,9 @@ import React from 'react';
 import { X, Tag, Plus, Edit2, Trash2, Copy, Save } from 'lucide-react';
 import { SupplierCategory } from '../types';
 import { supplierCategoryService } from '../services/supplierCategoryService';
+import { DEFAULT_SUPPLIER_CATEGORIES } from '../constants/supplierCategories';
 
-const DEFAULT_CATEGORIES = [
-    'Materiais de Construção',
-    'Mão de Obra / Serviços',
-    'Equipamentos / Ferramentas',
-    'Consultoria / Projetos',
-    'Transporte / Logística',
-    'Outros'
-];
+const DEFAULT_CATEGORIES = DEFAULT_SUPPLIER_CATEGORIES;
 
 interface SupplierCategoryModalProps {
     isOpen: boolean;
@@ -186,17 +180,23 @@ export const SupplierCategoryModal: React.FC<SupplierCategoryModalProps> = ({ is
                                             </div>
                                             <span className="font-bold text-gray-700">{category.name}</span>
                                         </div>
-                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => { setEditingId(category.id); setFormData({ name: category.name }); setIsAdding(false); }} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Editar">
-                                                <Edit2 className="w-4 h-4" />
-                                            </button>
-                                            <button onClick={() => handleDuplicate(category)} className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" title="Duplicar">
-                                                <Copy className="w-4 h-4" />
-                                            </button>
-                                            <button onClick={() => handleDelete(category.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Excluir">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
+                                        {category.id.startsWith('default-') ? (
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 px-2 py-1 rounded-lg border border-gray-100">
+                                                Padrão
+                                            </span>
+                                        ) : (
+                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => { setEditingId(category.id); setFormData({ name: category.name }); setIsAdding(false); }} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Editar">
+                                                    <Edit2 className="w-4 h-4" />
+                                                </button>
+                                                <button onClick={() => handleDuplicate(category)} className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" title="Duplicar">
+                                                    <Copy className="w-4 h-4" />
+                                                </button>
+                                                <button onClick={() => handleDelete(category.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Excluir">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        )}
                                     </>
                                 )}
                             </div>

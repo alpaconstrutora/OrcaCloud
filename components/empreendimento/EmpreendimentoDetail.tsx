@@ -1,11 +1,14 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag } from 'lucide-react';
-import { Empreendimento, EmpreendimentoStatus } from '../../types';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag, Map, Loader2 } from 'lucide-react';
+import { Empreendimento, EmpreendimentoStatus, ImovibStudy } from '../../types';
 import TowerEditor from './TowerEditor';
 import CommonAreaEditor from './CommonAreaEditor';
 import SyncFromStudyModal from './SyncFromStudyModal';
 import { EspelhoVendasTab } from './EspelhoVendasTab';
+import ImovibRegulatoryMapTab from '../ImovibRegulatoryMapTab';
+import ImovibBlocksTypologyTab from '../ImovibBlocksTypologyTab';
+import { imovibService } from '../../services/imovibService';
 
 interface Props {
   empreendimento: Empreendimento;
@@ -32,22 +35,51 @@ const TIPO_LABELS: Record<string, string> = {
   COND_INDUSTRIAL: 'Condomínio Industrial',
 };
 
-type Tab = 'visao' | 'torres' | 'areas' | 'comercial';
+type Tab = 'visao' | 'tipologia' | 'torres' | 'areas' | 'regulatorio' | 'comercial';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced }) => {
   const [tab, setTab] = React.useState<Tab>('visao');
   const [syncOpen, setSyncOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
+  const [linkedStudy, setLinkedStudy] = React.useState<ImovibStudy | null>(null);
+  const [isLoadingLinkedStudy, setIsLoadingLinkedStudy] = React.useState(false);
+  const [linkedStudyError, setLinkedStudyError] = React.useState<string | null>(null);
 
   const terrenoCidade = [e.terreno_city, e.terreno_state].filter(Boolean).join(' - ');
   const terrenoLinha = [e.terreno_street, e.terreno_number].filter(Boolean).join(', ');
   const enderecoCidade = [e.endereco_city, e.endereco_state].filter(Boolean).join(' - ');
   const enderecoLinha = [e.endereco_street, e.endereco_number].filter(Boolean).join(', ');
 
+  const loadLinkedStudy = React.useCallback(async () => {
+    if (!e.imovib_study_id) {
+      setLinkedStudy(null);
+      return;
+    }
+    try {
+      setIsLoadingLinkedStudy(true);
+      setLinkedStudyError(null);
+      const study = await imovibService.getStudyById(e.imovib_study_id, true);
+      setLinkedStudy(study);
+    } catch (err: any) {
+      console.error('[EmpreendimentoDetail] erro ao carregar estudo vinculado:', err);
+      setLinkedStudyError(err?.message || 'Erro ao carregar estudo vinculado.');
+    } finally {
+      setIsLoadingLinkedStudy(false);
+    }
+  }, [e.imovib_study_id]);
+
+  React.useEffect(() => {
+    if (tab === 'tipologia') {
+      loadLinkedStudy();
+    }
+  }, [tab, loadLinkedStudy]);
+
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: 'visao', label: 'Visão Geral', icon: FileText },
+    { id: 'tipologia', label: 'Bloco e Tipologia', icon: Building2 },
     { id: 'torres', label: 'Torres & Unidades', icon: Layers },
     { id: 'areas', label: 'Áreas Comuns', icon: Trees },
+    { id: 'regulatorio', label: 'Mapa Regulatorio', icon: Map },
     { id: 'comercial', label: 'Espelho de Vendas', icon: ShoppingBag },
   ];
 
@@ -174,6 +206,42 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
         </div>
       )}
 
+      {tab === 'tipologia' && (
+        e.imovib_study_id ? (
+          isLoadingLinkedStudy ? (
+            <div className="bg-white p-10 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-center gap-3 text-gray-400 font-black uppercase tracking-widest text-button">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> Carregando estudo vinculado...
+            </div>
+          ) : linkedStudyError ? (
+            <div className="bg-white p-10 rounded-3xl border border-gray-100 shadow-sm text-center">
+              <h3 className="text-lg font-black text-gray-800 tracking-tight">Nao foi possivel carregar o estudo vinculado</h3>
+              <p className="text-sm text-gray-500 font-medium mt-1">{linkedStudyError}</p>
+              <button
+                onClick={loadLinkedStudy}
+                className="mt-5 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-button uppercase tracking-widest inline-flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" /> Tentar Novamente
+              </button>
+            </div>
+          ) : linkedStudy ? (
+            <ImovibBlocksTypologyTab study={linkedStudy} onDataChanged={loadLinkedStudy} />
+          ) : null
+        ) : (
+          <div className="bg-white p-10 rounded-3xl border border-gray-100 shadow-sm text-center">
+            <Building2 className="w-10 h-10 mx-auto text-gray-300 mb-3" />
+            <h3 className="text-lg font-black text-gray-800 tracking-tight">Nenhum estudo de viabilidade vinculado</h3>
+            <p className="text-sm text-gray-500 font-medium mt-1 max-w-xl mx-auto">
+              Blocos e tipologias usam a mesma base do IMOVIB. Vincule um estudo de viabilidade para editar as premissas e manter uma fonte unica.
+            </p>
+            <button
+              onClick={onEdit}
+              className="mt-5 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-button uppercase tracking-widest inline-flex items-center gap-2"
+            >
+              <Edit className="w-4 h-4" /> Vincular Estudo
+            </button>
+          </div>
+        )
+      )}
       {tab === 'torres' && (
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
           <TowerEditor key={refreshKey} empreendimentoId={e.id} organizationId={organizationId} />
@@ -186,6 +254,25 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
         </div>
       )}
 
+      {tab === 'regulatorio' && (
+        e.imovib_study_id ? (
+          <ImovibRegulatoryMapTab studyId={e.imovib_study_id} />
+        ) : (
+          <div className="bg-white p-10 rounded-3xl border border-gray-100 shadow-sm text-center">
+            <Map className="w-10 h-10 mx-auto text-gray-300 mb-3" />
+            <h3 className="text-lg font-black text-gray-800 tracking-tight">Nenhum estudo de viabilidade vinculado</h3>
+            <p className="text-sm text-gray-500 font-medium mt-1 max-w-xl mx-auto">
+              O mapa regulatorio do empreendimento usa a mesma base do IMOVIB. Vincule um estudo de viabilidade para visualizar e manter os parametros urbanisticos em uma fonte unica.
+            </p>
+            <button
+              onClick={onEdit}
+              className="mt-5 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-button uppercase tracking-widest inline-flex items-center gap-2"
+            >
+              <Edit className="w-4 h-4" /> Vincular Estudo
+            </button>
+          </div>
+        )
+      )}
       {tab === 'comercial' && (
         <EspelhoVendasTab empreendimento={e} organizationId={organizationId} />
       )}

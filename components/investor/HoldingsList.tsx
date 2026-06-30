@@ -53,7 +53,48 @@ const HoldingsList: React.FC<Props> = ({
         </div>
 
         {viewMode === 'list' ? (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <>
+                <div className="md:hidden space-y-3">
+                    {holdings.map((proj, i) => (
+                        <button
+                            key={proj.id ?? i}
+                            type="button"
+                            onClick={() => onSelectAsset(proj)}
+                            className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm p-4"
+                        >
+                            <div className="flex items-start justify-between gap-3 mb-4">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0">
+                                        <Building2 className="w-5 h-5" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="font-bold text-gray-900 truncate">{proj.name}</p>
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-0.5">{proj.status}</p>
+                                    </div>
+                                </div>
+                                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-xs font-bold whitespace-nowrap">{proj.cota}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 mb-4">
+                                <div>
+                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Patrimônio</p>
+                                    <p className="text-sm font-black text-gray-900">
+                                        {typeof proj.equity === 'number'
+                                            ? proj.equity.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                                            : proj.equity}
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Progresso</p>
+                                    <p className="text-sm font-black text-blue-600">{proj.progress}%</p>
+                                </div>
+                            </div>
+                            <div className="bg-gray-100 h-2 rounded-full overflow-hidden">
+                                <div className="bg-blue-600 h-full" style={{ width: `${proj.progress}%` }} />
+                            </div>
+                        </button>
+                    ))}
+                </div>
+                <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <table className="w-full text-left">
                     <thead className="bg-gray-50/50 border-b border-gray-100">
                         <tr className="text-xs font-bold text-gray-400 uppercase tracking-widest">
@@ -102,7 +143,8 @@ const HoldingsList: React.FC<Props> = ({
                         ))}
                     </tbody>
                 </table>
-            </div>
+                </div>
+            </>
         ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {holdings.map((proj, i) => (

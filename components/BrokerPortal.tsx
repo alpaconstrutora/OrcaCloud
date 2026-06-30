@@ -204,8 +204,15 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
         return childUnits.length > 0 ? childUnits : units.filter(u => u.type === 'BUILDING');
     }, [units, selectedBuildingId]);
 
-    const handleReserve = (unit: BrokerUnit) => {
-        alert(`Unidade ${unit.number || unit.name} reservada por 48h!`);
+    const handleReserve = async (unit: BrokerUnit) => {
+        if (!window.confirm(`Reservar a unidade ${unit.number || unit.name} por 48h?`)) return;
+        try {
+            await commercialService.saveProperty({ id: unit.id, status: PropertyStatus.RESERVED });
+            setUnits(prev => prev.map(u => u.id === unit.id ? { ...u, status: PropertyStatus.RESERVED } : u));
+        } catch (err) {
+            console.error('[BrokerPortal] Erro ao reservar unidade:', err);
+            alert('Erro ao reservar a unidade. Tente novamente.');
+        }
     };
 
     const handleMakeProposal = (unit: BrokerUnit) => {

@@ -1133,22 +1133,13 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 <div className="p-4 bg-gray-50 rounded-b-[2.5rem] border-t border-gray-100 flex items-center justify-between">
                                     <div className="flex items-center gap-1">
                                         {!isObraContext && !isPlanejamentoContext && !isDiaryContext && (
-                                            <>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'dashboard'); }}
-                                                    className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                                                    title="Curva ABC"
-                                                >
-                                                    <LayoutDashboard className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'analytic'); }}
-                                                    className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
-                                                    title="Orçamento Analítico"
-                                                >
-                                                    <Table2 className="w-4 h-4" />
-                                                </button>
-                                            </>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'analytic'); }}
+                                                className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
+                                                title="Orçamento Analítico"
+                                            >
+                                                <Table2 className="w-4 h-4" />
+                                            </button>
                                         )}
                                         {isPlanejamentoContext && (
                                             <button

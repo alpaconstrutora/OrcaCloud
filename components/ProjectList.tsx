@@ -69,10 +69,15 @@ const COLUMN_LABELS: Record<ColumnKey, string> = {
     linked: 'Vinculado',
     client: 'Cliente',
     updated: 'Atualização',
-    'status-budget': 'Status Orç.',
+    'status-budget': 'Status',
     'status-obra': 'Status Obra',
     lock: 'Bloqueio',
     actions: 'Ações',
+};
+
+const capitalizeStatus = (status: string): string => {
+    if (!status) return status;
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 };
 
 const ProjectList: React.FC<ProjectListProps> = ({
@@ -700,7 +705,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-[0.2em] cursor-pointer hover:text-gray-600 transition-colors select-none group"
                                         >
                                             <div className="flex items-center gap-1.5">
-                                                {isDiaryContext ? 'Status Diário' : 'Status Orç.'}
+                                                {isDiaryContext ? 'Status Diário' : 'Status'}
                                                 {sortColumn === 'status-budget' && (
                                                     <span className="inline-flex items-center text-blue-600 group-hover:text-blue-700">
                                                         {sortDirection === 'asc' ? '↑' : '↓'}
@@ -938,9 +943,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     )
                                                 ) : (
                                                     project.settings?.budgetStatus ? (
-                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider
+                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-black tracking-wider
                                                     ${project.settings.budgetStatus === 'Fechado' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                            {project.settings.budgetStatus}
+                                                            {capitalizeStatus(project.settings.budgetStatus)}
                                                         </span>
                                                     ) : (
                                                         <span className="text-xs text-gray-400 italic">-</span>
@@ -986,18 +991,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </div>
                                             </td>
                                         )}
-                                        {!isObraContext && !isPlanejamentoContext && !isDiaryContext && (
-                                            <td className="px-6 py-4">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'dashboard'); }}
-                                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1.5"
-                                                    title="Curva ABC"
-                                                >
-                                                    <LayoutDashboard className="w-4 h-4" />
-                                                    <span className="text-xs font-bold uppercase hidden lg:inline">Curva ABC</span>
-                                                </button>
-                                            </td>
-                                        )}
                                         {isPlanejamentoContext && (
                                             <td className="px-6 py-4">
                                                 <button
@@ -1019,20 +1012,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 >
                                                     <BookOpen className="w-4 h-4 group-hover/act:scale-110 transition-transform" />
                                                     <span className="text-xs font-bold uppercase hidden lg:inline">Abrir Diário</span>
-                                                </button>
-                                            </td>
-                                        )}
-                                        {!isObraContext && !isPlanejamentoContext && !isDiaryContext && (
-                                            <td className="px-6 py-4">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'analytic'); }}
-                                                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center gap-1.5"
-                                                    title={project.settings?.budgetType === 'PARAMETRIC' ? "Paramétrico" : "Analítico"}
-                                                >
-                                                    <Table2 className="w-4 h-4" />
-                                                    <span className="text-xs font-bold uppercase hidden lg:inline">
-                                                        {project.settings?.budgetType === 'PARAMETRIC' ? 'Paramétrico' : 'Analítico'}
-                                                    </span>
                                                 </button>
                                             </td>
                                         )}
@@ -1085,9 +1064,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         </div>
                                         <div className="flex flex-col items-end gap-2">
                                             {!isObraContext && project.settings?.budgetStatus && (
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black tracking-wider
                                                 ${project.settings.budgetStatus === 'Fechado' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                    {project.settings.budgetStatus}
+                                                    {capitalizeStatus(project.settings.budgetStatus)}
                                                 </span>
                                             )}
                                             {project.settings?.obraStatus && (

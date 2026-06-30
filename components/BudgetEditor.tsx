@@ -1,7 +1,7 @@
 import React from 'react';
 import { BudgetEntry, ProjectSettings, SinapiItem, WBSPhase, SinapiType, BudgetVersion, WBSGroup, CustomDatabase, CompositionComponent } from '../types';
 import { sinapiService, SinapiReference, resolveReferenceDate } from '../services/sinapiService'; // Importação do Serviço
-import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText } from 'lucide-react';
+import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard } from 'lucide-react';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { parametricService } from '../services/parametricService';
 import { BudgetRow } from './BudgetRow';
@@ -19,6 +19,7 @@ interface BudgetEditorProps {
   onUpdateBudget: (newBudget: BudgetEntry[]) => void;
   onUpdateSettings: (newSettings: ProjectSettings) => void;
   onSaveProject?: (budget: BudgetEntry[], settings: ProjectSettings) => Promise<void>;
+  onOpenDashboard?: () => void;
   projectId?: string;
   organizationId?: string;
 }
@@ -66,6 +67,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   onUpdateBudget,
   onUpdateSettings,
   onSaveProject,
+  onOpenDashboard,
   favorites,
   onToggleFavorite,
   projectId,
@@ -1702,6 +1704,17 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               <Box className="w-4 h-4" />
               Paramétrico
             </button>
+
+            {onOpenDashboard && (
+              <button
+                onClick={onOpenDashboard}
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-md text-button font-bold transition-all border border-blue-100"
+                title="Curva ABC"
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                Curva ABC
+              </button>
+            )}
 
             <button
               onClick={() => setIsImportModalOpen(true)}

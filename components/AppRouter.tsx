@@ -557,6 +557,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onUpdateBudget={handleUpdateBudget}
           onUpdateSettings={handleUpdateSettings}
           onSaveProject={handleSaveProject}
+          onOpenDashboard={() => handleLoadProject(settingsWithId.id || '', 'dashboard')}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
           projectId={settingsWithId.id}

@@ -130,6 +130,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
         status: mapEmprToCommercial(unit.status),
         floor: unit.floor,
         typology: unit.typology || undefined,
+        bedrooms: unit.bedrooms,
         block: unit._tower_name,
         project_id: unit._tower_project_id || undefined,
         specs: { parkingSpaces: unit.parking_spaces },

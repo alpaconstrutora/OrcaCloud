@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Home, MapPin, Maximize2, DollarSign, Camera, Check, Info, Package, Layers, Plus, Trash2, Settings2, Settings } from 'lucide-react';
+import { X, Home, MapPin, Maximize2, DollarSign, Camera, Check, Info, Package, Layers, Plus, Trash2, Settings2, Settings, Building2 } from 'lucide-react';
 import { Property, PropertyStatus, Client, TowerMatrixConfig, GridCellConfig } from '../types';
 import { clientService } from '../services/clientService';
 import { propertyTypesService, PropertyType } from '../services/propertyTypesService';
 import PropertyTypesManager from './PropertyTypesManager';
 import { Sheet, SheetPanel, SheetFooter } from './ui/sheet';
+import { supabase } from '../lib/supabase';
 
 interface PropertyModalProps {
     isOpen: boolean;
@@ -215,6 +216,39 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
         }
     }, [initialData, isOpen, defaultPurpose]);
 
+    // Link reverso: descobre se este imóvel foi criado a partir de um Empreendimento
+    const [emprOrigin, setEmprOrigin] = useState<{
+        empreendimentoId: string; empreendimentoName: string;
+        towerName: string; unitName: string;
+    } | null>(null);
+
+    useEffect(() => {
+        if (!isOpen || !initialData?.id) { setEmprOrigin(null); return; }
+        let cancelled = false;
+        (async () => {
+            try {
+                const { data } = await supabase
+                    .from('empreendimento_units')
+                    .select('id, name, empreendimento_towers!inner(name, empreendimentos!inner(id, name))')
+                    .eq('commercial_property_id', initialData.id)
+                    .maybeSingle();
+                if (cancelled) return;
+                if (!data) { setEmprOrigin(null); return; }
+                const tower = (data as any).empreendimento_towers;
+                const empr  = tower?.empreendimentos;
+                setEmprOrigin({
+                    empreendimentoId:   empr?.id   ?? '',
+                    empreendimentoName: empr?.name ?? '—',
+                    towerName:          tower?.name ?? '—',
+                    unitName:           (data as any).name,
+                });
+            } catch {
+                if (!cancelled) setEmprOrigin(null);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [initialData?.id, isOpen]);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (formData.type === 'BUILDING' && enableMatrix) {
@@ -254,6 +288,18 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                             <p className="text-sm text-gray-500 font-medium leading-tight">
                                 {initialData ? 'Atualize as informações do imóvel selecionado.' : 'Configure os dados do novo imóvel.'}
                             </p>
+                            {emprOrigin && (
+                                <div className="flex items-center gap-1.5 mt-1 px-2.5 py-1 bg-blue-50 border border-blue-100 rounded-lg w-fit">
+                                    <Building2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                    <span className="text-[10px] font-bold text-blue-700">
+                                        {emprOrigin.empreendimentoName}
+                                    </span>
+                                    <span className="text-[10px] text-blue-400">›</span>
+                                    <span className="text-[10px] text-blue-600">{emprOrigin.towerName}</span>
+                                    <span className="text-[10px] text-blue-400">›</span>
+                                    <span className="text-[10px] font-bold text-blue-700">{emprOrigin.unitName}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
                     <button

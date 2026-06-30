@@ -28,13 +28,17 @@ interface CommercialSnap {
 }
 
 // ── Status mapping ────────────────────────────────────────────────────────────
-const mapCommercialToEmpr = (s: string): UnitStatus => {
+
+// Status do Comercial que não têm equivalente em UnitStatus — não mapeáveis.
+const UNMAPPABLE_COMMERCIAL_STATUSES = new Set(['RENTED', 'MAINTENANCE']);
+
+const mapCommercialToEmpr = (s: string): UnitStatus | null => {
   switch (s) {
-    case 'AVAILABLE':    return 'DISPONIVEL';
-    case 'RESERVED':     return 'RESERVADO';
-    case 'SOLD':         return 'VENDIDO';
-    case 'EXCHANGED':    return 'PERMUTADO';
-    default:             return 'DISPONIVEL';
+    case 'AVAILABLE':  return 'DISPONIVEL';
+    case 'RESERVED':   return 'RESERVADO';
+    case 'SOLD':       return 'VENDIDO';
+    case 'EXCHANGED':  return 'PERMUTADO';
+    default:           return null; // RENTED / MAINTENANCE / desconhecido → não sincronizar
   }
 };
 
@@ -78,6 +82,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
   const [loading, setLoading] = React.useState(true);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [syncingAll, setSyncingAll] = React.useState(false);
+  const [syncingAddress, setSyncingAddress] = React.useState(false);
   const [publishingAll, setPublishingAll] = React.useState(false);
   const [orphanIds, setOrphanIds] = React.useState<Set<string>>(new Set());
 
@@ -177,24 +182,50 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
     } finally { setBusyId(null); }
   };
 
-  // Sincroniza status: Comercial → Empreendimento para todas as unidades vinculadas
+  // Sincroniza status: Comercial → Empreendimento para todas as unidades vinculadas.
+  // Pula RENTED/MAINTENANCE: não têm equivalente em UnitStatus — avisa ao final.
   const handleSyncFromCommercial = async () => {
     const linked = units.filter(u => u.commercial_property_id && commSnaps[u.commercial_property_id!]);
     if (!linked.length) { alert('Nenhuma unidade vinculada ao Comercial.'); return; }
-    if (!window.confirm(`Sincronizar status de ${linked.length} unidades a partir do Comercial?`)) return;
+    const skipped = linked.filter(u => UNMAPPABLE_COMMERCIAL_STATUSES.has(commSnaps[u.commercial_property_id!].status));
+    const syncable = linked.filter(u => !UNMAPPABLE_COMMERCIAL_STATUSES.has(commSnaps[u.commercial_property_id!].status));
+    let msg = `Sincronizar status de ${syncable.length} unidade(s) a partir do Comercial?`;
+    if (skipped.length) msg += `\n\n⚠ ${skipped.length} unidade(s) com status Locado/Manutenção não serão alteradas (sem equivalente no Empreendimento).`;
+    if (!window.confirm(msg)) return;
     setSyncingAll(true);
     try {
-      await Promise.all(linked.map(u => {
+      await Promise.all(syncable.map(u => {
         const snap = commSnaps[u.commercial_property_id!];
         const newStatus = mapCommercialToEmpr(snap.status);
-        return newStatus !== u.status
+        return newStatus && newStatus !== u.status
           ? empreendimentoService.updateUnit(u.id, { status: newStatus })
           : Promise.resolve();
       }));
       await load();
+      if (skipped.length) {
+        alert(`✓ ${syncable.length} unidade(s) sincronizadas.\n⚠ ${skipped.length} pulada(s): status Locado ou Manutenção não existe no Empreendimento — ajuste manualmente.`);
+      }
     } catch (err: any) {
       alert(`Erro ao sincronizar: ${err.message}`);
     } finally { setSyncingAll(false); }
+  };
+
+  // Propaga endereço atual do empreendimento para todas as properties vinculadas.
+  // Útil quando o endereço do empreendimento muda depois da publicação inicial.
+  const handleSyncAddress = async () => {
+    const linked = units.filter(u => u.commercial_property_id && commSnaps[u.commercial_property_id!]);
+    if (!linked.length) { alert('Nenhuma unidade publicada no Comercial.'); return; }
+    const addr = buildAddress();
+    if (!window.confirm(`Atualizar endereço de ${linked.length} imóvel(eis) no Comercial para:\n"${addr}"`)) return;
+    setSyncingAddress(true);
+    try {
+      await Promise.all(linked.map(u =>
+        supabase.from('commercial_properties').update({ address: addr }).eq('id', u.commercial_property_id!)
+      ));
+      alert(`✓ Endereço atualizado em ${linked.length} imóvel(eis).`);
+    } catch (err: any) {
+      alert(`Erro ao atualizar endereço: ${err.message}`);
+    } finally { setSyncingAddress(false); }
   };
 
   // Publica todas as unidades ainda não vinculadas
@@ -289,7 +320,16 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
       <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider">Status das Unidades</h3>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <button
+              onClick={handleSyncAddress}
+              disabled={syncingAddress || linkedCount === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 disabled:opacity-40 border border-gray-200"
+              title="Propaga o endereço atual do empreendimento para todos os imóveis publicados no Comercial"
+            >
+              {syncingAddress ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              Sync Endereço
+            </button>
             <button
               onClick={handleSyncFromCommercial}
               disabled={syncingAll || linkedCount === 0}
@@ -349,7 +389,9 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
                 const snap = u.commercial_property_id ? commSnaps[u.commercial_property_id] : null;
                 const busy = busyId === u.id;
                 const isOrphan = !!u.commercial_property_id && !!orphanIds.has(u.commercial_property_id);
-                const statusDiverge = snap && mapCommercialToEmpr(snap.status) !== u.status;
+                const mappedStatus = snap ? mapCommercialToEmpr(snap.status) : null;
+                const isUnmappable = snap ? UNMAPPABLE_COMMERCIAL_STATUSES.has(snap.status) : false;
+                const statusDiverge = snap && !isUnmappable && mappedStatus !== u.status;
                 const priceDiverge = snap && u.price != null && Math.abs(snap.price - u.price) > 0.01;
                 return (
                   <tr key={u.id} className={`border-b border-gray-50 hover:bg-gray-50/30 ${isOrphan ? 'bg-rose-50/40' : ''}`}>
@@ -378,8 +420,15 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
                           <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${COMM_STATUS_STYLE[snap.status] || 'bg-gray-100 text-gray-600'}`}>
                             {COMM_STATUS_LABEL[snap.status] || snap.status}
                           </span>
+                          {isUnmappable && (
+                            <span title={`"${COMM_STATUS_LABEL[snap.status] || snap.status}" não tem equivalente em Empreendimento — ajuste manualmente`}>
+                              <AlertCircle className="w-3.5 h-3.5 text-orange-400" />
+                            </span>
+                          )}
                           {statusDiverge && (
-                            <span title="Status diverge do Empreendimento"><AlertCircle className="w-3.5 h-3.5 text-amber-500" /></span>
+                            <span title="Status diverge do Empreendimento — use 'Sync do Comercial' para atualizar">
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                            </span>
                           )}
                         </div>
                       ) : isOrphan ? (

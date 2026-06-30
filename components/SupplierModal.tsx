@@ -1,12 +1,12 @@
 import React from 'react';
-import { Truck, Mail, Phone, FileText, MapPin, Tag, Building2, User } from 'lucide-react';
+import { Truck, Mail, Phone, FileText, MapPin, Tag, Building2, User, Briefcase } from 'lucide-react';
 import { Supplier, Organization } from '../types';
 import { supplierCategoryService } from '../services/supplierCategoryService';
 import { organizationService } from '../services/organizationService';
 import { useStore } from '../store/useStore';
 import SupplierBankAccountsTab from './SupplierBankAccountsTab';
 import CityStateSelect from './CityStateSelect';
-import { DEFAULT_SUPPLIER_CATEGORIES } from '../constants/supplierCategories';
+import { DEFAULT_SUPPLIER_CATEGORIES, isRealEstateBrokerCategory } from '../constants/supplierCategories';
 import { Sheet, SheetHeader } from './ui/sheet';
 
 interface SupplierModalProps {
@@ -98,9 +98,22 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         }
     }, [initialData, isOpen, activeOrganizationId]);
 
+    const isBroker = isRealEstateBrokerCategory(formData.category);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isSubmitting) return;
+        // Corretor Imobiliário: e-mail + organização são obrigatórios para conectar ao Portal do Corretor
+        if (isBroker) {
+            if (!(formData.email || '').trim()) {
+                alert('Para conectar ao Portal do Corretor, informe o e-mail do corretor (será o login dele no portal).');
+                return;
+            }
+            if (!formData.organization_id) {
+                alert('Para conectar ao Portal do Corretor, selecione uma organização específica (não "Todas").');
+                return;
+            }
+        }
         setIsSubmitting(true);
         try {
             await onSubmit({
@@ -228,7 +241,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                     {/* E-mail + Telefone */}
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className={labelCls}>E-mail</label>
+                            <label className={labelCls}>E-mail{isBroker ? ' *' : ''}</label>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                 <input
@@ -273,7 +286,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                             </div>
                         </div>
                         <div>
-                            <label className={labelCls}>Organização</label>
+                            <label className={labelCls}>Organização{isBroker ? ' *' : ''}</label>
                             <div className="relative">
                                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                 <select
@@ -281,7 +294,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                                     value={formData.organization_id || ''}
                                     onChange={e => set({ organization_id: e.target.value || null })}
                                 >
-                                    <option value="">🌐 Todas</option>
+                                    <option value="" disabled={isBroker}>🌐 Todas</option>
                                     {organizations.map(org => (
                                         <option key={org.id} value={org.id}>{org.name}</option>
                                     ))}
@@ -289,6 +302,17 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                             </div>
                         </div>
                     </div>
+
+                    {/* Aviso: conexão com o Portal do Corretor */}
+                    {isBroker && (
+                        <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
+                            <Briefcase className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                            <p className="text-xs font-medium text-blue-700 leading-snug">
+                                Este fornecedor será conectado automaticamente ao <strong>Portal do Corretor</strong>.
+                                Para isso, <strong>e-mail</strong> e <strong>organização</strong> são obrigatórios — o e-mail será o login do corretor no portal.
+                            </p>
+                        </div>
+                    )}
 
                     {/* Divisor endereço */}
                     <div className="flex items-center gap-2 pt-1">

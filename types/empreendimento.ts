@@ -65,6 +65,7 @@ export interface Empreendimento {
 
     // Comercial
     vgv_total?: number;
+    commercial_building_id?: string | null;  // edifício-pai no módulo Comercial (agrupa as unidades publicadas)
     developer_name?: string;
     manager?: string;
     launch_date?: string;

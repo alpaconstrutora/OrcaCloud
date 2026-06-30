@@ -5,7 +5,7 @@
 import React from 'react';
 import {
   Loader2, ExternalLink, Unlink, RefreshCw, Upload, TrendingUp,
-  CheckCircle2, AlertCircle, Clock, ArrowRightLeft,
+  CheckCircle2, AlertCircle, Clock, ArrowRightLeft, Building2,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { empreendimentoService } from '../../services/empreendimentoService';
@@ -43,6 +43,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
   const [syncingAll, setSyncingAll] = React.useState(false);
   const [syncingAddress, setSyncingAddress] = React.useState(false);
   const [publishingAll, setPublishingAll] = React.useState(false);
+  const [regrouping, setRegrouping] = React.useState(false);
   const [orphanIds, setOrphanIds] = React.useState<Set<string>>(new Set());
 
   const load = React.useCallback(async () => {
@@ -87,11 +88,13 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
   const handlePublish = async (unit: UnitWithTower) => {
     setBusyId(unit.id);
     try {
+      const buildingId = await empreendimentoService.ensureCommercialBuilding(e, organizationId);
       const prop = await commercialService.saveProperty({
         organization_id: organizationId,
         name: unit.name,
         type: 'APARTMENT',
         purpose: 'SALE',
+        parent_id: buildingId,
         address: buildAddress(),
         price: unit.price ?? 0,
         private_area: unit.private_area,
@@ -113,6 +116,20 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
     } catch (err: any) {
       alert(`Erro ao publicar unidade: ${err.message}`);
     } finally { setBusyId(null); }
+  };
+
+  // Reagrupa unidades já publicadas que estão soltas (sem parent_id) sob o edifício-pai.
+  const handleRegroup = async () => {
+    if (!window.confirm('Agrupar todas as unidades publicadas sob o edifício do empreendimento no Comercial?')) return;
+    setRegrouping(true);
+    try {
+      const buildingId = await empreendimentoService.ensureCommercialBuilding(e, organizationId);
+      const n = await empreendimentoService.regroupCommercialUnits(e.id, organizationId, buildingId);
+      await load();
+      alert(n > 0 ? `✓ ${n} unidade(s) reagrupada(s) sob o edifício.` : 'Todas as unidades já estavam agrupadas no edifício.');
+    } catch (err: any) {
+      alert(`Erro ao reagrupar: ${err.message}`);
+    } finally { setRegrouping(false); }
   };
 
   const handleUnlink = async (unit: UnitWithTower) => {
@@ -194,12 +211,14 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
     if (!window.confirm(`Publicar ${unpublished.length} unidades no Comercial?`)) return;
     setPublishingAll(true);
     try {
+      const buildingId = await empreendimentoService.ensureCommercialBuilding(e, organizationId);
       for (const unit of unpublished) {
         const prop = await commercialService.saveProperty({
           organization_id: organizationId,
           name: unit.name,
           type: 'APARTMENT',
           purpose: 'SALE',
+          parent_id: buildingId,
           address: buildAddress(),
           price: unit.price ?? 0,
           private_area: unit.private_area,
@@ -288,6 +307,15 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizat
             >
               {syncingAddress ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
               Sync Endereço
+            </button>
+            <button
+              onClick={handleRegroup}
+              disabled={regrouping || linkedCount === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 disabled:opacity-40 border border-gray-200"
+              title="Agrupa as unidades publicadas sob o edifício do empreendimento no Comercial"
+            >
+              {regrouping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Building2 className="w-3 h-3" />}
+              Reagrupar
             </button>
             <button
               onClick={handleSyncFromCommercial}

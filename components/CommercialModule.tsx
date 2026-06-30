@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, MoreVertical, Edit, Trash2, LayoutGrid, List, ChevronRight, ChevronDown, X, RotateCw, Layers } from 'lucide-react';
 import { commercialService } from '../services/commercialService';
 import { Property, PropertyStatus, PropertyDeal, Client } from '../types';
@@ -28,6 +28,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
         (localStorage.getItem('commercial_view_mode') as any) || 'tower'
     );
     const [selectedProperties, setSelectedProperties] = useState<string[]>([]);
+    const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
     // Modals Control
     const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
@@ -320,6 +321,38 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
         const matchesFilter = !dealTypeFilter || !p.purpose || p.purpose === dealTypeFilter || p.purpose === 'BOTH';
 
         return matchesSearch && matchesFilter;
+    });
+
+    // Agrupamento da list view por edifício (parent_id). Buildings viram cabeçalhos;
+    // unidades entram sob seu pai; as sem pai vão para o grupo "Sem edifício".
+    const listGroups = useMemo(() => {
+        const buildingById = new Map<string, Property>();
+        properties.forEach(p => { if (p.type === 'BUILDING') buildingById.set(p.id, p); });
+
+        const groupUnits = new Map<string, Property[]>();
+        const ensure = (key: string) => { if (!groupUnits.has(key)) groupUnits.set(key, []); return groupUnits.get(key)!; };
+
+        for (const p of filteredProperties) {
+            if (p.type === 'BUILDING') { ensure(p.id); continue; } // garante header mesmo sem unidades
+            const key = p.parent_id && buildingById.has(p.parent_id) ? p.parent_id : '__none__';
+            ensure(key).push(p);
+        }
+
+        const byBlockName = (a: Property, b: Property) =>
+            (a.block || '').localeCompare(b.block || '') || a.name.localeCompare(b.name);
+
+        const named = Array.from(groupUnits.entries())
+            .filter(([key]) => key !== '__none__')
+            .map(([key, units]) => ({ key, building: buildingById.get(key) || null, units: units.sort(byBlockName) }))
+            .sort((a, b) => (a.building?.name || '').localeCompare(b.building?.name || ''));
+
+        const none = groupUnits.get('__none__');
+        if (none && none.length) named.push({ key: '__none__', building: null, units: none.sort(byBlockName) });
+        return named;
+    }, [filteredProperties, properties]);
+
+    const toggleGroup = (key: string) => setCollapsedGroups(prev => {
+        const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n;
     });
 
     const filteredDeals = deals.filter(d => !dealTypeFilter || d.type === dealTypeFilter);
@@ -636,8 +669,39 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                                                 <th className="px-6 py-2 text-right">Ações</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-200 text-sm font-medium text-gray-700">
-                                            {filteredProperties.map((property) => (
+                                        {listGroups.map((group) => {
+                                          const collapsed = collapsedGroups.has(group.key);
+                                          return (
+                                            <tbody key={group.key} className="divide-y divide-gray-200 text-sm font-medium text-gray-700">
+                                              {/* Cabeçalho do edifício */}
+                                              <tr className="bg-gray-50/80 border-y border-gray-200">
+                                                <td colSpan={10} className="px-6 py-2.5">
+                                                  <div className="flex items-center justify-between">
+                                                    <button
+                                                      onClick={() => toggleGroup(group.key)}
+                                                      className="flex items-center gap-2 text-gray-700 hover:text-blue-600 transition-colors"
+                                                    >
+                                                      {collapsed ? <ChevronRight className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                                                      <Building2 className="w-4 h-4 text-blue-500" />
+                                                      <span className="font-black uppercase tracking-wider text-xs">
+                                                        {group.building ? group.building.name : 'Sem edifício'}
+                                                      </span>
+                                                      <span className="bg-gray-200 text-gray-600 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                                        {group.units.length}
+                                                      </span>
+                                                    </button>
+                                                    {group.building && (
+                                                      <button
+                                                        onClick={(e) => { e.stopPropagation(); setEditingProperty(group.building!); setIsPropertyModalOpen(true); }}
+                                                        className="text-blue-600 hover:text-blue-800 text-button font-black uppercase tracking-widest p-1 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1.5"
+                                                      >
+                                                        <Edit className="w-3.5 h-3.5" /> Editar edifício
+                                                      </button>
+                                                    )}
+                                                  </div>
+                                                </td>
+                                              </tr>
+                                              {!collapsed && group.units.map((property) => (
                                                 <tr
                                                     key={property.id}
                                                     className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
@@ -704,8 +768,10 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                                                         </div>
                                                     </td>
                                                 </tr>
-                                            ))}
-                                        </tbody>
+                                              ))}
+                                            </tbody>
+                                          );
+                                        })}
                                     </table>
                                 </div>
                             )}

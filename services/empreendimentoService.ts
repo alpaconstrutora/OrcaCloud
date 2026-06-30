@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { imovibService } from './imovibService';
+import { commercialService } from './commercialService';
 import {
     Empreendimento, EmpreendimentoInsert, EmpreendimentoUpdate, EmpreendimentoWithChildren,
     EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoTowerUpdate,
@@ -45,7 +46,7 @@ const inferCommonAreaCategory = (name: string): CommonAreaCategory => {
 
 // NOTA: estas constantes precisam ser string LITERAIS (sem concatenação com +),
 // senão o supabase-js infere GenericStringError em vez do tipo da linha.
-const EMPREENDIMENTO_COLS = 'id, organization_id, name, code, status, tipo, imovib_study_id, last_synced_at, matricula, construtora, responsavel_tecnico, crea_cau, numero_processo, endereco_street, endereco_number, endereco_complement, endereco_neighborhood, endereco_city, endereco_state, endereco_zip_code, spe_razao_social, spe_cnpj, spe_nome_fantasia, terreno_street, terreno_number, terreno_complement, terreno_neighborhood, terreno_city, terreno_state, terreno_zip_code, terreno_area, terreno_frente, terreno_fundos, terreno_lateral_direita, terreno_lateral_esquerda, vgv_total, developer_name, manager, launch_date, expected_delivery_date, metadata, created_at, updated_at';
+const EMPREENDIMENTO_COLS = 'id, organization_id, name, code, status, tipo, imovib_study_id, last_synced_at, matricula, construtora, responsavel_tecnico, crea_cau, numero_processo, endereco_street, endereco_number, endereco_complement, endereco_neighborhood, endereco_city, endereco_state, endereco_zip_code, spe_razao_social, spe_cnpj, spe_nome_fantasia, terreno_street, terreno_number, terreno_complement, terreno_neighborhood, terreno_city, terreno_state, terreno_zip_code, terreno_area, terreno_frente, terreno_fundos, terreno_lateral_direita, terreno_lateral_esquerda, vgv_total, commercial_building_id, developer_name, manager, launch_date, expected_delivery_date, metadata, created_at, updated_at';
 
 const TOWER_COLS = 'id, empreendimento_id, project_id, imovib_block_id, name, floors_count, units_per_floor, construction_cost_sqm, sales_price_sqm, sort_order, created_at, updated_at';
 
@@ -249,6 +250,69 @@ export const empreendimentoService = {
             if (u.price != null && Math.abs((snap.price ?? 0) - u.price) > 0.01) summary.priceDiverge++;
         }
         return summary;
+    },
+
+    // ── Edifício-pai no Comercial (agrupa as unidades publicadas) ─────────────
+    /**
+     * Garante que exista um edifício-pai (commercial_properties type='BUILDING') para o
+     * empreendimento e retorna seu id. Reusa o existente se já vinculado e presente;
+     * senão cria e persiste o vínculo em empreendimentos.commercial_building_id.
+     */
+    async ensureCommercialBuilding(emp: Empreendimento, organizationId: string): Promise<string> {
+        // Já vinculado e ainda existente nesta org?
+        if (emp.commercial_building_id) {
+            const { data } = await supabase
+                .from('commercial_properties')
+                .select('id')
+                .eq('id', emp.commercial_building_id)
+                .eq('organization_id', organizationId)
+                .maybeSingle();
+            if (data?.id) return data.id;
+        }
+
+        const address = [emp.endereco_street, emp.endereco_number, emp.endereco_neighborhood, emp.endereco_city, emp.endereco_state]
+            .filter(Boolean).join(', ')
+            || [emp.terreno_street, emp.terreno_number, emp.terreno_city, emp.terreno_state].filter(Boolean).join(', ')
+            || emp.name;
+
+        const building = await commercialService.saveProperty({
+            organization_id: organizationId,
+            name: emp.name,
+            type: 'BUILDING',
+            purpose: 'SALE',
+            address,
+            area: 0,
+            price: 0,
+            status: 'AVAILABLE' as any,
+        } as any);
+
+        await this.update(emp.id, { commercial_building_id: building.id });
+        return building.id;
+    },
+
+    /**
+     * Reagrupa unidades já publicadas que estão soltas (property sem parent_id ou com
+     * parent_id diferente do edifício). Retorna quantas foram reagrupadas.
+     */
+    async regroupCommercialUnits(empreendimentoId: string, organizationId: string, buildingId: string): Promise<number> {
+        const units = await this.listAllUnitsForEmpreendimento(empreendimentoId);
+        const ids = units.map(u => u.commercial_property_id).filter(Boolean) as string[];
+        if (!ids.length) return 0;
+
+        const { data } = await supabase
+            .from('commercial_properties')
+            .select('id, parent_id, type')
+            .eq('organization_id', organizationId)
+            .in('id', ids);
+
+        // Só as unidades (não o próprio building) que ainda não apontam para o edifício
+        const toFix = (data || []).filter((p: any) => p.id !== buildingId && p.type !== 'BUILDING' && p.parent_id !== buildingId);
+        if (!toFix.length) return 0;
+
+        await Promise.all(toFix.map((p: any) =>
+            commercialService.saveProperty({ id: p.id, parent_id: buildingId } as any)
+        ));
+        return toFix.length;
     },
 
     // ── Pavimentos template ──────────────────────────────────────────────────

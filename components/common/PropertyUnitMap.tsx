@@ -39,6 +39,16 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
     const [statusFilter, setStatusFilter] = useState<string | 'all'>('all');
     const [selectedUnit, setSelectedUnit] = useState<Property | null>(null);
     const [groupingMode, setGroupingMode] = useState<'position' | 'orientation'>('position');
+    const [density, setDensity] = useState<'completo' | 'compacto'>(() => {
+        if (typeof window === 'undefined') return 'completo';
+        return (localStorage.getItem('propertyUnitMap.density') as 'completo' | 'compacto') || 'completo';
+    });
+
+    const handleDensityChange = (value: 'completo' | 'compacto') => {
+        setDensity(value);
+        if (typeof window !== 'undefined') localStorage.setItem('propertyUnitMap.density', value);
+    };
+    const isCompact = density === 'compacto';
 
     // Dicionário de Status do Negócio
     const DEAL_STATUS_CONFIG: Record<string, { label: string; bg: string; color: string; icon: React.ElementType }> = {
@@ -112,6 +122,36 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
         
         // Priorizar o valor da negociação ativa (contrato) sobre o preço base do imóvel
         const unitPrice = activeDeal?.value || unit.current_price || unit.price;
+
+        // Modo compacto: só cor de status + número + preço pequeno. Detalhes via tooltip + painel.
+        if (isCompact) {
+            const tooltip = [
+                unit.name || unit.number || 'N/A',
+                `${unit.bedrooms || unit.specs?.bedrooms || 0} dorm.`,
+                `${unit.private_area || unit.area || 0}m²`,
+                formatPrice(unitPrice),
+                cfg.label,
+            ].join(' • ');
+            return (
+                <div
+                    key={unit.id}
+                    title={tooltip}
+                    onClick={() => handleUnitClick(unit)}
+                    className={`relative flex flex-col items-center justify-center p-1.5 rounded-lg border transition-all min-w-[64px] ${cfg.bg} ${cfg.border} ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-1 scale-105' : ''} cursor-pointer hover:scale-105 hover:shadow-md focus:outline-none`}
+                >
+                    <span className={`text-xs font-black leading-none ${cfg.color}`}>{unit.name || unit.number || 'N/A'}</span>
+                    <span className="text-[9px] font-bold text-gray-400 leading-none mt-0.5">{formatPrice(unitPrice)}</span>
+                    {mode === 'admin' && onEditUnit && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onEditUnit(unit); }}
+                            className="absolute -top-1.5 -right-1.5 p-1 bg-white border border-gray-100 rounded-md shadow-sm text-blue-600 hover:bg-blue-50 hover:scale-110 transition-all"
+                        >
+                            <Edit className="w-2.5 h-2.5" />
+                        </button>
+                    )}
+                </div>
+            );
+        }
 
         return (
             <div
@@ -263,6 +303,24 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                             </button>
                         </div>
                     </div>
+
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Visão:</span>
+                        <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-200">
+                            <button
+                                onClick={() => handleDensityChange('completo')}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${density === 'completo' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                Completa
+                            </button>
+                            <button
+                                onClick={() => handleDensityChange('compacto')}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${density === 'compacto' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                Compacta
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Block Selector (Moved inside bar for cleanliness) */}
@@ -300,11 +358,11 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                     {floor}º<br/>Pavimento
                                 </span>
                             </div>
-                            <div className="flex-1 flex flex-wrap gap-4 p-4">
+                            <div className={`flex-1 flex flex-wrap ${isCompact ? 'gap-1.5 p-2' : 'gap-4 p-4'}`}>
                                 {(() => {
                                     if (selectedBlock !== 'all') {
                                         return (
-                                            <div className="flex flex-wrap gap-4">
+                                            <div className={`flex flex-wrap ${isCompact ? 'gap-1.5' : 'gap-4'}`}>
                                                 {floorUnits
                                                     .sort((a, b) => (a.number || '').localeCompare(b.number || ''))
                                                     .map(unit => renderUnit(unit))}
@@ -374,7 +432,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                                     </div>
                                                                     
                                                                     <div 
-                                                                        className="grid gap-2 sm:gap-4 mt-2"
+                                                                        className={`grid mt-2 ${isCompact ? 'gap-1.5' : 'gap-2 sm:gap-4'}`}
                                                                         style={{ gridTemplateColumns: `repeat(${t.unitsWidth || 1}, minmax(100px, 1fr))` }}
                                                                     >
                                                                         {t.gridCells.map((cell: GridCellConfig, cIndex: number) => {
@@ -483,7 +541,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                     const allBlocks = blocks.length > 0 ? blocks : ['Geral'];
 
                                     return (
-                                        <div className={`flex-1 grid gap-8 ${allBlocks.length > 1 ? `md:grid-cols-${Math.min(allBlocks.length, 3)} lg:grid-cols-${Math.min(allBlocks.length, 4)}` : 'grid-cols-1'}`}>
+                                        <div className={`flex-1 grid ${isCompact ? 'gap-3' : 'gap-8'} ${allBlocks.length > 1 ? `md:grid-cols-${Math.min(allBlocks.length, 3)} lg:grid-cols-${Math.min(allBlocks.length, 4)}` : 'grid-cols-1'}`}>
                                             {allBlocks.map(blockName => {
                                                 const blockUnits = floorUnits.filter(u => (u.block || 'Geral') === blockName);
                                                 if (blockUnits.length === 0) return <div key={blockName} className="hidden md:block" />;
@@ -571,7 +629,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                                                 </span>
                                                                             )}
                                                                         </div>
-                                                                        <div className="flex flex-wrap gap-3">
+                                                                        <div className={`flex flex-wrap ${isCompact ? 'gap-1.5' : 'gap-3'}`}>
                                                                             {sortedUnits.map(unit => renderUnit(unit))}
                                                                         </div>
                                                                     </div>

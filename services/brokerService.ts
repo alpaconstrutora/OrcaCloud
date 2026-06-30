@@ -136,7 +136,19 @@ export const brokerService = {
                 console.error('[BROKER SERVICE] Error inserting proposal:', error);
                 throw error;
             }
-            return data as BrokerProposal;
+            const saved = data as BrokerProposal;
+
+            // Notifica admins da organização — fire-and-forget (falha silenciosa)
+            if (saved.id && saved.organization_id) {
+                supabase.functions.invoke('notify-broker-proposal', {
+                    body: {
+                        proposalId: saved.id,
+                        organizationId: saved.organization_id,
+                    },
+                }).catch(() => {/* notificação não bloqueia o fluxo */});
+            }
+
+            return saved;
         }
     },
 

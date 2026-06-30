@@ -11,6 +11,10 @@ import { supabase } from '../../lib/supabase';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { commercialService } from '../../services/commercialService';
 import { Empreendimento, EmpreendimentoUnit, UnitStatus } from '../../types';
+import {
+  UNMAPPABLE_COMMERCIAL_STATUSES, mapCommercialToEmpr, mapEmprToCommercial,
+  UNIT_STATUS_LABEL, UNIT_STATUS_STYLE, COMM_STATUS_LABEL, COMM_STATUS_STYLE,
+} from '../../utils/empreendimentoComercial';
 
 interface Props {
   empreendimento: Empreendimento;
@@ -27,52 +31,7 @@ interface CommercialSnap {
   specs?: Record<string, unknown>;
 }
 
-// ── Status mapping ────────────────────────────────────────────────────────────
-
-// Status do Comercial que não têm equivalente em UnitStatus — não mapeáveis.
-const UNMAPPABLE_COMMERCIAL_STATUSES = new Set(['RENTED', 'MAINTENANCE']);
-
-const mapCommercialToEmpr = (s: string): UnitStatus | null => {
-  switch (s) {
-    case 'AVAILABLE':  return 'DISPONIVEL';
-    case 'RESERVED':   return 'RESERVADO';
-    case 'SOLD':       return 'VENDIDO';
-    case 'EXCHANGED':  return 'PERMUTADO';
-    default:           return null; // RENTED / MAINTENANCE / desconhecido → não sincronizar
-  }
-};
-
-const mapEmprToCommercial = (s: UnitStatus): string => {
-  switch (s) {
-    case 'DISPONIVEL': return 'AVAILABLE';
-    case 'RESERVADO':  return 'RESERVED';
-    case 'VENDIDO':    return 'SOLD';
-    case 'PERMUTADO':  return 'EXCHANGED';
-  }
-};
-
-const UNIT_STATUS_LABEL: Record<UnitStatus, string> = {
-  DISPONIVEL: 'Disponível', RESERVADO: 'Reservado', VENDIDO: 'Vendido', PERMUTADO: 'Permutado',
-};
-const UNIT_STATUS_STYLE: Record<UnitStatus, string> = {
-  DISPONIVEL: 'bg-emerald-500/10 text-emerald-600',
-  RESERVADO:  'bg-amber-500/10 text-amber-600',
-  VENDIDO:    'bg-blue-500/10 text-blue-600',
-  PERMUTADO:  'bg-violet-500/10 text-violet-600',
-};
-
-const COMM_STATUS_LABEL: Record<string, string> = {
-  AVAILABLE: 'Disponível', RESERVED: 'Reservado', SOLD: 'Vendido',
-  RENTED: 'Locado', EXCHANGED: 'Permutado', MAINTENANCE: 'Manutenção',
-};
-const COMM_STATUS_STYLE: Record<string, string> = {
-  AVAILABLE: 'bg-emerald-500/10 text-emerald-600',
-  RESERVED:  'bg-amber-500/10 text-amber-600',
-  SOLD:      'bg-blue-500/10 text-blue-600',
-  EXCHANGED: 'bg-violet-500/10 text-violet-600',
-  RENTED:    'bg-teal-500/10 text-teal-600',
-  MAINTENANCE: 'bg-gray-500/10 text-gray-600',
-};
+// Mapeamentos de status e rótulos vivem em utils/empreendimentoComercial.ts (fonte única).
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 

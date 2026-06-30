@@ -9,6 +9,18 @@ import {
     UnitStatus, CommonAreaCategory,
     ImovibStudy, ImovibUnit, ImovibUnitInstance,
 } from '../types';
+import { mapCommercialToEmpr, UNMAPPABLE_COMMERCIAL_STATUSES } from '../utils/empreendimentoComercial';
+
+// Resumo de divergências entre as unidades do empreendimento e suas properties no Comercial.
+export interface CommercialDivergenceSummary {
+    total: number;
+    published: number;
+    unpublished: number;
+    statusDiverge: number;
+    priceDiverge: number;
+    unmappable: number;
+    orphans: number;
+}
 
 // Traduz status da instância Imovib (com acento) para o enum do empreendimento.
 const translateStatus = (s?: string): UnitStatus => {
@@ -195,6 +207,48 @@ export const empreendimentoService = {
         return arrays.flatMap((arr, i) =>
             arr.map(u => ({ ...u, _tower_name: towers[i].name, _tower_project_id: towers[i].project_id }))
         );
+    },
+
+    /**
+     * Resumo de divergências Empreendimento ↔ Comercial (somente leitura).
+     * Reusa a mesma detecção do Espelho de Vendas: status/preço divergentes,
+     * status não mapeáveis (Locado/Manutenção) e vínculos órfãos.
+     */
+    async getCommercialDivergenceSummary(
+        empreendimentoId: string,
+        organizationId: string,
+    ): Promise<CommercialDivergenceSummary> {
+        const units = await this.listAllUnitsForEmpreendimento(empreendimentoId);
+        const ids = units.map(u => u.commercial_property_id).filter(Boolean) as string[];
+
+        const snaps: Record<string, { status: string; price: number }> = {};
+        if (ids.length) {
+            const { data } = await supabase
+                .from('commercial_properties')
+                .select('id, status, price')
+                .eq('organization_id', organizationId)
+                .in('id', ids);
+            (data || []).forEach((p: any) => { snaps[p.id] = { status: p.status, price: p.price }; });
+        }
+
+        const summary: CommercialDivergenceSummary = {
+            total: units.length, published: 0, unpublished: 0,
+            statusDiverge: 0, priceDiverge: 0, unmappable: 0, orphans: 0,
+        };
+
+        for (const u of units) {
+            if (!u.commercial_property_id) { summary.unpublished++; continue; }
+            const snap = snaps[u.commercial_property_id];
+            if (!snap) { summary.orphans++; continue; } // property excluída ou de outra org
+            summary.published++;
+            if (UNMAPPABLE_COMMERCIAL_STATUSES.has(snap.status)) {
+                summary.unmappable++;
+            } else if (mapCommercialToEmpr(snap.status) !== u.status) {
+                summary.statusDiverge++;
+            }
+            if (u.price != null && Math.abs((snap.price ?? 0) - u.price) > 0.01) summary.priceDiverge++;
+        }
+        return summary;
     },
 
     // ── Pavimentos template ──────────────────────────────────────────────────

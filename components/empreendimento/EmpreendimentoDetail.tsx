@@ -1,11 +1,12 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag, Map, Loader2 } from 'lucide-react';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag, Map, Loader2, ArrowLeftRight } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus, ImovibStudy } from '../../types';
 import TowerEditor from './TowerEditor';
 import CommonAreaEditor from './CommonAreaEditor';
 import SyncFromStudyModal from './SyncFromStudyModal';
 import { EspelhoVendasTab } from './EspelhoVendasTab';
+import { SyncCenterTab } from './SyncCenterTab';
 import ImovibRegulatoryMapTab from '../ImovibRegulatoryMapTab';
 import ImovibBlocksTypologyTab from '../ImovibBlocksTypologyTab';
 import { imovibService } from '../../services/imovibService';
@@ -35,7 +36,7 @@ const TIPO_LABELS: Record<string, string> = {
   COND_INDUSTRIAL: 'Condomínio Industrial',
 };
 
-type Tab = 'visao' | 'tipologia' | 'torres' | 'areas' | 'regulatorio' | 'comercial';
+type Tab = 'visao' | 'sync' | 'tipologia' | 'torres' | 'areas' | 'regulatorio' | 'comercial';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced }) => {
   const [tab, setTab] = React.useState<Tab>('visao');
@@ -76,6 +77,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
 
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: 'visao', label: 'Visão Geral', icon: FileText },
+    { id: 'sync', label: 'Sincronização', icon: ArrowLeftRight },
     { id: 'tipologia', label: 'Bloco e Tipologia', icon: Building2 },
     { id: 'torres', label: 'Torres & Unidades', icon: Layers },
     { id: 'areas', label: 'Áreas Comuns', icon: Trees },
@@ -275,6 +277,15 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       )}
       {tab === 'comercial' && (
         <EspelhoVendasTab empreendimento={e} organizationId={organizationId} />
+      )}
+      {tab === 'sync' && (
+        <SyncCenterTab
+          key={refreshKey}
+          empreendimento={e}
+          organizationId={organizationId}
+          onOpenStudySync={() => setSyncOpen(true)}
+          onGoToComercial={() => setTab('comercial')}
+        />
       )}
 
       {syncOpen && (

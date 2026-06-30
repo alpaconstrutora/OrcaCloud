@@ -25,23 +25,22 @@ const FLOOR_TIPO_STYLE: Record<FloorTipo, string> = {
   COBERTURA: 'bg-amber-500/10 text-amber-700', TECNICO: 'bg-gray-500/10 text-gray-600',
   GARAGEM: 'bg-orange-500/10 text-orange-600', OUTRO: 'bg-purple-500/10 text-purple-600',
 };
-type SortCol = 'name' | 'floor' | 'floor_tipo' | 'typology' | 'private_area' | 'common_area' | 'parking_spaces' | 'price' | 'position_type' | 'view_type' | 'sun_orientation';
+type SortCol = 'name' | 'floor' | 'floor_tipo' | 'typology' | 'private_area' | 'common_area' | 'parking_spaces' | 'position_type' | 'view_type' | 'sun_orientation';
 
 const emptyForm = () => ({
   name: '', floor: '', typology: '', private_area: '', common_area: '',
-  price: '', parking_spaces: '', floor_tipo: '' as FloorTipo | '',
+  parking_spaces: '', floor_tipo: '' as FloorTipo | '',
   position_type: '' as UnitPositionType | '', view_type: '' as UnitViewType | '',
   sun_orientation: '' as UnitSunOrientation | '',
 });
 const emptyBulkForm = () => ({
   floor: '', floor_tipo: '' as FloorTipo | '',
-  typology: '', private_area: '', common_area: '', parking_spaces: '', price: '',
+  typology: '', private_area: '', common_area: '', parking_spaces: '',
   position_type: '' as UnitPositionType | '', view_type: '' as UnitViewType | '',
   sun_orientation: '' as UnitSunOrientation | '',
 });
 
 const fmtArea = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
-const fmtPrice = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -112,7 +111,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       case 'private_area':  va = a.private_area ?? 0; vb = b.private_area ?? 0; break;
       case 'common_area':   va = a.common_area ?? 0;  vb = b.common_area ?? 0; break;
       case 'parking_spaces':va = a.parking_spaces ?? 0; vb = b.parking_spaces ?? 0; break;
-      case 'price':         va = a.price ?? 0;        vb = b.price ?? 0; break;
       case 'position_type': va = a.position_type ?? ''; vb = b.position_type ?? ''; break;
       case 'view_type':     va = a.view_type ?? '';   vb = b.view_type ?? ''; break;
       case 'sun_orientation': va = a.sun_orientation ?? ''; vb = b.sun_orientation ?? ''; break;
@@ -175,7 +173,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       typology: f.typology || undefined,
       private_area: priv, common_area: common,
       total_area: priv !== undefined || common !== undefined ? (priv ?? 0) + (common ?? 0) : undefined,
-      price: f.price ? Number(f.price) : undefined,
       parking_spaces: f.parking_spaces ? Number(f.parking_spaces) : undefined,
       position_type: (f.position_type || undefined) as UnitPositionType | undefined,
       view_type: (f.view_type || undefined) as UnitViewType | undefined,
@@ -201,9 +198,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
     setEditForm({
       name: u.name, floor: u.floor?.toString() ?? '',
       typology: u.typology ?? '', private_area: u.private_area?.toString() ?? '',
-      common_area: u.common_area?.toString() ?? '', price: u.price?.toString() ?? '',
-      parking_spaces: u.parking_spaces?.toString() ?? '',
-      floor_tipo: u.floor_tipo ?? '', floor_id: u.floor_id ?? '',
+      common_area: u.common_area?.toString() ?? '',
+      parking_spaces: u.parking_spaces?.toString() ?? '', floor_tipo: u.floor_tipo ?? '',
+      floor_id: u.floor_id ?? '',
       position_type: u.position_type ?? '', view_type: u.view_type ?? '',
       sun_orientation: u.sun_orientation ?? '',
     });
@@ -219,7 +216,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         floor_tipo: (editForm.floor_tipo || null) as FloorTipo | null,
         typology: editForm.typology || undefined, private_area: priv, common_area: common,
         total_area: priv !== undefined || common !== undefined ? (priv ?? 0) + (common ?? 0) : undefined,
-        price: editForm.price ? Number(editForm.price) : undefined,
         parking_spaces: editForm.parking_spaces ? Number(editForm.parking_spaces) : undefined,
         position_type: (editForm.position_type || null) as UnitPositionType | null,
         view_type: (editForm.view_type || null) as UnitViewType | null,
@@ -259,7 +255,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
 
   const handleBulkSave = async () => {
     const hasAny = bulkForm.floor || bulkForm.floor_tipo || bulkForm.typology.trim()
-      || bulkForm.price || bulkForm.private_area || bulkForm.common_area || bulkForm.parking_spaces
+      || bulkForm.private_area || bulkForm.common_area || bulkForm.parking_spaces
       || bulkForm.position_type || bulkForm.view_type || bulkForm.sun_orientation;
     if (!hasAny) { alert('Preencha pelo menos um campo para aplicar em lote.'); return; }
     setBulkSaving(true);
@@ -270,7 +266,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       if (bulkForm.floor_tipo) upd.floor_tipo = bulkForm.floor_tipo;
       if (bulkForm.typology.trim()) upd.typology = bulkForm.typology.trim();
       if (bulkForm.parking_spaces) upd.parking_spaces = Number(bulkForm.parking_spaces);
-      if (bulkForm.price) upd.price = Number(bulkForm.price);
       if (bulkForm.position_type) upd.position_type = bulkForm.position_type;
       if (bulkForm.view_type) upd.view_type = bulkForm.view_type;
       if (bulkForm.sun_orientation) upd.sun_orientation = bulkForm.sun_orientation;
@@ -362,7 +357,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         <input className={inputCls} placeholder="Priv. m²" type="number" step="0.01" value={form.private_area} onChange={e => setForm(p => ({ ...p, private_area: e.target.value }))} />
         <input className={inputCls} placeholder="Comum m²" type="number" step="0.01" value={form.common_area} onChange={e => setForm(p => ({ ...p, common_area: e.target.value }))} />
         <input className={inputCls} placeholder="Vagas" type="number" value={form.parking_spaces} onChange={e => setForm(p => ({ ...p, parking_spaces: e.target.value }))} />
-        <input className={inputCls} placeholder="Preço R$" type="number" step="0.01" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} />
         <select className={inputCls} value={form.position_type} onChange={e => setForm(p => ({ ...p, position_type: e.target.value as UnitPositionType | '' }))}>
           <option value="">Posição</option>
           {(Object.keys(POSITION_LABEL) as UnitPositionType[]).map(t => <option key={t} value={t}>{POSITION_LABEL[t]}</option>)}
@@ -471,7 +465,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                 <SortableHeader col="position_type" current={sortCol} dir={sortDir} onSort={handleSort}>Posição</SortableHeader>
                 <SortableHeader col="view_type" current={sortCol} dir={sortDir} onSort={handleSort}>Vista</SortableHeader>
                 <SortableHeader col="sun_orientation" current={sortCol} dir={sortDir} onSort={handleSort}>Orient.</SortableHeader>
-                <SortableHeader col="price" current={sortCol} dir={sortDir} onSort={handleSort}>Preço</SortableHeader>
                 <th className="py-3 px-4 text-center">Ações</th>
               </tr>
             </thead>
@@ -519,7 +512,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                       <td className="py-2 px-4 text-xs font-bold text-teal-600">
                         {group.totalComum > 0 ? `${fmtArea(group.totalComum)} m²` : '—'}
                       </td>
-                      <td colSpan={6} />
+                      <td colSpan={5} />
                     </tr>
 
                     {/* Unidades do grupo */}
@@ -570,7 +563,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                                   {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
                                 </select>
                               </td>
-                              <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.price} onChange={e => setEditForm(p => ({ ...p, price: e.target.value }))} /></td>
                               <td className="py-2 px-3 text-center">
                                 <div className="flex items-center justify-center gap-1">
                                   <button onClick={() => handleSaveEdit(u)} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg"><Check className="w-3.5 h-3.5" /></button>
@@ -606,7 +598,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                                   ? <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${SUN_STYLE[u.sun_orientation]}`}>{SUN_LABEL[u.sun_orientation]}</span>
                                   : <span className="text-gray-300 text-[10px]">—</span>}
                               </td>
-                              <td className="py-3 px-4 text-gray-700 font-semibold">{u.price != null ? fmtPrice(u.price) : '—'}</td>
                               <td className="py-3 px-4 text-center">
                                 <div className="flex items-center justify-center gap-1">
                                   <button onClick={() => startEdit(u)} className="p-1.5 hover:bg-blue-50 text-blue-500 rounded-lg" title="Editar"><Edit className="w-3.5 h-3.5" /></button>
@@ -631,7 +622,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                 </td>
                 <td className="py-2.5 px-4 text-blue-600">{totalPriv > 0 ? `${fmtArea(totalPriv)} m²` : '—'}</td>
                 <td className="py-2.5 px-4 text-teal-600">{totalComum > 0 ? `${fmtArea(totalComum)} m²` : '—'}</td>
-                <td colSpan={7} />
+                <td colSpan={5} />
               </tr>
             </tfoot>
           </table>
@@ -662,7 +653,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
             <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Priv. m²" value={bulkForm.private_area} onChange={e => setBulkForm(p => ({ ...p, private_area: e.target.value }))} />
             <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Comum m²" value={bulkForm.common_area} onChange={e => setBulkForm(p => ({ ...p, common_area: e.target.value }))} />
             <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Vagas" value={bulkForm.parking_spaces} onChange={e => setBulkForm(p => ({ ...p, parking_spaces: e.target.value }))} />
-            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Preço R$" value={bulkForm.price} onChange={e => setBulkForm(p => ({ ...p, price: e.target.value }))} />
             <select value={bulkForm.position_type} onChange={e => setBulkForm(p => ({ ...p, position_type: e.target.value as UnitPositionType | '' }))}
               className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-400">
               <option value="">Posição...</option>

@@ -1168,11 +1168,26 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                             <span className="text-[9px] font-black uppercase tracking-widest">Tempo de Esgotamento</span>
                                         </div>
                                         <p className="text-2xl font-black">
-                                            {Math.ceil(filteredProperties.length / (simMonthlySales || 1))} 
+                                            {Math.ceil(filteredProperties.length / (simMonthlySales || 1))}
                                             <span className="text-xs text-gray-400 ml-1">Meses</span>
                                         </p>
                                     </div>
-                                    <button 
+
+                                    <div className="space-y-2">
+                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Cenários de Absorção (curva S)</span>
+                                        {pricingService.compareScenarios(filteredProperties.length, 60, [
+                                            { label: 'Lenta', velocity: 0.25 },
+                                            { label: 'Moderada', velocity: 0.5 },
+                                            { label: 'Agressiva', velocity: 0.9 },
+                                        ]).map(s => (
+                                            <div key={s.label} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100">
+                                                <span className="text-xs font-bold text-gray-600">{s.label}</span>
+                                                <span className="text-xs font-black text-blue-600">{s.monthsToSellOut} meses</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <button
                                         onClick={() => { setSimMonthlySales(2); setSimPriceAdjust(0); }}
                                         className="w-full py-3 bg-white text-gray-400 hover:text-gray-900 text-xs font-black uppercase tracking-widest rounded-xl border border-gray-200 transition-all"
                                     >
@@ -1182,7 +1197,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             </div>
 
                             <div className="lg:col-span-3">
-                                <SalesDashboard 
+                                <SalesDashboard
                                     buildings={properties} 
                                     selectedBuildingId={selectedBuildingId} 
                                     mode="simulation"

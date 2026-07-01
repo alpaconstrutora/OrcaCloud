@@ -82,5 +82,26 @@ export const pricingService = {
     }
 
     return results;
+  },
+
+  /**
+   * Roda simulateAbsorption para várias velocidades e retorna lado a lado, para
+   * comparar cenários (ex.: lenta/moderada/agressiva) sobre o mesmo estoque/horizonte.
+   */
+  compareScenarios(
+    totalUnits: number,
+    months: number,
+    velocities: { label: string; velocity: number }[]
+  ): { label: string; velocity: number; curve: { month: number; sales: number; total: number }[]; monthsToSellOut: number }[] {
+    return velocities.map(({ label, velocity }) => {
+      const curve = this.simulateAbsorption(totalUnits, months, velocity);
+      const monthsToSellOut = curve.findIndex(c => c.total >= totalUnits);
+      return {
+        label,
+        velocity,
+        curve,
+        monthsToSellOut: monthsToSellOut === -1 ? months : monthsToSellOut + 1,
+      };
+    });
   }
 };

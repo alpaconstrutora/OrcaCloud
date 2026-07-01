@@ -4,6 +4,7 @@ import { Target, TrendingUp, AlertTriangle, Users, DollarSign, Activity, Percent
 import type { Property } from '../types';
 import { useStore } from '../store/useStore';
 import { salesDashboardService, DashboardMetrics } from '../services/salesDashboardService';
+import { pricingService } from '../services/pricingService';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'];
 
@@ -82,18 +83,29 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
     ? vgvTotal * (1 + simulationParams.priceAdjust / 100) 
     : vgvTotal;
 
+  // Curva de absorção logística real (pricingService.simulateAbsorption), não mais uma
+  // reta ingênua. O horizonte (meses até esgotar) respeita a velocidade que o usuário
+  // pediu no slider — só a FORMA da curva (lenta no início/fim, rápida no meio) muda.
   const simulationData = mode === 'simulation' && simulationParams ? (() => {
-    let cumulative = vgvVendido;
     const avgPricePerUnit = unidadesTotal > 0 ? vgvTotal / unidadesTotal : 0;
-    const monthlyVGV = simulationParams.monthlySales * avgPricePerUnit;
     const currentMonthIndex = new Date().getMonth();
+    const monthsToSellOut = Math.max(1, Math.ceil(unidadesDisponiveis / Math.max(1, simulationParams.monthlySales)));
+    const remainingMonths = Math.max(1, vendasCurva.length - currentMonthIndex);
+    const absorption = pricingService.simulateAbsorption(
+      unidadesDisponiveis,
+      Math.max(monthsToSellOut, remainingMonths),
+      0.5,
+    );
 
+    let absIdx = 0;
     return vendasCurva.map((d, i) => {
       if (i < currentMonthIndex) {
         return { ...d, simulado: d.real };
       }
-      cumulative = Math.min(cumulative + monthlyVGV, projectedVGVTotal);
-      return { ...d, simulado: cumulative };
+      const unitsSold = absorption[absIdx]?.total ?? absorption[absorption.length - 1]?.total ?? 0;
+      absIdx++;
+      const simulado = Math.min(vgvVendido + unitsSold * avgPricePerUnit, projectedVGVTotal);
+      return { ...d, simulado };
     });
   })() : vendasCurva;
 

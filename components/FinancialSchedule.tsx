@@ -48,6 +48,7 @@ import { SupplyPanel } from './schedule/SupplyPanel';
 import { EapPanel } from './schedule/EapPanel';
 import { orderService } from '../services/orderService';
 import { projectService } from '../services/projectService';
+import { contractService } from '../services/contractService';
 import ScheduleHeader from './schedule/ScheduleHeader';
 import { CrewClassificationModal } from './schedule/CrewClassificationModal';
 import { OutlineNodeModal } from './schedule/OutlineNodeModal';
@@ -1504,6 +1505,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
     const [orders, setOrders] = useState<PurchaseOrder[]>([]);
     const [allDiaryEntries, setAllDiaryEntries] = useState<DiaryEntry[]>(settings.diaryEntries || []);
+    // Fase 4 — medições de empreitada por item de orçamento (medido/aprovado/pago).
+    const [measurementRollup, setMeasurementRollup] = useState<Record<string, { measured: number; approved: number; paid: number }>>({});
 
 
     useEffect(() => {
@@ -1521,6 +1524,28 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 const ordersResults = await Promise.all(orderPromises);
                 const combinedOrders = ordersResults.flat();
                 setOrders(combinedOrders);
+
+                // --- Medições de empreitada (Fase 4) ---
+                // Contratos podem viver na obra/orçamento (settings.id) e/ou no projeto
+                // vinculado; agrega os dois, somando por item de orçamento.
+                const measIds = [settings.id, settings.linkedProjectId].filter(Boolean) as string[];
+                if (measIds.length > 0) {
+                    const rollups = await Promise.all(
+                        measIds.map(id => contractService.getMeasurementRollupByBudgetItem(id).catch(() => ({})))
+                    );
+                    const merged: Record<string, { measured: number; approved: number; paid: number }> = {};
+                    rollups.forEach(r => {
+                        Object.entries(r).forEach(([k, v]) => {
+                            const cur = merged[k] || { measured: 0, approved: 0, paid: 0 };
+                            merged[k] = {
+                                measured: cur.measured + v.measured,
+                                approved: cur.approved + v.approved,
+                                paid: cur.paid + v.paid,
+                            };
+                        });
+                    });
+                    setMeasurementRollup(merged);
+                }
 
                 // --- Diary Discovery ---
                 let diaryEntries = [...(settings.diaryEntries || [])];
@@ -1659,6 +1684,18 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         const sourceSettings = pinnedVersion?.settings || linkedActive?.settings || linkedProject?.settings;
         return sourceSettings?.bdi ?? settings.bdi ?? 0;
     }, [projects, settings.classification, settings.linkedProjectId, settings.basedOnBudgetVersionId, settings.bdi]);
+
+    // Totais de medição de empreitada (projeto) — para o Centro de Comando e o AC do EVM.
+    const measurementTotals = React.useMemo(() => {
+        return Object.values(measurementRollup).reduce(
+            (acc, v) => ({
+                measured: acc.measured + v.measured,
+                approved: acc.approved + v.approved,
+                paid: acc.paid + v.paid,
+            }),
+            { measured: 0, approved: 0, paid: 0 }
+        );
+    }, [measurementRollup]);
 
     // Calculate Hierarchy
     const hierarchy = React.useMemo(
@@ -4351,6 +4388,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             schedule={schedule}
                             budget={budget}
                             financialValues={realizedState.financialValues}
+                            measurementTotals={measurementTotals}
                             chartData={chartDataWithCumulative}
                             organizationId={organizationId}
                             projectId={settings.id}
@@ -4492,6 +4530,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 handleUpdateRealPct={handleUpdateRealPct}
                                                 setPredecessorModalTask={setPredecessorModalTask}
                                                 GanttResizeHandle={GanttResizeHandle}
+                                                measurementRollup={measurementRollup}
                                             />
                                         );
                                     } catch (err) {

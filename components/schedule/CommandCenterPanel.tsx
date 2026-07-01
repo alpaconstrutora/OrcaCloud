@@ -67,6 +67,7 @@ function computeKpis(
     schedule: ProjectSchedule,
     budget: BudgetEntry[],
     financialValues: Record<string, number>,
+    approvedMeasurements: number,
 ) {
     const leaves = flatLeaves(hierarchy);
     const todayStr = today();
@@ -102,11 +103,13 @@ function computeKpis(
 
     const physicalPct = physicalWeightTotal > 0 ? (physicalWeightedSum / physicalWeightTotal) * 100 : 0;
 
-    // AC (Actual Cost) — custo real, exclusivamente financeiro (compras já realizadas).
-    // Antes deste cálculo usar o mapa combinado (max físico×financeiro) inflava o AC
-    // sempre que o físico estava à frente das compras, distorcendo CPI/EAC.
-    const ac = Object.values(financialValues).reduce((s, v) => s + v, 0);
-    const financialPct = totalBudget > 0 ? (ac / totalBudget) * 100 : 0;
+    // AC (Actual Cost) — custo real = compras de material (orders) + medições de empreitada
+    // APROVADAS (mão de obra terceirizada). Sem as medições, obras de empreitada teriam o AC
+    // subestimado (só material), inflando o CPI e distorcendo o EAC.
+    const purchases = Object.values(financialValues).reduce((s, v) => s + v, 0);
+    const ac = purchases + approvedMeasurements;
+    // "% Financeiro" do painel segue sendo só compras (coerente com a coluna do cronograma).
+    const financialPct = totalBudget > 0 ? (purchases / totalBudget) * 100 : 0;
 
     // EVM real: SPI (prazo) e CPI (custo). BAC = orçamento total; EAC = previsão de custo
     // final assumindo a mesma eficiência (CPI) observada até aqui; ETC = quanto falta gastar.
@@ -167,6 +170,7 @@ interface Props {
     schedule: ProjectSchedule;
     budget: BudgetEntry[];
     financialValues: Record<string, number>;
+    measurementTotals: { measured: number; approved: number; paid: number };
     chartData: SCurveEntry[];
     organizationId?: string;
     projectId?: string;
@@ -175,7 +179,7 @@ interface Props {
 // ─── Component ────────────────────────────────────────────────
 
 export const CommandCenterPanel: React.FC<Props> = ({
-    hierarchy, schedule, budget, financialValues, chartData,
+    hierarchy, schedule, budget, financialValues, measurementTotals, chartData,
     organizationId, projectId,
 }) => {
     const [ppcLast, setPpcLast] = useState<number | null>(null);
@@ -185,8 +189,8 @@ export const CommandCenterPanel: React.FC<Props> = ({
     const [simulatorOpen, setSimulatorOpen] = useState(false);
 
     const kpis = React.useMemo(
-        () => computeKpis(hierarchy, schedule, budget, financialValues),
-        [hierarchy, schedule, budget, financialValues]
+        () => computeKpis(hierarchy, schedule, budget, financialValues, measurementTotals.approved),
+        [hierarchy, schedule, budget, financialValues, measurementTotals.approved]
     );
 
     const load = useCallback(async () => {
@@ -263,6 +267,24 @@ export const CommandCenterPanel: React.FC<Props> = ({
                     icon={<Clock className="w-4 h-4" />}
                     tooltip="Estimate to Complete = EAC − Custo Real" />
             </div>
+
+            {/* ── KPI cards de Medição de Empreitada (só quando há medições) ── */}
+            {measurementTotals.measured > 0 && (
+                <div className="grid grid-cols-3 gap-3">
+                    <KpiCard label="Medido (empreitada)" value={fmtBRL(measurementTotals.measured)}
+                        sub="valor total medido aos empreiteiros" color="indigo"
+                        icon={<BarChart2 className="w-4 h-4" />}
+                        tooltip="Soma das medições não canceladas dos contratos de empreitada" />
+                    <KpiCard label="Aprovado" value={fmtBRL(measurementTotals.approved)}
+                        sub={measurementTotals.measured > 0 ? `${((measurementTotals.approved / measurementTotals.measured) * 100).toFixed(0)}% do medido` : '—'}
+                        color="emerald" icon={<CheckCircle2 className="w-4 h-4" />}
+                        tooltip="Medições Processadas + Pagas — entram no Custo Real (AC)" />
+                    <KpiCard label="Pago" value={fmtBRL(measurementTotals.paid)}
+                        sub={measurementTotals.approved > 0 ? `${((measurementTotals.paid / measurementTotals.approved) * 100).toFixed(0)}% do aprovado` : '—'}
+                        color="blue" icon={<TrendingUp className="w-4 h-4" />}
+                        tooltip="Medições efetivamente pagas" />
+                </div>
+            )}
 
             {/* ── KPI cards row 2 ── */}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

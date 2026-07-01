@@ -67,6 +67,8 @@ interface ScheduleGanttProps {
     GanttResizeHandle?: React.ComponentType<{ colKey: string }>;
     outlineActions?: OutlineActions;
     onAddRootGroup?: () => void;
+    // Fase 4 — medições de empreitada por item de orçamento (para o TaskDetailModal).
+    measurementRollup?: Record<string, { measured: number; approved: number; paid: number }>;
 }
 
 
@@ -113,7 +115,8 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     setPredecessorModalTask,
     GanttResizeHandle,
     outlineActions,
-    onAddRootGroup
+    onAddRootGroup,
+    measurementRollup,
 }) => {
 
     const formatDateDisplay = (dateString?: string) => {
@@ -947,6 +950,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         handleUpdateRealPct={handleUpdateRealPct}
                         handleUpdateCrewField={handleUpdateCrewField}
                         onEditPredecessors={() => { setSelectedTaskId(null); setPredecessorModalTask(sn.item.id); }}
+                        measurement={measurementRollup?.[sn.item.id]}
                     />
                 );
             })()}

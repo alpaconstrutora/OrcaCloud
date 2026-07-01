@@ -1423,6 +1423,26 @@ export const contractService = {
         return data as ContractMeasurementItem[];
     },
 
+    // Fase 4 (EVM) — rollup de medições de empreitada por item de orçamento (= id da
+    // tarefa do cronograma). Agrega medido/aprovado/pago via RPC, sem fan-out N+M.
+    getMeasurementRollupByBudgetItem: async (
+        projectId: string,
+    ): Promise<Record<string, { measured: number; approved: number; paid: number }>> => {
+        const { data, error } = await supabase.rpc('fn_project_measurements_by_budget_item', {
+            p_project_id: projectId,
+        });
+        if (error) throw error;
+        const map: Record<string, { measured: number; approved: number; paid: number }> = {};
+        (data ?? []).forEach((r: { budget_item_id: string; measured: number; approved: number; paid: number }) => {
+            map[r.budget_item_id] = {
+                measured: Number(r.measured ?? 0),
+                approved: Number(r.approved ?? 0),
+                paid: Number(r.paid ?? 0),
+            };
+        });
+        return map;
+    },
+
     // Faturas de Consumo (Utility Bills)
     listUtilityBills: async (contractId: string): Promise<ContractUtilityBill[]> => {
         const { data, error } = await supabase

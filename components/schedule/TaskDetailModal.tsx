@@ -14,6 +14,8 @@ interface TaskDetailModalProps {
     handleUpdateRealPct: (itemId: string, value: string) => void;
     handleUpdateCrewField: (id: string, field: string, value: string | number | boolean) => void;
     onEditPredecessors: () => void;
+    // Fase 4 — medição de empreitada desta tarefa (undefined quando não há contrato vinculado).
+    measurement?: { measured: number; approved: number; paid: number };
 }
 
 const fmt = (date?: string) =>
@@ -96,7 +98,7 @@ const EditField: React.FC<EditFieldProps> = ({ label, type = 'number', value, su
 export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     node, item, itemSchedule, idToUid, allItems, onClose,
     handleUpdateItemSchedule, handleUpdateRealPct, handleUpdateCrewField,
-    onEditPredecessors,
+    onEditPredecessors, measurement,
 }) => {
     const isCritical = itemSchedule?.isCritical ?? node.isCritical;
     const totalFloat = itemSchedule?.totalFloat ?? node.totalFloat ?? 0;
@@ -262,6 +264,20 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                             )}
                         </div>
                     </section>
+
+                    {/* Medição de Empreitada — só quando há contrato vinculado a este item */}
+                    {measurement && measurement.measured > 0 && (
+                        <section>
+                            <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Medição (Empreitada)
+                            </h3>
+                            <div className="grid grid-cols-3 gap-2 bg-indigo-50/50 border border-indigo-100 rounded-xl p-3">
+                                <Field label="Medido" value={fmtCurrency(measurement.measured)} />
+                                <Field label="Aprovado" value={fmtCurrency(measurement.approved)} />
+                                <Field label="Pago" value={fmtCurrency(measurement.paid)} />
+                            </div>
+                        </section>
+                    )}
 
                     {/* Item SINAPI */}
                     <section>

@@ -151,7 +151,8 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
         realized: 'Realizado',
         variation: 'Variação',
         resources: 'Recursos',
-        realPct: 'Real %',
+        realPct: '% Físico',
+        finPct: '% Financeiro',
     };
     const TOGGLEABLE_COLS = Object.keys(COL_LABELS);
 
@@ -177,6 +178,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                     <col data-col="variation" style={{ width: getColWidth('variation') }} />
                     <col data-col="resources" style={{ width: 140 }} />
                     <col data-col="realPct" style={{ width: getColWidth('realPct') }} />
+                    <col data-col="finPct" style={{ width: getColWidth('finPct') }} />
                     <col data-col="splitter" style={{ width: 6 }} />
                     {timelineColumns.map(column => (
                         <col key={column.id} data-col={`tl-${column.id}`} style={{ width: 80 }} />
@@ -319,7 +321,8 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                         <th className="px-4 py-3 text-right relative">Real<ResizeHandle colKey="realized" /></th>
                         <th className="px-4 py-3 text-right relative">Var.<ResizeHandle colKey="variation" /></th>
                         <th className="px-4 py-3 text-left relative text-table-header text-gray-400 uppercase tracking-widest font-medium">Recursos</th>
-                        <th className="px-4 py-3 text-center border-l border-gray-200 relative">Real %<ResizeHandle colKey="realPct" /></th>
+                        <th className="px-4 py-3 text-center border-l border-gray-200 relative">% Físico<ResizeHandle colKey="realPct" /></th>
+                        <th className="px-4 py-3 text-center relative">% Financeiro<ResizeHandle colKey="finPct" /></th>
                         <th
                             className="relative p-0 cursor-col-resize select-none group/splitter"
                             onMouseDown={handleSplitterMouseDown}
@@ -558,8 +561,9 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                                 step="1"
                                                                 className={`w-10 bg-transparent border-none p-0 text-table-body font-medium focus:ring-1 focus:ring-blue-300 rounded ${itemSchedule.manualRealPct !== undefined ? 'text-orange-500' : 'text-blue-600'}`}
                                                                 value={(() => {
-                                                                    const calculatedPct = node.total > 0 ? (node.realizedTotal / node.total * 100) : 0;
-                                                                    // If we have manualPct, show it. But if diary showed more (already factored in node.realizedTotal), 
+                                                                    // Índice puramente físico (Diário/manual) — não mais o max() com financeiro.
+                                                                    const calculatedPct = node.total > 0 ? (node.realizedPhysicalTotal / node.total * 100) : 0;
+                                                                    // If we have manualPct, show it. But if diary showed more (already factored in node.realizedPhysicalTotal),
                                                                     // we show the calculated one to avoid "0%" confusion.
                                                                     return Math.max(Number(itemSchedule.manualRealPct) || 0, calculatedPct).toFixed(0);
                                                                 })()}
@@ -582,7 +586,23 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                     <div className="w-full bg-gray-100 rounded-full h-1 overflow-hidden relative">
                                                         <div
                                                             className={`${itemSchedule.manualRealPct !== undefined ? 'bg-orange-400' : 'bg-blue-400'} h-full transition-all`}
-                                                            style={{ width: `${Math.min(node.total > 0 ? (node.realizedTotal / node.total * 100) : 0, 100)}%` }}
+                                                            style={{ width: `${Math.min(node.total > 0 ? (node.realizedPhysicalTotal / node.total * 100) : 0, 100)}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-2">
+                                            <div className="overflow-hidden w-full">
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center justify-between text-xs text-amber-600 font-medium whitespace-nowrap">
+                                                        <span>{(node.total > 0 ? (node.realizedFinancialTotal / node.total * 100) : 0).toFixed(0)}%</span>
+                                                        <span className="text-gray-400">Comprado</span>
+                                                    </div>
+                                                    <div className="w-full bg-gray-100 rounded-full h-1 overflow-hidden relative">
+                                                        <div
+                                                            className="bg-amber-400 h-full transition-all"
+                                                            style={{ width: `${Math.min(node.total > 0 ? (node.realizedFinancialTotal / node.total * 100) : 0, 100)}%` }}
                                                         />
                                                     </div>
                                                 </div>
@@ -702,11 +722,24 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                             <div className="overflow-hidden w-full">
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex items-center justify-between text-xs text-blue-600 font-medium whitespace-nowrap">
-                                                        <span>{node.total > 0 ? (node.realizedTotal / node.total * 100).toFixed(0) : 0}%</span>
-                                                        <span className="text-gray-400 font-medium uppercase tracking-tighter">Realizado</span>
+                                                        <span>{node.total > 0 ? (node.realizedPhysicalTotal / node.total * 100).toFixed(0) : 0}%</span>
+                                                        <span className="text-gray-400 font-medium uppercase tracking-tighter">Físico</span>
                                                     </div>
                                                     <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
-                                                        <div className="bg-blue-500 h-full transition-all" style={{ width: `${Math.min(node.total > 0 ? (node.realizedTotal / node.total * 100) : 0, 100)}%` }} />
+                                                        <div className="bg-blue-500 h-full transition-all" style={{ width: `${Math.min(node.total > 0 ? (node.realizedPhysicalTotal / node.total * 100) : 0, 100)}%` }} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <div className="overflow-hidden w-full">
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center justify-between text-xs text-amber-600 font-medium whitespace-nowrap">
+                                                        <span>{node.total > 0 ? (node.realizedFinancialTotal / node.total * 100).toFixed(0) : 0}%</span>
+                                                        <span className="text-gray-400 font-medium uppercase tracking-tighter">Comprado</span>
+                                                    </div>
+                                                    <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                                        <div className="bg-amber-500 h-full transition-all" style={{ width: `${Math.min(node.total > 0 ? (node.realizedFinancialTotal / node.total * 100) : 0, 100)}%` }} />
                                                     </div>
                                                 </div>
                                             </div>

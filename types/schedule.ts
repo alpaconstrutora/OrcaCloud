@@ -69,6 +69,8 @@ export interface HierarchyNode {
     schedule?: ItemScheduleDetails;
     total: number;
     realizedTotal: number;
+    realizedPhysicalTotal: number;   // avanço físico valorado (diário/manual) — usado no SPI/EV
+    realizedFinancialTotal: number;  // avanço financeiro valorado (compras) — usado no CPI/AC
     budgetedTotal: number;
     budgetedWithBdiTotal: number;
     plannedTotal: number;

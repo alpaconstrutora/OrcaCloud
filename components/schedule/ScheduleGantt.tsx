@@ -187,7 +187,8 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
         gRealized: 'Realizado $',
         gVariation: 'Variação $',
         gResources: 'Recursos',
-        gRealPct: 'Real %'
+        gRealPct: '% Físico',
+        gFinPct: '% Financeiro'
     };
     const TOGGLEABLE_COLS = Object.keys(COL_LABELS);
 
@@ -544,11 +545,16 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     min="0"
                                     max="100"
                                     className={`w-9 bg-transparent border-none p-0 text-form-input font-medium text-right focus:ring-0 ${itemSchedule?.manualRealPct !== undefined ? 'text-orange-500' : 'text-blue-600'}`}
-                                    value={itemSchedule?.manualRealPct !== undefined ? itemSchedule.manualRealPct : (node.total > 0 ? (node.realizedTotal / node.total * 100) : 0).toFixed(0)}
+                                    value={itemSchedule?.manualRealPct !== undefined ? itemSchedule.manualRealPct : (node.total > 0 ? (node.realizedPhysicalTotal / node.total * 100) : 0).toFixed(0)}
                                     onChange={(e) => handleUpdateRealPct(item.id, e.target.value)}
                                 />
                                 <span>%</span>
                             </div>
+                        </div>
+                        <div data-gantt-col="gFinPct" className="shrink-0 flex items-center justify-center" style={getGanttColStyle('gFinPct')}>
+                            <span className="text-xs text-amber-600 font-medium">
+                                {(node.total > 0 ? (node.realizedFinancialTotal / node.total * 100) : 0).toFixed(0)}%
+                            </span>
                         </div>
                     </div>
                     <div className="relative flex-1 h-full" style={{ width: `${totalWidth}px` }}>
@@ -571,7 +577,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             const baseColor = node.color || '#3b82f6';
                             const progress = itemSchedule?.manualRealPct !== undefined
                                 ? itemSchedule.manualRealPct
-                                : (node.total > 0 ? (node.realizedTotal / node.total * 100) : 0);
+                                : (node.total > 0 ? (node.realizedPhysicalTotal / node.total * 100) : 0);
 
                             if (node.isMilestone) {
                                 return (
@@ -807,7 +813,12 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         </div>
                         <div data-gantt-col="gRealPct" className="shrink-0 flex items-center justify-center" style={getGanttColStyle('gRealPct')}>
                             <div className="text-xs text-blue-600 font-medium">
-                                {(node.total > 0 ? (node.realizedTotal / node.total * 100) : 0).toFixed(0)}%
+                                {(node.total > 0 ? (node.realizedPhysicalTotal / node.total * 100) : 0).toFixed(0)}%
+                            </div>
+                        </div>
+                        <div data-gantt-col="gFinPct" className="shrink-0 flex items-center justify-center" style={getGanttColStyle('gFinPct')}>
+                            <div className="text-xs text-amber-600 font-medium">
+                                {(node.total > 0 ? (node.realizedFinancialTotal / node.total * 100) : 0).toFixed(0)}%
                             </div>
                         </div>
                     </div>
@@ -1103,7 +1114,8 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             <div data-gantt-col="gRealized" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-xs font-medium text-emerald-500" style={getGanttColStyle('gRealized')}>REALIZADO{GanttResizeHandle && <GanttResizeHandle colKey="gRealized" />}</div>
                             <div data-gantt-col="gVariation" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-xs font-medium text-gray-400" style={getGanttColStyle('gVariation')}>VARIAÇÃO{GanttResizeHandle && <GanttResizeHandle colKey="gVariation" />}</div>
                             <div data-gantt-col="gResources" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gResources')}>RECURSOS{GanttResizeHandle && <GanttResizeHandle colKey="gResources" />}</div>
-                            <div data-gantt-col="gRealPct" className="relative shrink-0 flex items-center justify-center text-xs font-medium text-blue-600" style={getGanttColStyle('gRealPct')}>REAL %{GanttResizeHandle && <GanttResizeHandle colKey="gRealPct" />}</div>
+                            <div data-gantt-col="gRealPct" className="relative shrink-0 flex items-center justify-center text-xs font-medium text-blue-600" style={getGanttColStyle('gRealPct')}>% FÍSICO{GanttResizeHandle && <GanttResizeHandle colKey="gRealPct" />}</div>
+                            <div data-gantt-col="gFinPct" className="relative shrink-0 flex items-center justify-center text-xs font-medium text-amber-600" style={getGanttColStyle('gFinPct')}>% FINANC.{GanttResizeHandle && <GanttResizeHandle colKey="gFinPct" />}</div>
                         </div>
                         <div
                             ref={headerRef}

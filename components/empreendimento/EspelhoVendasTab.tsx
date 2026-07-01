@@ -20,7 +20,6 @@ import {
 
 interface Props {
   empreendimento: Empreendimento;
-  organizationId: string;
 }
 
 type UnitWithTower = EmpreendimentoUnit & { _tower_name: string; _tower_project_id?: string | null };
@@ -37,7 +36,10 @@ interface CommercialSnap {
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, organizationId }) => {
+export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
+  // Sempre o org do próprio empreendimento — nunca o seletor global (que pode estar
+  // em "Todas as Organizações" = string vazia, causando "invalid input syntax for type uuid").
+  const organizationId = e.organization_id;
   const [units, setUnits] = React.useState<UnitWithTower[]>([]);
   const [commSnaps, setCommSnaps] = React.useState<Record<string, CommercialSnap>>({});
   const [loading, setLoading] = React.useState(true);

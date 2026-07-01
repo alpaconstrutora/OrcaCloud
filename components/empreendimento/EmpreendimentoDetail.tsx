@@ -268,13 +268,12 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
         )
       )}
       {tab === 'comercial' && (
-        <EspelhoVendasTab empreendimento={e} organizationId={organizationId} />
+        <EspelhoVendasTab empreendimento={e} />
       )}
       {tab === 'sync' && (
         <SyncCenterTab
           key={refreshKey}
           empreendimento={e}
-          organizationId={organizationId}
           onOpenStudySync={() => setSyncOpen(true)}
           onGoToComercial={() => setTab('comercial')}
         />

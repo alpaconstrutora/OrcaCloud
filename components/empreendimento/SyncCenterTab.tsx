@@ -14,7 +14,6 @@ import { useConfirm } from '../ui/confirm';
 
 interface Props {
   empreendimento: Empreendimento;
-  organizationId: string;
   onOpenStudySync: () => void;
   onGoToComercial: () => void;
 }
@@ -25,7 +24,10 @@ const fmtDate = (iso?: string | null) => {
   catch { return iso; }
 };
 
-export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, organizationId, onOpenStudySync, onGoToComercial }) => {
+export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudySync, onGoToComercial }) => {
+  // Sempre o org do próprio empreendimento — nunca o seletor global (que pode estar
+  // em "Todas as Organizações" = string vazia).
+  const organizationId = e.organization_id;
   const confirm = useConfirm();
   const [loading, setLoading] = React.useState(true);
   const [studyReport, setStudyReport] = React.useState<EmpreendimentoSyncReport | null>(null);

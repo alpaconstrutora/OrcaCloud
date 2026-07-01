@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { ArrowLeft, Edit2, MapPin, Phone, Mail, Calendar, ClipboardList, Calculator, FileText, CheckCircle, Clock, ExternalLink, CheckSquare, Square, Plus, HardHat, Link2, Copy, Check } from 'lucide-react';
+import Button from '../ui/Button';
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
 import ServicesWonModal from './ServicesWonModal';
@@ -314,9 +315,9 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
     <div className="max-w-3xl mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={onBack} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+        <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft size={20} />
-        </button>
+        </Button>
         <div className="flex-1">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{opp.contact_name}</h2>
           <div className="flex items-center gap-2 mt-0.5">
@@ -342,29 +343,26 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
             {opp.work_type && <span className="text-xs text-gray-400">{opp.work_type}</span>}
           </div>
         </div>
-        <button onClick={() => setIsEditing(true)} className="text-gray-400 hover:text-blue-600">
+        <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
           <Edit2 size={18} />
-        </button>
+        </Button>
       </div>
 
       {/* Actions */}
       {!isTerminal && (
         <div className="flex gap-3">
           {nextStage && (
-            <button
+            <Button
               onClick={moveToNext}
               disabled={moving}
-              className="flex-1 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="flex-1"
             >
               {moving ? 'Movendo...' : `Avançar para "${STAGE_LABELS[nextStage]}"`}
-            </button>
+            </Button>
           )}
-          <button
-            onClick={() => setShowLostModal(true)}
-            className="px-4 py-2.5 text-sm font-medium text-red-600 border border-red-200 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-          >
+          <Button variant="secondary" onClick={() => setShowLostModal(true)}>
             Marcar como Perdido
-          </button>
+          </Button>
         </div>
       )}
 
@@ -448,18 +446,12 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
 
           {opp.budget_source === 'engineering' && !opp.engineering_project_id && (
             <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                onClick={() => setShowPicker(true)}
-                className="flex-1 py-2 text-sm border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-              >
+              <Button variant="secondary" onClick={() => setShowPicker(true)} className="flex-1">
                 Vincular existente
-              </button>
-              <button
-                onClick={() => setShowRequestModal(true)}
-                className="flex-1 py-2 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600 dark:text-gray-300 transition-colors"
-              >
+              </Button>
+              <Button variant="secondary" onClick={() => setShowRequestModal(true)} className="flex-1">
                 Solicitar à engenharia
-              </button>
+              </Button>
             </div>
           )}
 
@@ -481,19 +473,16 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
           { view: 'budget' as ServicesView, icon: <Calculator size={18} />, label: 'Orçamento', disabled: ['lead', 'visit'].includes(opp.stage) || opp.budget_source === 'engineering' },
           { view: 'proposal' as ServicesView, icon: <FileText size={18} />, label: 'Proposta', disabled: ['lead', 'visit'].includes(opp.stage) },
         ].map(({ view, icon, label, disabled }) => (
-          <button
+          <Button
             key={view}
+            variant={disabled ? 'ghost' : 'secondary'}
             disabled={disabled}
             onClick={() => onNavigate(view, opportunityId)}
-            className={`flex flex-col items-center gap-1.5 py-4 rounded-xl border text-sm font-medium transition-colors ${
-              disabled
-                ? 'border-gray-100 text-gray-300 dark:border-gray-800 dark:text-gray-600 cursor-not-allowed'
-                : 'border-gray-200 text-gray-700 hover:border-blue-300 hover:text-blue-600 dark:border-gray-700 dark:text-gray-300'
-            }`}
+            className={`flex flex-col flex-1 items-center gap-1.5 py-4 ${disabled ? 'cursor-not-allowed' : ''}`}
           >
             {icon}
             {label}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -565,13 +554,9 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Crie o planejamento para o cliente acompanhar o andamento do serviço no portal.
               </p>
-              <button
-                onClick={handleCreatePlanning}
-                disabled={creatingPlan}
-                className="shrink-0 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
+              <Button size="sm" onClick={handleCreatePlanning} disabled={creatingPlan} className="shrink-0">
                 {creatingPlan ? 'Criando...' : 'Criar Planejamento'}
-              </button>
+              </Button>
             </div>
           ) : (
             <button
@@ -586,18 +571,14 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
             <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-600 px-3 py-2 bg-gray-50 dark:bg-gray-700/40">
               <Link2 size={14} className="text-gray-400 shrink-0" />
               <span className="flex-1 text-xs text-gray-600 dark:text-gray-300 truncate">{portalUrl}</span>
-              <button onClick={handleCopyPortalLink} className="shrink-0 text-gray-400 hover:text-blue-600 transition-colors">
+              <Button variant="ghost" size="icon" onClick={handleCopyPortalLink} className="shrink-0">
                 {linkCopied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
-              </button>
+              </Button>
             </div>
           ) : (
-            <button
-              onClick={handleGeneratePortalLink}
-              disabled={generatingLink}
-              className="w-full py-2 text-sm border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
-            >
+            <Button variant="secondary" onClick={handleGeneratePortalLink} disabled={generatingLink} className="w-full">
               {generatingLink ? 'Gerando...' : 'Gerar Link do Portal'}
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -619,9 +600,9 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
             const overdue = !done && task.due_date && new Date(task.due_date) < new Date();
             return (
               <div key={task.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
-                <button onClick={() => handleToggleTask(task)} className={done ? 'text-green-600' : 'text-gray-300 hover:text-blue-600'}>
+                <Button variant="ghost" size="icon" onClick={() => handleToggleTask(task)} className={done ? 'text-green-600' : 'text-gray-300'}>
                   {done ? <CheckSquare size={16} /> : <Square size={16} />}
-                </button>
+                </Button>
                 <span className={`flex-1 text-sm ${done ? 'line-through text-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>
                   {task.title}
                 </span>
@@ -653,13 +634,9 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
             title="Vencimento (opcional)"
             className="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm text-gray-600 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <button
-            onClick={handleAddTask}
-            disabled={!newTaskTitle.trim()}
-            className="flex items-center gap-1 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-40"
-          >
+          <Button size="sm" onClick={handleAddTask} disabled={!newTaskTitle.trim()}>
             <Plus size={14} /> Add
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -700,14 +677,10 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
               />
             </div>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setShowLostModal(false)} className="text-sm text-gray-500 px-4 py-2">Cancelar</button>
-              <button
-                onClick={markLost}
-                disabled={!lostReason.trim() || moving}
-                className="text-sm bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
+              <Button variant="ghost" onClick={() => setShowLostModal(false)}>Cancelar</Button>
+              <Button variant="danger" onClick={markLost} disabled={!lostReason.trim() || moving}>
                 Confirmar
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -767,14 +740,10 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
               />
             </div>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setShowRequestModal(false)} className="text-sm text-gray-500 px-4 py-2">Cancelar</button>
-              <button
-                onClick={handleRequestEngineering}
-                disabled={!requestEmail.trim()}
-                className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
+              <Button variant="ghost" onClick={() => setShowRequestModal(false)}>Cancelar</Button>
+              <Button onClick={handleRequestEngineering} disabled={!requestEmail.trim()}>
                 Solicitar
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -788,13 +757,8 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
               Os itens do orçamento simples serão copiados para um novo projeto da engenharia. O orçamento simples será mantido como histórico.
             </p>
             <div className="flex gap-3 justify-end">
-              <button onClick={() => setShowMigrateConfirm(false)} className="text-sm text-gray-500 px-4 py-2">Cancelar</button>
-              <button
-                onClick={handleMigrate}
-                className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-              >
-                Migrar
-              </button>
+              <Button variant="ghost" onClick={() => setShowMigrateConfirm(false)}>Cancelar</Button>
+              <Button onClick={handleMigrate}>Migrar</Button>
             </div>
           </div>
         </div>

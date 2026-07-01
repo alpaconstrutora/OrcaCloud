@@ -27,6 +27,7 @@ import ProjectFinancialManager from './ProjectFinancialManager';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import { SalesDashboard } from './SalesDashboard';
 import PricingIntelligenceModal from './PricingIntelligenceModal';
+import PriceTableManager from './PriceTableManager';
 import { pricingService } from '../services/pricingService';
 import { brokerService } from '../services/brokerService';
 import BrokerModal from './BrokerModal';
@@ -41,8 +42,8 @@ interface SalesModuleProps {
 }
 
 const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
-    const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'simulation' | 'brokers' | 'contracts'>(
-        (localStorage.getItem('sales_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'simulation' | 'brokers' | 'contracts') || 'inventory'
+    const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'simulation' | 'price-tables' | 'brokers' | 'contracts'>(
+        (localStorage.getItem('sales_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'simulation' | 'price-tables' | 'brokers' | 'contracts') || 'inventory'
     );
     const [properties, setProperties] = useState<Property[]>([]);
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
@@ -751,6 +752,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         Simulação
                     </button>
                     <button
+                        onClick={() => setActiveTab('price-tables')}
+                        className={`flex items-center gap-2 px-8 py-3 rounded-[1.25rem] font-black tracking-tight transition-all duration-300 ${activeTab === 'price-tables' ? 'bg-white text-blue-600 shadow-md transform scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
+                    >
+                        <DollarSign className={`w-4 h-4 ${activeTab === 'price-tables' ? 'fill-blue-600/10' : ''}`} />
+                        Tabela de Preços
+                    </button>
+                    <button
                         onClick={() => setActiveTab('brokers')}
                         className={`flex items-center gap-2 px-8 py-3 rounded-[1.25rem] font-black tracking-tight transition-all duration-300 ${activeTab === 'brokers' ? 'bg-white text-blue-600 shadow-md transform scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
                     >
@@ -1210,6 +1218,16 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {activeTab === 'price-tables' && selectedBuildingId && currentBuilding && organizationId && (
+                <div className="animate-in slide-in-from-bottom-5 duration-500">
+                    <PriceTableManager
+                        organizationId={organizationId}
+                        buildingId={selectedBuildingId}
+                        buildingName={currentBuilding.name}
+                    />
                 </div>
             )}
 

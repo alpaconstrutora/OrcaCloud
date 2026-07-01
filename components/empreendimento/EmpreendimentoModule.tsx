@@ -1,6 +1,7 @@
 // components/empreendimento/EmpreendimentoModule.tsx
 import React from 'react';
 import { Plus, Loader2, Building2, Search, ArrowRight, Trash2 } from 'lucide-react';
+import Button from '../ui/Button';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { Empreendimento, EmpreendimentoStatus } from '../../types';
 import EmpreendimentoForm from './EmpreendimentoForm';
@@ -118,14 +119,15 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
             <Building2 className="w-6 h-6 text-blue-600" /> Empreendimentos
           </h1>
         </div>
-        <button
+        <Button
           onClick={() => { setEditing(null); setIsFormOpen(true); }}
           disabled={isWriteDisabled}
           title={isWriteDisabled ? 'Selecione uma organização específica' : 'Novo empreendimento'}
-          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-[1.25rem] font-black text-button uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-blue-900/10 active:scale-95"
+          size="lg"
+          className="shadow-xl shadow-blue-900/10"
         >
           <Plus className="w-4 h-4" /> Novo Empreendimento
-        </button>
+        </Button>
       </div>
 
       {/* Busca */}

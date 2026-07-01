@@ -7,6 +7,7 @@ import { projectService, ProjectData } from '../services/projectService';
 import PropertyModal from './PropertyModal';
 import DealModal from './DealModal';
 import PropertyUnitMap from './common/PropertyUnitMap';
+import Button from './ui/Button';
 
 interface CommercialModuleProps {
     organizationId?: string;
@@ -541,16 +542,17 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                         <Maximize2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
                         Relatórios
                     </button>
-                    <button
+                    <Button
                         onClick={() => {
                             setEditingProperty(undefined);
                             setIsPropertyModalOpen(true);
                         }}
-                        className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 hover:scale-[1.02] active:scale-95 group"
+                        size="lg"
+                        className="rounded-2xl shadow-xl shadow-blue-600/20 hover:scale-[1.02] group"
                     >
                         <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
                         Novo Imóvel
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -1129,8 +1131,8 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                                 <h3 className="text-3xl font-black mb-6 relative z-10 leading-tight">Pronto para<br /><span className="text-blue-500">{dealTypeFilter === 'RENTAL' ? 'Escalar suas Locações?' : 'Escalar suas Vendas?'}</span></h3>
                                 <p className="text-gray-400 font-medium mb-10 relative z-10 leading-relaxed">Utilize nossas ferramentas de análise preditiva para identificar as melhores oportunidades {dealTypeFilter === 'RENTAL' ? 'de locação' : 'de mercado'} e otimizar seu ticket médio.</p>
                                 <div className="flex gap-4 relative z-10">
-                                    <button className="px-8 py-4 bg-blue-600 text-white rounded-2xl font-black shadow-xl shadow-blue-600/30 hover:bg-blue-700 transition-all">Ver Insights IA</button>
-                                    <button className="px-8 py-4 bg-white/10 text-white rounded-2xl font-black border border-white/10 hover:bg-white/20 transition-all">Configurações</button>
+                                    <Button size="lg" className="rounded-2xl shadow-xl shadow-blue-600/30">Ver Insights IA</Button>
+                                    <Button size="lg" variant="ghost" className="rounded-2xl bg-white/10 text-white border border-white/10 hover:bg-white/20 hover:text-white">Configurações</Button>
                                 </div>
                             </div>
                         </div>

@@ -1,6 +1,7 @@
 // components/empreendimento/SyncFromStudyModal.tsx
 import React from 'react';
 import { X, Loader2, RefreshCw, AlertTriangle, Building, Layers, Trees, ShieldCheck } from 'lucide-react';
+import Button from '../ui/Button';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { EmpreendimentoSyncReport } from '../../types';
 
@@ -50,7 +51,7 @@ export const SyncFromStudyModal: React.FC<Props> = ({ empreendimentoId, onClose,
           <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
             <RefreshCw className="w-5 h-5 text-violet-600" /> Sincronizar do Estudo
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl"><X className="w-5 h-5 text-gray-500" /></button>
+          <Button variant="ghost" size="icon" onClick={onClose}><X className="w-5 h-5 text-gray-500" /></Button>
         </div>
 
         <div className="p-6 space-y-5">
@@ -107,7 +108,7 @@ export const SyncFromStudyModal: React.FC<Props> = ({ empreendimentoId, onClose,
         </div>
 
         <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 flex justify-end gap-3 rounded-b-3xl">
-          <button onClick={onClose} className="px-5 py-2.5 text-gray-600 font-bold text-button uppercase tracking-widest hover:bg-gray-100 rounded-xl">Cancelar</button>
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
           <button
             onClick={handleApply}
             disabled={loading || applying || !!error || !report}

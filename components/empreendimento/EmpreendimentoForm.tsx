@@ -1,6 +1,7 @@
 // components/empreendimento/EmpreendimentoForm.tsx
 import React from 'react';
 import { X, Loader2, Building2 } from 'lucide-react';
+import Button from '../ui/Button';
 import CityStateSelect from '../CityStateSelect';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { imovibService } from '../../services/imovibService';
@@ -136,7 +137,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
             <Building2 className="w-5 h-5 text-blue-600" />
             {editing ? 'Editar Empreendimento' : 'Novo Empreendimento'}
           </h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl"><X className="w-5 h-5 text-gray-500" /></button>
+          <Button variant="ghost" size="icon" onClick={onClose}><X className="w-5 h-5 text-gray-500" /></Button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -313,11 +314,11 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="px-5 py-2.5 text-gray-600 font-bold text-button uppercase tracking-widest hover:bg-gray-100 rounded-xl">Cancelar</button>
-            <button type="submit" disabled={saving} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-button uppercase tracking-widest flex items-center gap-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" disabled={saving}>
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               {editing ? 'Salvar' : 'Criar'}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

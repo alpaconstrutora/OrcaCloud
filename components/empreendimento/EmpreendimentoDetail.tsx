@@ -10,6 +10,7 @@ import { SyncCenterTab } from './SyncCenterTab';
 import ImovibRegulatoryMapTab from '../ImovibRegulatoryMapTab';
 import ImovibBlocksTypologyTab from '../ImovibBlocksTypologyTab';
 import { imovibService } from '../../services/imovibService';
+import Button from '../ui/Button';
 
 interface Props {
   empreendimento: Empreendimento;
@@ -125,9 +126,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
                 <BarChart3 className="w-4 h-4" /> Ver Estudo
               </button>
             )}
-            <button onClick={onEdit} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-button uppercase tracking-widest flex items-center gap-2">
+            <Button onClick={onEdit}>
               <Edit className="w-4 h-4" /> Editar
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -218,12 +219,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             <div className="bg-white p-10 rounded-3xl border border-gray-100 shadow-sm text-center">
               <h3 className="text-lg font-black text-gray-800 tracking-tight">Nao foi possivel carregar o estudo vinculado</h3>
               <p className="text-sm text-gray-500 font-medium mt-1">{linkedStudyError}</p>
-              <button
-                onClick={loadLinkedStudy}
-                className="mt-5 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-button uppercase tracking-widest inline-flex items-center gap-2"
-              >
+              <Button onClick={loadLinkedStudy} className="mt-5">
                 <RefreshCw className="w-4 h-4" /> Tentar Novamente
-              </button>
+              </Button>
             </div>
           ) : linkedStudy ? (
             <ImovibBlocksTypologyTab study={linkedStudy} onDataChanged={loadLinkedStudy} />
@@ -235,12 +233,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             <p className="text-sm text-gray-500 font-medium mt-1 max-w-xl mx-auto">
               Blocos e tipologias usam a mesma base do IMOVIB. Vincule um estudo de viabilidade para editar as premissas e manter uma fonte unica.
             </p>
-            <button
-              onClick={onEdit}
-              className="mt-5 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-button uppercase tracking-widest inline-flex items-center gap-2"
-            >
+            <Button onClick={onEdit} className="mt-5">
               <Edit className="w-4 h-4" /> Vincular Estudo
-            </button>
+            </Button>
           </div>
         )
       )}
@@ -266,12 +261,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             <p className="text-sm text-gray-500 font-medium mt-1 max-w-xl mx-auto">
               O mapa regulatorio do empreendimento usa a mesma base do IMOVIB. Vincule um estudo de viabilidade para visualizar e manter os parametros urbanisticos em uma fonte unica.
             </p>
-            <button
-              onClick={onEdit}
-              className="mt-5 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-button uppercase tracking-widest inline-flex items-center gap-2"
-            >
+            <Button onClick={onEdit} className="mt-5">
               <Edit className="w-4 h-4" /> Vincular Estudo
-            </button>
+            </Button>
           </div>
         )
       )}

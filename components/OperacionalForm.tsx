@@ -59,9 +59,9 @@ const BudgetPickerModal: React.FC<{
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
           <h3 className="text-lg font-black text-slate-900">Vincular item de orçamento</h3>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl">
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         <div className="p-4 border-b border-slate-50 flex gap-3">
@@ -210,9 +210,9 @@ const PlanningPickerModal: React.FC<{
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
           <h3 className="text-lg font-black text-slate-900">Vincular atividade do planejamento</h3>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl">
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         <div className="p-4 border-b border-slate-50 flex gap-3">
@@ -536,9 +536,9 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
           </h2>
           <p className="text-sm text-slate-400 mt-0.5">Preencha os dados da OE</p>
         </div>
-        <button onClick={onCancel} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+        <Button variant="ghost" size="icon" onClick={onCancel}>
           <X className="w-5 h-5" />
-        </button>
+        </Button>
       </div>
 
       {error && (
@@ -576,22 +576,26 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
               </div>
               <div className="flex items-center gap-2 ml-4 shrink-0">
                 {budgetItems.length > 0 && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     type="button"
                     onClick={() => setShowBudgetPicker(true)}
-                    className="text-button font-black text-blue-600 hover:text-blue-800 px-2 py-1 hover:bg-blue-100 rounded-lg transition-colors"
+                    className="text-blue-600 hover:text-blue-800 hover:bg-blue-100"
                   >
                     Trocar
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   type="button"
                   onClick={() => setSelectedBudgetItem(null)}
-                  className="text-button font-bold text-slate-400 hover:text-red-500 px-2 py-1 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1"
+                  className="text-slate-400 hover:text-red-500 hover:bg-red-50"
                 >
                   <Unlink className="w-3 h-3" />
                   Desvincular
-                </button>
+                </Button>
               </div>
             </div>
           ) : (

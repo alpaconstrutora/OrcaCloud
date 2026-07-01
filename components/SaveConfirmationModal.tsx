@@ -1,4 +1,5 @@
 import React from 'react';
+import Button from './ui/Button';
 
 // Ícones Inline para garantir estabilidade
 const SaveIcon = () => (
@@ -168,20 +169,21 @@ const SaveConfirmationModal: React.FC<SaveConfirmationModalProps> = ({
                 </div>
 
                 <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
-                    <button
+                    <Button
+                        variant="ghost"
                         onClick={onClose}
-                        className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg text-sm"
                         disabled={isSaving}
                     >
                         Cancelar
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        size="lg"
                         onClick={() => onConfirm(target)}
-                        className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+                        className="disabled:opacity-50"
                         disabled={isSaving}
                     >
                         {isSaving ? 'Salvando...' : 'Confirmar'}
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>

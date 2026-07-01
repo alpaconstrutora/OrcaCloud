@@ -3,6 +3,7 @@ import { projectService } from '../services/projectService';
 import { FolderOpen, Calendar, Search, Loader2, Settings, FileSpreadsheet, Edit2, LayoutDashboard, Clock, AlertCircle, CheckCircle2, ChevronRight, Copy, Trash2 } from 'lucide-react';
 import { ProjectSchedule } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import Button from './ui/Button';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Planejamento', sortable: true },
@@ -189,13 +190,15 @@ const PlanningList: React.FC<PlanningListProps> = ({
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Planejamento</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Controle cronogramas e prazos das obras em tempo real com infraestrutura premium.</p>
                 </div>
-                <button
+                <Button
+                    variant="primary"
+                    size="lg"
                     onClick={onAddPlanning}
-                    className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                    className="gap-3 rounded-[1.25rem] text-button tracking-widest shadow-xl shadow-blue-900/20 active:scale-95"
                 >
                     <Calendar className="w-5 h-5" />
                     <span>Novo Planejamento</span>
-                </button>
+                </Button>
             </div>
 
             <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm">

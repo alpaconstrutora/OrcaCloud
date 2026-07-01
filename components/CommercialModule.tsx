@@ -616,10 +616,10 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                                 className="w-full pl-14 pr-6 py-4 bg-white border border-gray-200 rounded-[1.5rem] focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-400"
                             />
                         </div>
-                        <button className="flex items-center gap-2 px-8 py-4 bg-white border border-gray-200 rounded-[1.5rem] font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm">
+                        <Button variant="secondary" size="lg">
                             <Filter className="w-5 h-5 text-gray-400" />
                             Mais Filtros
-                        </button>
+                        </Button>
 
                         <div className="flex p-1.5 bg-gray-100 rounded-2xl border border-gray-200 shadow-inner">
                             <button onClick={() => setViewMode('grid')} className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`} title="Grid"><LayoutGrid className="w-5 h-5" /></button>

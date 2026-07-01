@@ -7,6 +7,7 @@ import { payrollService, Worksite, EmployeeAllocation } from '../services/payrol
 import { Employee } from '../services/laborService';
 import { getCodeLevelStyle, sortByCode } from '../utils/codeHierarchy';
 import PaystubModal from './PaystubModal';
+import Button from './ui/Button';
 
 // ── Local types ────────────────────────────────────────────────────────────────
 interface CostCenter {
@@ -413,14 +414,16 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                     </div>
                                 </div>
                                 <div className="flex gap-2 w-full md:w-auto">
-                                    <button 
+                                    <Button
+                                        variant="secondary"
+                                        size="lg"
                                         onClick={handleCopyFromPrevious}
                                         disabled={copying || !!saving}
-                                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 text-slate-600 rounded-2xl hover:bg-slate-50 transition-all font-black text-xs uppercase tracking-widest disabled:opacity-50"
+                                        className="flex-1 md:flex-none disabled:opacity-50"
                                     >
                                         {copying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Copy className="w-3 h-3" />}
                                         Copiar Mês Ant.
-                                    </button>
+                                    </Button>
                                     <button 
                                         onClick={handleSave}
                                         disabled={!!saving}
@@ -563,14 +566,14 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                     {/* Holerites disponíveis */}
                                     <div className="flex flex-wrap gap-2">
                                         {closedResults.map(r => (
-                                            <button
+                                            <Button
+                                                variant="secondary"
                                                 key={r.run_id}
                                                 onClick={() => setPaystubRunId(r.run_id)}
-                                                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700 transition-colors shadow-sm"
                                             >
                                                 <FileText className="w-4 h-4 text-blue-500" />
                                                 Holerite — {r.run_type === 'adiantamento' ? 'Adiantamento' : 'Folha Completa'}
-                                            </button>
+                                            </Button>
                                         ))}
                                     </div>
 

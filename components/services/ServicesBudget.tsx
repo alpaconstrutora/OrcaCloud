@@ -3,6 +3,7 @@ import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { servicesCommercialService, ServiceBudget, ServiceBudgetItem } from '../../services/servicesCommercialService';
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
+import Button from '../ui/Button';
 
 interface Props {
   opportunityId: string;
@@ -159,13 +160,15 @@ const ServicesBudget: React.FC<Props> = ({ opportunityId, organizationId, onBack
         />
       </div>
 
-      <button
+      <Button
+        variant="primary"
+        size="lg"
         onClick={save}
         disabled={saving}
-        className="w-full py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+        className="w-full disabled:opacity-50"
       >
         {saving ? 'Salvando...' : 'Salvar orçamento'}
-      </button>
+      </Button>
       <ServicesToast toasts={toasts} onDismiss={dismiss} />
     </div>
   );

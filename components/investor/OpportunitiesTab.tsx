@@ -162,13 +162,13 @@ const OpportunitiesTab: React.FC<Props> = ({
                 </div>
 
                 {isAdmin && adminTab === 'opportunities' && organizationId && (
-                    <button
+                    <Button
+                        variant="primary"
                         onClick={() => setEditing('new')}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-bold shadow-md hover:bg-blue-700 transition-colors"
                     >
                         <Plus className="w-4 h-4" />
                         Nova Oportunidade
-                    </button>
+                    </Button>
                 )}
             </div>
 

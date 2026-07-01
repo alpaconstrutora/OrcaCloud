@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, TrendingUp, Calculator, ShieldCheck, ArrowRight, Info, BrainCircuit } from 'lucide-react';
 import { HedonicPricingConfig } from '../types';
+import Button from './ui/Button';
 
 interface PricingIntelligenceModalProps {
     isOpen: boolean;
@@ -151,14 +152,16 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                     </div>
                     
                     <div className="flex gap-4">
-                        <button onClick={onClose} className="px-8 py-4 bg-white border border-gray-200 rounded-2xl font-black text-button uppercase tracking-widest text-gray-600 hover:bg-gray-100 transition-all">Cancelar</button>
-                        <button 
+                        <Button variant="secondary" size="lg" onClick={onClose} className="px-8 rounded-2xl text-button tracking-widest">Cancelar</Button>
+                        <Button
+                            variant="primary"
+                            size="lg"
                             onClick={() => onApply(config)}
-                            className="flex items-center gap-3 px-8 py-4 bg-blue-600 text-white rounded-2xl font-black text-button uppercase tracking-[0.2em] hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/30 group"
+                            className="gap-3 px-8 rounded-2xl text-button tracking-[0.2em] shadow-xl shadow-blue-600/30 group"
                         >
                             Aplicar Inteligência
                             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>

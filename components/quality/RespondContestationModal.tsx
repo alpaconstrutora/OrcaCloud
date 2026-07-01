@@ -85,7 +85,7 @@ const RespondContestationModal: React.FC<Props> = ({
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 className="text-base font-semibold text-gray-900">Responder contestação</h2>
-          <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
+          <Button variant="ghost" size="icon" onClick={onClose}><X className="w-5 h-5 text-gray-400" /></Button>
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-4 space-y-4">

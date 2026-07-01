@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Upload, Image, FileText, Trash2, Loader2, AlertCircle, ExternalLink } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import Button from './ui/Button'
 
 interface EvidenceFile {
   id: string
@@ -197,10 +198,9 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
                     className="text-white bg-blue-600/90 rounded-lg p-1.5 hover:bg-blue-700">
                     <ExternalLink className="w-4 h-4" />
                   </a>
-                  <button onClick={() => handleDelete(f)}
-                    className="text-white bg-red-600/90 rounded-lg p-1.5 hover:bg-red-700">
+                  <Button variant="danger" size="icon" onClick={() => handleDelete(f)}>
                     <Trash2 className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-2 py-1">
                   <span className={`text-button font-bold px-1.5 py-0.5 rounded ${GATE_COLORS[f.gate]}`}>

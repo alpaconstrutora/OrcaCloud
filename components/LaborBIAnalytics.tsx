@@ -13,6 +13,7 @@ import {
     ProductivityByProject, RetentionCohort, HrTarget
 } from '../services/hrAnalyticsService';
 import { STALE } from '../lib/queryClient';
+import Button from './ui/Button';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -170,9 +171,9 @@ const EventForm: React.FC<EventFormProps> = ({ orgId, employees, onClose, onSave
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
                 <div className="flex items-center justify-between p-6 border-b border-slate-100">
                     <h2 className="text-base font-black text-slate-900">Registrar Movimentação</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                    <Button variant="ghost" size="icon" onClick={onClose}>
                         <X className="w-5 h-5 text-slate-400" />
-                    </button>
+                    </Button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-6 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -247,7 +248,7 @@ const EventForm: React.FC<EventFormProps> = ({ orgId, employees, onClose, onSave
                     )}
                 </div>
                 <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-100">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+                    <Button variant="ghost" onClick={onClose}>Cancelar</Button>
                     <button onClick={handleSave} disabled={saving}
                         className="flex items-center gap-2 px-5 py-2 bg-sky-600 text-white text-sm font-bold rounded-xl hover:bg-sky-700 transition-colors disabled:opacity-50 shadow-lg shadow-sky-900/20">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -296,9 +297,9 @@ const TargetForm: React.FC<TargetFormProps> = ({ orgId, ano, existing, onClose, 
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm">
                 <div className="flex items-center justify-between p-6 border-b border-slate-100">
                     <h2 className="text-base font-black text-slate-900">Metas de RH — {ano}</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                    <Button variant="ghost" size="icon" onClick={onClose}>
                         <X className="w-5 h-5 text-slate-400" />
-                    </button>
+                    </Button>
                 </div>
                 <div className="p-6 space-y-4">
                     {[
@@ -316,7 +317,7 @@ const TargetForm: React.FC<TargetFormProps> = ({ orgId, ano, existing, onClose, 
                     ))}
                 </div>
                 <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-100">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+                    <Button variant="ghost" onClick={onClose}>Cancelar</Button>
                     <button onClick={handleSave} disabled={saving}
                         className="flex items-center gap-2 px-5 py-2 bg-sky-600 text-white text-sm font-bold rounded-xl hover:bg-sky-700 transition-colors disabled:opacity-50 shadow-lg shadow-sky-900/20">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}

@@ -2,6 +2,7 @@ import React from 'react';
 import { generateBudgetAnalysis } from '../services/geminiService';
 import { BudgetEntry, ProjectSettings, Message } from '../types';
 import { Bot, Send, Loader2, X } from 'lucide-react';
+import Button from './ui/Button';
 
 interface AIChatProps {
   budget: BudgetEntry[];
@@ -122,13 +123,15 @@ const AIChat: React.FC<AIChatProps> = ({ budget, settings, isOpen, onClose }) =>
             className="flex-1 border border-gray-300 rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             disabled={isLoading}
           />
-          <button 
+          <Button
+            variant="primary"
+            size="icon"
             onClick={handleSend}
             disabled={isLoading || !inputText.trim()}
-            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white p-2 rounded-full transition-colors"
+            className="rounded-full"
           >
             <Send className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

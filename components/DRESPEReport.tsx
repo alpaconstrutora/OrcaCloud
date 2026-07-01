@@ -80,10 +80,9 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
                         <option value="COMPETENCIA">Regime de Competência</option>
                     </select>
                 </div>
-                <button onClick={load} disabled={loading}
-                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-button font-black uppercase tracking-widest rounded-xl transition-colors">
+                <Button variant="primary" onClick={load} disabled={loading}>
                     {loading ? 'Carregando…' : 'Atualizar'}
-                </button>
+                </Button>
                 {data.length > 0 && (
                     <span className="ml-auto text-xs text-slate-400">
                         {data.length} empresa{data.length !== 1 ? 's' : ''} com movimentação

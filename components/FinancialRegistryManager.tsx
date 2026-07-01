@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Save, X, Search, Building2, Filter, HandCoins, AlertCircle, Download, FileDown, Upload } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import Button from './ui/Button';
 
 interface RegistryItem {
     id: string;
@@ -163,32 +164,35 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                         {onDownloadTemplate && (
-                            <button
+                            <Button
+                                variant="secondary"
                                 onClick={onDownloadTemplate}
                                 title="Baixar modelo para importação"
-                                className="flex items-center gap-2 bg-white text-gray-500 px-4 py-3 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-200 active:scale-95"
+                                className="text-gray-500 active:scale-95"
                             >
                                 <FileDown className="w-4 h-4" />
                                 <span>Template</span>
-                            </button>
+                            </Button>
                         )}
                         {onImport && (
-                            <button
+                            <Button
+                                variant="secondary"
                                 onClick={onImport}
-                                className="flex items-center gap-2 bg-white text-gray-600 px-5 py-3 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-200 active:scale-95"
+                                className="text-gray-600 active:scale-95"
                             >
                                 <Upload className="w-4 h-4" />
                                 <span>Importar</span>
-                            </button>
+                            </Button>
                         )}
                         {onExport && items.length > 0 && (
-                            <button
+                            <Button
+                                variant="secondary"
                                 onClick={onExport}
-                                className="flex items-center gap-2 bg-white text-gray-600 px-5 py-3 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all border border-gray-200 active:scale-95"
+                                className="text-gray-600 active:scale-95"
                             >
                                 <Download className="w-4 h-4" />
                                 <span>Exportar</span>
-                            </button>
+                            </Button>
                         )}
                         <ColumnConfigButton
                             columns={registryColumns}
@@ -198,13 +202,14 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                             onToggleColumn={tableColumns.toggleColumn}
                             onReset={tableColumns.resetColumns}
                         />
-                        <button
+                        <Button
+                            variant="primary"
                             onClick={handleAdd}
-                            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/10 active:scale-95"
+                            className="shadow-lg shadow-blue-900/10 active:scale-95"
                         >
                             <Plus className="w-4 h-4" />
                             <span>Novo Cadastro</span>
-                        </button>
+                        </Button>
                     </div>
                 </div>
 
@@ -315,13 +320,14 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                 )}
                             </div>
                             <div className="flex justify-end gap-3 mt-8">
-                                <button
+                                <Button
+                                    variant="ghost"
                                     type="button"
                                     onClick={handleCancel}
-                                    className="px-6 py-3 text-button font-black uppercase text-gray-400 hover:text-gray-600 transition-all"
+                                    className="text-gray-400 hover:text-gray-600"
                                 >
                                     Cancelar
-                                </button>
+                                </Button>
                                 <button
                                     type="submit"
                                     disabled={loading}

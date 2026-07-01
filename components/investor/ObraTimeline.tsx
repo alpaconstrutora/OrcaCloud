@@ -1,6 +1,7 @@
 import React from 'react';
 import { Clock, Plus, Trash2, Check } from 'lucide-react';
 import { projectMilestonesService, ProjectMilestone, MilestoneStatus } from '../../services/projectMilestonesService';
+import Button from '../ui/Button';
 
 interface Props {
     projectId?: string;
@@ -141,12 +142,13 @@ const ObraTimeline: React.FC<Props> = ({ projectId, organizationId, isAdmin }) =
                         placeholder="Novo marco (ex: Fundação)"
                         className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    <button
+                    <Button
+                        variant="primary"
+                        size="sm"
                         onClick={handleAdd}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-button font-bold hover:bg-blue-700"
                     >
                         <Plus className="w-4 h-4" /> Marco
-                    </button>
+                    </Button>
                 </div>
             )}
         </div>

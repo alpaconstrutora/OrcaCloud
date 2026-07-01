@@ -3,6 +3,7 @@ import { X, Loader2, Save, Trash2, Bell, ChevronDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { TaskStatus } from '../services/taskService'
 import { notificationService } from '../services/notificationService'
+import Button from './ui/Button';
 
 export type TaskRecord = {
   id: string
@@ -273,9 +274,9 @@ const TaskForm: React.FC<Props> = ({
               <p className="text-xs text-slate-400 mt-0.5 font-medium">↳ {parentTaskTitle}</p>
             )}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400">
+          <Button variant="ghost" size="icon" onClick={onClose} className="text-slate-400">
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
@@ -519,12 +520,11 @@ const TaskForm: React.FC<Props> = ({
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-xl text-button font-black uppercase tracking-wider text-slate-500 hover:bg-slate-100">Cancelar</button>
-            <button onClick={save} disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl text-button font-black uppercase tracking-wider bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+            <Button variant="ghost" onClick={onClose} disabled={saving} className="text-slate-500">Cancelar</Button>
+            <Button variant="primary" onClick={save} disabled={saving}>
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Salvar
-            </button>
+            </Button>
           </div>
         </div>
       </div>

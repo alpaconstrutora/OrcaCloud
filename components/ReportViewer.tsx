@@ -4,6 +4,7 @@ import { exportService } from '../services/exportService';
 import { sinapiService } from '../services/sinapiService';
 import { projectService } from '../services/projectService';
 import { FileDown, FileText, Printer, ChevronDown, ChevronRight, Share2, Loader2, Building2, Layers, Search, ClipboardList, Box, Database } from 'lucide-react';
+import Button from './ui/Button';
 
 interface ReportViewerProps {
     budget: BudgetEntry[];
@@ -409,13 +410,14 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                     <div className="flex items-center gap-2">
                         {/* Group: Arquivos / Exportação */}
                         <div className="flex items-center gap-2 p-1.5 rounded-lg border border-dashed border-gray-200">
-                            <button
+                            <Button
+                                variant="danger"
                                 onClick={handleDownloadPDF}
-                                className="flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 hover:-translate-y-0.5 active:translate-y-0 transition-all font-bold text-button shadow-md shadow-red-100"
+                                className="hover:-translate-y-0.5 active:translate-y-0 shadow-md shadow-red-100"
                             >
                                 <FileText className="w-4 h-4" />
                                 DOWNLOAD PDF
-                            </button>
+                            </Button>
                             <button
                                 onClick={handleDownloadExcel}
                                 className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 hover:-translate-y-0.5 active:translate-y-0 transition-all font-bold text-button shadow-md shadow-emerald-100"

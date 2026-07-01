@@ -90,9 +90,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-button font-bold text-gray-400 hover:text-gray-600 mb-3">
+        <Button variant="ghost" size="sm" onClick={onBack} className="mb-3">
           <ArrowLeft className="w-4 h-4" /> Voltar
-        </button>
+        </Button>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">

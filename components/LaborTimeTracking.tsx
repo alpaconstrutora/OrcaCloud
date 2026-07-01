@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Clock, CheckCircle2, XCircle, Trash2, Loader2, ChevronDown, Calendar, Filter } from 'lucide-react';
 import { laborService, TimeEntry, Employee } from '../services/laborService';
+import Button from './ui/Button';
 
 interface LaborTimeTrackingProps {
     employees: Employee[];
@@ -186,7 +187,7 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                         </div>
                     </div>
                     <div className="flex justify-end gap-2">
-                        <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-white rounded-xl transition-all">Cancelar</button>
+                        <Button variant="ghost" onClick={() => setShowForm(false)} className="text-slate-600 hover:bg-white">Cancelar</Button>
                         <button onClick={handleSaveEntry} disabled={saving} className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all disabled:opacity-50">
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                             Salvar Registro

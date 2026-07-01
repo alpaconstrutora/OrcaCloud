@@ -12,6 +12,7 @@ import {
 } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
+import Button from './ui/Button';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -430,15 +431,15 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
                 <div className="px-6 py-4 border-t bg-slate-50/50 flex items-center justify-between gap-3 shrink-0">
                     <div className="flex gap-2">
                         {step > 0 && (
-                            <button onClick={() => setStep(s => s - 1)} className="px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all border border-slate-200">
+                            <Button variant="ghost" onClick={() => setStep(s => s - 1)} className="text-slate-600 border border-slate-200">
                                 ← Voltar
-                            </button>
+                            </Button>
                         )}
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={onClose} className="px-4 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-all">
+                        <Button variant="ghost" onClick={onClose} className="text-slate-500">
                             Cancelar
-                        </button>
+                        </Button>
                         <button
                             onClick={() => handleSave(false)}
                             disabled={saving}

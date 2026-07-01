@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Lock, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import Button from './ui/Button';
 
 interface ResetPasswordProps {
     onComplete: () => void;
@@ -99,17 +100,17 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onComplete }) => {
                             </div>
                         )}
 
-                        <button
+                        <Button
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="w-full shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {loading ? (
                                 <Loader2 className="w-5 h-5 animate-spin" />
                             ) : (
                                 'Salvar Nova Senha'
                             )}
-                        </button>
+                        </Button>
                     </form>
                 )}
             </div>

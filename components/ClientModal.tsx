@@ -2,6 +2,7 @@ import React from 'react';
 import { User, Mail, Phone, FileText, MapPin } from 'lucide-react';
 import { Client } from '../types';
 import CityStateSelect from './CityStateSelect';
+import Button from './ui/Button';
 import { Sheet, SheetHeader, SheetTitle, SheetPanel, SheetFooter } from './ui/sheet';
 
 interface ClientModalProps {
@@ -214,20 +215,19 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                 </SheetPanel>
 
                 <SheetFooter>
-                    <button
+                    <Button
                         type="button"
+                        variant="secondary"
                         onClick={onClose}
-                        className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
                     >
                         Cancelar
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                         type="submit"
                         disabled={isSubmitting}
-                        className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                         {isSubmitting ? 'Salvando...' : 'Salvar Cliente'}
-                    </button>
+                    </Button>
                 </SheetFooter>
             </form>
         </Sheet>

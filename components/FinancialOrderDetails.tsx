@@ -14,6 +14,7 @@ import {
     HandCoins
 } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
+import Button from './ui/Button';
 import { PurchaseOrder, PaymentAccount, CostCenter, ChartOfAccount } from '../types';
 import { orderService } from '../services/orderService';
 import { organizationService } from '../services/organizationService';
@@ -209,9 +210,9 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">#{order.number || order.id.slice(0, 8)} • {fmt(totalValue)}</p>
                     </div>
                 </div>
-                <button onClick={onClose} className="p-2 hover:bg-white hover:text-red-500 rounded-xl transition-all border border-transparent hover:border-red-100">
+                <Button variant="ghost" size="icon" onClick={onClose} className="hover:text-red-500 border border-transparent hover:border-red-100">
                     <X className="w-5 h-5" />
-                </button>
+                </Button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-10 space-y-10">
@@ -347,9 +348,9 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
 
             {/* Modal Footer */}
             <div className="px-10 py-8 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-4">
-                <button onClick={onClose} className="px-8 py-4 bg-white text-gray-400 border border-gray-100 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-white hover:text-gray-600 transition-all">
+                <Button variant="secondary" size="lg" onClick={onClose} className="text-gray-400 hover:text-gray-600">
                     Cancelar
-                </button>
+                </Button>
                 <button
                     onClick={handleSave}
                     disabled={saving}

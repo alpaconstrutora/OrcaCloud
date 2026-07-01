@@ -1,0 +1,205 @@
+<USER_REQUEST>
+Para um Portal do Investidor, o prospecto de um empreendimento imobiliário não deve ser apenas um PDF institucional. Ele deve funcionar como um Data Room Comercial, reunindo informações executivas, financeiras, técnicas, jurídicas e de risco em uma experiência visual moderna.
+
+Acredito que podemos aproveitar o motor do módulo Viabilidade (IMOVIB),analise se faz sentido aproveitamento ou sera melhor criarmos seoaradamente.
+
+A estrutura abaixo segue o padrão utilizado por incorporadoras profissionais, fundos imobiliários, private equity e plataformas de investimento.
+
+PRD — Prospecto Inteligente de Empreendimento Imobiliário
+Objetivo
+
+Disponibilizar ao investidor uma visão completa do empreendimento, permitindo avaliar:
+
+potencial de retorno;
+riscos;
+cronograma;
+documentação;
+indicadores financeiros;
+evolução da obra;
+materiais de marketing.
+
+O prospecto deve ser totalmente digital e responsivo.
+
+Página Inicial (Capa)
+
+Imagem em tela cheia.
+
+Deve conter:
+
+Nome do empreendimento
+Logo
+Cidade
+Bairro
+Categoria
+
+Exemplo
+
+ÒPURA RESIDENCE
+
+Alto padrão
+
+Cambuí • MG
+
+Ao lado:
+
+Grande destaque
+
+Captação pretendida
+
+R$ 42.500.000
+
+Meta
+
+72%
+
+Prazo
+
+36 meses
+
+TIR projetada
+
+18,4%
+
+Resumo Executivo
+
+Uma página que responde:
+
+"O que estou investindo?"
+
+Campos
+
+descrição curta
+diferencial
+público-alvo
+ticket médio
+VGV
+investimento necessário
+retorno esperado
+prazo
+
+Cards
+
+✓ Área construída
+
+✓ Número de unidades
+
+✓ Vagas
+
+✓ Torres
+
+✓ Pavimentos
+
+✓ Área do terreno
+
+✓ Status da obra
+
+Galeria Premium
+
+Fotos
+
+Renderizações
+
+Vídeos
+
+Drone
+
+Tour 360°
+
+Maquete 3D
+
+Vídeo institucional
+
+Integração BIM Viewer (quando existir)
+
+Dashboard Financeiro
+
+Muito importante.
+
+Em vez de textos.
+
+Gráficos.
+
+Indicadores.
+
+Exemplo
+
+VGV
+
+R$ 92 milhões
+
+Custo da obra
+
+R$ 58 milhões
+
+Margem
+
+37%
+
+TIR
+
+18,4%
+
+Payback
+
+43 meses
+
+ROI
+
+62%
+
+Capital próprio
+
+28%
+
+Capital captado
+
+72%
+
+Gráficos
+
+Pizza
+
+Fontes dos recursos
+
+Barras
+
+Cronograma financeiro
+
+Linha
+
+Fluxo de caixa
+
+Curva S
+
+L
+<truncated 3606 bytes>
+eas e quantitativos.
+Data Room seguro	Controle de acesso por perfil, registro de downloads e histórico de visualizações.
+IA para análise de riscos	Identificação de desvios de prazo, orçamento e vendas com alertas proativos.
+Comparativo de mercado	Benchmark de preço por m², velocidade de vendas e valorização frente a empreendimentos concorrentes.
+Simulador de cenários	Alteração de premissas (custos, vendas, prazo) com recálculo instantâneo de TIR, VPL, ROI e payback.
+Linha do tempo interativa	Integração com o planejamento da obra, mostrando marcos concluídos e próximos eventos.
+Histórico de atualizações	Registro de todas as alterações no prospecto, garantindo transparência e rastreabilidade.
+Assinatura eletrônica	Formalização de NDAs, manifestações de interesse e contratos diretamente pelo portal.
+Conceito de UX
+
+O prospecto deve se comportar como uma combinação de:
+
+uma landing page premium para apresentação comercial;
+um dashboard executivo para acompanhamento de indicadores;
+um data room para documentação técnica e jurídica;
+uma plataforma de relacionamento com investidores, permitindo interação contínua ao longo de todo o ciclo do empreendimento.
+
+Essa abordagem transforma o prospecto de um documento estático em uma ferramenta de decisão e acompanhamento, aumentando a confiança do investidor e reduzindo o tempo necessário para diligência e captação de recursos.
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-06-28T22:18:17-03:00.
+
+The user's current state is as follows:
+Other open documents:
+- c:\D\ORÇACLOUD\orçacloud-saas\services\laborService.ts (LANGUAGE_TYPESCRIPT)
+- c:\D\ORÇACLOUD\orçacloud-saas\services\documentService.ts (LANGUAGE_TYPESCRIPT)
+- c:\D\ORÇACLOUD\orçacloud-saas\supabase\migrations\20261227010000_opura_docs_approvals.sql (LANGUAGE_SQL)
+- c:\D\ORÇACLOUD\orçacloud-saas\components\ComplianceChecklists.tsx (LANGUAGE_TSX)
+- c:\D\ORÇACLOUD\orçacloud-saas\types\compliance.ts (LANGUAGE_TYPESCRIPT)
+</ADDITIONAL_METADATA>

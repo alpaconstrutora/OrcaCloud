@@ -18,7 +18,7 @@ const SIZE: Record<ButtonSize, string> = {
 };
 
 const BASE =
-  'inline-flex items-center justify-center rounded-xl font-semibold ' +
+  'inline-flex items-center justify-center rounded-xl font-black uppercase tracking-widest ' +
   'transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ' +
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1';
 

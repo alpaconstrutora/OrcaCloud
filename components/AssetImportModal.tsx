@@ -477,9 +477,9 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
             </h3>
             <p className="text-xs font-semibold text-gray-400 mt-0.5">Suba uma lista de bens em lote a partir do Excel.</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-xl transition-colors">
+          <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         {/* Conteúdo Principal */}
@@ -579,13 +579,15 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
                   </ul>
                 </div>
 
-                <button
+                <Button
+                  variant="secondary"
+                  size="lg"
                   onClick={handleDownloadTemplate}
-                  className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-2xl text-button font-bold transition-all"
+                  className="mt-6 w-full rounded-2xl"
                 >
                   <Download className="w-4 h-4 text-gray-500" />
                   Baixar Planilha Modelo
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -682,22 +684,24 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
 
         {/* Rodapé */}
         <div className="px-8 py-5 border-t border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
-          <button
+          <Button
+            variant="ghost"
             onClick={onClose}
-            className="px-5 py-2.5 text-gray-500 hover:bg-gray-200/50 rounded-xl text-button font-black uppercase tracking-widest transition-colors"
           >
             Cancelar
-          </button>
+          </Button>
           
           {parsedRows.length > 0 && (
-            <button
+            <Button
+              variant="primary"
+              size="lg"
               onClick={handleSubmitImport}
               disabled={isLoading || importSummary.valid === 0}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-button font-black uppercase tracking-widest transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+              className="shadow-md active:scale-95"
             >
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {isLoading ? 'Importando...' : `Importar ${importSummary.valid} Ativos`}
-            </button>
+            </Button>
           )}
         </div>
 

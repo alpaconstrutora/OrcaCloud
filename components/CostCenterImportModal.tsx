@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { CostCenter } from '../types/financial';
 import { financialRegistryService } from '../services/financialRegistryService';
+import Button from './ui/Button';
 
 interface ParsedRow {
     index: number;
@@ -154,9 +155,9 @@ const CostCenterImportModal: React.FC<Props> = ({
                             {step === 'done' && 'Importação concluída'}
                         </p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
+                    <Button variant="ghost" size="icon" onClick={onClose}>
                         <X className="w-5 h-5 text-gray-400" />
-                    </button>
+                    </Button>
                 </div>
 
                 {/* Body */}
@@ -294,35 +295,36 @@ const CostCenterImportModal: React.FC<Props> = ({
                 {/* Footer */}
                 <div className="flex items-center justify-between px-8 py-5 border-t border-gray-100 bg-gray-50/50">
                     {step === 'upload' && (
-                        <button onClick={onClose} className="text-button font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-colors">
+                        <Button variant="ghost" onClick={onClose}>
                             Cancelar
-                        </button>
+                        </Button>
                     )}
 
                     {step === 'preview' && (
                         <>
-                            <button onClick={reset} className="flex items-center gap-2 text-button font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-colors">
+                            <Button variant="ghost" onClick={reset}>
                                 <RotateCcw className="w-3.5 h-3.5" />
                                 Trocar arquivo
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                                variant="primary"
+                                size="lg"
                                 onClick={handleImport}
                                 disabled={selectedCount === 0 || importing}
-                                className="flex items-center gap-2 bg-blue-600 text-white px-8 py-3 rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-blue-900/10 active:scale-95"
                             >
                                 <Upload className="w-4 h-4" />
                                 {importing ? 'Importando...' : `Importar ${selectedCount} registro${selectedCount !== 1 ? 's' : ''}`}
                                 {!importing && <ArrowRight className="w-3.5 h-3.5" />}
-                            </button>
+                            </Button>
                         </>
                     )}
 
                     {step === 'done' && (
                         <>
-                            <button onClick={reset} className="flex items-center gap-2 text-button font-black text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-colors">
+                            <Button variant="ghost" onClick={reset}>
                                 <RotateCcw className="w-3.5 h-3.5" />
                                 Nova importação
-                            </button>
+                            </Button>
                             <button
                                 onClick={() => { onSuccess(); onClose(); }}
                                 className="flex items-center gap-2 bg-black text-white px-8 py-3 rounded-xl text-button font-black uppercase tracking-widest hover:bg-gray-800 transition-all shadow-xl shadow-gray-200 active:scale-95"

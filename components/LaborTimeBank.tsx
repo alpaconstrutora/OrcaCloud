@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { laborService, Employee, TimeBankBalance, TimeBankEntry, QrCodeObra } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
+import Button from './ui/Button';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -90,7 +91,7 @@ const BankEntryForm: React.FC<EntryFormProps> = ({ orgId, employees, onClose, on
                     </InputGroup>
                 </div>
                 <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50/50">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                    <Button variant="ghost" onClick={onClose} className="text-slate-600">Cancelar</Button>
                     <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                         Lançar
@@ -153,7 +154,7 @@ const QrCodeForm: React.FC<QrFormProps> = ({ orgId, projects, onClose, onSaved }
                     </div>
                 </div>
                 <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50/50">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                    <Button variant="ghost" onClick={onClose} className="text-slate-600">Cancelar</Button>
                     <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 disabled:opacity-50">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                         Criar QR Code

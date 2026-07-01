@@ -4,6 +4,7 @@ import {
     creditAnalysisService, DealCreditAnalysis, CreditChecklist, CreditResult,
     CHECKLIST_LABELS, CHECKLIST_WEIGHTS, calcScore, suggestResult,
 } from '../services/creditAnalysisService';
+import Button from './ui/Button';
 
 interface Props {
     dealId: string;
@@ -216,13 +217,15 @@ export const CreditAnalysisPanel: React.FC<Props> = ({ dealId, organizationId, c
 
                     {/* Actions */}
                     <div className="flex gap-3 pt-1">
-                        <button
+                        <Button
+                            variant="primary"
+                            size="lg"
                             onClick={handleSave}
                             disabled={saving}
-                            className="flex-1 py-3 bg-blue-600 text-white rounded-2xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            className="flex-1"
                         >
                             {saving ? 'Salvando…' : 'Salvar Análise'}
-                        </button>
+                        </Button>
                     </div>
 
                     {analysis?.analyzed_by && (

@@ -3,6 +3,7 @@ import { TrendingUp, TrendingDown, Download, ChevronDown, ChevronRight, Building
 import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
 import type { DRESummary, DRELine, DREGroup, DREProjectSummary, RegimeContabil } from '../types/financial';
+import Button from './ui/Button';
 
 // ── Labels e ordem dos grupos ─────────────────────────────────────────────────
 
@@ -301,10 +302,9 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                         <option value="CAIXA">Caixa</option>
                         <option value="COMPETENCIA">Competência</option>
                     </select>
-                    <button onClick={load}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all">
+                    <Button variant="primary" onClick={load}>
                         Atualizar
-                    </button>
+                    </Button>
                     <button
                         onClick={() => {
                             if (!summary) return;

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Plus, FileSpreadsheet, TrendingUp } from 'lucide-react';
+import Button from './ui/Button';
 import { ProfileGroup, UserProfile, ProjectSettings, BudgetEntry, Organization, Contract, Client } from '../types';
 import { Session } from '@supabase/supabase-js';
 import { ProjectData } from '../services/projectService';
@@ -606,13 +607,15 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
                 <FileSpreadsheet className="w-4 h-4" />
                 Importar Excel
               </button>
-              <button
+              <Button
+                variant="primary"
+                size="lg"
                 onClick={() => handleNewProject('PLANEJAMENTO')}
-                className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                className="rounded-[1.25rem] shadow-xl shadow-blue-900/20 active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 Novo Planejamento
-              </button>
+              </Button>
             </div>
           </div>
           <PlanningDashboard projects={typedProjects} />
@@ -656,13 +659,15 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
                 <TrendingUp className="w-4 h-4" />
                 Análise de Equipes
               </button>
-              <button
+              <Button
+                variant="primary"
+                size="lg"
                 onClick={() => handleNewProject('DIARIO')}
-                className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                className="rounded-[1.25rem] shadow-xl shadow-blue-900/20 active:scale-95"
               >
                 <Plus className="w-4 h-4" />
                 Novo Diário
-              </button>
+              </Button>
             </div>
             <ProjectList
               projects={typedProjects}

@@ -86,9 +86,9 @@ const TaskSpaceBottomSheet: React.FC<Props> = ({
         {/* Header da sheet */}
         <div className="flex items-center justify-between px-5 pb-3 border-b border-slate-100 flex-shrink-0">
           <span className="text-sm font-black text-slate-800">Navegar</span>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100">
+          <Button variant="ghost" size="icon" onClick={onClose} className="text-slate-400">
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         {/* Conteúdo scrollável */}

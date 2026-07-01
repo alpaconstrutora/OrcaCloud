@@ -26,6 +26,12 @@ export interface CommercialDivergenceSummary {
     orphans: number;
 }
 
+// Resultado da escrita reversa Empreendimento → Viabilidade (Imovib).
+export interface EmpreendimentoWriteBackReport {
+    instancesUpdated: number;   // instâncias com nome/pav./área/posição/orientação atualizados
+    unitsWithoutInstance: number; // unidades sem imovib_instance_id — não elegíveis (nunca geradas por instância)
+}
+
 // Traduz status da instância Imovib (com acento) para o enum do empreendimento.
 const translateStatus = (s?: string): UnitStatus => {
     switch (s) {
@@ -591,6 +597,30 @@ export const empreendimentoService = {
 
         return planToReport(plan);
     },
+
+    // ── Escrita reversa: Empreendimento → Viabilidade (Imovib) ───────────────
+    // Propaga só campos estruturais (nome/pavimento/área privativa/posição/orientação)
+    // das unidades de volta à instância de origem no estudo. NUNCA propaga preço/status
+    // (a simulação do estudo permanece independente do realizado). Tipologia também fica
+    // de fora: mudar a tipologia da instância exigiria re-vincular a um ImovibUnit
+    // diferente (operação estrutural no estudo, não um simples update de campo).
+
+    /** Dry-run: calcula quantas instâncias seriam atualizadas, sem escrever. */
+    async previewWriteBackToStudy(empreendimentoId: string): Promise<EmpreendimentoWriteBackReport> {
+        const ctx = await loadSyncContext(empreendimentoId);
+        const plan = buildWriteBackPlan(ctx);
+        return { instancesUpdated: plan.updates.length, unitsWithoutInstance: plan.unitsWithoutInstance };
+    },
+
+    /** Aplica a escrita reversa: atualiza as instâncias divergentes no estudo. */
+    async writeBackToStudy(empreendimentoId: string): Promise<EmpreendimentoWriteBackReport> {
+        const ctx = await loadSyncContext(empreendimentoId);
+        const plan = buildWriteBackPlan(ctx);
+        for (const u of plan.updates) {
+            await imovibService.updateUnitInstance(u.instanceId, u.fields);
+        }
+        return { instancesUpdated: plan.updates.length, unitsWithoutInstance: plan.unitsWithoutInstance };
+    },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -655,6 +685,37 @@ async function loadSyncContext(empreendimentoId: string): Promise<SyncContext> {
     const existingCommonAreas = await empreendimentoService.listCommonAreas(empreendimentoId);
 
     return { empreendimento, study, instances, existingTowers, existingUnits, existingCommonAreas };
+}
+
+interface WriteBackPlan {
+    updates: { instanceId: string; fields: Partial<import('../types').ImovibUnitInstanceInsert> }[];
+    unitsWithoutInstance: number;
+}
+
+/** Reusa o SyncContext do forward-sync: mesmas unidades/instâncias, diff na direção oposta. */
+function buildWriteBackPlan(ctx: SyncContext): WriteBackPlan {
+    const instanceById = new Map(ctx.instances.map(i => [i.id, i]));
+    const updates: WriteBackPlan['updates'] = [];
+    let unitsWithoutInstance = 0;
+
+    for (const u of ctx.existingUnits) {
+        if (!u.imovib_instance_id) { unitsWithoutInstance++; continue; }
+        const inst = instanceById.get(u.imovib_instance_id);
+        if (!inst) continue; // órfão — instância sumiu do estudo, nunca escreve de volta
+
+        const fields: Partial<import('../types').ImovibUnitInstanceInsert> = {};
+        if (u.name && u.name !== inst.name) fields.name = u.name;
+        if (u.floor != null && u.floor !== inst.floor) fields.floor = u.floor;
+        if (u.private_area != null && u.private_area !== inst.private_area) fields.private_area = u.private_area;
+        if (u.position_type && u.position_type !== inst.position_type) fields.position_type = u.position_type;
+        if (u.sun_orientation && u.sun_orientation !== inst.sun_orientation) fields.sun_orientation = u.sun_orientation;
+
+        if (Object.keys(fields).length > 0) {
+            updates.push({ instanceId: inst.id, fields });
+        }
+    }
+
+    return { updates, unitsWithoutInstance };
 }
 
 function buildSyncPlan(ctx: SyncContext, opts: { overwriteCommercialState: boolean }): SyncPlan {

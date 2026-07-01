@@ -6,10 +6,11 @@
 import React from 'react';
 import {
   Loader2, RefreshCw, ShoppingBag, BarChart3, Building2, ArrowLeftRight,
-  CheckCircle2, AlertTriangle, ArrowRight, Link2Off, Clock,
+  CheckCircle2, AlertTriangle, ArrowRight, Link2Off, Clock, Upload,
 } from 'lucide-react';
-import { empreendimentoService, CommercialDivergenceSummary } from '../../services/empreendimentoService';
+import { empreendimentoService, CommercialDivergenceSummary, EmpreendimentoWriteBackReport } from '../../services/empreendimentoService';
 import { Empreendimento, EmpreendimentoSyncReport } from '../../types';
+import { useConfirm } from '../ui/confirm';
 
 interface Props {
   empreendimento: Empreendimento;
@@ -25,14 +26,19 @@ const fmtDate = (iso?: string | null) => {
 };
 
 export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, organizationId, onOpenStudySync, onGoToComercial }) => {
+  const confirm = useConfirm();
   const [loading, setLoading] = React.useState(true);
   const [studyReport, setStudyReport] = React.useState<EmpreendimentoSyncReport | null>(null);
   const [studyError, setStudyError] = React.useState<string | null>(null);
   const [comm, setComm] = React.useState<CommercialDivergenceSummary | null>(null);
+  const [writeBackReport, setWriteBackReport] = React.useState<EmpreendimentoWriteBackReport | null>(null);
+  const [writeBackError, setWriteBackError] = React.useState<string | null>(null);
+  const [writingBack, setWritingBack] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setStudyError(null);
+    setWriteBackError(null);
     const tasks: Promise<void>[] = [];
 
     // Viabilidade — só roda o dry-run se houver estudo vinculado
@@ -42,8 +48,14 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, organization
           .then(r => setStudyReport(r))
           .catch(err => { setStudyError(err.message); setStudyReport(null); })
       );
+      tasks.push(
+        empreendimentoService.previewWriteBackToStudy(e.id)
+          .then(r => setWriteBackReport(r))
+          .catch(err => { setWriteBackError(err.message); setWriteBackReport(null); })
+      );
     } else {
       setStudyReport(null);
+      setWriteBackReport(null);
     }
 
     // Comercial
@@ -58,6 +70,26 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, organization
   }, [e.id, e.imovib_study_id, organizationId]);
 
   React.useEffect(() => { load(); }, [load]);
+
+  const handleWriteBack = async () => {
+    if (!writeBackReport || writeBackReport.instancesUpdated === 0) return;
+    const ok = await confirm({
+      title: 'Enviar ao Estudo de Viabilidade?',
+      message: `${writeBackReport.instancesUpdated} unidade${writeBackReport.instancesUpdated > 1 ? 's' : ''} do empreendimento ${writeBackReport.instancesUpdated > 1 ? 'têm' : 'tem'} nome, pavimento, área privativa, posição ou orientação diferentes da instância de origem no estudo.\n\nSó dados estruturais são enviados — preço e status de venda nunca são propagados ao estudo.`,
+      confirmLabel: 'Enviar',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setWritingBack(true);
+    try {
+      await empreendimentoService.writeBackToStudy(e.id);
+      await load();
+    } catch (err: any) {
+      setWriteBackError(err.message);
+    } finally {
+      setWritingBack(false);
+    }
+  };
 
   // Divergências de Viabilidade = itens que o sync criaria/atualizaria
   const studyDiverge = studyReport
@@ -135,9 +167,9 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, organization
 
       {/* Detalhamento + ações */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Viabilidade → Empreendimento */}
+        {/* Viabilidade ↔ Empreendimento */}
         <RelationCard
-          title="Viabilidade → Empreendimento"
+          title="Viabilidade ↔ Empreendimento"
           icon={BarChart3}
           tint="violet"
         >
@@ -149,6 +181,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, organization
             </div>
           ) : studyReport ? (
             <>
+              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 pt-1">Do Estudo para o Empreendimento</p>
               <DiffRow label="Torres a criar" value={studyReport.towersCreated} />
               <DiffRow label="Torres a atualizar" value={studyReport.towersUpdated} />
               <DiffRow label="Unidades a criar" value={studyReport.unitsCreated} />
@@ -157,10 +190,33 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, organization
               {studyOrphans > 0 && <DiffRow label="Itens órfãos (mantidos)" value={studyOrphans} warn />}
               <button
                 onClick={onOpenStudySync}
-                className="mt-3 w-full px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2"
+                className="mt-2 w-full px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" /> Sincronizar do Estudo
               </button>
+
+              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 pt-3 border-t border-gray-100 mt-1">Do Empreendimento para o Estudo</p>
+              {writeBackError ? (
+                <div className="text-xs text-rose-600 font-medium flex items-start gap-1.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0" /> {writeBackError}
+                </div>
+              ) : writeBackReport ? (
+                <>
+                  <DiffRow label="Unidades a enviar (estrutural)" value={writeBackReport.instancesUpdated} warn={writeBackReport.instancesUpdated > 0} />
+                  <DiffRow label="Sem instância de origem" value={writeBackReport.unitsWithoutInstance} muted />
+                  <button
+                    onClick={handleWriteBack}
+                    disabled={writingBack || writeBackReport.instancesUpdated === 0}
+                    className="mt-2 w-full px-4 py-2.5 bg-white hover:bg-violet-50 disabled:opacity-40 disabled:cursor-not-allowed text-violet-700 border border-violet-200 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2"
+                  >
+                    {writingBack ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    {writeBackReport.instancesUpdated === 0 ? 'Nada a enviar' : 'Enviar ao Estudo'}
+                  </button>
+                  <p className="text-[9px] text-gray-400 font-medium leading-relaxed pt-1">
+                    Envia nome, pavimento, área privativa, posição e orientação. Preço, status e tipologia nunca são propagados de volta.
+                  </p>
+                </>
+              ) : null}
             </>
           ) : null}
         </RelationCard>
@@ -192,13 +248,13 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, organization
         </RelationCard>
       </div>
 
-      {/* Próxima fase */}
+      {/* Limitação conhecida */}
       <div className="bg-gray-50/60 border border-dashed border-gray-200 rounded-2xl p-4 flex items-start gap-2.5">
         <Clock className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
         <p className="text-xs text-gray-500 font-medium leading-relaxed">
-          <strong className="text-gray-600">Em breve:</strong> escrita reversa do Empreendimento para a Viabilidade
-          (área, tipologia, pavimento e nome). O estado comercial (preço/status de venda) nunca será propagado de volta
-          ao estudo — a simulação permanece independente do realizado.
+          <strong className="text-gray-600">Tipologia</strong> não é enviada de volta ao estudo — mudar a tipologia de
+          uma unidade exige re-vincular a instância a um tipo diferente no Imovib, uma operação estrutural que ainda
+          não tem escrita reversa automática. Ajuste manualmente no estudo quando necessário.
         </p>
       </div>
     </div>

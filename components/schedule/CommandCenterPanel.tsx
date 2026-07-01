@@ -154,8 +154,10 @@ export interface SCurveEntry {
     name: string;
     valor: number;
     realizado: number;
+    realizadoFisico: number;
     acumulado: number;
     acumuladoRealizado: number;
+    acumuladoRealizadoFisico: number;
 }
 
 // ─── Props ────────────────────────────────────────────────────
@@ -288,10 +290,10 @@ export const CommandCenterPanel: React.FC<Props> = ({
                     icon={<AlertTriangle className="w-4 h-4" />} />
             </div>
 
-            {/* ── Curva S (reusa dados já calculados) ── */}
+            {/* ── Curva S dupla: Físico × Financeiro (reusa dados já calculados) ── */}
             <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-                <h3 className="text-xs font-bold text-gray-700 mb-1">Curva S — Desembolso Financeiro</h3>
-                <p className="text-xs text-gray-400 mb-4">Previsto × realizado por período (acumulado)</p>
+                <h3 className="text-xs font-bold text-gray-700 mb-1">Curva S — Físico × Financeiro</h3>
+                <p className="text-xs text-gray-400 mb-4">Planejado × avanço físico (diário) × avanço financeiro (compras), acumulados</p>
                 {chartSlice.length === 0 ? (
                     <div className="flex items-center justify-center py-10 text-xs text-gray-400">
                         Configure datas e distribuições nas atividades para gerar a curva S.
@@ -310,9 +312,9 @@ export const CommandCenterPanel: React.FC<Props> = ({
                                 />
                                 <Legend wrapperStyle={{ fontSize: 11 }} />
                                 <Bar yAxisId="left" dataKey="valor" name="Previsto (M)" barSize={20} fill="#bfdbfe" radius={[4, 4, 0, 0]} />
-                                <Bar yAxisId="left" dataKey="realizado" name="Realizado (M)" barSize={20} fill="#f59e0b" radius={[4, 4, 0, 0]} />
                                 <Line yAxisId="right" type="monotone" dataKey="acumulado" name="Previsto (Acum)" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                                <Line yAxisId="right" type="monotone" dataKey="acumuladoRealizado" name="Realizado (Acum)" stroke="#10b981" strokeWidth={2} dot={false} />
+                                <Line yAxisId="right" type="monotone" dataKey="acumuladoRealizadoFisico" name="Realizado Físico (Acum)" stroke="#0ea5e9" strokeWidth={2} dot={false} />
+                                <Line yAxisId="right" type="monotone" dataKey="acumuladoRealizado" name="Realizado Financeiro (Acum)" stroke="#f59e0b" strokeWidth={2} dot={false} />
                             </ComposedChart>
                         </ResponsiveContainer>
                     </div>

@@ -3641,11 +3641,14 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const periodCalculation = React.useMemo(() => {
         const itemPeriodRealized: Record<string, Record<string, number>> = {};
         const itemPeriodPlanned: Record<string, Record<string, number>> = {};
-        const periodTotals: Record<string, { planned: number; realized: number }> = {};
+        // `realized` = combinado (diário+compras), mantido para os mini-labels "O:/E:" por
+        // período no Grid/Gantt. `physical` = só diário (avanço físico), usado exclusivamente
+        // pela 2ª linha da Curva S (físico × financeiro), sem alterar o que já consome `realized`.
+        const periodTotals: Record<string, { planned: number; realized: number; physical: number }> = {};
 
         // Initialize timeline column data
         timelineColumns.forEach(period => {
-            periodTotals[period.id] = { planned: 0, realized: 0 };
+            periodTotals[period.id] = { planned: 0, realized: 0, physical: 0 };
         });
 
         // 1. Calculate Planned Values (Automatic distribution by dates OR manual distributions)
@@ -3733,7 +3736,10 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     });
                 }
                 itemPeriodRealized[item.id][period.id] = val;
-                if (periodTotals[period.id]) periodTotals[period.id].realized += val;
+                if (periodTotals[period.id]) {
+                    periodTotals[period.id].realized += val;
+                    periodTotals[period.id].physical += val; // puramente diário — vira a Curva S física
+                }
             });
         });
 
@@ -3806,20 +3812,24 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             return {
                 name: period.name,
                 valor: data.planned,
-                realizado: data.realized
+                realizado: data.realized,
+                realizadoFisico: data.physical,
             };
         });
 
         // Calculate Cumulative for Chart
         let cumulative = 0;
         let cumulativeRealized = 0;
+        let cumulativePhysical = 0;
         const chartDataWithCumulative = chartData.map(d => {
             cumulative += d.valor;
             cumulativeRealized += d.realizado;
+            cumulativePhysical += d.realizadoFisico;
             return {
                 ...d,
                 acumulado: cumulative,
-                acumuladoRealizado: cumulativeRealized
+                acumuladoRealizado: cumulativeRealized,
+                acumuladoRealizadoFisico: cumulativePhysical,
             };
         });
 
@@ -4248,7 +4258,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="font-bold text-gray-900 flex items-center gap-2">
                                 <TrendingUp className="w-5 h-5 text-green-600" />
-                                Curva S - Desembolso Acumulado
+                                Curva S — Físico × Financeiro
                             </h3>
                         </div>
                         <div className="h-[400px] w-full">
@@ -4264,9 +4274,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                     />
                                     <Legend />
                                     <Bar yAxisId="left" dataKey="valor" name="Previsto (M)" barSize={30} fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                                    <Bar yAxisId="left" dataKey="realizado" name="Realizado (M)" barSize={30} fill="#f59e0b" radius={[4, 4, 0, 0]} />
                                     <Line yAxisId="right" type="monotone" dataKey="acumulado" name="Previsto (Acum)" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6' }} />
-                                    <Line yAxisId="right" type="monotone" dataKey="acumuladoRealizado" name="Realizado (Acum)" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981' }} />
+                                    <Line yAxisId="right" type="monotone" dataKey="acumuladoRealizadoFisico" name="Realizado Físico (Acum)" stroke="#0ea5e9" strokeWidth={3} dot={{ r: 4, fill: '#0ea5e9' }} />
+                                    <Line yAxisId="right" type="monotone" dataKey="acumuladoRealizado" name="Realizado Financeiro (Acum)" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, fill: '#f59e0b' }} />
                                 </ComposedChart>
                             </ResponsiveContainer>
                         </div>

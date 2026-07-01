@@ -120,6 +120,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
       } as any);
       await empreendimentoService.updateUnit(unit.id, { commercial_property_id: prop.id });
       await load();
+      alert(`✓ "${unit.name}" publicada no Comercial com sucesso.`);
     } catch (err: any) {
       alert(`Erro ao publicar unidade: ${err.message}`);
     } finally { setBusyId(null); }
@@ -247,6 +248,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
         await empreendimentoService.updateUnit(unit.id, { commercial_property_id: prop.id });
       }
       await load();
+      alert(`✓ ${unpublished.length} unidade${unpublished.length > 1 ? 's' : ''} publicada${unpublished.length > 1 ? 's' : ''} no Comercial com sucesso.`);
     } catch (err: any) {
       alert(`Erro ao publicar: ${err.message}`);
     } finally { setPublishingAll(false); }

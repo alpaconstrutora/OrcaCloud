@@ -34,6 +34,8 @@ export interface ServiceOpportunity {
   engineering_request_status: EngineeringRequestStatus;
   assigned_email: string | null;
   notes: string | null;
+  client_id: string | null;
+  planning_project_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -173,7 +175,7 @@ export const servicesCommercialService = {
   async listOpportunities(organizationId?: string | null): Promise<ServiceOpportunity[]> {
     let query = supabase
       .from('services_opportunities')
-      .select('id, organization_id, contact_name, contact_phone, contact_email, contact_whatsapp, city, work_type, estimated_area, estimated_value, scope_summary, stage, sub_status, assigned_to, priority, origin_channel, lost_reason, won_at, lost_at, converted_project_id, converted_contract_id, rich_contract_id, budget_source, engineering_project_id, engineering_request_status, assigned_email, notes, created_at, updated_at')
+      .select('id, organization_id, contact_name, contact_phone, contact_email, contact_whatsapp, city, work_type, estimated_area, estimated_value, scope_summary, stage, sub_status, assigned_to, priority, origin_channel, lost_reason, won_at, lost_at, converted_project_id, converted_contract_id, rich_contract_id, budget_source, engineering_project_id, engineering_request_status, assigned_email, notes, client_id, planning_project_id, created_at, updated_at')
       .order('created_at', { ascending: false });
     if (organizationId) query = query.eq('organization_id', organizationId);
     const { data, error } = await query;
@@ -184,7 +186,7 @@ export const servicesCommercialService = {
   async getOpportunity(id: string): Promise<ServiceOpportunity | null> {
     const { data, error } = await supabase
       .from('services_opportunities')
-      .select('id, organization_id, contact_name, contact_phone, contact_email, contact_whatsapp, city, work_type, estimated_area, estimated_value, scope_summary, stage, sub_status, assigned_to, priority, origin_channel, lost_reason, won_at, lost_at, converted_project_id, converted_contract_id, rich_contract_id, budget_source, engineering_project_id, engineering_request_status, assigned_email, notes, created_at, updated_at')
+      .select('id, organization_id, contact_name, contact_phone, contact_email, contact_whatsapp, city, work_type, estimated_area, estimated_value, scope_summary, stage, sub_status, assigned_to, priority, origin_channel, lost_reason, won_at, lost_at, converted_project_id, converted_contract_id, rich_contract_id, budget_source, engineering_project_id, engineering_request_status, assigned_email, notes, client_id, planning_project_id, created_at, updated_at')
       .eq('id', id)
       .single();
     if (error) throw error;
@@ -192,7 +194,7 @@ export const servicesCommercialService = {
   },
 
   async createOpportunity(
-    payload: Omit<ServiceOpportunity, 'id' | 'created_at' | 'updated_at' | 'won_at' | 'lost_at' | 'converted_project_id' | 'converted_contract_id' | 'rich_contract_id' | 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email' | 'sub_status'> & Partial<Pick<ServiceOpportunity, 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email' | 'sub_status'>>
+    payload: Omit<ServiceOpportunity, 'id' | 'created_at' | 'updated_at' | 'won_at' | 'lost_at' | 'converted_project_id' | 'converted_contract_id' | 'rich_contract_id' | 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email' | 'sub_status' | 'client_id' | 'planning_project_id'> & Partial<Pick<ServiceOpportunity, 'budget_source' | 'engineering_project_id' | 'engineering_request_status' | 'assigned_email' | 'sub_status'>>
   ): Promise<ServiceOpportunity> {
     const { data, error } = await supabase
       .from('services_opportunities')
@@ -519,6 +521,88 @@ export const servicesCommercialService = {
       engineering_project_id: project.id,
       engineering_request_status: 'ready',
     });
+    return { projectId: project.id };
+  },
+
+  // ─── Portal do Cliente (categoria Serviços) ──────────────────────────────
+  // O domínio de Serviços não usa public.clients; para expor a oportunidade
+  // ganha no Portal do Cliente, garantimos um registro clients (category=
+  // 'Serviços') a partir do contato, reusando por email+org se já existir.
+
+  async ensureClientFromOpportunity(opp: ServiceOpportunity): Promise<string> {
+    if (opp.client_id) return opp.client_id;
+
+    let existingId: string | null = null;
+    if (opp.contact_email) {
+      const { data } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('organization_id', opp.organization_id)
+        .eq('email', opp.contact_email)
+        .maybeSingle();
+      existingId = data?.id ?? null;
+    }
+
+    let clientId = existingId;
+    if (!clientId) {
+      const { data: client, error } = await supabase
+        .from('clients')
+        .insert({
+          organization_id: opp.organization_id,
+          name: opp.contact_name,
+          email: opp.contact_email,
+          phone: opp.contact_phone,
+          city: opp.city,
+          category: 'Serviços',
+        })
+        .select('id')
+        .single();
+      if (error) throw error;
+      clientId = client.id;
+    }
+
+    await servicesCommercialService.updateOpportunity(opp.id, { client_id: clientId });
+    return clientId as string;
+  },
+
+  /**
+   * Cria o projeto PLANEJAMENTO (cronograma) da oportunidade, vinculado ao
+   * orçamento de engenharia (se houver) ou à obra criada na conversão (won).
+   * settings.clientId é carimbado diretamente no PLANEJAMENTO — casa como nó
+   * raiz na cadeia de fn_build_planning_json, sem depender de public.contracts.
+   * Idempotente: reusa planning_project_id se já existir.
+   */
+  async createPlanningProject(opp: ServiceOpportunity): Promise<{ projectId: string }> {
+    if (opp.planning_project_id) return { projectId: opp.planning_project_id };
+    if (!opp.converted_project_id) {
+      throw new Error('Oportunidade ainda não foi convertida (ganha). Crie o planejamento após o fechamento.');
+    }
+
+    const clientId = await servicesCommercialService.ensureClientFromOpportunity(opp);
+    const linkedProjectId = opp.engineering_project_id ?? opp.converted_project_id;
+    const projectName = `${opp.contact_name} - ${opp.work_type ?? 'Serviço'} (Planejamento)`;
+
+    const { data: project, error } = await supabase
+      .from('projects')
+      .insert({
+        organization_id: opp.organization_id,
+        name: projectName,
+        settings: {
+          organizationId: opp.organization_id,
+          classification: 'PLANEJAMENTO',
+          clientId,
+          linkedProjectId,
+          crmOpportunityId: opp.id,
+          area: opp.estimated_area ?? 0,
+          bdi: 0,
+        },
+        budget: [],
+      })
+      .select()
+      .single();
+    if (error) throw error;
+
+    await servicesCommercialService.updateOpportunity(opp.id, { planning_project_id: project.id });
     return { projectId: project.id };
   },
 

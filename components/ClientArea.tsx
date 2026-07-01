@@ -3464,7 +3464,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const ALL_TABS = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
         { id: 'jornada', label: 'Minha Jornada', icon: <Calendar className="w-4 h-4" /> },
-        { id: 'obra', label: 'Obra', icon: <HardHat className="w-4 h-4" /> },
+        { id: 'obra', label: clientProfile?.category === 'Serviços' ? 'Andamento do Serviço' : 'Obra', icon: <HardHat className="w-4 h-4" /> },
         { id: 'visual', label: 'Visual', icon: <Camera className="w-4 h-4" /> },
         { id: 'personalizacao', label: 'Personalização', icon: <Palette className="w-4 h-4" /> },
         { id: 'diario', label: 'Diário de Obra', icon: <BookOpen className="w-4 h-4" /> },

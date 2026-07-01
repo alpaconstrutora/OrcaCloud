@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, Edit2, MapPin, Phone, Mail, Calendar, ClipboardList, Calculator, FileText, CheckCircle, Clock, ExternalLink, CheckSquare, Square, Plus } from 'lucide-react';
+import { ArrowLeft, Edit2, MapPin, Phone, Mail, Calendar, ClipboardList, Calculator, FileText, CheckCircle, Clock, ExternalLink, CheckSquare, Square, Plus, HardHat, Link2, Copy, Check } from 'lucide-react';
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
 import ServicesWonModal from './ServicesWonModal';
@@ -13,6 +13,7 @@ import {
   PipelineStageConfig,
   OpportunityTask,
 } from '../../services/servicesCommercialService';
+import { clientPortalService } from '../../services/clientPortalService';
 import { ServicesView } from '../ServicesCommercialModule';
 import ServicesOpportunityModal from './ServicesOpportunityModal';
 
@@ -68,6 +69,10 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
   const [tasks, setTasks] = useState<OpportunityTask[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDue, setNewTaskDue] = useState('');
+  const [creatingPlan, setCreatingPlan] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [portalUrl, setPortalUrl] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const { toasts, show: showToast, dismiss } = useServicesToast();
 
   const load = useCallback(async () => {
@@ -79,8 +84,50 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
     setOpp(oppData);
     setEvents(eventsData);
     setTasks(tasksData);
+    if (oppData?.client_id) {
+      const tok = await clientPortalService.getTokenForClient(oppData.client_id).catch(() => null);
+      setPortalUrl(tok ? clientPortalService.buildPortalUrl(tok.token) : null);
+    }
     setLoading(false);
   }, [opportunityId]);
+
+  const handleCreatePlanning = async () => {
+    if (!opp) return;
+    setCreatingPlan(true);
+    try {
+      await servicesCommercialService.createPlanningProject(opp);
+      showToast('Planejamento criado com sucesso!');
+      await load();
+    } catch (e: any) {
+      showToast(e?.message ?? 'Erro ao criar planejamento.', 'error');
+    } finally {
+      setCreatingPlan(false);
+    }
+  };
+
+  const handleGeneratePortalLink = async () => {
+    if (!opp) return;
+    setGeneratingLink(true);
+    try {
+      const clientId = await servicesCommercialService.ensureClientFromOpportunity(opp);
+      await clientPortalService.generateToken(clientId, opp.organization_id);
+      const tok = await clientPortalService.getTokenForClient(clientId);
+      setPortalUrl(tok ? clientPortalService.buildPortalUrl(tok.token) : null);
+      showToast('Link do portal gerado com sucesso!');
+      await load();
+    } catch (e: any) {
+      showToast(e?.message ?? 'Erro ao gerar link do portal.', 'error');
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const handleCopyPortalLink = async () => {
+    if (!portalUrl) return;
+    await navigator.clipboard.writeText(portalUrl);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
 
   const handleAddTask = async () => {
     if (!opp || !newTaskTitle.trim()) return;
@@ -504,6 +551,55 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
         >
           {moving ? 'Reabrindo...' : '↩ Reabrir como Lead'}
         </button>
+      )}
+
+      {/* Portal do Cliente — só após conversão (won) */}
+      {opp.stage === 'won' && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+            <HardHat size={15} /> Portal do Cliente
+          </h3>
+
+          {!opp.planning_project_id ? (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Crie o planejamento para o cliente acompanhar o andamento do serviço no portal.
+              </p>
+              <button
+                onClick={handleCreatePlanning}
+                disabled={creatingPlan}
+                className="shrink-0 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {creatingPlan ? 'Criando...' : 'Criar Planejamento'}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => onGoToProject(opp.planning_project_id!)}
+              className="flex items-center gap-1 text-button text-blue-700 dark:text-blue-300 font-medium hover:underline"
+            >
+              <ExternalLink size={11} /> Ver Planejamento
+            </button>
+          )}
+
+          {portalUrl ? (
+            <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-600 px-3 py-2 bg-gray-50 dark:bg-gray-700/40">
+              <Link2 size={14} className="text-gray-400 shrink-0" />
+              <span className="flex-1 text-xs text-gray-600 dark:text-gray-300 truncate">{portalUrl}</span>
+              <button onClick={handleCopyPortalLink} className="shrink-0 text-gray-400 hover:text-blue-600 transition-colors">
+                {linkCopied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleGeneratePortalLink}
+              disabled={generatingLink}
+              className="w-full py-2 text-sm border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
+            >
+              {generatingLink ? 'Gerando...' : 'Gerar Link do Portal'}
+            </button>
+          )}
+        </div>
       )}
 
       {/* Tarefas vinculadas */}

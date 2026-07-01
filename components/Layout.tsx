@@ -692,7 +692,7 @@ const Layout: React.FC<LayoutProps> = ({
                   if (isCollapsed) { onChangeView('bi-executivo'); }
                   else { setIsInteligenciaNegociosOpen(o => !o); }
                 }}
-                hasActiveChild={['bi-executivo','opura-reports','opura-central-obra','opura-central-cliente','opura-central-fornecedor','opura-market'].includes(activeView)}
+                hasActiveChild={['bi-executivo','opura-reports','opura-central-obra','opura-central-cliente','opura-central-fornecedor','opura-market','opura-governance'].includes(activeView)}
               >
                 <DropdownItem id="bi-executivo" label="BI Executivo" icon={BarChart3} />
                 <DropdownItem id="opura-reports" label="ÒPURA Relatórios" icon={BarChart3} />
@@ -700,9 +700,10 @@ const Layout: React.FC<LayoutProps> = ({
                 <DropdownItem id="opura-central-cliente" label="Central de Clientes" icon={Users} />
                 <DropdownItem id="opura-central-fornecedor" label="Central de Fornecedores" icon={Truck} />
                 <DropdownItem id="opura-market" label="ÒPURA Market" icon={Search} />
+                {(mod.compliance || isDev) && <DropdownItem id="opura-governance" label="Governança Corporativa" icon={Shield} />}
               </NavDropdown>
 
-              <NavGroup label="Corporativo" />
+              <NavGroup label="Operacional" />
 
               {/* Seletor de empresa ativa */}
               {companies.length > 1 && (
@@ -760,9 +761,6 @@ const Layout: React.FC<LayoutProps> = ({
               )}
 
               <NavItem id="organization" icon={Building2} label="Minha Organização" />
-              {(mod.compliance || isDev) && (
-                <NavItem id="opura-governance" icon={Shield} label="Governança Corporativa" />
-              )}
               <NavItem id="opura-assets" icon={Package} label="Gestão de Ativos" />
               <NavItem id="opura-docs" icon={FolderOpen} label="Gestão de Documentos" />
 

@@ -70,6 +70,7 @@ export interface HierarchyNode {
     total: number;
     realizedTotal: number;
     budgetedTotal: number;
+    budgetedWithBdiTotal: number;
     plannedTotal: number;
     variation?: number;
     isCritical?: boolean;

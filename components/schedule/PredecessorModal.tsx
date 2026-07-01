@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link2, X, Trash2, Plus } from 'lucide-react';
 import { HierarchyNode, Predecessor, DependencyType } from '../../types';
+import Button from '../ui/Button';
 
 interface PredecessorModalProps {
     taskId: string;
@@ -163,16 +164,17 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                                                 <option value="SF">Início-Termina (IT)</option>
                                             </select>
                                             <input id={`lag-${task.id}`} type="number" className="w-12 text-xs font-bold border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-blue-500" defaultValue="0" />
-                                            <button
+                                            <Button
                                                 onClick={() => {
                                                     const type = (document.getElementById(`type-${task.id}`) as HTMLSelectElement).value as DependencyType;
                                                     const lag = parseInt((document.getElementById(`lag-${task.id}`) as HTMLInputElement).value, 10) || 0;
                                                     handleAdd(task.id, type, lag);
                                                 }}
-                                                className="bg-blue-600 text-white p-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+                                                variant="primary"
+                                                size="icon"
                                             >
                                                 <Plus className="w-4 h-4" />
-                                            </button>
+                                            </Button>
                                         </div>
                                     </div>
                                     );

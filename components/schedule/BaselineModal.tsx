@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TrendingUp, X, CheckCircle2, Trash2 } from 'lucide-react';
 import { Baseline } from '../../types';
+import Button from '../ui/Button';
 
 interface BaselineModalProps {
     isOpen: boolean;
@@ -53,13 +54,14 @@ export const BaselineModal: React.FC<BaselineModalProps> = ({
                             value={name}
                             onChange={e => setName(e.target.value)}
                         />
-                        <button
+                        <Button
                             disabled={!name}
                             onClick={() => { onSave(name, description); setName(''); setDescription(''); }}
-                            className="w-full py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm"
+                            variant="primary"
+                            className="w-full"
                         >
                             Salvar Estado Atual
-                        </button>
+                        </Button>
                     </div>
 
                     <div className="border-t pt-4">

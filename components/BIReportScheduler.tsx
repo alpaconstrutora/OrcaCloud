@@ -3,6 +3,7 @@ import {
     Mail, Plus, Power, Trash2, Send, Loader2, Clock,
     CheckCircle, AlertCircle, Download, X, Calendar,
 } from 'lucide-react';
+import Button from './ui/Button';
 import { biReportService, BIReportSchedule, NewSchedule, ReportFrequency } from '../services/biReportService';
 import type { BIExecutiveSummary } from '../types/bi';
 
@@ -143,16 +144,15 @@ const BIReportScheduler: React.FC<Props> = ({
                 </div>
                 <div className="flex items-center gap-2">
                     {summary && (
-                        <button onClick={handleDownload}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600">
+                        <Button variant="secondary" size="sm" onClick={handleDownload}>
                             <Download size={12} /> Baixar HTML
-                        </button>
+                        </Button>
                     )}
-                    <button
-                        onClick={() => setEditing(emptySchedule(orgId))}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-blue-700 transition-colors">
+                    <Button
+                        size="sm"
+                        onClick={() => setEditing(emptySchedule(orgId))}>
                         <Plus size={12} /> Novo Agendamento
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -289,10 +289,9 @@ const BIReportScheduler: React.FC<Props> = ({
                                 <input className={inputCls} type="email" placeholder="email@empresa.com"
                                     value={emailInput} onChange={e => setEmailInput(e.target.value)}
                                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addEmail(); } }} />
-                                <button onClick={addEmail}
-                                    className="px-3 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 shrink-0">
+                                <Button onClick={addEmail} size="sm" className="shrink-0">
                                     <Plus size={14} />
-                                </button>
+                                </Button>
                             </div>
                             <div className="flex flex-wrap gap-1.5 mt-2">
                                 {editing.recipients.map(r => (
@@ -333,12 +332,11 @@ const BIReportScheduler: React.FC<Props> = ({
                                 Enviar agora
                             </button>
                             <div className="flex gap-2">
-                                <button onClick={() => setEditing(null)} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">Cancelar</button>
-                                <button onClick={handleSave} disabled={busy === 'save'}
-                                    className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-50">
+                                <Button variant="ghost" onClick={() => setEditing(null)}>Cancelar</Button>
+                                <Button onClick={handleSave} disabled={busy === 'save'}>
                                     {busy === 'save' ? <Loader2 size={14} className="animate-spin" /> : null}
                                     Salvar
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     </div>

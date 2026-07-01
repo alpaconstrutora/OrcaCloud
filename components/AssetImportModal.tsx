@@ -7,6 +7,7 @@ import { saveAs } from 'file-saver';
 import { assetService } from '../services/assetService';
 import { useStore } from '../store/useStore';
 import { OpuraAsset, OpuraAssetInsert, AssetCategory } from '../types';
+import Button from './ui/Button';
 
 interface AssetImportModalProps {
   isOpen: boolean;

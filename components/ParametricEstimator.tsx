@@ -1,4 +1,5 @@
 import React from 'react';
+import Button from './ui/Button';
 import { ProjectSettings, BudgetEntry } from '../types';
 import { parametricService } from '../services/parametricService';
 import { exportService } from '../services/exportService';
@@ -250,14 +251,15 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
             <span>Salvar Cenário</span>
           </button>
           <div className="relative">
-            <button
+            <Button
+              variant="secondary"
+              size="lg"
               onClick={() => setShowExportMenu(!showExportMenu)}
-              className="flex items-center gap-2 px-6 py-4 bg-white text-gray-700 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-all shadow-xl shadow-gray-100/50 font-bold"
             >
               <Download className="w-5 h-5 text-blue-600" />
               <span>Exportar</span>
               <ChevronDown className={`w-4 h-4 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
-            </button>
+            </Button>
 
             {showExportMenu && (
               <>
@@ -266,7 +268,8 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                   onClick={() => setShowExportMenu(false)}
                 />
                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-20 animate-in fade-in slide-in-from-top-2">
-                  <button
+                  <Button
+                    variant="ghost"
                     onClick={() => {
                       exportService.generateCompleteParametricPDF(
                         settings,
@@ -290,7 +293,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                       );
                       setShowExportMenu(false);
                     }}
-                    className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                    className="w-full text-left"
                   >
                     <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
                       <Layers className="w-4 h-4" />
@@ -299,8 +302,9 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                       <p className="text-sm font-bold text-gray-900">Relatório Completo</p>
                       <p className="text-xs text-gray-500 font-medium">Dados técnicos e NBR 12.721</p>
                     </div>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="ghost"
                     onClick={() => {
                       exportService.generateParametricProposalPDF(
                         settings,
@@ -311,7 +315,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                       );
                       setShowExportMenu(false);
                     }}
-                    className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors border-t border-gray-50"
+                    className="w-full text-left border-t border-gray-50"
                   >
                     <div className="p-2 bg-orange-50 text-orange-600 rounded-lg">
                       <Calculator className="w-4 h-4" />
@@ -320,20 +324,21 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                       <p className="text-sm font-bold text-gray-900">Proposta Comercial</p>
                       <p className="text-xs text-gray-500 font-medium">Formato para apresentação cliente</p>
                     </div>
-                  </button>
+                  </Button>
                 </div>
               </>
             )}
           </div>
-          <button
+          <Button
+            size="lg"
             onClick={handleConvertToAddDetailed}
-            className="group flex items-center gap-3 px-6 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 hover:shadow-2xl hover:scale-105 active:scale-95 font-bold"
+            className="group shadow-xl shadow-blue-200 hover:shadow-2xl hover:scale-105"
           >
             <div className="p-1.5 bg-white/20 rounded-lg group-hover:rotate-180 transition-transform duration-500">
               <ArrowRightLeft className="w-5 h-5" />
             </div>
             <span>Converter para Analítico</span>
-          </button>
+          </Button>
         </div>
       </div>
 

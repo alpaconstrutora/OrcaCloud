@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import type { WorkOrderType, WorkOrderPriority, BudgetItemRef, PlanningItemRef } from '../types/operational-control'
 import type { BudgetEntry } from '../types'
 import type { ItemScheduleDetails } from '../types/schedule'
+import Button from './ui/Button'
 
 interface Team { id: string; name: string }
 interface Employee { id: string; name: string; role: string | null }

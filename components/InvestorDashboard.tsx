@@ -6,6 +6,7 @@ import { projectService, ProjectData } from '../services/projectService';
 import { investorPortalService, InvestorReport, InvestorOpportunity, ReportCategory } from '../services/investorPortalService';
 import { announcementsService } from '../services/announcementsService';
 import CommunicationCenter from './investor/CommunicationCenter';
+import Button from './ui/Button';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import { investorPortalTokenService } from '../services/investorPortalTokenService';
 import SpeManager from './investor/SpeManager';
@@ -625,23 +626,27 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 <div className="flex items-center gap-3 flex-wrap justify-end">
                     {/* Botão Prévia Mobile — somente admin */}
                     {isAdmin && (
-                        <button
+                        <Button
+                            variant="secondary"
+                            size="icon"
                             onClick={() => setShowMobilePreview(true)}
                             title="Visualizar como o investidor vê no celular"
-                            className="hidden md:flex p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm"
+                            className="hidden md:flex"
                         >
                             <Smartphone className="w-4 h-4" />
-                        </button>
+                        </Button>
                     )}
                     {/* Botão Configurar Abas — somente admin com investidor selecionado */}
                     {isAdmin && investorProfile && (
-                        <button
+                        <Button
+                            variant="secondary"
+                            size="icon"
                             onClick={() => setShowTabConfig(true)}
                             title="Configurar abas visíveis do investidor"
-                            className="hidden md:flex p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm"
+                            className="hidden md:flex"
                         >
                             <Settings2 className="w-4 h-4" />
-                        </button>
+                        </Button>
                     )}
                     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                         {navTabs.map(tab => {
@@ -793,7 +798,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                             {ann.acknowledged
                                                 ? <CheckCircle2 className="w-6 h-6 text-emerald-500 flex-shrink-0 mt-1" />
                                                 : ann.requires_acknowledgment && (
-                                                    <button
+                                                    <Button
                                                         onClick={() => {
                                                             investorPortalTokenService.acknowledgeByToken(portalToken, ann.id)
                                                                 .then(() => setPortalAnnouncements(prev =>
@@ -801,11 +806,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                                                 ))
                                                                 .catch(e => console.error(e));
                                                         }}
-                                                        className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-button font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all"
+                                                        className="flex-shrink-0"
                                                     >
                                                         <CheckCircle2 className="w-3.5 h-3.5" />
                                                         Confirmar
-                                                    </button>
+                                                    </Button>
                                                 )
                                             }
                                         </div>
@@ -839,7 +844,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                         {ann.acknowledged
                                             ? <CheckCircle2 className="w-6 h-6 text-emerald-500 flex-shrink-0 mt-1" />
                                             : ann.requires_acknowledgment && (
-                                                <button
+                                                <Button
                                                     onClick={() => {
                                                         investorPortalTokenService.acknowledgeByToken(portalToken, ann.id)
                                                             .then(() => setPortalAnnouncements(prev =>
@@ -847,11 +852,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                                             ))
                                                             .catch(e => console.error(e));
                                                     }}
-                                                    className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-button font-black uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all"
+                                                    className="flex-shrink-0"
                                                 >
                                                     <CheckCircle2 className="w-3.5 h-3.5" />
                                                     Confirmar
-                                                </button>
+                                                </Button>
                                             )
                                         }
                                     </div>
@@ -895,13 +900,13 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200">
                         <p className="text-base font-bold text-gray-900 mb-6">{confirmModal.msg}</p>
                         <div className="flex gap-3 justify-end">
-                            <button onClick={() => setConfirmModal(null)} className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-700">Cancelar</button>
-                            <button
+                            <Button variant="ghost" onClick={() => setConfirmModal(null)}>Cancelar</Button>
+                            <Button
+                                variant="danger"
                                 onClick={() => { confirmModal.onConfirm(); setConfirmModal(null); }}
-                                className="px-5 py-2 bg-red-600 text-white text-sm font-bold rounded-xl hover:bg-red-700"
                             >
                                 Remover
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -924,13 +929,12 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <div className="flex gap-3 justify-end">
-                            <button onClick={() => setInputModal(null)} className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-700">Cancelar</button>
-                            <button
+                            <Button variant="ghost" onClick={() => setInputModal(null)}>Cancelar</Button>
+                            <Button
                                 onClick={() => { inputModal.onConfirm(inputValue); setInputModal(null); }}
-                                className="px-5 py-2 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700"
                             >
                                 Salvar
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>

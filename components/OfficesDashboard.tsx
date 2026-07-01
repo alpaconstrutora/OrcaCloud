@@ -18,6 +18,7 @@ import {
   Filter,
   ArrowRight
 } from 'lucide-react';
+import Button from './ui/Button';
 
 interface OfficesDashboardProps {
   userId: string;
@@ -189,12 +190,14 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
     <div className="p-6 space-y-6 bg-[#F3F7F9] text-slate-700 min-h-screen pb-24">
       {/* ── Cabeçalho: breadcrumb + título + período/exportar ────────────── */}
       <div className="flex flex-col gap-4">
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => onNavigate('DASHBOARD')}
-          className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 w-fit"
+          className="text-[9px] uppercase tracking-widest text-slate-400 hover:text-slate-600 w-fit"
         >
           ← Menu Principal
-        </button>
+        </Button>
 
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
@@ -214,12 +217,12 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
           </div>
 
           <div className="flex items-center gap-2.5">
-            <button className="p-2.5 bg-white border border-slate-200/60 rounded-xl text-slate-400 hover:text-[#D47A55] hover:border-[#D47A55]/30 transition-all shadow-sm">
+            <Button variant="secondary" size="icon">
               <Search className="w-4 h-4" />
-            </button>
-            <button className="p-2.5 bg-white border border-slate-200/60 rounded-xl text-slate-400 hover:text-amber-400 hover:border-amber-200 transition-all shadow-sm">
+            </Button>
+            <Button variant="secondary" size="icon">
               <Star className="w-4 h-4" />
-            </button>
+            </Button>
 
             <div className="relative">
               <select
@@ -300,9 +303,9 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
             <h2 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5 text-[#D47A55]" /> Funil de Projetos
             </h2>
-            <button onClick={() => onNavigate('CRM')} className="text-slate-300 hover:text-[#D47A55]">
+            <Button variant="ghost" size="icon" onClick={() => onNavigate('CRM')}>
               <MoreHorizontal className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
 
           <div className="flex items-end gap-2 mb-5">
@@ -340,9 +343,9 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
             <h2 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-[#D47A55]" /> Horas por Projeto
             </h2>
-            <button onClick={() => onNavigate('TIMESHEET')} className="text-slate-300 hover:text-[#D47A55]">
+            <Button variant="ghost" size="icon" onClick={() => onNavigate('TIMESHEET')}>
               <MoreHorizontal className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
 
           {horasPorProjeto.length === 0 ? (
@@ -375,12 +378,12 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Propostas Recentes</h2>
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/70 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#D47A55] transition-colors">
+            <Button variant="secondary" size="sm" className="text-[9px] uppercase tracking-widest">
               <Filter className="w-3 h-3" /> Filtrar
-            </button>
-            <button onClick={() => onNavigate('CRM')} className="text-slate-300 hover:text-[#D47A55]">
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => onNavigate('CRM')}>
               <MoreHorizontal className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -450,12 +453,14 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
         )}
 
         <div className="px-5 py-3 border-t border-slate-100 flex justify-end">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => onNavigate('CRM')}
-            className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-[#D47A55] transition-colors"
+            className="text-[9px] uppercase tracking-widest"
           >
             Ver funil completo <ArrowRight className="w-3 h-3" />
-          </button>
+          </Button>
         </div>
       </div>
     </div>

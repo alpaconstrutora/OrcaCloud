@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { servicesCommercialService, ServiceOpportunity, Priority } from '../../services/servicesCommercialService';
+import Button from '../ui/Button';
 
 interface Props {
   organizationId: string;
@@ -141,14 +142,15 @@ const ServicesOpportunityModal: React.FC<Props> = ({ organizationId, initial, on
 
         <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900">Cancelar</button>
-          <button
+          <Button
             type="submit"
             form="services-opportunity-form"
             disabled={saving}
-            className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+            variant="primary"
+            size="sm"
           >
             {saving ? 'Salvando...' : 'Salvar'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

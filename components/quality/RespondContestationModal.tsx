@@ -3,6 +3,7 @@ import { X, AlertCircle, Loader2, CheckCircle2, XCircle, Upload } from 'lucide-r
 import { qualityConditionService } from '../../services/qualityConditionService';
 import { supabase } from '../../lib/supabase';
 import type { ConstructionCondition, ActorReference } from '../../types/quality';
+import Button from '../ui/Button';
 
 interface Props {
   condition: ConstructionCondition;

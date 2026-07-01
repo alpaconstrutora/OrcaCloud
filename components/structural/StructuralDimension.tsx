@@ -4,6 +4,7 @@ import {
   User, Shield, Activity, ArrowLeft, Building2, CheckCircle2, AlertTriangle, XCircle, HelpCircle,
   Loader2
 } from 'lucide-react'
+import Button from '../ui/Button'
 import { structuralService } from '../../services/structuralService'
 import type {
   OpuraStructuralProject,
@@ -445,12 +446,11 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                 Projetos estruturais da organização para cálculo analítico normativo convencional.
               </p>
             </div>
-            <button
+            <Button
               onClick={() => setIsNewProjectModalOpen(true)}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest transition-transform active:scale-95 shadow-md"
             >
               <Plus className="w-4 h-4" /> Novo Projeto
-            </button>
+            </Button>
           </div>
 
           {loading ? (

@@ -3,6 +3,7 @@ import {
   Calendar, AlertTriangle, ListChecks, Inbox,
   ChevronRight, ChevronDown, FolderOpen, X,
 } from 'lucide-react'
+import Button from './ui/Button'
 import type { TaskSpaceWithMeta } from '../services/taskSpaceService'
 import type { FilterView } from './TasksModule'
 

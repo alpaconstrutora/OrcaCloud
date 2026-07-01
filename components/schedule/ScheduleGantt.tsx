@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { ChevronDown, ChevronRight, Camera, Filter, Check, Columns3, EyeOff, ArrowRightToLine, Plus } from 'lucide-react';
+import Button from '../ui/Button';
 
 import { HierarchyNode, ProjectSchedule, BudgetEntry, ResourceAllocation, SinapiType } from '../../types';
 import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
@@ -181,6 +182,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
         gLsLf: 'LS/LF',
         gFloat: 'Folga',
         gBudgeted: 'Orçado (B)',
+        gBudgetedWithBdi: 'Orçado c/ BDI',
         gPlanned: 'Planejado (C)',
         gRealized: 'Realizado $',
         gVariation: 'Variação $',
@@ -505,6 +507,9 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         <div data-gantt-col="gBudgeted" className="shrink-0 border-r border-gray-100 flex items-center justify-end px-2 text-xs font-medium text-gray-400" style={getGanttColStyle('gBudgeted')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.budgetedTotal)}
                         </div>
+                        <div data-gantt-col="gBudgetedWithBdi" className="shrink-0 border-r border-gray-100 flex items-center justify-end px-2 text-xs font-medium text-gray-700" style={getGanttColStyle('gBudgetedWithBdi')}>
+                            {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.budgetedWithBdiTotal)}
+                        </div>
 
                         <div data-gantt-col="gPlanned" className="shrink-0 flex items-center justify-end px-2 text-xs font-medium text-blue-600 border-r border-gray-100" style={getGanttColStyle('gPlanned')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.plannedTotal)}
@@ -774,6 +779,9 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         <div data-gantt-col="gFloat" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gFloat')}></div>
                         <div data-gantt-col="gBudgeted" className="shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-xs font-medium text-gray-500" style={getGanttColStyle('gBudgeted')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.budgetedTotal)}
+                        </div>
+                        <div data-gantt-col="gBudgetedWithBdi" className="shrink-0 border-r border-gray-100 flex items-center justify-end px-2 text-xs font-medium text-gray-700" style={getGanttColStyle('gBudgetedWithBdi')}>
+                            {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.budgetedWithBdiTotal)}
                         </div>
                         <div data-gantt-col="gPlanned" className="shrink-0 flex items-center justify-end px-2 text-xs font-medium text-blue-700 border-r border-gray-100" style={getGanttColStyle('gPlanned')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.plannedTotal)}
@@ -1090,6 +1098,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             <div data-gantt-col="gLsLf" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-orange-400 bg-orange-50/30" style={getGanttColStyle('gLsLf')}>M.I/M.T{GanttResizeHandle && <GanttResizeHandle colKey="gLsLf" />}</div>
                             <div data-gantt-col="gFloat" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-indigo-400" style={getGanttColStyle('gFloat')}>F.L{GanttResizeHandle && <GanttResizeHandle colKey="gFloat" />}</div>
                             <div data-gantt-col="gBudgeted" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-xs font-medium text-gray-400" style={getGanttColStyle('gBudgeted')}>ORÇADO{GanttResizeHandle && <GanttResizeHandle colKey="gBudgeted" />}</div>
+                            <div data-gantt-col="gBudgetedWithBdi" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-xs font-medium text-gray-500" style={getGanttColStyle('gBudgetedWithBdi')}>ORÇADO c/ BDI{GanttResizeHandle && <GanttResizeHandle colKey="gBudgetedWithBdi" />}</div>
                             <div data-gantt-col="gPlanned" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-xs font-medium text-blue-500" style={getGanttColStyle('gPlanned')}>PLANEJ.{GanttResizeHandle && <GanttResizeHandle colKey="gPlanned" />}</div>
                             <div data-gantt-col="gRealized" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-xs font-medium text-emerald-500" style={getGanttColStyle('gRealized')}>REALIZADO{GanttResizeHandle && <GanttResizeHandle colKey="gRealized" />}</div>
                             <div data-gantt-col="gVariation" className="relative shrink-0 border-r border-gray-200 flex items-center justify-end px-2 text-xs font-medium text-gray-400" style={getGanttColStyle('gVariation')}>VARIAÇÃO{GanttResizeHandle && <GanttResizeHandle colKey="gVariation" />}</div>
@@ -1123,12 +1132,13 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     className="shrink-0 flex items-center sticky left-0 z-[35] bg-white border-r border-gray-200"
                                     style={{ width: `${getGanttSidebarTotal()}px` }}
                                 >
-                                    <button
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
                                         onClick={onAddRootGroup}
-                                        className="flex items-center gap-1.5 px-4 py-1.5 text-button font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                     >
                                         <Plus className="w-3.5 h-3.5" /> Novo Grupo
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
                         )}

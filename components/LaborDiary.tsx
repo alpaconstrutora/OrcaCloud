@@ -4,6 +4,7 @@ import {
     CheckCircle2, Clock, Users, CloudRain, Sun, Cloud,
     Zap, Trash2, Eye, ChevronRight
 } from 'lucide-react';
+import Button from './ui/Button';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     laborService, Employee, LaborTeam,
@@ -245,7 +246,7 @@ const DiaryForm: React.FC<DiaryFormProps> = ({ orgId, employees, teams, projects
                     </div>
                 </div>
                 <div className="px-6 py-4 border-t flex items-center justify-end gap-3 bg-slate-50/50">
-                    <button onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                    <Button variant="ghost" onClick={onClose}>Cancelar</Button>
                     <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-emerald-700 text-white rounded-xl font-bold text-sm hover:bg-emerald-800 shadow-lg disabled:opacity-50">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                         {saving ? 'Salvando...' : (isEditing ? 'Salvar' : 'Criar Diário')}

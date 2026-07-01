@@ -6,6 +6,7 @@ import {
     TrendingUp, HandCoins, Filter, Truck, Settings, Send
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import Button from './ui/Button';
 
 const ORG_LIST_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Organização', sortable: true },
@@ -218,13 +219,13 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight italic border-l-4 border-blue-600 pl-4">Empresas do Grupo</h2>
                             <p className="text-gray-400 text-xs font-black uppercase tracking-widest mt-1">Gerencie os perfis e logotipos das suas empresas.</p>
                         </div>
-                        <button
+                        <Button
                             onClick={onCreate}
-                            className="px-8 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black text-button uppercase tracking-[0.2em] hover:bg-blue-700 transition-all shadow-2xl shadow-blue-500/20 flex items-center gap-3 active:scale-95"
+                            size="lg"
                         >
                             <Plus className="w-5 h-5" />
                             Nova Empresa
-                        </button>
+                        </Button>
                     </div>
 
                     <div className="flex flex-col md:flex-row gap-4">
@@ -328,12 +329,13 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                             {tableColumns.visibleColumns.includes('actions') && (
                                                 <td className="px-8 py-4">
                                                     <div className="flex items-center justify-center">
-                                                        <button
+                                                        <Button
                                                             onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(null); setManagingOrgId(null); }}
-                                                            className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${!activeOrganizationId ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                                            size="sm"
+                                                            className={!activeOrganizationId ? 'bg-emerald-500 hover:bg-emerald-500' : undefined}
                                                         >
                                                             {!activeOrganizationId ? 'ATIVO' : 'SELECIONAR'}
-                                                        </button>
+                                                        </Button>
                                                     </div>
                                                 </td>
                                             )}
@@ -377,12 +379,13 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                     {tableColumns.visibleColumns.includes('actions') && (
                                                         <td className="px-8 py-4">
                                                             <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                                                <button
+                                                                <Button
                                                                     onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(org.id); }}
-                                                                    className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${isActive ? 'bg-emerald-500 text-white shadow-sm' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                                                    size="sm"
+                                                                    className={isActive ? 'bg-emerald-500 hover:bg-emerald-500' : undefined}
                                                                 >
                                                                     {isActive ? 'ATIVO' : 'SELECIONAR'}
-                                                                </button>
+                                                                </Button>
                                                                 <InlineDisclosureMenu
                                                                     menuItems={[
                                                                         {
@@ -416,12 +419,12 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                 </div>
                                 <div className="p-8">
                                     <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2 truncate">TODAS AS ORGANIZAÇÕES</h3>
-                                    <button
+                                    <Button
                                         onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(null); }}
-                                        className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all ${!activeOrganizationId ? 'bg-emerald-500 text-white shadow-xl shadow-emerald-500/20' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                        className={`w-full ${!activeOrganizationId ? 'bg-emerald-500 hover:bg-emerald-500' : ''}`}
                                     >
                                         {!activeOrganizationId ? 'ATIVO' : 'SELECIONAR VISÃO GLOBAL'}
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
                             {filteredOrganizations.map(org => {
@@ -441,12 +444,12 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                         <div className="p-8">
                                             <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2 truncate">{org.name}</h3>
                                             <div className="flex gap-3 items-center" onClick={(e) => e.stopPropagation()}>
-                                                <button
+                                                <Button
                                                     onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(org.id); }}
-                                                    className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] transition-all ${isActive ? 'bg-emerald-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                                    className={`flex-1 ${isActive ? 'bg-emerald-500 hover:bg-emerald-500' : ''}`}
                                                 >
                                                     {isActive ? 'ATIVO' : 'SELECIONAR'}
-                                                </button>
+                                                </Button>
                                                 <InlineDisclosureMenu
                                                     menuItems={[
                                                         {
@@ -479,11 +482,12 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             <p className="text-xs text-center max-w-xs">
                                 Vá para a aba <strong className="text-gray-600">Organização</strong>, clique em <strong className="text-gray-600">SELECIONAR</strong> na empresa desejada e volte aqui.
                             </p>
-                            <button
+                            <Button
                                 onClick={() => onTabChange('organizations')}
-                                className="mt-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
+                                className="mt-2"
+                            >
                                 Ir para Organização
-                            </button>
+                            </Button>
                         </div>
                     )
             )}

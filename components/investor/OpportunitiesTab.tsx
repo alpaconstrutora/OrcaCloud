@@ -11,6 +11,7 @@ import { Investor } from '../../services/investorService';
 import OpportunityForm from './OpportunityForm';
 import OpportunityDetail from './OpportunityDetail';
 import InterestsPanel from './InterestsPanel';
+import Button from '../ui/Button';
 
 interface Props {
     opportunities: InvestorOpportunity[];

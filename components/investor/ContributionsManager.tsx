@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Plus, Trash2, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '../../utils/financialMath';
+import Button from '../ui/Button';
 import {
     investorContributionsService,
     InvestorContribution,
@@ -153,13 +154,14 @@ const ContributionsManager: React.FC<Props> = ({ organizationId, projectId, proj
                                 {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                             </select>
                         </label>
-                        <button
+                        <Button
                             onClick={handleAdd}
                             disabled={saving}
-                            className="flex items-center justify-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-button font-bold hover:bg-blue-700 disabled:opacity-60"
+                            variant="primary"
+                            size="sm"
                         >
                             <Plus className="w-4 h-4" /> Adicionar
-                        </button>
+                        </Button>
                     </div>
                     <input
                         type="text"

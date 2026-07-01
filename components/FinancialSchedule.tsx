@@ -378,10 +378,12 @@ function makeItemHierNode(
     globalBdi: number,
 ): HierarchyNode {
     const itemBdi = item.bdi !== undefined ? item.bdi : globalBdi;
-    const itemTotal = item.quantity * item.sinapiItem.price * (1 + itemBdi / 100);
+    const itemRawTotal = item.quantity * item.sinapiItem.price;
+    const itemTotal = itemRawTotal * (1 + itemBdi / 100);
     const itemRealized = realizedValues[item.id] || 0;
     const pValue = itemSchedule?.plannedValue ?? itemSchedule?.totalLaborCost ?? itemTotal;
-    const bValue = itemSchedule?.budgetedValue ?? itemTotal;
+    const bValue = itemSchedule?.budgetedValue ?? itemRawTotal;
+    const bValueWithBdi = bValue * (1 + itemBdi / 100);
     return {
         id: item.id,
         uid: '',
@@ -393,6 +395,7 @@ function makeItemHierNode(
         total: itemTotal,
         realizedTotal: itemRealized,
         budgetedTotal: bValue,
+        budgetedWithBdiTotal: bValueWithBdi,
         plannedTotal: pValue,
         variation: itemSchedule?.costVariation || 0,
         isCritical: itemSchedule?.isCritical,
@@ -427,6 +430,7 @@ function makeActivityHierNode(
         total: 0,
         realizedTotal: 0,
         budgetedTotal: 0,
+        budgetedWithBdiTotal: 0,
         plannedTotal: 0,
         variation: 0,
         isCritical: itemSchedule?.isCritical,
@@ -491,6 +495,7 @@ function buildHierarchyFromOutline(
             total: sum(c => c.total),
             realizedTotal: sum(c => c.realizedTotal),
             budgetedTotal: sum(c => c.budgetedTotal),
+            budgetedWithBdiTotal: sum(c => c.budgetedWithBdiTotal),
             plannedTotal: sum(c => c.plannedTotal),
             variation: sum(c => c.variation || 0),
             level,
@@ -520,13 +525,15 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
 
     budget.forEach(item => {
         const itemBdi = item.bdi !== undefined ? item.bdi : globalBdi;
-        const itemTotal = item.quantity * item.sinapiItem.price * (1 + itemBdi / 100);
+        const itemRawTotal = item.quantity * item.sinapiItem.price;
+        const itemTotal = itemRawTotal * (1 + itemBdi / 100);
         const itemRealized = realizedValues[item.id] || 0;
         const itemSchedule = itemSchedules.find(s => s.id === item.id);
 
         // Manual override or automatic from labor
         const pValue = itemSchedule?.plannedValue ?? itemSchedule?.totalLaborCost ?? itemTotal;
-        const bValue = itemSchedule?.budgetedValue ?? itemTotal;
+        const bValue = itemSchedule?.budgetedValue ?? itemRawTotal;
+        const bValueWithBdi = bValue * (1 + itemBdi / 100);
 
         // 1. Group Level
         const groupName = item.group || 'Sem Grupo';
@@ -542,6 +549,7 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
                 total: 0,
                 realizedTotal: 0,
                 budgetedTotal: 0,
+        budgetedWithBdiTotal: 0,
                 plannedTotal: 0,
                 variation: 0,
                 level: 0,
@@ -551,6 +559,7 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
         groups[groupId].total += itemTotal;
         groups[groupId].realizedTotal += itemRealized;
         groups[groupId].budgetedTotal += bValue;
+        groups[groupId].budgetedWithBdiTotal += bValueWithBdi;
         groups[groupId].plannedTotal += pValue;
         groups[groupId].variation = (groups[groupId].variation || 0) + (itemSchedule?.costVariation || 0);
 
@@ -569,6 +578,7 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
                 total: 0,
                 realizedTotal: 0,
                 budgetedTotal: 0,
+        budgetedWithBdiTotal: 0,
                 plannedTotal: 0,
                 variation: 0,
                 level: 1,
@@ -579,6 +589,7 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
         phaseNode.total += itemTotal;
         phaseNode.realizedTotal += itemRealized;
         phaseNode.budgetedTotal += bValue;
+        phaseNode.budgetedWithBdiTotal += bValueWithBdi;
         phaseNode.plannedTotal += pValue;
         phaseNode.variation = (phaseNode.variation || 0) + (itemSchedule?.costVariation || 0);
 
@@ -599,6 +610,7 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
                     total: 0,
                     realizedTotal: 0,
                     budgetedTotal: 0,
+        budgetedWithBdiTotal: 0,
                     plannedTotal: 0,
                     variation: 0,
                     level: 2,
@@ -609,6 +621,7 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
             subPhaseNode.total += itemTotal;
             subPhaseNode.realizedTotal += itemRealized;
             subPhaseNode.budgetedTotal += bValue;
+            subPhaseNode.budgetedWithBdiTotal += bValueWithBdi;
             subPhaseNode.plannedTotal += pValue;
             subPhaseNode.variation = (subPhaseNode.variation || 0) + (itemSchedule?.costVariation || 0);
             parentForItems = subPhaseNode;
@@ -631,6 +644,7 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
             total: itemTotal,
             realizedTotal: itemRealized,
             budgetedTotal: bValue,
+        budgetedWithBdiTotal: bValueWithBdi,
             plannedTotal: pValue,
             variation: itemSchedule?.costVariation || 0,
             isCritical: itemSchedule?.isCritical,
@@ -897,7 +911,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const DEFAULT_COL_WIDTHS: Record<string, number> = {
         item: 250, wbs: 80, uid: 40, pred: 50, duration: 60,
         start: 100, end: 100, esef: 80, lslf: 80, float: 50,
-        budgeted: 100, planned: 100, realized: 100, variation: 100, realPct: 100, totalPct: 80
+        budgeted: 100, budgetedWithBdi: 120, planned: 100, realized: 100, variation: 100, realPct: 100, totalPct: 80
     };
     const COL_MIN = 30;
     const COL_MAX = 500;
@@ -980,7 +994,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     // ── Gantt Column Resize ──
     const GANTT_DEFAULT_COL_WIDTHS: Record<string, number> = {
         gWbs: 100, gId: 44, gPred: 56, gDur: 64, gStart: 86, gEnd: 86,
-        gEsEf: 86, gLsLf: 86, gFloat: 56, gBudgeted: 110, gPlanned: 110, gRealized: 110, gVariation: 110, gResources: 120, gRealPct: 100
+        gEsEf: 86, gLsLf: 86, gFloat: 56, gBudgeted: 110, gBudgetedWithBdi: 125, gPlanned: 110, gRealized: 110, gVariation: 110, gResources: 120, gRealPct: 100
     };
     const [ganttColWidths, setGanttColWidths] = useState<Record<string, number>>(() => {
         try {
@@ -1097,7 +1111,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     );
 
     // ── Gantt Timeline Splitter (collapsible sidebar columns) ──
-    const GANTT_COL_KEYS = ['gId', 'gPred', 'gDur', 'gStart', 'gEnd', 'gEsEf', 'gLsLf', 'gFloat', 'gBudgeted', 'gPlanned', 'gRealized', 'gVariation', 'gResources', 'gRealPct'];
+    const GANTT_COL_KEYS = ['gId', 'gPred', 'gDur', 'gStart', 'gEnd', 'gEsEf', 'gLsLf', 'gFloat', 'gBudgeted', 'gBudgetedWithBdi', 'gPlanned', 'gRealized', 'gVariation', 'gResources', 'gRealPct'];
     const GANTT_HIDEABLE_COLS = [...GANTT_COL_KEYS].reverse(); // right-to-left: gPlanned → gId
 
     const [ganttCollapsedCols, setGanttCollapsedCols] = useState<Set<string>>(() => {
@@ -1236,7 +1250,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             : { width: `${getGanttColW(key)}px` };
 
     // ── Timeline Splitter (collapsible fixed columns) ──
-    const FIXED_COL_KEYS = ['item', 'wbs', 'uid', 'pred', 'duration', 'start', 'end', 'esef', 'lslf', 'float', 'budgeted', 'planned', 'realized', 'variation', 'resources', 'realPct'];
+    const FIXED_COL_KEYS = ['item', 'wbs', 'uid', 'pred', 'duration', 'start', 'end', 'esef', 'lslf', 'float', 'budgeted', 'budgetedWithBdi', 'planned', 'realized', 'variation', 'resources', 'realPct'];
     const HIDEABLE_COLS = [...FIXED_COL_KEYS].reverse().filter(k => k !== 'item'); // right-to-left, never hide 'item'
     const [collapsedCols, setCollapsedCols] = useState<Set<string>>(() => {
         try {
@@ -1590,8 +1604,23 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         return { itemQty: {}, realizedValues };
     }, [orders, budget, allDiaryEntries, settings.bdi]);
 
+    const effectiveBudgetBdi = React.useMemo(() => {
+        if (settings.classification !== 'PLANEJAMENTO' || !settings.linkedProjectId) {
+            return settings.bdi || 0;
+        }
+        const linkedProject = projects.find(p => p.id === settings.linkedProjectId);
+        const linkedVersions: BudgetVersion[] = linkedProject?.settings?.versions || [];
+        const pinnedVersion = settings.basedOnBudgetVersionId
+            ? linkedVersions.find(v => v.id === settings.basedOnBudgetVersionId)
+            : undefined;
+        const linkedActive = linkedVersions.find(v => v.id === linkedProject?.settings?.activeVersionId)
+            || (linkedVersions.length > 0 ? linkedVersions[linkedVersions.length - 1] : undefined);
+        const sourceSettings = pinnedVersion?.settings || linkedActive?.settings || linkedProject?.settings;
+        return sourceSettings?.bdi ?? settings.bdi ?? 0;
+    }, [projects, settings.classification, settings.linkedProjectId, settings.basedOnBudgetVersionId, settings.bdi]);
+
     // Calculate Hierarchy
-    const hierarchy = React.useMemo(() => buildHierarchy(budget, schedule.itemSchedules || [], realizedState.realizedValues, settings.bdi, schedule.outline), [budget, schedule.itemSchedules, realizedState.realizedValues, settings.bdi, schedule.outline]);
+    const hierarchy = React.useMemo(() => buildHierarchy(budget, schedule.itemSchedules || [], realizedState.realizedValues, effectiveBudgetBdi, schedule.outline), [budget, schedule.itemSchedules, realizedState.realizedValues, effectiveBudgetBdi, schedule.outline]);
 
     // Wrapper that expands group/phase predecessors before calling the engine and
     // then restores original predecessor lists so the expanded form is never persisted.

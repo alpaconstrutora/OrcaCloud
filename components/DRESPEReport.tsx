@@ -3,6 +3,7 @@ import { financialReportService } from '../services/financialReportService'
 import type { DRESPELine, RegimeContabil } from '../types/financial'
 import { useToast } from '../hooks/useToast'
 import { TrendingUp, TrendingDown } from 'lucide-react'
+import Button from './ui/Button'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtPct = (v: number | null) => v === null ? '—' : `${v.toFixed(1)}%`

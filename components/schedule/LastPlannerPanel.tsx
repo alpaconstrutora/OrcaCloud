@@ -14,6 +14,7 @@ import {
     X,
 } from 'lucide-react';
 import { HierarchyNode, WeeklyCommitment, PpcWeek, ScheduleConstraint } from '../../types';
+import Button from '../ui/Button';
 import {
     weeklyCommitmentsService,
     scheduleConstraintsService,
@@ -198,9 +199,9 @@ export const LastPlannerPanel: React.FC<Props> = ({ organizationId, projectId, h
                     <h2 className="text-sm font-bold text-gray-800">Last Planner / PPC</h2>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={load} className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all">
+                    <Button variant="secondary" size="icon" onClick={load}>
                         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -400,24 +401,18 @@ const WeeklyView: React.FC<{
         <div className="space-y-4">
             {/* Week navigation */}
             <div className="flex items-center gap-3">
-                <button
-                    onClick={() => setWeekOffset(weekOffset - 1)}
-                    className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-all"
-                >
+                <Button variant="secondary" size="icon" onClick={() => setWeekOffset(weekOffset - 1)}>
                     <ChevronLeft className="w-4 h-4" />
-                </button>
+                </Button>
                 <div className="flex-1 text-center">
                     <div className="text-sm font-bold text-gray-800">
                         {weekOffset === 0 ? 'Esta semana' : weekOffset === 1 ? 'Próxima semana' : weekOffset === -1 ? 'Semana passada' : weekOffset > 0 ? `+${weekOffset} semanas` : `${Math.abs(weekOffset)} semanas atrás`}
                     </div>
                     <div className="text-xs text-gray-400">{fmtWeek(selectedWeekStart)}</div>
                 </div>
-                <button
-                    onClick={() => setWeekOffset(weekOffset + 1)}
-                    className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-all"
-                >
+                <Button variant="secondary" size="icon" onClick={() => setWeekOffset(weekOffset + 1)}>
                     <ChevronRight className="w-4 h-4" />
-                </button>
+                </Button>
                 {weekOffset !== 0 && (
                     <button
                         onClick={() => setWeekOffset(0)}

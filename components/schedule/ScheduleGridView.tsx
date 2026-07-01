@@ -11,6 +11,7 @@ import {
     Filter,
     Check
 } from 'lucide-react';
+import Button from '../ui/Button';
 import { HierarchyNode, ProjectSchedule, ItemScheduleDetails, BudgetEntry, SinapiType } from '../../types';
 import ModernDateInput from '../ModernDateInput';
 import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
@@ -145,6 +146,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
         lslf: 'LS/LF',
         float: 'Folga',
         budgeted: 'Orçado (B)',
+        budgetedWithBdi: 'Orçado c/ BDI',
         planned: 'Planejado (C)',
         realized: 'Realizado',
         variation: 'Variação',
@@ -169,6 +171,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                     <col data-col="lslf" style={{ width: getColWidth('lslf') }} />
                     <col data-col="float" style={{ width: getColWidth('float') }} />
                     <col data-col="budgeted" style={{ width: getColWidth('budgeted') }} />
+                    <col data-col="budgetedWithBdi" style={{ width: getColWidth('budgetedWithBdi') }} />
                     <col data-col="planned" style={{ width: getColWidth('planned') }} />
                     <col data-col="realized" style={{ width: getColWidth('realized') }} />
                     <col data-col="variation" style={{ width: getColWidth('variation') }} />
@@ -225,12 +228,13 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 </div>
                                                 {collapsedCols.size > 0 && (
                                                     <div className="border-t border-gray-100 mt-1 pt-1 px-3">
-                                                        <button
+                                                        <Button
+                                                            variant="ghost"
                                                             onClick={(e) => { e.stopPropagation(); handleSplitterDblClick(); setIsColMenuOpen(false); }}
-                                                            className="w-full text-center text-button font-medium text-blue-600 hover:text-blue-700 py-1.5 rounded-md hover:bg-blue-50 transition-colors"
+                                                            className="w-full"
                                                         >
                                                             Exibir todas ({collapsedCols.size} ocultas)
-                                                        </button>
+                                                        </Button>
                                                     </div>
                                                 )}
                                             </div>
@@ -310,6 +314,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                         <th className="px-4 py-3 text-center bg-orange-50/50 relative">LS/LF<ResizeHandle colKey="lslf" /></th>
                         <th className="px-4 py-3 text-center relative">Folga<ResizeHandle colKey="float" /></th>
                         <th className="px-4 py-3 text-right relative">Orçado (B)<ResizeHandle colKey="budgeted" /></th>
+                        <th className="px-4 py-3 text-right relative">Orçado c/ BDI<ResizeHandle colKey="budgetedWithBdi" /></th>
                         <th className="px-4 py-3 text-right relative">Plan. (C)<ResizeHandle colKey="planned" /></th>
                         <th className="px-4 py-3 text-right relative">Real<ResizeHandle colKey="realized" /></th>
                         <th className="px-4 py-3 text-right relative">Var.<ResizeHandle colKey="variation" /></th>
@@ -514,6 +519,9 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                         <td className="px-1 py-2 text-right text-table-body text-gray-500">
                                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.budgetedTotal)}
                                         </td>
+                                        <td className="px-1 py-2 text-right text-table-body font-medium text-gray-900">
+                                            {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.budgetedWithBdiTotal)}
+                                        </td>
                                         <td className="px-1 py-2 text-right text-table-body font-medium text-blue-700">
                                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.plannedTotal)}
                                         </td>
@@ -685,6 +693,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                         <td className="px-1 py-3"></td>
                                         <td className="px-1 py-3"></td>
                                         <td className="px-4 py-3 text-right font-medium text-gray-900 text-table-body">{new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.budgetedTotal)}</td>
+                                        <td className="px-2 py-3 text-right font-medium text-gray-900 text-table-body">{new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.budgetedWithBdiTotal)}</td>
                                         <td className="px-2 py-3 text-right font-medium text-blue-700 text-table-body">{new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.plannedTotal)}</td>
                                         <td className="px-2 py-3 text-right font-medium text-green-700 text-table-body">{new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.realizedTotal)}</td>
                                         <td className={`px-2 py-3 text-right font-medium text-table-body ${node.variation && node.variation > 0 ? 'text-red-500' : 'text-green-600'}`}>{node.variation ? new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2, signDisplay: 'always' }).format(node.variation) : '-'}</td>
@@ -726,12 +735,13 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                     {onAddRootGroup && (
                         <tr>
                             <td colSpan={99} className="px-4 py-2">
-                                <button
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={onAddRootGroup}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-button font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 >
                                     <Plus className="w-3.5 h-3.5" /> Novo Grupo
-                                </button>
+                                </Button>
                             </td>
                         </tr>
                     )}
@@ -753,6 +763,9 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                 const task = schedule.itemSchedules?.find(s => s.id === item.id);
                                 return sum + (task?.budgetedValue ?? (item.quantity * item.sinapiItem.price));
                             }, 0))}
+                        </td>
+                        <td className="px-2 py-3 text-right">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(hierarchy.reduce((sum, node) => sum + (node.budgetedWithBdiTotal || 0), 0))}
                         </td>
                         <td className="px-2 py-3 text-right">
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(budget.reduce((sum, item) => {

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { ProcurementPlanItem } from '../../types/procurement';
 import { procurementService, computeRiskItems } from '../../services/procurementService';
+import Button from '../ui/Button';
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -171,16 +172,17 @@ export const SupplyPanel: React.FC<Props> = ({ organizationId, projectId, onNavi
                             Módulo Aquisições
                         </button>
                     )}
-                    <button
+                    <Button
                         onClick={handleGenerate}
                         disabled={generating}
-                        className="flex items-center gap-1.5 px-4 py-1.5 text-button font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-60 shadow-sm"
+                        variant="primary"
+                        size="sm"
                     >
                         {generating
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             : <RefreshCw className="w-3.5 h-3.5" />}
                         {generating ? 'Gerando…' : items.length === 0 ? 'Gerar Plano de Compras' : 'Atualizar Plano'}
-                    </button>
+                    </Button>
                 </div>
             </div>
 

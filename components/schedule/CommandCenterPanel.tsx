@@ -37,6 +37,7 @@ const fmtDate = (iso?: string) => {
 };
 
 const fmtPct = (v: number) => `${v.toFixed(1)}%`;
+const fmtBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 
 function daysBetween(a: string, b: string): number {
     return Math.round(
@@ -65,7 +66,7 @@ function computeKpis(
     hierarchy: HierarchyNode[],
     schedule: ProjectSchedule,
     budget: BudgetEntry[],
-    realizedValues: Record<string, number>,
+    financialValues: Record<string, number>,
 ) {
     const leaves = flatLeaves(hierarchy);
     const todayStr = today();
@@ -100,10 +101,20 @@ function computeKpis(
     });
 
     const physicalPct = physicalWeightTotal > 0 ? (physicalWeightedSum / physicalWeightTotal) * 100 : 0;
-    const financialPct = totalBudget > 0
-        ? (Object.values(realizedValues).reduce((s, v) => s + v, 0) / totalBudget) * 100
-        : 0;
+
+    // AC (Actual Cost) — custo real, exclusivamente financeiro (compras já realizadas).
+    // Antes deste cálculo usar o mapa combinado (max físico×financeiro) inflava o AC
+    // sempre que o físico estava à frente das compras, distorcendo CPI/EAC.
+    const ac = Object.values(financialValues).reduce((s, v) => s + v, 0);
+    const financialPct = totalBudget > 0 ? (ac / totalBudget) * 100 : 0;
+
+    // EVM real: SPI (prazo) e CPI (custo). BAC = orçamento total; EAC = previsão de custo
+    // final assumindo a mesma eficiência (CPI) observada até aqui; ETC = quanto falta gastar.
     const spi = pv > 0 ? ev / pv : null;
+    const bac = totalBudget;
+    const cpi = ac > 0 ? ev / ac : null;
+    const eac = cpi !== null && cpi > 0 ? bac / cpi : null;
+    const etc = eac !== null ? Math.max(0, eac - ac) : null;
 
     const criticalItems = leaves.filter(l => {
         const sched = schedule.itemSchedules?.find(s => s.id === l.id);
@@ -130,6 +141,7 @@ function computeKpis(
 
     return {
         physicalPct, financialPct, spi,
+        ac, bac, cpi, eac, etc,
         criticalItems, criticalCount: criticalItems.length,
         atrasadas, projectEnd, baselineEnd, devioDias,
         totalLeaves: leaves.length,
@@ -152,7 +164,7 @@ interface Props {
     hierarchy: HierarchyNode[];
     schedule: ProjectSchedule;
     budget: BudgetEntry[];
-    realizedValues: Record<string, number>;
+    financialValues: Record<string, number>;
     chartData: SCurveEntry[];
     organizationId?: string;
     projectId?: string;
@@ -161,7 +173,7 @@ interface Props {
 // ─── Component ────────────────────────────────────────────────
 
 export const CommandCenterPanel: React.FC<Props> = ({
-    hierarchy, schedule, budget, realizedValues, chartData,
+    hierarchy, schedule, budget, financialValues, chartData,
     organizationId, projectId,
 }) => {
     const [ppcLast, setPpcLast] = useState<number | null>(null);
@@ -171,8 +183,8 @@ export const CommandCenterPanel: React.FC<Props> = ({
     const [simulatorOpen, setSimulatorOpen] = useState(false);
 
     const kpis = React.useMemo(
-        () => computeKpis(hierarchy, schedule, budget, realizedValues),
-        [hierarchy, schedule, budget, realizedValues]
+        () => computeKpis(hierarchy, schedule, budget, financialValues),
+        [hierarchy, schedule, budget, financialValues]
     );
 
     const load = useCallback(async () => {
@@ -227,6 +239,27 @@ export const CommandCenterPanel: React.FC<Props> = ({
                     sub={loadingKpis ? '' : ppcLast !== null ? `Últ. sem.: ${ppcLast}%` : 'sem dados'}
                     color={ppcAccum === null ? 'gray' : ppcAccum >= 80 ? 'emerald' : ppcAccum >= 60 ? 'amber' : 'red'}
                     icon={<CheckCircle2 className="w-4 h-4" />} />
+            </div>
+
+            {/* ── KPI cards row EVM (custo) ── */}
+            <div className="grid grid-cols-3 gap-3">
+                <KpiCard label="CPI" value={kpis.cpi !== null ? kpis.cpi.toFixed(2) : '—'}
+                    sub={kpis.cpi === null ? 'sem compras registradas' : kpis.cpi >= 1 ? 'dentro do orçamento' : 'acima do orçamento'}
+                    color={kpis.cpi === null ? 'gray' : kpis.cpi >= 1 ? 'emerald' : 'red'}
+                    icon={<BarChart2 className="w-4 h-4" />}
+                    tooltip="Cost Performance Index = Valor Agregado / Custo Real" />
+                <KpiCard label="Custo final previsto (EAC)"
+                    value={kpis.eac !== null ? fmtBRL(kpis.eac) : '—'}
+                    sub={kpis.eac !== null ? `Orçado: ${fmtBRL(kpis.bac)}` : 'sem CPI calculável'}
+                    color={kpis.eac === null ? 'gray' : kpis.eac > kpis.bac ? 'red' : 'emerald'}
+                    icon={<TrendingUp className="w-4 h-4" />}
+                    tooltip="Estimate at Completion = Orçamento Total / CPI" />
+                <KpiCard label="Falta gastar (ETC)"
+                    value={kpis.etc !== null ? fmtBRL(kpis.etc) : '—'}
+                    sub={`Gasto até agora: ${fmtBRL(kpis.ac)}`}
+                    color={kpis.etc === null ? 'gray' : 'amber'}
+                    icon={<Clock className="w-4 h-4" />}
+                    tooltip="Estimate to Complete = EAC − Custo Real" />
             </div>
 
             {/* ── KPI cards row 2 ── */}

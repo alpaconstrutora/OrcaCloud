@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { BudgetEntry, SinapiCategory, SinapiType } from '../types/budget';
-import { SchedulePeriod, ItemDistribution } from '../types/schedule';
+import { SchedulePeriod, ItemDistribution, OutlineNode, TaskNature } from '../types/schedule';
 import { ProjectSchedule } from '../types/project';
 import { inventoryService } from './inventoryService';
 import { quotationService } from './quotationService';
@@ -37,6 +37,19 @@ function subtractDays(isoDate: string, days: number): string {
 
 function toIso(date: Date): string {
     return date.toISOString().slice(0, 10);
+}
+
+// Varre o outline (WBS) e mapeia budgetItemId → nature, para folhas marcadas explicitamente.
+function buildNatureByBudgetItemId(outline?: OutlineNode[]): Record<string, TaskNature> {
+    const map: Record<string, TaskNature> = {};
+    const walk = (nodes: OutlineNode[]) => {
+        for (const n of nodes) {
+            if (n.budgetItemId && n.nature) map[n.budgetItemId] = n.nature;
+            if (n.children?.length) walk(n.children);
+        }
+    };
+    if (outline?.length) walk(outline);
+    return map;
 }
 
 // Converte snake_case row → ProcurementPlanItem camelCase
@@ -117,6 +130,9 @@ async function explodeNeeds(
     // Pré-carrega todos os lead times da org para evitar N queries
     const leadTimes = await inventoryService.listLeadTimes(organizationId);
 
+    // Atividades marcadas como Natureza=Compra no outline (WBS) do planejamento.
+    const natureByBudgetItemId = buildNatureByBudgetItemId(schedule.outline);
+
     const periodsById: Record<string, SchedulePeriod> = {};
     for (const p of schedule.periods ?? []) periodsById[p.id] = p;
 
@@ -151,14 +167,19 @@ async function explodeNeeds(
         sampleDistribItemIds: Object.keys(distribsByItemId).slice(0, 3),
     });
 
-    let skippedNoComposition = 0, skippedNoDistrib = 0, skippedNoMaterial = 0;
+    let skippedNoComposition = 0, skippedNoDistrib = 0, skippedNoMaterial = 0, lumpFromNature = 0;
 
     const needs: ExplodedNeed[] = [];
     const consolGroupIds: Record<string, string> = {}; // groupKey → UUID
 
     for (const entry of budget) {
         const comp = entry.sinapiItem?.composition;
-        if (!comp || comp.length === 0) { skippedNoComposition++; continue; }
+        const isPurchaseNature = natureByBudgetItemId[entry.id] === TaskNature.COMPRA;
+
+        // Sem composição SINAPI (ex.: elevador, compra direta): se a atividade do cronograma
+        // está marcada com Natureza=Compra, gera a necessidade a partir do próprio item
+        // (lump sum), em vez de descartá-lo silenciosamente.
+        if ((!comp || comp.length === 0) && !isPurchaseNature) { skippedNoComposition++; continue; }
 
         // Tenta distribuições explícitas; se vazio, tenta itemSchedule sintético
         let itemDistribs: ItemDistribution[] = distribsByItemId[entry.id] ?? [];
@@ -169,6 +190,43 @@ async function explodeNeeds(
             itemDistribs = [{ itemId: entry.id, periodId: syntheticPeriodId, percentage: 100, value: 0 }];
         }
         if (itemDistribs.length === 0) { skippedNoDistrib++; continue; }
+
+        if (!comp || comp.length === 0) {
+            // Lump sum: o item de orçamento inteiro é a necessidade (sem quebra em insumos).
+            lumpFromNature++;
+            for (const dist of itemDistribs) {
+                if (dist.percentage <= 0) continue;
+                const period = periodsById[dist.periodId];
+                if (!period) continue;
+
+                const qtyInPeriod = Number(entry.quantity ?? 0) * (dist.percentage / 100);
+                const leadTime = leadTimes.find(lt => !lt.inputCode && lt.organizationId === organizationId);
+                const leadTimeDays = leadTime?.leadTimeDays ?? 0;
+                const needDate = period.date;
+                const suggestedBuyDate = leadTimeDays > 0 ? subtractDays(needDate, leadTimeDays) : needDate;
+                const groupKey = `${entry.sinapiItem?.code ?? entry.id}|${period.date}`;
+                if (!consolGroupIds[groupKey]) consolGroupIds[groupKey] = crypto.randomUUID();
+
+                needs.push({
+                    inputCode:              entry.sinapiItem?.code || undefined,
+                    inputDescription:       entry.sinapiItem?.description ?? '',
+                    inputUnit:              entry.sinapiItem?.unit ?? '',
+                    requiredQty:            qtyInPeriod,
+                    sourceBudgetItemId:     entry.id,
+                    sourceBudgetItemDesc:   entry.sinapiItem?.description ?? '',
+                    sourceBudgetItemUnit:   entry.sinapiItem?.unit ?? '',
+                    periodId:               dist.periodId,
+                    periodDate:             period.date,
+                    needDate,
+                    leadTimeDays,
+                    suggestedBuyDate,
+                    suggestedSupplierId:    leadTime?.supplierId,
+                    estimatedUnitCost:      Number(entry.sinapiItem?.price ?? 0),
+                    consolidationGroupKey:  groupKey,
+                });
+            }
+            continue;
+        }
 
         for (const component of comp) {
             // Inclui INPUTs (materiais/equipamentos diretos); exclui sub-COMPOSITIONs e Mão de Obra
@@ -235,6 +293,7 @@ async function explodeNeeds(
         skippedNoComposition,
         skippedNoDistrib,
         skippedNoMaterial,
+        lumpFromNature,
     });
 
     return needs;

@@ -151,6 +151,8 @@ export interface ItemScheduleDetails {
     endDate?: string;
     duration?: number;
     manualRealPct?: number;
+    phase?: string;            // propagado de BudgetEntry.phase na criação (ver ensureFullScheduleList)
+    subPhase?: string;         // propagado de BudgetEntry.subPhase
     predecessors?: Predecessor[];
     earlyStart?: string;
     earlyFinish?: string;

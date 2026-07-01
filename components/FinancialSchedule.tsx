@@ -220,7 +220,13 @@ function expandGroupPredecessors(
 }
 
 function ensureFullScheduleList(currentItems: ItemScheduleDetails[], budgetItems: BudgetEntry[]): ItemScheduleDetails[] {
-    const list = [...currentItems];
+    const budgetById = new Map(budgetItems.map(b => [b.id, b]));
+    // Backfill: itens já existentes que ainda não têm phase/subPhase (criados antes desta propagação).
+    const list = currentItems.map(s => {
+        if (s.phase !== undefined) return s;
+        const b = budgetById.get(s.id);
+        return b ? { ...s, phase: b.phase, subPhase: b.subPhase } : s;
+    });
     budgetItems.forEach(item => {
         if (!list.some(s => s.id === item.id)) {
             const laborData = SchedulingEngine.deriveTotalLaborFromComposition(item.sinapiItem.composition || []);
@@ -234,7 +240,9 @@ function ensureFullScheduleList(currentItems: ItemScheduleDetails[], budgetItems
                 totalLaborCost: laborData.cost * item.quantity,
                 crewMainWorkers: 1,
                 hoursPerDay: 8,
-                efficiencyFactor: 1.0
+                efficiencyFactor: 1.0,
+                phase: item.phase,
+                subPhase: item.subPhase,
             });
         }
     });

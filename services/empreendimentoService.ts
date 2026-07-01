@@ -130,6 +130,15 @@ export const empreendimentoService = {
             .select(EMPREENDIMENTO_COLS)
             .single();
         if (error) throw new Error(`Failed to update empreendimento: ${error.message}`);
+
+        // Propaga renomeação para o edifício-pai no Comercial (best-effort)
+        if (updates.name && data.commercial_building_id) {
+            await supabase
+                .from('commercial_properties')
+                .update({ name: updates.name })
+                .eq('id', data.commercial_building_id);
+        }
+
         return data;
     },
 

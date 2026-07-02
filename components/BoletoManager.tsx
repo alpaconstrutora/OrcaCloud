@@ -122,30 +122,29 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         onOrgChange?.(id === 'ALL' ? null : id);
     }
 
-    function toggleSelect(id: string, e?: React.MouseEvent) {
-        e?.stopPropagation();
-        setSelectedIds(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id); else next.add(id);
-            return next;
-        });
+    const lastSelectedIndexRef = useRef<number | null>(null);
+    const shiftHeldRef = useRef(false);
+
+    function handleCheckboxMouseDown(e: React.MouseEvent) {
+        shiftHeldRef.current = e.shiftKey;
     }
 
-    const lastSelectedIndexRef = useRef<number | null>(null);
-
-    function handleCheckboxClick(e: React.MouseEvent<HTMLInputElement>, id: string, index: number) {
-        e.stopPropagation();
-        if (e.shiftKey && lastSelectedIndexRef.current !== null) {
-            e.preventDefault();
+    function handleCheckboxChange(checked: boolean, id: string, index: number) {
+        if (shiftHeldRef.current && lastSelectedIndexRef.current !== null) {
             const start = Math.min(lastSelectedIndexRef.current, index);
             const end = Math.max(lastSelectedIndexRef.current, index);
             const rangeIds = filtered.slice(start, end + 1).map(b => b.id);
             setSelectedIds(prev => {
                 const next = new Set(prev);
-                rangeIds.forEach(rid => next.add(rid));
+                rangeIds.forEach(rid => checked ? next.add(rid) : next.delete(rid));
                 return next;
             });
-            return;
+        } else {
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                if (checked) next.add(id); else next.delete(id);
+                return next;
+            });
         }
         lastSelectedIndexRef.current = index;
     }
@@ -690,8 +689,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                     <input
                                         type="checkbox"
                                         checked={selected}
-                                        onClick={e => handleCheckboxClick(e, b.id, idx)}
-                                        onChange={() => toggleSelect(b.id)}
+                                        onMouseDown={handleCheckboxMouseDown}
+                                        onChange={e => handleCheckboxChange(e.target.checked, b.id, idx)}
                                         className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
                                     />
                                 </label>
@@ -864,8 +863,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                             <input
                                                 type="checkbox"
                                                 checked={selected}
-                                                onClick={e => handleCheckboxClick(e, b.id, idx)}
-                                                onChange={() => toggleSelect(b.id)}
+                                                onMouseDown={handleCheckboxMouseDown}
+                                                onChange={e => handleCheckboxChange(e.target.checked, b.id, idx)}
                                                 className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
                                             />
                                         </td>

@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { laborService, EpiCatalogItem, EpiDelivery, EpiCategoria, Employee } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
+import Button from './ui/Button';
 
 const EPI_CATEGORIA_LABELS: Record<EpiCategoria, string> = {
     PROTECAO_CABECA: 'Proteção da Cabeça',
@@ -136,7 +137,7 @@ const EpiCatalogForm: React.FC<EpiFormProps> = ({ orgId, item, onClose, onSaved 
                 </div>
 
                 <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
-                    <button onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all">Cancelar</button>
+                    <Button onClick={onClose} variant="ghost">Cancelar</Button>
                     <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-all font-bold text-sm shadow-lg disabled:opacity-50">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                         {saving ? 'Salvando...' : (isEditing ? 'Salvar' : 'Cadastrar EPI')}
@@ -248,7 +249,7 @@ const EpiDeliveryForm: React.FC<DeliveryFormProps> = ({ orgId, employees, catalo
                     </InputGroup>
                 </div>
                 <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
-                    <button onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all">Cancelar</button>
+                    <Button onClick={onClose} variant="ghost">Cancelar</Button>
                     <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold text-sm shadow-lg disabled:opacity-50">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                         {saving ? 'Registrando...' : 'Registrar Entrega'}

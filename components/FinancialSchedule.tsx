@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Button from './ui/Button';
 
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -786,9 +787,9 @@ const SavePlanningVersionModal: React.FC<{ onCancel: () => void; onSave: (descri
             <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-[420px] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-200">
                 <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                     <h2 className="text-sm font-bold text-gray-900">Salvar Versão do Planejamento</h2>
-                    <button onClick={onCancel} className="p-1.5 hover:bg-gray-100 rounded-lg transition-all text-gray-400 hover:text-gray-600">
+                    <Button variant="ghost" size="icon" onClick={onCancel}>
                         <X className="w-4 h-4" />
-                    </button>
+                    </Button>
                 </div>
                 <div className="px-6 py-4">
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Descrição</label>
@@ -802,9 +803,9 @@ const SavePlanningVersionModal: React.FC<{ onCancel: () => void; onSave: (descri
                     />
                 </div>
                 <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
-                    <button onClick={onCancel} className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-all">
+                    <Button variant="ghost" onClick={onCancel}>
                         Cancelar
-                    </button>
+                    </Button>
                     <button
                         onClick={() => onSave(description)}
                         disabled={!description.trim()}
@@ -3951,9 +3952,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                     <p className="text-xs text-gray-400">Alterações detectadas no orçamento</p>
                                 </div>
                             </div>
-                            <button onClick={() => setSyncModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-all text-gray-400 hover:text-gray-600">
+                            <Button variant="ghost" size="icon" onClick={() => setSyncModalOpen(false)}>
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
+                            </Button>
                         </div>
 
                         {/* Body */}
@@ -4019,19 +4020,13 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
                         {/* Footer */}
                         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">
-                            <button
-                                onClick={() => setSyncModalOpen(false)}
-                                className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 rounded-xl transition-all border border-gray-200"
-                            >
+                            <Button variant="secondary" onClick={() => setSyncModalOpen(false)}>
                                 Fechar
-                            </button>
+                            </Button>
                             {syncDiff.total > 0 && (
-                                <button
-                                    onClick={handleApplySync}
-                                    className="px-4 py-2 text-sm font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-sm"
-                                >
+                                <Button variant="primary" onClick={handleApplySync}>
                                     Aplicar Sincronização
-                                </button>
+                                </Button>
                             )}
                         </div>
                     </div>
@@ -4057,9 +4052,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                     </p>
                                 </div>
                             </div>
-                            <button onClick={() => setVersionPanelOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-all text-gray-400 hover:text-gray-600">
+                            <Button variant="ghost" size="icon" onClick={() => setVersionPanelOpen(false)}>
                                 <X className="w-4 h-4" />
-                            </button>
+                            </Button>
                         </div>
 
                         {/* Actions */}
@@ -4145,13 +4140,15 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                         {v.budgetVersionItem != null ? ` · orçamento v${v.budgetVersionItem}` : ' · orçamento ao vivo'}
                                                     </p>
                                                 </div>
-                                                <button
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
                                                     onClick={() => handleRestorePlanningVersion(v)}
-                                                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:text-gray-900 transition-all"
+                                                    className="shrink-0 gap-1.5 hover:text-gray-900"
                                                 >
                                                     <RefreshCw className="w-3 h-3" />
                                                     Restaurar
-                                                </button>
+                                                </Button>
                                             </div>
                                         ))}
                                     </div>
@@ -4581,9 +4578,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Evidências Visuais do Diário de Obra • {viewingTaskPhotos.photos.length} Itens</p>
                                 </div>
                             </div>
-                            <button onClick={() => setViewingTaskPhotos(null)} className="p-3 hover:bg-gray-100 rounded-2xl transition-colors">
+                            <Button variant="ghost" size="icon" onClick={() => setViewingTaskPhotos(null)} className="!p-3 !h-auto !w-auto rounded-2xl">
                                 <X className="w-6 h-6 text-gray-400" />
-                            </button>
+                            </Button>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-8 bg-gray-50/50">
@@ -4720,4 +4717,5 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         </div>
     );
 };
+
 

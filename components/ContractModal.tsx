@@ -1,4 +1,5 @@
 import React from 'react';
+import Button from './ui/Button';
 import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins, MapPin, ClipboardList, Users } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
 import { Contract, ContractInstallment, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature } from '../types';
@@ -426,12 +427,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             </p>
                         </div>
                     </div>
-                    <button
+                    <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                        className="text-gray-400 hover:text-gray-600 rounded-full"
                     >
                         <X className="w-6 h-6" />
-                    </button>
+                    </Button>
                 </div>
 
                 {/* Form Body - 2:1 Layout */}
@@ -541,14 +544,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     className="w-full px-4 py-3 bg-white border border-blue-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                                 />
                                                 <div className="flex gap-2">
-                                                    <button type="button" onClick={handleCreateClient} disabled={!newClientName.trim() || savingClient}
-                                                        className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-button font-semibold uppercase tracking-wider disabled:opacity-50 hover:bg-blue-700 transition-colors">
+                                                    <Button type="button" variant="primary" onClick={handleCreateClient} disabled={!newClientName.trim() || savingClient}
+                                                        className="flex-1 py-2.5 rounded-xl text-button font-semibold uppercase tracking-wider">
                                                         {savingClient ? 'Salvando…' : 'Salvar Cliente'}
-                                                    </button>
-                                                    <button type="button" onClick={() => { setShowClientCreate(false); setNewClientName(''); setNewClientDoc(''); }}
-                                                        className="px-4 py-2.5 bg-white text-gray-500 border border-gray-200 rounded-xl text-button font-medium hover:bg-gray-50 transition-colors">
+                                                    </Button>
+                                                    <Button type="button" variant="secondary" onClick={() => { setShowClientCreate(false); setNewClientName(''); setNewClientDoc(''); }}
+                                                        className="px-4 py-2.5 rounded-xl text-button font-medium">
                                                         Cancelar
-                                                    </button>
+                                                    </Button>
                                                 </div>
                                             </div>
                                         ) : (
@@ -1398,3 +1401,4 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         </>
     );
 };
+

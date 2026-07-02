@@ -92,6 +92,20 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
   const handlePublish = async (unit: UnitWithTower) => {
     setBusyId(unit.id);
     try {
+      // Revalida no banco antes de criar — o estado local (units) pode estar obsoleto
+      // (ex.: outra aba/usuário já publicou), o que criaria uma property duplicada.
+      const { data: fresh, error: freshErr } = await supabase
+        .from('empreendimento_units')
+        .select('commercial_property_id')
+        .eq('id', unit.id)
+        .single();
+      if (freshErr) throw freshErr;
+      if (fresh?.commercial_property_id) {
+        await load();
+        alert(`"${unit.name}" já está publicada no Comercial — a lista foi atualizada.`);
+        return;
+      }
+
       const buildingId = await empreendimentoService.ensureCommercialBuilding(e, organizationId);
       const prop = await commercialService.saveProperty({
         organization_id: organizationId,

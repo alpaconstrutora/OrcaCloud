@@ -1,6 +1,7 @@
 import React from 'react';
 import { Plus, Pencil, Trash2, Loader2, X, Check, AlertTriangle, RotateCcw } from 'lucide-react';
 import { obraTypeService, ObraType, ObraTypeInsert, COLOR_OPTIONS, colorClasses } from '../services/obraTypeService';
+import Button from './ui/Button';
 
 interface Props {
   organizationId: string;
@@ -124,14 +125,14 @@ const TypeForm: React.FC<{
         <button type="button" onClick={onCancel} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition-colors">
           Cancelar
         </button>
-        <button
+        <Button
           type="submit"
           disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          variant="primary"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Salvar
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -318,13 +319,14 @@ const ObraTypesManager: React.FC<Props> = ({ organizationId }) => {
               ao editar um, você cria uma personalização para sua organização.
             </p>
           </div>
-          <button
+          <Button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-colors shrink-0"
+            variant="primary"
+            className="shrink-0"
           >
             <Plus className="w-4 h-4" />
             Novo Tipo
-          </button>
+          </Button>
         </div>
 
         {loading ? (
@@ -431,10 +433,10 @@ const ObraTypesManager: React.FC<Props> = ({ organizationId }) => {
               <button onClick={() => setDeleting(null)} disabled={actionLoading} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50">
                 Cancelar
               </button>
-              <button onClick={handleDelete} disabled={actionLoading} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors">
+              <Button onClick={handleDelete} disabled={actionLoading} variant="danger">
                 {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 Excluir
-              </button>
+              </Button>
             </div>
           </div>
         </div>

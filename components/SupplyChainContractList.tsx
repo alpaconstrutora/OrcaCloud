@@ -11,6 +11,7 @@ import { supplierService } from '../services/supplierService';
 import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
 import { Contract } from '../types';
+import Button from './ui/Button';
 
 interface SupplyChainContractListProps {
     projectId: string;
@@ -239,12 +240,14 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                             >
                                 Cancelar
                             </button>
-                            <button
+                            <Button
                                 onClick={confirmDelete}
-                                className="px-6 py-3 bg-red-600 text-white rounded-xl font-medium text-button uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-200"
+                                variant="danger"
+                                size="lg"
+                                className="shadow-lg shadow-red-200"
                             >
                                 Excluir
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -281,13 +284,15 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         </button>
                     </div>
 
-                    <button
+                    <Button
                         onClick={loadContracts}
-                        className="p-4 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm active:scale-95 group"
+                        variant="secondary"
+                        size="icon"
+                        className="hover:text-blue-600 hover:border-blue-100 shadow-sm group"
                         title="Recarregar Lista"
                     >
                         <RotateCcw className={`w-5 h-5 group-hover:rotate-180 transition-transform duration-500 ${loading ? 'animate-spin text-blue-600' : ''}`} />
-                    </button>
+                    </Button>
 
                     <button
                         onClick={onCreateNew}
@@ -371,12 +376,14 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     </div>
                     <h3 className="text-xl font-medium text-gray-900 tracking-tight">Nenhum contrato encontrado</h3>
                     <p className="text-gray-400 text-sm mt-2 font-medium max-w-xs mx-auto">Não há contratos registrados para este projeto ainda.</p>
-                    <button
+                    <Button
                         onClick={onCreateNew}
-                        className="mt-8 px-8 py-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all font-medium text-button uppercase tracking-widest shadow-lg shadow-blue-200 active:scale-95"
+                        variant="primary"
+                        size="lg"
+                        className="mt-8 shadow-lg shadow-blue-200"
                     >
                         Começar Cadastro
-                    </button>
+                    </Button>
                 </div>
             ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -392,30 +399,36 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         <FileText className="w-6 h-6" />
                                     </div>
                                     <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button
+                                        <Button
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 onEdit && onEdit(contract);
                                             }}
-                                            className="p-2 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-emerald-600 hover:border-emerald-100 transition-all shadow-sm"
+                                            variant="secondary"
+                                            size="icon"
+                                            className="!h-8 !w-8 hover:text-emerald-600 hover:border-emerald-100 shadow-sm"
                                             title="Ajustar Contrato"
                                         >
                                             <Pencil className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button
+                                        </Button>
+                                        <Button
                                             onClick={(e) => handleDuplicate(e, contract.id)}
-                                            className="p-2 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm"
+                                            variant="secondary"
+                                            size="icon"
+                                            className="!h-8 !w-8 hover:text-blue-600 hover:border-blue-100 shadow-sm"
                                             title="Duplicar Contrato"
                                         >
                                             <Copy className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button
+                                        </Button>
+                                        <Button
                                             onClick={(e) => handleDelete(e, contract.id)}
-                                            className="p-2 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-red-600 hover:border-red-100 transition-all shadow-sm"
+                                            variant="secondary"
+                                            size="icon"
+                                            className="!h-8 !w-8 hover:text-red-600 hover:border-red-100 shadow-sm"
                                             title="Excluir Contrato"
                                         >
                                             <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                        </Button>
                                     </div>
                                 </div>
                                 <StatusBadge status={contract.status} />

@@ -9,6 +9,7 @@ import { opportunityProjectService } from '../../services/opportunityProjectServ
 import { imovibService } from '../../services/imovibService';
 import { ImovibStudy } from '../../types';
 import { storageService } from '../../services/storageService';
+import Button from '../ui/Button';
 
 interface Props {
     initial?: Partial<InvestorOpportunity>;
@@ -194,9 +195,9 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             {initial?.id ? form.title || 'Sem título' : 'Cadastro de Oportunidade'}
                         </h2>
                     </div>
-                    <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors">
+                    <Button variant="ghost" size="icon" onClick={onClose} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100">
                         <X className="w-5 h-5" />
-                    </button>
+                    </Button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-8 space-y-8">
@@ -287,14 +288,16 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 ))}
                             </select>
                             {form.project_id && (
-                                <button
+                                <Button
+                                    variant="secondary"
+                                    size="icon"
                                     type="button"
                                     onClick={() => set('project_id', null)}
                                     title="Desvincular"
-                                    className="p-2.5 text-indigo-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors border border-indigo-200 bg-white"
+                                    className="text-indigo-400 hover:text-red-500 hover:bg-red-50 border-indigo-200"
                                 >
                                     <Unlink className="w-4 h-4" />
-                                </button>
+                                </Button>
                             )}
                         </div>
                         {form.project_id && (
@@ -328,14 +331,16 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 ))}
                             </select>
                             {form.imovib_study_id && (
-                                <button
+                                <Button
+                                    variant="secondary"
+                                    size="icon"
                                     type="button"
                                     onClick={() => set('imovib_study_id', null)}
                                     title="Desvincular"
-                                    className="p-2.5 text-blue-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors border border-blue-200 bg-white"
+                                    className="text-blue-400 hover:text-red-500 hover:bg-red-50 border-blue-200"
                                 >
                                     <Unlink className="w-4 h-4" />
-                                </button>
+                                </Button>
                             )}
                         </div>
                     </section>
@@ -415,14 +420,16 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                         <div key={idx} className="relative rounded-xl overflow-hidden border border-gray-150 aspect-video group bg-gray-50">
                                             <img src={url} alt={`Render ${idx + 1}`} className="w-full h-full object-cover" />
                                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <button
+                                                <Button
+                                                    variant="danger"
+                                                    size="icon"
                                                     type="button"
                                                     onClick={() => set('gallery_urls', (form.gallery_urls || []).filter((_, i) => i !== idx))}
-                                                    className="p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-lg"
+                                                    className="rounded-lg shadow-lg"
                                                     title="Excluir imagem"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                </Button>
                                             </div>
                                         </div>
                                     ))}
@@ -453,7 +460,8 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     placeholder="Ex: 500m / 5 min"
                                     className="w-40 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
-                                <button
+                                <Button
+                                    size="icon"
                                     type="button"
                                     onClick={() => {
                                         if (newDistance.place.trim() && newDistance.distance.trim()) {
@@ -461,10 +469,9 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                             setNewDistance({ place: '', distance: '' });
                                         }
                                     }}
-                                    className="p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all"
                                 >
                                     <Plus className="w-5 h-5" />
-                                </button>
+                                </Button>
                             </div>
                             {form.distances_json && form.distances_json.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mt-2">

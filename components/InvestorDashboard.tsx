@@ -577,9 +577,9 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                     <p className="text-form-label font-bold text-gray-400 uppercase tracking-widest mt-0.5">Abas visíveis para {investorProfile.name.split(' ')[0]}</p>
                                 </div>
                             </div>
-                            <button onClick={() => setShowTabConfig(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                            <Button variant="ghost" size="icon" onClick={() => setShowTabConfig(false)} className="text-gray-400 hover:text-gray-700">
                                 <X className="w-5 h-5" />
-                            </button>
+                            </Button>
                         </div>
                         <div className="p-8 space-y-3">
                             {TABS.map(tab => {

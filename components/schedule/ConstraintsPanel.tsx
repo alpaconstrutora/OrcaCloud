@@ -16,6 +16,7 @@ import {
     RotateCcw,
 } from 'lucide-react';
 import { HierarchyNode, ScheduleConstraint, ConstraintCategory } from '../../types';
+import Button from '../ui/Button';
 import {
     scheduleConstraintsService,
 } from '../../services/scheduleConstraintsService';
@@ -198,22 +199,20 @@ export const ConstraintsPanel: React.FC<Props> = ({ organizationId, projectId, h
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setShowResolved(v => !v)}
-                        className="text-xs font-medium text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
-                    >
+                    <Button variant="secondary" size="sm" onClick={() => setShowResolved(v => !v)}>
                         {showResolved ? 'Ocultar resolvidas' : 'Ver resolvidas'}
-                    </button>
-                    <button onClick={load} className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all">
+                    </Button>
+                    <Button variant="secondary" size="icon" onClick={load}>
                         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        variant="primary"
+                        size="sm"
                         onClick={() => { setAddingFor('__new__'); setForm(EMPTY_FORM); }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all shadow-sm"
                     >
                         <Plus className="w-3.5 h-3.5" />
                         Nova restrição
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -293,13 +292,14 @@ export const ConstraintsPanel: React.FC<Props> = ({ organizationId, projectId, h
                                                 />
                                             </div>
                                         ) : (
-                                            <button
+                                            <Button
+                                                variant="ghost"
                                                 onClick={() => { setAddingFor(cat); setForm({ ...EMPTY_FORM, category: cat }); }}
-                                                className="w-full flex items-center gap-2 px-4 py-2.5 text-xs font-medium text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                                                className="w-full justify-start normal-case font-medium tracking-normal text-gray-400 hover:text-blue-600 hover:bg-blue-50"
                                             >
                                                 <Plus className="w-3.5 h-3.5" />
                                                 Adicionar restrição de {cfg.label.toLowerCase()}
-                                            </button>
+                                            </Button>
                                         )}
                                     </div>
                                 )}
@@ -452,21 +452,24 @@ const NewConstraintForm: React.FC<{
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-1">
-            <button
+            <Button
+                variant="ghost"
+                size="sm"
                 onClick={onCancel}
-                className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-all"
+                className="normal-case font-medium tracking-normal"
             >
                 <X className="w-3.5 h-3.5 inline mr-1" />
                 Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
+                variant="primary"
+                size="sm"
                 onClick={onSave}
                 disabled={saving || !form.description.trim() || !form.scheduleItemId}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                 Salvar
-            </button>
+            </Button>
         </div>
     </div>
 );

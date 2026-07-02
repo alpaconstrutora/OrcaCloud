@@ -5,6 +5,7 @@ import {
     Square, BookOpen, ListChecks, Tag
 } from 'lucide-react';
 import { contractScopeService, ContractScopeTemplate } from '../services/contractScopeService';
+import Button from './ui/Button';
 
 /* ─── Catálogo predefinido ─── */
 interface ScopeGroup { id: string; label: string; items: string[]; }
@@ -421,21 +422,22 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                                 </span>
                                 <div className="flex gap-2">
                                     {totalSelected > 0 && (
-                                        <button
+                                        <Button
                                             onClick={() => setSelected(new Set())}
-                                            className="px-3 py-1.5 text-xs font-black text-gray-400 uppercase tracking-widest border border-gray-200 rounded-lg hover:bg-white transition-colors"
+                                            variant="secondary"
+                                            size="sm"
                                         >
                                             Limpar
-                                        </button>
+                                        </Button>
                                     )}
-                                    <button
+                                    <Button
                                         onClick={handleUseCatalog}
                                         disabled={totalSelected === 0}
-                                        className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-40 hover:bg-blue-700 transition-colors"
+                                        size="sm"
                                     >
                                         <Tag className="w-3.5 h-3.5" />
                                         {mode === 'pick' ? 'Usar selecionados' : 'Pré-visualizar'}
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
                         </div>
@@ -467,14 +469,13 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                                         className="w-full px-4 py-3 bg-white border border-blue-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
                                     />
                                     <div className="flex gap-2">
-                                        <button onClick={handleSave} disabled={saving || !form.name.trim() || !form.content.trim()}
-                                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-50 hover:bg-blue-700 transition-colors">
+                                        <Button onClick={handleSave} disabled={saving || !form.name.trim() || !form.content.trim()} size="sm">
                                             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                                             {saving ? 'Salvando…' : 'Salvar'}
-                                        </button>
-                                        <button onClick={cancelForm} className="px-4 py-2 bg-white text-gray-500 border border-gray-200 rounded-xl text-xs font-medium hover:bg-gray-50 transition-colors">
+                                        </Button>
+                                        <Button onClick={cancelForm} variant="secondary" size="sm">
                                             Cancelar
-                                        </button>
+                                        </Button>
                                     </div>
                                 </div>
                             )}

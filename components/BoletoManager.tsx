@@ -15,6 +15,7 @@ import BoletoLoteModal from './BoletoLoteModal';
 import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import Button from './ui/Button';
 
 interface BoletoManagerProps {
     organizationId: string;
@@ -120,6 +121,25 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             if (next.has(id)) next.delete(id); else next.add(id);
             return next;
         });
+    }
+
+    const lastSelectedIndexRef = useRef<number | null>(null);
+
+    function handleCheckboxClick(e: React.MouseEvent<HTMLInputElement>, id: string, index: number) {
+        e.stopPropagation();
+        if (e.shiftKey && lastSelectedIndexRef.current !== null) {
+            e.preventDefault();
+            const start = Math.min(lastSelectedIndexRef.current, index);
+            const end = Math.max(lastSelectedIndexRef.current, index);
+            const rangeIds = filtered.slice(start, end + 1).map(b => b.id);
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                rangeIds.forEach(rid => next.add(rid));
+                return next;
+            });
+            return;
+        }
+        lastSelectedIndexRef.current = index;
     }
 
     function selectAllFiltered() {
@@ -327,47 +347,57 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     )}
                     {filtered.length > 0 && (
                         <>
-                            <button
+                            <Button
+                                variant="secondary"
+                                size="lg"
                                 onClick={() => handleExport('excel')}
                                 disabled={exporting}
-                                className="flex items-center gap-2 px-4 py-3 bg-white text-emerald-700 border border-emerald-200 rounded-[1.25rem] hover:bg-emerald-50 font-bold text-button uppercase tracking-widest disabled:opacity-50"
+                                className="text-emerald-700 border-emerald-200 hover:bg-emerald-50"
                                 title="Exportar lista filtrada para Excel"
                             >
                                 {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                                 Excel
-                            </button>
-                            <button
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                size="lg"
                                 onClick={() => handleExport('pdf')}
                                 disabled={exporting}
-                                className="flex items-center gap-2 px-4 py-3 bg-white text-red-600 border border-red-200 rounded-[1.25rem] hover:bg-red-50 font-bold text-button uppercase tracking-widest disabled:opacity-50"
+                                className="text-red-600 border-red-200 hover:bg-red-50"
                                 title="Exportar lista filtrada para PDF"
                             >
                                 {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                                 PDF
-                            </button>
+                            </Button>
                         </>
                     )}
-                    <button
+                    <Button
+                        variant="secondary"
+                        size="lg"
                         onClick={() => carregar(effectiveOrgId)}
-                        className="flex items-center gap-2 px-4 py-3 bg-white text-gray-700 border border-gray-100 rounded-[1.25rem] hover:bg-gray-50 font-bold text-button uppercase tracking-widest"
+                        className="text-gray-700 border-gray-100 hover:bg-gray-50"
                     >
                         <RefreshCw className="w-4 h-4" />
                         Atualizar
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        size="lg"
                         onClick={() => setIsLoteOpen(true)}
-                        className="flex items-center gap-2 px-4 py-3 bg-white text-blue-600 border border-blue-200 rounded-[1.25rem] hover:bg-blue-50 font-bold text-button uppercase tracking-widest transition-all"
+                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
                     >
                         <Upload className="w-4 h-4" />
                         Importar em Lote
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        variant="primary"
+                        size="lg"
                         onClick={abrirNovo}
-                        className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                        className="gap-3 shadow-xl shadow-blue-900/20"
                     >
                         <Plus className="w-4 h-4" />
                         Novo Boleto
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -503,9 +533,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     <div className="flex items-center justify-between">
                         <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Filtros avançados</span>
                         {temFiltroAtivo && (
-                            <button onClick={limparFiltros} className="flex items-center gap-1 text-button text-red-500 hover:text-red-700 font-bold">
+                            <Button variant="ghost" size="sm" onClick={limparFiltros} className="text-red-500 hover:text-red-700 normal-case font-bold">
                                 <X className="w-3 h-3" /> Limpar filtros
-                            </button>
+                            </Button>
                         )}
                     </div>
 
@@ -576,12 +606,14 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                             <option value="cost_center_id">Centro de Custo</option>
                             <option value="status">Status</option>
                         </select>
-                        <button
+                        <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => setOrdenarDir(d => d === 'asc' ? 'desc' : 'asc')}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-button font-bold hover:bg-gray-50"
+                            className="normal-case font-bold"
                         >
                             {ordenarDir === 'asc' ? '↑ Crescente' : '↓ Decrescente'}
-                        </button>
+                        </Button>
                     </div>
                 </div>
             )}
@@ -603,13 +635,15 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                             · {formatBRL(filtered.filter(b => selectedIds.has(b.id)).reduce((s, b) => s + (b.valor ?? 0), 0))}
                         </span>
                     </span>
-                    <button
+                    <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => setIsLoteEditOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-white text-blue-700 rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-50 transition-colors"
+                        className="text-blue-700 border-none hover:bg-blue-50"
                     >
                         <Pencil className="w-3.5 h-3.5" />
                         Editar em Lote
-                    </button>
+                    </Button>
                     <button
                         onClick={clearSelection}
                         className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-400 transition-colors"
@@ -634,7 +668,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filtered.map(b => {
+                    {filtered.map((b, idx) => {
                         const atrasado = b.vencimento && !['pago','cancelado'].includes(b.status)
                             && new Date(b.vencimento + 'T00:00:00') < new Date();
                         const selected = selectedIds.has(b.id);
@@ -648,6 +682,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                     <input
                                         type="checkbox"
                                         checked={selected}
+                                        onClick={e => handleCheckboxClick(e, b.id, idx)}
                                         onChange={() => toggleSelect(b.id)}
                                         className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
                                     />
@@ -805,7 +840,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {filtered.map(b => {
+                            {filtered.map((b, idx) => {
                                 const atrasado = b.vencimento && !['pago','cancelado'].includes(b.status)
                                     && new Date(b.vencimento + 'T00:00:00') < new Date();
                                 const selected = selectedIds.has(b.id);
@@ -821,6 +856,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                             <input
                                                 type="checkbox"
                                                 checked={selected}
+                                                onClick={e => handleCheckboxClick(e, b.id, idx)}
                                                 onChange={() => toggleSelect(b.id)}
                                                 className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
                                             />

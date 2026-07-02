@@ -12,6 +12,7 @@ import {
     Communication, CommTipo, CommScope, CommStatus, WhatsappConfig, WppProvider
 } from '../services/communicationService';
 import { STALE } from '../lib/queryClient';
+import Button from './ui/Button';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -129,9 +130,9 @@ const CommForm: React.FC<CommFormProps> = ({ orgId, comm, employees, projects, o
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
                 <div className="flex items-center justify-between p-6 border-b border-slate-100">
                     <h2 className="text-lg font-black text-slate-900">{isEditing ? 'Editar Comunicado' : 'Novo Comunicado'}</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                    <Button onClick={onClose} variant="ghost" size="icon">
                         <X className="w-5 h-5 text-slate-400" />
-                    </button>
+                    </Button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-5">
@@ -252,9 +253,9 @@ const CommForm: React.FC<CommFormProps> = ({ orgId, comm, employees, projects, o
                 </div>
 
                 <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-100">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+                    <Button onClick={onClose} variant="ghost" size="md">
                         Cancelar
-                    </button>
+                    </Button>
                     <button onClick={() => handleSave(false)} disabled={saving}
                         className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50">
                         {saving && !dispatching ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
@@ -299,9 +300,9 @@ const CommDetail: React.FC<CommDetailProps> = ({ comm, onBack, onDispatch, dispa
     return (
         <div className="space-y-5">
             <div className="flex items-start gap-4">
-                <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-xl transition-colors mt-1">
+                <Button onClick={onBack} variant="ghost" size="icon" className="mt-1">
                     <ChevronRight className="w-5 h-5 text-slate-400 rotate-180" />
-                </button>
+                </Button>
                 <div className="flex-1">
                     <div className="flex items-center gap-3 flex-wrap">
                         <div className={`p-2 ${TIPO.bg} rounded-xl`}>

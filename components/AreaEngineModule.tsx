@@ -1,16 +1,19 @@
-﻿import React from 'react';
+import React from 'react';
 import {
     AlertTriangle,
     Calculator,
     CheckCircle2,
     FileSpreadsheet,
+    FileText,
     Lock,
     Plus,
     RefreshCw,
     ShieldCheck,
+    Trash2,
 } from 'lucide-react';
 import Button from './ui/Button';
 import { areaEngineService } from '../services/areaEngineService';
+import { areaEngineExportService } from '../services/areaEngineExportService';
 import type {
     AreaEngineRpcResult,
     AreaProject,
@@ -18,6 +21,8 @@ import type {
     AreaQuadroIRow,
     AreaQuadroIVBRow,
     AreaVersion,
+    AreaVersionApproval,
+    AreaVersionAuditLog,
     AreaVersionStructure,
 } from '../types/areaEngine';
 
@@ -61,23 +66,51 @@ function statusTone(status?: string): string {
 function RpcFeedback({ result }: { result: AreaEngineRpcResult | null }) {
     if (!result) return null;
     const errors = result.blocking_errors || [];
+    const warnings = result.warnings || [];
     const success = result.status === 'success';
+    const hasErrors = errors.length > 0;
+    const hasWarnings = warnings.length > 0;
 
     return (
-        <div className={`border rounded-lg px-4 py-3 text-sm ${success ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-            <div className="flex items-center gap-2 font-bold">
-                {success ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-                <span>Status: {result.status}</span>
+        <div className={`border rounded-lg px-4 py-3 text-sm ${hasErrors ? 'bg-red-50 border-red-200 text-red-800' : success ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-2 font-bold">
+                    {hasErrors ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                    <span>Status: {result.status}</span>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11px] font-black uppercase tracking-widest">
+                    <span className="rounded-full bg-white/70 px-2 py-1">Bloqueios: {errors.length}</span>
+                    <span className="rounded-full bg-white/70 px-2 py-1">Alertas: {warnings.length}</span>
+                </div>
             </div>
-            {errors.length > 0 && (
-                <ul className="mt-2 space-y-1">
-                    {errors.map((err, idx) => (
-                        <li key={`${err.code}-${idx}`}>
-                            <span className="font-mono font-bold">{err.code}</span> - {err.message}
-                        </li>
-                    ))}
-                </ul>
+            {hasErrors && (
+                <IssueList title="Erros bloqueantes" issues={errors} tone="error" />
             )}
+            {hasWarnings && (
+                <IssueList title="Alertas" issues={warnings} tone="warning" />
+            )}
+            {!hasErrors && !hasWarnings && (
+                <p className="mt-2 text-xs font-semibold">Nenhum erro bloqueante ou alerta retornado pelo motor.</p>
+            )}
+        </div>
+    );
+}
+
+function IssueList({ title, issues, tone }: { title: string; issues: AreaEngineRpcResult['blocking_errors']; tone: 'error' | 'warning' }) {
+    const rows = issues || [];
+    if (rows.length === 0) return null;
+    return (
+        <div className="mt-3 rounded-lg border border-white/70 bg-white/60 p-3">
+            <p className={`text-xs font-black uppercase tracking-widest ${tone === 'error' ? 'text-red-700' : 'text-amber-700'}`}>{title}</p>
+            <ul className="mt-2 space-y-1">
+                {rows.map((issue, idx) => (
+                    <li key={`${issue.code}-${idx}`} className="flex flex-col gap-0.5 md:flex-row md:items-center md:gap-2">
+                        <span className="font-mono text-xs font-black">{issue.code}</span>
+                        <span>{issue.message}</span>
+                        {typeof issue.count === 'number' && <span className="text-xs font-bold opacity-70">({issue.count})</span>}
+                    </li>
+                ))}
+            </ul>
         </div>
     );
 }
@@ -96,12 +129,15 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
     const [selectedVersionId, setSelectedVersionId] = React.useState<string>('');
     const [structure, setStructure] = React.useState<AreaVersionStructure>({ blocks: [], floors: [], units: [], spaces: [] });
+    const [approvals, setApprovals] = React.useState<AreaVersionApproval[]>([]);
+    const [auditLogs, setAuditLogs] = React.useState<AreaVersionAuditLog[]>([]);
     const [quadroI, setQuadroI] = React.useState<AreaQuadroIRow[]>([]);
     const [quadroII, setQuadroII] = React.useState<AreaQuadroIIRow[]>([]);
     const [quadroIVB, setQuadroIVB] = React.useState<AreaQuadroIVBRow[]>([]);
     const [activeTable, setActiveTable] = React.useState<TableView>('estrutura');
     const [loading, setLoading] = React.useState(false);
     const [actionLoading, setActionLoading] = React.useState<string | null>(null);
+    const [exportLoading, setExportLoading] = React.useState<'pdf' | 'xlsx' | null>(null);
     const [feedback, setFeedback] = React.useState<AreaEngineRpcResult | null>(null);
     const [error, setError] = React.useState<string | null>(null);
     const [isCreateOpen, setIsCreateOpen] = React.useState(false);
@@ -114,8 +150,35 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const [structureUnit1Area, setStructureUnit1Area] = React.useState('50');
     const [structureUnit2Area, setStructureUnit2Area] = React.useState('50');
     const [structureCommonArea, setStructureCommonArea] = React.useState('20');
+    const [editorBlockCode, setEditorBlockCode] = React.useState('T1');
+    const [editorBlockName, setEditorBlockName] = React.useState('Torre 1');
+    const [editorFloorBlockId, setEditorFloorBlockId] = React.useState('');
+    const [editorFloorCode, setEditorFloorCode] = React.useState('PAV');
+    const [editorFloorName, setEditorFloorName] = React.useState('Pavimento');
+    const [editorFloorType, setEditorFloorType] = React.useState('type');
+    const [editorUnitBlockId, setEditorUnitBlockId] = React.useState('');
+    const [editorUnitFloorId, setEditorUnitFloorId] = React.useState('');
+    const [editorUnitCode, setEditorUnitCode] = React.useState('Unidade');
+    const [editorUnitType, setEditorUnitType] = React.useState('apartment');
+    const [editorUnitTypology, setEditorUnitTypology] = React.useState('Tipo A');
+    const [editorSpaceUseClass, setEditorSpaceUseClass] = React.useState<'private' | 'common'>('private');
+    const [editorSpaceBlockId, setEditorSpaceBlockId] = React.useState('');
+    const [editorSpaceFloorId, setEditorSpaceFloorId] = React.useState('');
+    const [editorSpaceUnitId, setEditorSpaceUnitId] = React.useState('');
+    const [editorSpaceCode, setEditorSpaceCode] = React.useState('');
+    const [editorSpaceName, setEditorSpaceName] = React.useState('Area');
+    const [editorSpaceArea, setEditorSpaceArea] = React.useState('10');
+    const [editorSpaceCoverage, setEditorSpaceCoverage] = React.useState('covered_standard');
+    const [editorSpaceDivision, setEditorSpaceDivision] = React.useState<'proportional' | 'non_proportional'>('proportional');
+    const [editorSpaceCoefficient, setEditorSpaceCoefficient] = React.useState('1');
+    const [editorSpaceScope, setEditorSpaceScope] = React.useState<'global' | 'block'>('global');
 
     const selectedVersion = versions.find(v => v.id === selectedVersionId) || null;
+    const technicalApproval = approvals.find(approval => approval.approval_type === 'technical');
+    const legalApproval = approvals.find(approval => approval.approval_type === 'legal');
+    const canApproveTechnical = selectedVersion?.status === 'calculated';
+    const canApproveLegal = selectedVersion?.status === 'technically_approved';
+    const canLockVersion = selectedVersion?.status === 'legally_approved';
 
     const loadProjects = React.useCallback(async () => {
         if (!organizationId) return;
@@ -153,6 +216,9 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
 
     const loadResults = React.useCallback(async (versionId: string) => {
         if (!versionId) {
+            setStructure({ blocks: [], floors: [], units: [], spaces: [] });
+            setApprovals([]);
+            setAuditLogs([]);
             setQuadroI([]);
             setQuadroII([]);
             setQuadroIVB([]);
@@ -161,13 +227,17 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         setLoading(true);
         setError(null);
         try {
-            const [structureData, qi, qii, qivb] = await Promise.all([
+            const [structureData, approvalRows, auditRows, qi, qii, qivb] = await Promise.all([
                 areaEngineService.getStructure(versionId),
+                areaEngineService.listApprovals(versionId),
+                areaEngineService.listAuditLogs(versionId),
                 areaEngineService.listQuadroI(versionId),
                 areaEngineService.listQuadroII(versionId),
                 areaEngineService.listQuadroIVB(versionId),
             ]);
             setStructure(structureData);
+            setApprovals(approvalRows);
+            setAuditLogs(auditRows);
             setQuadroI(qi);
             setQuadroII(qii);
             setQuadroIVB(qivb);
@@ -181,6 +251,17 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     React.useEffect(() => { void loadProjects(); }, [loadProjects]);
     React.useEffect(() => { void loadVersions(selectedProjectId); }, [selectedProjectId, loadVersions]);
     React.useEffect(() => { void loadResults(selectedVersionId); }, [selectedVersionId, loadResults]);
+    React.useEffect(() => {
+        const firstBlockId = structure.blocks[0]?.id || '';
+        const firstFloorId = structure.floors[0]?.id || '';
+        const firstUnitId = structure.units[0]?.id || '';
+        setEditorFloorBlockId(prev => prev || firstBlockId);
+        setEditorUnitBlockId(prev => prev || firstBlockId);
+        setEditorUnitFloorId(prev => prev || firstFloorId);
+        setEditorSpaceBlockId(prev => prev || firstBlockId);
+        setEditorSpaceFloorId(prev => prev || firstFloorId);
+        setEditorSpaceUnitId(prev => prev || firstUnitId);
+    }, [structure.blocks, structure.floors, structure.units]);
 
     async function runAction(action: string, fn: () => Promise<AreaEngineRpcResult>) {
         setActionLoading(action);
@@ -197,6 +278,64 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         }
     }
 
+    async function runValidatedCalculation() {
+        if (!selectedVersionId) return;
+        setActionLoading('calculate');
+        setError(null);
+        setFeedback(null);
+        try {
+            const validation = await areaEngineService.validateVersion(selectedVersionId);
+            const blockingErrors = validation.blocking_errors || [];
+            if (blockingErrors.length > 0 || validation.status === 'failed') {
+                setFeedback(validation);
+                return;
+            }
+
+            const result = await areaEngineService.calculateVersion(selectedVersionId);
+            setFeedback(result);
+            if (selectedProjectId) await loadVersions(selectedProjectId);
+            await loadResults(selectedVersionId);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao validar e calcular.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+    function exportPackagePayload() {
+        const project = projects.find(row => row.id === selectedProjectId);
+        return {
+            projectName: project?.name || 'Projeto de areas',
+            version: selectedVersion,
+            structure,
+            quadroI,
+            quadroII,
+            quadroIVB,
+            approvals,
+            auditLogs,
+        };
+    }
+
+    async function exportAreaPackage(kind: 'pdf' | 'xlsx') {
+        if (!selectedVersionId) return;
+        if (quadroI.length === 0 && quadroII.length === 0 && quadroIVB.length === 0) {
+            setError('Calcule a versao antes de exportar os quadros.');
+            return;
+        }
+        setExportLoading(kind);
+        setError(null);
+        try {
+            const payload = exportPackagePayload();
+            if (kind === 'xlsx') {
+                areaEngineExportService.exportXlsx(payload);
+            } else {
+                await areaEngineExportService.exportPdf(payload);
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao exportar pacote de areas.');
+        } finally {
+            setExportLoading(null);
+        }
+    }
     async function createAreaProject(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
         if (!organizationId) return;
@@ -270,6 +409,11 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                 unit2Area,
                 commonArea,
             });
+            const validation = await areaEngineService.validateVersion(selectedVersionId);
+            if ((validation.blocking_errors || []).length > 0 || validation.status === 'failed') {
+                setFeedback(validation);
+                return;
+            }
             const result = await areaEngineService.calculateVersion(selectedVersionId);
             setFeedback(result);
             await loadResults(selectedVersionId);
@@ -282,6 +426,163 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         }
     }
 
+
+    function versionIsEditable(): boolean {
+        if (!selectedVersionId || !selectedVersion) {
+            setError('Selecione uma versao para editar a estrutura.');
+            return false;
+        }
+        if (['locked', 'superseded', 'cancelled'].includes(selectedVersion.status)) {
+            setError('Esta versao esta bloqueada para edicao. Crie uma nova versao para alterar a estrutura.');
+            return false;
+        }
+        return true;
+    }
+
+    function parsePositiveArea(value: string, label: string): number | null {
+        const parsed = Number(value.replace(',', '.'));
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+            setError(`Informe um valor maior que zero para ${label}.`);
+            return null;
+        }
+        return parsed;
+    }
+
+    async function addBlock(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!versionIsEditable()) return;
+        const name = editorBlockName.trim();
+        if (!name) { setError('Informe o nome do bloco.'); return; }
+        setActionLoading('add-block');
+        setError(null);
+        try {
+            await areaEngineService.createBlock(selectedVersionId, {
+                code: editorBlockCode.trim() || undefined,
+                name,
+                sortOrder: structure.blocks.length + 1,
+            });
+            await loadResults(selectedVersionId);
+            setEditorBlockCode('');
+            setEditorBlockName('');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao adicionar bloco.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
+    async function addFloor(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!versionIsEditable()) return;
+        const blockId = editorFloorBlockId || structure.blocks[0]?.id;
+        const name = editorFloorName.trim();
+        if (!blockId) { setError('Cadastre um bloco antes de criar pavimentos.'); return; }
+        if (!name) { setError('Informe o nome do pavimento.'); return; }
+        setActionLoading('add-floor');
+        setError(null);
+        try {
+            await areaEngineService.createFloor(selectedVersionId, {
+                blockId,
+                code: editorFloorCode.trim() || undefined,
+                name,
+                floorType: editorFloorType,
+                sortOrder: structure.floors.length + 1,
+            });
+            await loadResults(selectedVersionId);
+            setEditorFloorCode('');
+            setEditorFloorName('');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao adicionar pavimento.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
+    async function addUnit(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!versionIsEditable()) return;
+        const blockId = editorUnitBlockId || structure.blocks[0]?.id;
+        const code = editorUnitCode.trim();
+        if (!blockId) { setError('Cadastre um bloco antes de criar unidades.'); return; }
+        if (!code) { setError('Informe o codigo da unidade.'); return; }
+        setActionLoading('add-unit');
+        setError(null);
+        try {
+            await areaEngineService.createUnit(selectedVersionId, {
+                blockId,
+                primaryFloorId: editorUnitFloorId || null,
+                code,
+                unitType: editorUnitType,
+                typologyCode: editorUnitTypology.trim() || undefined,
+                materializedIndex: structure.units.length + 1,
+            });
+            await loadResults(selectedVersionId);
+            setEditorUnitCode('');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao adicionar unidade.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
+    async function addSpace(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!versionIsEditable()) return;
+        const blockId = editorSpaceBlockId || structure.blocks[0]?.id;
+        const isPrivate = editorSpaceUseClass === 'private';
+        const unitId = editorSpaceUnitId || structure.units[0]?.id;
+        const name = editorSpaceName.trim();
+        const realArea = parsePositiveArea(editorSpaceArea, 'area do espaco');
+        const coefficient = editorSpaceCoefficient.trim() === '' ? null : Number(editorSpaceCoefficient.replace(',', '.'));
+        if (!blockId) { setError('Cadastre um bloco antes de criar espacos.'); return; }
+        if (isPrivate && !unitId) { setError('Espaco privativo precisa de uma unidade.'); return; }
+        if (!name) { setError('Informe o nome do espaco.'); return; }
+        if (realArea === null) return;
+        if (coefficient !== null && (!Number.isFinite(coefficient) || coefficient <= 0)) { setError('Coeficiente deve ser vazio ou maior que zero.'); return; }
+        setActionLoading('add-space');
+        setError(null);
+        try {
+            await areaEngineService.createSpace(selectedVersionId, {
+                blockId,
+                floorId: editorSpaceFloorId || null,
+                unitId: isPrivate ? unitId : null,
+                code: editorSpaceCode.trim() || undefined,
+                name,
+                useClass: editorSpaceUseClass,
+                realArea,
+                coverageClass: editorSpaceCoverage,
+                commonDivisionClass: editorSpaceDivision,
+                coefficientValue: coefficient,
+                materializedIndex: structure.spaces.length + 1,
+                distributionScope: editorSpaceScope,
+            });
+            await loadResults(selectedVersionId);
+            setEditorSpaceCode('');
+            setEditorSpaceName('Area');
+            setEditorSpaceArea('10');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao adicionar espaco.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
+    async function deleteStructureRecord(kind: 'block' | 'floor' | 'unit' | 'space', id: string) {
+        if (!versionIsEditable()) return;
+        setActionLoading(`delete-${kind}`);
+        setError(null);
+        try {
+            if (kind === 'block') await areaEngineService.deleteBlock(id);
+            if (kind === 'floor') await areaEngineService.deleteFloor(id);
+            if (kind === 'unit') await areaEngineService.deleteUnit(id);
+            if (kind === 'space') await areaEngineService.deleteSpace(id);
+            await loadResults(selectedVersionId);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao remover registro da estrutura.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
     const privateAreaTotal = structure.spaces.filter(space => space.use_class === 'private').reduce((sum, space) => sum + Number(space.real_area_m2_raw || 0), 0);
     const commonAreaTotal = structure.spaces.filter(space => space.use_class === 'common').reduce((sum, space) => sum + Number(space.real_area_m2_raw || 0), 0);
 
@@ -312,10 +613,16 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                         <RefreshCw className="w-4 h-4" /> Atualizar
                     </Button>
                     <Button
-                        onClick={() => selectedVersionId && runAction('calculate', () => areaEngineService.calculateVersion(selectedVersionId))}
+                        onClick={runValidatedCalculation}
                         disabled={!selectedVersionId || !!actionLoading}
                     >
                         <Calculator className="w-4 h-4" /> Calcular
+                    </Button>
+                    <Button variant="secondary" onClick={() => void exportAreaPackage('xlsx')} disabled={!selectedVersionId || !!exportLoading || (quadroI.length === 0 && quadroII.length === 0 && quadroIVB.length === 0)}>
+                        <FileSpreadsheet className="w-4 h-4" /> XLSX
+                    </Button>
+                    <Button variant="secondary" onClick={() => void exportAreaPackage('pdf')} disabled={!selectedVersionId || !!exportLoading || (quadroI.length === 0 && quadroII.length === 0 && quadroIVB.length === 0)}>
+                        <FileText className="w-4 h-4" /> PDF
                     </Button>
                 </div>
             </header>
@@ -499,22 +806,29 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                             <div>
                                 <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Ciclo de vida</h2>
                                 <p className="text-xs text-slate-500 mt-1">Versao selecionada: {selectedVersion?.version_label || '-'}</p>
+                                <p className="text-xs text-slate-500 mt-1">O botao Calcular executa validacao tecnica antes do calculo oficial.</p>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 <Button variant="secondary" onClick={() => selectedVersionId && runAction('validate', () => areaEngineService.validateVersion(selectedVersionId))} disabled={!selectedVersionId || !!actionLoading}>
                                     <ShieldCheck className="w-4 h-4" /> Validar
                                 </Button>
-                                <Button variant="secondary" onClick={() => selectedVersionId && runAction('technical', () => areaEngineService.approveVersion(selectedVersionId, 'technical', 'Aprovacao via app'))} disabled={!selectedVersionId || !!actionLoading}>
+                                <Button variant="secondary" onClick={() => selectedVersionId && runAction('technical', () => areaEngineService.approveVersion(selectedVersionId, 'technical', 'Aprovacao via app'))} disabled={!selectedVersionId || !!actionLoading || !canApproveTechnical}>
                                     <CheckCircle2 className="w-4 h-4" /> Tecnica
                                 </Button>
-                                <Button variant="secondary" onClick={() => selectedVersionId && runAction('legal', () => areaEngineService.approveVersion(selectedVersionId, 'legal', 'Aprovacao via app'))} disabled={!selectedVersionId || !!actionLoading}>
+                                <Button variant="secondary" onClick={() => selectedVersionId && runAction('legal', () => areaEngineService.approveVersion(selectedVersionId, 'legal', 'Aprovacao via app'))} disabled={!selectedVersionId || !!actionLoading || !canApproveLegal}>
                                     <CheckCircle2 className="w-4 h-4" /> Juridica
                                 </Button>
-                                <Button variant="secondary" onClick={() => selectedVersionId && runAction('lock', () => areaEngineService.lockVersion(selectedVersionId))} disabled={!selectedVersionId || !!actionLoading}>
+                                <Button variant="secondary" onClick={() => selectedVersionId && runAction('lock', () => areaEngineService.lockVersion(selectedVersionId))} disabled={!selectedVersionId || !!actionLoading || !canLockVersion}>
                                     <Lock className="w-4 h-4" /> Lock
                                 </Button>
                             </div>
                         </div>
+                        <LifecycleAuditPanel
+                            version={selectedVersion}
+                            technicalApproval={technicalApproval}
+                            legalApproval={legalApproval}
+                            auditLogs={auditLogs}
+                        />
                         <RpcFeedback result={feedback} />
                     </div>
 
@@ -526,6 +840,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                             </div>
                             <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit">
                                 {([
+                                    ['estrutura', 'Estrutura'],
                                     ['quadro_i', 'Quadro I'],
                                     ['quadro_ii', 'Quadro II'],
                                     ['quadro_ivb', 'IV-B'],
@@ -543,6 +858,97 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
 
                         {activeTable === 'estrutura' && (
                             <div className="p-4 space-y-4">
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-4">
+                                    <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                                        <div>
+                                            <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">Editor granular</h3>
+                                            <p className="text-xs text-slate-500 mt-1">Cadastre blocos, pavimentos, unidades e espacos reais da versao.</p>
+                                        </div>
+                                        {selectedVersion && ['locked', 'superseded', 'cancelled'].includes(selectedVersion.status) && (
+                                            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-widest text-amber-700">Somente leitura</span>
+                                        )}
+                                    </div>
+
+                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                        <form onSubmit={addBlock} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+                                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Bloco</h4>
+                                            <div className="grid grid-cols-[120px_1fr] gap-2">
+                                                <input value={editorBlockCode} onChange={event => setEditorBlockCode(event.target.value)} placeholder="Codigo" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
+                                                <input value={editorBlockName} onChange={event => setEditorBlockName(event.target.value)} placeholder="Nome do bloco" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
+                                            </div>
+                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> Adicionar bloco</Button>
+                                        </form>
+
+                                        <form onSubmit={addFloor} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+                                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Pavimento</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                                                <select value={editorFloorBlockId} onChange={event => setEditorFloorBlockId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm">
+                                                    <option value="">Bloco</option>
+                                                    {structure.blocks.map(block => <option key={block.id} value={block.id}>{block.code || block.name}</option>)}
+                                                </select>
+                                                <input value={editorFloorCode} onChange={event => setEditorFloorCode(event.target.value)} placeholder="Codigo" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
+                                                <input value={editorFloorName} onChange={event => setEditorFloorName(event.target.value)} placeholder="Nome" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
+                                                <select value={editorFloorType} onChange={event => setEditorFloorType(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm">
+                                                    <option value="ground">Terreo</option>
+                                                    <option value="type">Tipo</option>
+                                                    <option value="garage">Garagem</option>
+                                                    <option value="roof">Cobertura</option>
+                                                    <option value="other">Outro</option>
+                                                </select>
+                                            </div>
+                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> Adicionar pavimento</Button>
+                                        </form>
+
+                                        <form onSubmit={addUnit} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+                                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Unidade</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                                                <select value={editorUnitBlockId} onChange={event => setEditorUnitBlockId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm">
+                                                    <option value="">Bloco</option>
+                                                    {structure.blocks.map(block => <option key={block.id} value={block.id}>{block.code || block.name}</option>)}
+                                                </select>
+                                                <select value={editorUnitFloorId} onChange={event => setEditorUnitFloorId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm">
+                                                    <option value="">Pavimento</option>
+                                                    {structure.floors.map(floor => <option key={floor.id} value={floor.id}>{floor.code || floor.name}</option>)}
+                                                </select>
+                                                <input value={editorUnitCode} onChange={event => setEditorUnitCode(event.target.value)} placeholder="Codigo" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
+                                                <input value={editorUnitTypology} onChange={event => setEditorUnitTypology(event.target.value)} placeholder="Tipologia" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
+                                                <select value={editorUnitType} onChange={event => setEditorUnitType(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm">
+                                                    <option value="apartment">Apartamento</option>
+                                                    <option value="office">Sala</option>
+                                                    <option value="store">Loja</option>
+                                                    <option value="parking">Garagem</option>
+                                                    <option value="other">Outro</option>
+                                                </select>
+                                            </div>
+                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> Adicionar unidade</Button>
+                                        </form>
+
+                                        <form onSubmit={addSpace} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+                                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Espaco</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                                                <select value={editorSpaceUseClass} onChange={event => setEditorSpaceUseClass(event.target.value as 'private' | 'common')} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="private">Privativo</option><option value="common">Comum</option></select>
+                                                <select value={editorSpaceBlockId} onChange={event => setEditorSpaceBlockId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Bloco</option>{structure.blocks.map(block => <option key={block.id} value={block.id}>{block.code || block.name}</option>)}</select>
+                                                <select value={editorSpaceFloorId} onChange={event => setEditorSpaceFloorId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Pavimento</option>{structure.floors.map(floor => <option key={floor.id} value={floor.id}>{floor.code || floor.name}</option>)}</select>
+                                                <select value={editorSpaceUnitId} onChange={event => setEditorSpaceUnitId(event.target.value)} disabled={editorSpaceUseClass === 'common'} className="h-9 rounded-lg border border-slate-200 px-3 text-sm disabled:bg-slate-100"><option value="">Unidade</option>{structure.units.map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>
+                                                <input value={editorSpaceCode} onChange={event => setEditorSpaceCode(event.target.value)} placeholder="Codigo" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
+                                                <input value={editorSpaceName} onChange={event => setEditorSpaceName(event.target.value)} placeholder="Nome" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
+                                                <input value={editorSpaceArea} onChange={event => setEditorSpaceArea(event.target.value)} placeholder="Area m2" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
+                                                <input value={editorSpaceCoefficient} onChange={event => setEditorSpaceCoefficient(event.target.value)} placeholder="Coef." className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
+                                                <select value={editorSpaceCoverage} onChange={event => setEditorSpaceCoverage(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="covered_standard">Coberta padrao</option><option value="covered_different">Coberta diferente</option><option value="uncovered">Descoberta</option></select>
+                                                <select value={editorSpaceDivision} onChange={event => setEditorSpaceDivision(event.target.value as 'proportional' | 'non_proportional')} disabled={editorSpaceUseClass === 'private'} className="h-9 rounded-lg border border-slate-200 px-3 text-sm disabled:bg-slate-100"><option value="proportional">Comum proporcional</option><option value="non_proportional">Comum nao proporcional</option></select>
+                                                <select value={editorSpaceScope} onChange={event => setEditorSpaceScope(event.target.value as 'global' | 'block')} disabled={editorSpaceUseClass === 'private'} className="h-9 rounded-lg border border-slate-200 px-3 text-sm disabled:bg-slate-100"><option value="global">Escopo global</option><option value="block">Escopo bloco</option></select>
+                                            </div>
+                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> Adicionar espaco</Button>
+                                        </form>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                        <StructureAdminList title="Blocos" empty="Nenhum bloco cadastrado." rows={structure.blocks.map(block => ({ id: block.id, label: `${block.code || '-'} - ${block.name}`, detail: `Ordem ${block.sort_order || 0}` }))} onDelete={id => deleteStructureRecord('block', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
+                                        <StructureAdminList title="Pavimentos" empty="Nenhum pavimento cadastrado." rows={structure.floors.map(floor => ({ id: floor.id, label: `${floor.code || '-'} - ${floor.name}`, detail: floor.floor_type }))} onDelete={id => deleteStructureRecord('floor', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
+                                        <StructureAdminList title="Unidades" empty="Nenhuma unidade cadastrada." rows={structure.units.map(unit => ({ id: unit.id, label: unit.code, detail: `${unit.unit_type} ${unit.typology_code || ''}`.trim() }))} onDelete={id => deleteStructureRecord('unit', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
+                                        <StructureAdminList title="Espacos" empty="Nenhum espaco cadastrado." rows={structure.spaces.map(space => ({ id: space.id, label: `${space.code || '-'} - ${space.name}`, detail: `${space.use_class === 'private' ? 'Privativo' : 'Comum'} - ${formatNumber(space.real_area_m2_raw)} m2` }))} onDelete={id => deleteStructureRecord('space', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
+                                    </div>
+                                </div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                     <StructureMetric label="Blocos" value={structure.blocks.length} />
                                     <StructureMetric label="Pavimentos" value={structure.floors.length} />
@@ -604,6 +1010,90 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     );
 }
 
+function formatDateTime(value?: string | null): string {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return new Intl.DateTimeFormat('pt-BR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+    }).format(date);
+}
+
+function approvalLabel(approval?: AreaVersionApproval): string {
+    if (!approval) return 'Pendente';
+    if (approval.status === 'approved') return 'Aprovada';
+    if (approval.status === 'rejected') return 'Rejeitada';
+    return 'Pendente';
+}
+
+function LifecycleAuditPanel({ version, technicalApproval, legalApproval, auditLogs }: { version: AreaVersion | null; technicalApproval?: AreaVersionApproval; legalApproval?: AreaVersionApproval; auditLogs: AreaVersionAuditLog[] }) {
+    return (
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr_1.2fr] gap-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500">Hashes documentais</p>
+                <div className="mt-2 space-y-1 text-xs text-slate-600">
+                    <div><span className="font-black">Payload:</span> <span className="font-mono">{shortHash(version?.version_payload_hash)}</span></div>
+                    <div><span className="font-black">Identidade:</span> <span className="font-mono">{shortHash(version?.version_identity_hash)}</span></div>
+                    <div><span className="font-black">Locked at:</span> {formatDateTime(version?.locked_at)}</div>
+                </div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500">Aprovacoes</p>
+                <div className="mt-2 space-y-2 text-xs text-slate-600">
+                    <div className="flex items-center justify-between gap-3"><span className="font-black">Tecnica</span><span>{approvalLabel(technicalApproval)}</span></div>
+                    <div className="text-[11px] text-slate-500">{technicalApproval?.approval_hash ? shortHash(technicalApproval.approval_hash) : formatDateTime(technicalApproval?.reviewed_at)}</div>
+                    <div className="flex items-center justify-between gap-3"><span className="font-black">Juridica</span><span>{approvalLabel(legalApproval)}</span></div>
+                    <div className="text-[11px] text-slate-500">{legalApproval?.approval_hash ? shortHash(legalApproval.approval_hash) : formatDateTime(legalApproval?.reviewed_at)}</div>
+                </div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500">Auditoria recente</p>
+                {auditLogs.length === 0 ? (
+                    <p className="mt-2 text-xs text-slate-500">Nenhum evento registrado.</p>
+                ) : (
+                    <div className="mt-2 space-y-2">
+                        {auditLogs.slice(0, 4).map(log => (
+                            <div key={log.id} className="flex items-center justify-between gap-3 text-xs">
+                                <div className="min-w-0">
+                                    <p className="truncate font-black uppercase text-slate-700">{log.action}</p>
+                                    <p className="truncate text-slate-500">{log.entity_type}</p>
+                                </div>
+                                <span className="shrink-0 text-slate-500">{formatDateTime(log.performed_at)}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+function StructureAdminList({ title, rows, empty, disabled, onDelete }: { title: string; rows: { id: string; label: string; detail: string }[]; empty: string; disabled: boolean; onDelete: (id: string) => void }) {
+    return (
+        <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+            <div className="border-b border-slate-200 bg-slate-50 px-3 py-2">
+                <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">{title}</h4>
+            </div>
+            {rows.length === 0 ? (
+                <div className="p-3 text-sm text-slate-500">{empty}</div>
+            ) : (
+                <div className="divide-y divide-slate-100">
+                    {rows.map(row => (
+                        <div key={row.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                            <div className="min-w-0">
+                                <p className="truncate text-sm font-bold text-slate-800">{row.label}</p>
+                                <p className="truncate text-xs text-slate-500">{row.detail}</p>
+                            </div>
+                            <Button type="button" variant="ghost" size="icon" onClick={() => onDelete(row.id)} disabled={disabled} className="shrink-0 text-red-600 hover:text-red-700">
+                                <Trash2 className="w-4 h-4" />
+                            </Button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
 function StructureMetric({ label, value }: { label: string; value: number }) {
     return (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -657,9 +1147,3 @@ function ResultTable({ headers, rows, empty }: { headers: string[]; rows: string
         </div>
     );
 }
-
-
-
-
-
-

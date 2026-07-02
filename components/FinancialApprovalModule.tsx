@@ -10,6 +10,7 @@ import { approvalService, type ApprovalPendingSummary, type ActionQueueItem } fr
 import type {
     FinancialApprovalConfig, ApprovalStep,
 } from '../types/financial';
+import Button from './ui/Button';
 
 // ─── dispatch por entidade ───────────────────────────────────
 // A fila é unificada; cada ação vai ao serviço de domínio correto.
@@ -377,12 +378,13 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
                     <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Faixas de Alçada</h2>
                     <p className="text-xs text-gray-400 mt-0.5">Configure os limites de valor e os níveis de aprovação exigidos.</p>
                 </div>
-                <button
+                <Button
                     onClick={openNew}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-black rounded-xl transition-colors"
+                    variant="primary"
+                    size="md"
                 >
                     <Plus className="w-4 h-4" /> Nova faixa
-                </button>
+                </Button>
             </div>
 
             {error && <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold">{error}</div>}
@@ -440,9 +442,9 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
                             <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">
                                 {editing.id ? 'Editar Faixa' : 'Nova Faixa'}
                             </h2>
-                            <button onClick={() => setEditing(null)} className="p-1.5 hover:bg-gray-100 rounded-lg">
+                            <Button onClick={() => setEditing(null)} variant="ghost" size="icon">
                                 <X className="w-4 h-4 text-gray-500" />
-                            </button>
+                            </Button>
                         </div>
                         <div className="p-6 space-y-4">
                             <div className="grid grid-cols-2 gap-3">
@@ -513,14 +515,16 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
                             <button onClick={() => setEditing(null)} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">
                                 Cancelar
                             </button>
-                            <button
+                            <Button
                                 onClick={handleSave}
                                 disabled={saving}
-                                className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-sm font-black flex items-center justify-center gap-2"
+                                variant="primary"
+                                size="lg"
+                                className="flex-1"
                             >
                                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                                 Salvar
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>

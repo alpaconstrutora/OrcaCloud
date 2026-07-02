@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { X, Save, Trash2, Loader2, UserPlus, UserMinus, Settings, Users, FolderOpen, Plus, Pencil, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { taskSpaceService, type TaskSpace, type TaskFolder, type TaskSpaceMember } from '../services/taskSpaceService'
+import Button from './ui/Button'
 
 // ── Paleta de cores predefinidas ──────────────────────────────────────────────
 const COLOR_PALETTE = [
@@ -347,12 +348,13 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
                 />
               </div>
             ) : (
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setCreatingFolder(true)}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl text-button font-bold text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors w-full"
+                className="w-full font-bold normal-case tracking-normal"
               >
                 <Plus className="w-3.5 h-3.5" /> Nova pasta
-              </button>
+              </Button>
             )}
 
             {folderError && (
@@ -413,14 +415,14 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
                           </option>
                         ))}
                       </select>
-                      <button
+                      <Button
+                        variant="primary"
                         onClick={addMember}
                         disabled={!addingId}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-form-input font-black bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       >
                         <UserPlus className="w-4 h-4" />
                         Adicionar
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -439,27 +441,28 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-100 flex-shrink-0">
-          <button
+          <Button
+            variant="ghost"
             onClick={deleteSpace}
             disabled={saving}
-            className="flex items-center gap-1.5 text-button font-black uppercase tracking-wider text-red-500 hover:text-red-700 disabled:opacity-40"
+            className="text-red-500 hover:text-red-700 hover:bg-transparent"
           >
             <Trash2 className="w-3.5 h-3.5" /> Excluir espaço
-          </button>
+          </Button>
           {tab === 'settings' && (
-            <button
+            <Button
+              variant="primary"
               onClick={saveSettings}
               disabled={saving || !name.trim()}
-              className="flex items-center gap-2 px-5 py-2 rounded-xl text-button font-black uppercase tracking-wider bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Salvar
-            </button>
+            </Button>
           )}
           {(tab === 'members' || tab === 'folders') && (
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-button font-black uppercase tracking-wider text-slate-500 hover:bg-slate-100">
+            <Button variant="ghost" onClick={onClose}>
               Fechar
-            </button>
+            </Button>
           )}
         </div>
       </div>

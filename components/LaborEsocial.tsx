@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import Button from './ui/Button';
 import {
     FileText, CheckCircle, AlertTriangle, Clock, XCircle,
     Plus, X, Check, Loader2, Settings, Send, RefreshCw,
@@ -311,9 +312,9 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ orgId, employees, o
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md">
                 <div className="flex items-center justify-between p-6 border-b border-slate-100">
                     <h2 className="text-base font-black text-slate-900">Gerar Evento eSocial</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                    <Button variant="ghost" size="icon" onClick={onClose}>
                         <X className="w-5 h-5 text-slate-400" />
-                    </button>
+                    </Button>
                 </div>
                 <div className="p-6 space-y-4">
                     <Field label="Tipo de evento">
@@ -347,7 +348,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({ orgId, employees, o
                     )}
                 </div>
                 <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-100">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+                    <Button variant="ghost" onClick={onClose}>Cancelar</Button>
                     <button onClick={handleSave} disabled={saving}
                         className="flex items-center gap-2 px-5 py-2 bg-orange-600 text-white text-sm font-bold rounded-xl hover:bg-orange-700 transition-colors disabled:opacity-50 shadow-lg shadow-orange-900/20">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
@@ -391,9 +392,9 @@ const CreateBatchModal: React.FC<CreateBatchModalProps> = ({ orgId, onClose, onS
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm">
                 <div className="flex items-center justify-between p-6 border-b border-slate-100">
                     <h2 className="text-base font-black text-slate-900">Criar Lote de Transmissão</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                    <Button variant="ghost" size="icon" onClick={onClose}>
                         <X className="w-5 h-5 text-slate-400" />
-                    </button>
+                    </Button>
                 </div>
                 <div className="p-6 space-y-4">
                     <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700 font-medium">
@@ -414,7 +415,7 @@ const CreateBatchModal: React.FC<CreateBatchModalProps> = ({ orgId, onClose, onS
                     )}
                 </div>
                 <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-100">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+                    <Button variant="ghost" onClick={onClose}>Cancelar</Button>
                     <button onClick={handleSave} disabled={saving}
                         className="flex items-center gap-2 px-5 py-2 bg-orange-600 text-white text-sm font-bold rounded-xl hover:bg-orange-700 transition-colors disabled:opacity-50 shadow-lg shadow-orange-900/20">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />}
@@ -537,10 +538,9 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
                     <p className="text-xs text-slate-400 mt-0.5">Gerador de eventos S-1xxx/S-2xxx • Lotes • Transmissão</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={refetchAll}
-                        className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl transition-colors" title="Atualizar">
+                    <Button variant="ghost" size="icon" onClick={refetchAll} title="Atualizar">
                         <RefreshCw className="w-4 h-4" />
-                    </button>
+                    </Button>
                     {mainTab === 'eventos' && (
                         <button onClick={() => setShowCreateEvent(true)}
                             className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white text-sm font-bold rounded-xl hover:bg-orange-700 transition-colors shadow-lg shadow-orange-900/20">
@@ -914,3 +914,4 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees }) => {
 };
 
 export default LaborEsocial;
+

@@ -16,6 +16,7 @@ import {
 } from '../../services/publicMarketplaceService';
 import ScenarioComparison from '../investor/ScenarioComparison';
 import PhotoGallery from '../investor/PhotoGallery';
+import Button from '../ui/Button';
 import { fmtBRL, fmtPct, fmtM2 } from '../../utils/format';
 
 interface Props {
@@ -74,13 +75,14 @@ const PublicOpportunityDetail: React.FC<Props> = ({ opportunity: op, organizatio
             {/* ── Navbar ── */}
             <nav className="sticky top-0 z-10 bg-white/90 backdrop-blur-sm border-b border-gray-100 shadow-sm">
                 <div className="max-w-4xl mx-auto px-6 h-14 flex items-center gap-4">
-                    <button
+                    <Button
+                        variant="ghost"
                         onClick={onBack}
-                        className="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
+                        className="normal-case font-bold tracking-normal text-gray-500 hover:text-gray-900"
                     >
                         <ArrowLeft className="w-4 h-4" />
                         {org.name}
-                    </button>
+                    </Button>
                     {op.status && (
                         <span className={`ml-auto px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
                             {OPPORTUNITY_STATUS_LABELS[op.status]}
@@ -297,9 +299,9 @@ const PublicOpportunityDetail: React.FC<Props> = ({ opportunity: op, organizatio
                 {/* ── Formulário de interesse ── */}
                 {step === 'form' && (
                     <div className="max-w-lg">
-                        <button onClick={() => setStep('view')} className="text-sm font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 mb-6">
+                        <Button variant="ghost" onClick={() => setStep('view')} className="normal-case font-bold tracking-normal text-blue-600 hover:text-blue-700 mb-6">
                             <ArrowLeft className="w-4 h-4" /> Voltar
-                        </button>
+                        </Button>
                         <h2 className="text-2xl font-black text-gray-900 mb-1">Manifestar Interesse</h2>
                         <p className="text-sm text-gray-500 mb-8">{op.title}</p>
                         <form onSubmit={handleSubmit} className="space-y-5">
@@ -359,12 +361,14 @@ const PublicOpportunityDetail: React.FC<Props> = ({ opportunity: op, organizatio
                                     className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 resize-none"
                                 />
                             </div>
-                            <button
+                            <Button
+                                variant="primary"
+                                size="lg"
                                 type="submit" disabled={saving}
-                                className="w-full px-6 py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-2xl transition-colors shadow-lg shadow-blue-600/20 text-base"
+                                className="w-full h-auto px-6 py-4 normal-case font-bold tracking-normal rounded-2xl shadow-lg shadow-blue-600/20 text-base"
                             >
                                 {saving ? 'Enviando...' : 'Enviar manifestação'}
-                            </button>
+                            </Button>
                         </form>
                     </div>
                 )}

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { PayrollRun } from '../services/payrollService';
 import { formatDate } from '../lib/payrollUIHelpers';
+import Button from './ui/Button';
 
 interface PayrollRunDetailProps {
     run: PayrollRun;
@@ -39,12 +40,13 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
 
     return (
         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            <button
+            <Button
+                variant="ghost"
                 onClick={onBack}
-                className="flex items-center gap-2 text-slate-400 hover:text-slate-900 font-bold text-button uppercase transition-colors"
+                className="gap-2 text-slate-400 hover:text-slate-900 font-bold text-button uppercase"
             >
                 <ArrowRight className="w-4 h-4 rotate-180" /> Voltar à Lista
-            </button>
+            </Button>
 
             <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm">
                 {/* Header */}
@@ -108,13 +110,15 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                             </button>
                         )}
 
-                        <button
+                        <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => onDeleteRun(run.id)}
-                            className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
+                            className="text-slate-300 hover:text-rose-500"
                             title="Excluir Ciclo"
                         >
                             <Trash2 className="w-4 h-4" />
-                        </button>
+                        </Button>
                     </div>
                 </div>
 
@@ -155,9 +159,9 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                                         <p className="text-xs text-rose-600 font-bold uppercase tracking-widest">Divergências detectadas vs Referência Oficial</p>
                                     </div>
                                 </div>
-                                <button onClick={() => setShowAuditModal(false)} className="p-2 hover:bg-rose-100 text-rose-400 rounded-xl transition-colors">
+                                <Button variant="ghost" size="icon" onClick={() => setShowAuditModal(false)} className="hover:bg-rose-100 text-rose-400 rounded-xl">
                                     <X size={20} />
-                                </button>
+                                </Button>
                             </div>
                             <div className="p-6 overflow-y-auto space-y-6">
                                 {run.validation_logs?.map((log: any, idx: number) => (

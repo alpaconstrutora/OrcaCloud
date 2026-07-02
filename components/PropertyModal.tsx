@@ -6,6 +6,7 @@ import { propertyTypesService, PropertyType } from '../services/propertyTypesSer
 import PropertyTypesManager from './PropertyTypesManager';
 import { Sheet, SheetPanel, SheetFooter } from './ui/sheet';
 import { supabase } from '../lib/supabase';
+import Button from './ui/Button';
 
 interface PropertyModalProps {
     isOpen: boolean;
@@ -302,13 +303,15 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                             )}
                         </div>
                     </div>
-                    <button
+                    <Button
                         type="button"
+                        variant="ghost"
+                        size="icon"
                         onClick={handleRequestClose}
-                        className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors shrink-0"
+                        className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 shrink-0"
                     >
                         <X className="w-5 h-5" />
-                    </button>
+                    </Button>
                 </div>
 
                 {/* Tab Bar */}
@@ -427,14 +430,16 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <div className="flex items-center justify-between px-1">
                                         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Tipo</label>
                                         {organizationId && (
-                                            <button
+                                            <Button
                                                 type="button"
+                                                variant="ghost"
+                                                size="sm"
                                                 onClick={() => setIsTypesManagerOpen(true)}
-                                                className="flex items-center gap-1 text-[9px] font-black text-blue-400 hover:text-blue-600 uppercase tracking-widest transition-colors"
+                                                className="h-auto px-0 gap-1 text-[9px] text-blue-400 hover:text-blue-600 hover:bg-transparent"
                                             >
                                                 <Settings className="w-3 h-3" />
                                                 Gerenciar
-                                            </button>
+                                            </Button>
                                         )}
                                     </div>
                                     <select
@@ -520,13 +525,15 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                             <p className="text-xs text-gray-500 font-bold max-w-sm mt-0.5">Ative para gerar (ou injetar) novas unidades em massa neste edifício usando a matriz técnica.</p>
                                         </div>
                                     </div>
-                                    <button
+                                    <Button
                                         type="button"
+                                        variant="primary"
+                                        size="lg"
                                         onClick={() => setEnableMatrix(true)}
-                                        className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all text-button shadow-md active:scale-95"
+                                        className="shadow-md"
                                     >
                                         Ativar Gerador
-                                    </button>
+                                    </Button>
                                 </div>
                             ) : (
                                 <div className="col-span-1 border border-blue-100 bg-blue-50/30 rounded-[2rem] p-6 shadow-inner relative overflow-hidden group">

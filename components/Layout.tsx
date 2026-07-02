@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -368,7 +368,7 @@ const Layout: React.FC<LayoutProps> = ({
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
   const [commandQuery, setCommandQuery] = React.useState('');
   const commandInputRef = React.useRef<HTMLInputElement>(null);
-  const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates'];
+  const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates','area-engine'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
   const especialidadesViews = ['pro-dashboard','offices-dashboard','reformas-dashboard','opura-cno','compliance-dashboard'];
@@ -787,6 +787,7 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="estrutural" label="Ferragem & Aço" icon={Layers} />
                     <DropdownItem id="project-settings" label="Dados Técnicos" icon={Calculator} />
                     <DropdownItem id="eng-obra-types" label="Tipos de Obra" icon={Layers} />
+                    <DropdownItem id="area-engine" label="Áreas NBR 12721" icon={FileSpreadsheet} />
                   </NavDropdown>
 
                   <NavDropdown

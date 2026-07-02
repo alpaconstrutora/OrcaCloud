@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Button from './ui/Button';
 import {
   Shield,
   Users,
@@ -437,13 +438,14 @@ export default function OpuraGovernanceModule({
           <p className="text-sm text-gray-400">
             Esta organização não possui nenhuma empresa cadastrada no banco de dados. Para utilizar a governança, primeiro crie a empresa principal deste grupo.
           </p>
-          <button
+          <Button
+            variant="primary"
             onClick={handleCreateDefaultCompany}
-            className="flex items-center gap-2.5 px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[1rem] font-black text-button uppercase tracking-widest transition-all mx-auto shadow-lg active:scale-95"
+            className="mx-auto shadow-lg"
           >
             <Plus className="w-4 h-4" />
             Criar Empresa Sede
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="bg-gray-900/40 border border-gray-800/80 rounded-[1.5rem] p-6 shadow-xl backdrop-blur-md">
@@ -587,13 +589,13 @@ export default function OpuraGovernanceModule({
                   <h3 className="text-lg font-black text-white">Alçadas e Limites de Autoridade</h3>
                   <p className="text-xs text-gray-500 mt-0.5">Configure os limites monetários de aprovação para fluxos do ecossistema.</p>
                 </div>
-                <button
+                <Button
+                  variant="primary"
                   onClick={() => setIsLimitModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[1rem] font-bold text-button uppercase tracking-wider transition-all"
                 >
                   <Plus className="w-4 h-4" />
                   Nova Alçada
-                </button>
+                </Button>
               </div>
 
               <div className="overflow-x-auto">
@@ -1176,3 +1178,4 @@ export default function OpuraGovernanceModule({
     </div>
   );
 }
+

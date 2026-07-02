@@ -11,6 +11,7 @@ import { useServicesToast } from './services/useServicestoast';
 import ServicesToast from './services/ServicesToast';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import Button from './ui/Button';
 
 interface ClientListProps {
     onClientsChange?: () => void;
@@ -229,13 +230,15 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Meus Clientes</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua base de contatos e clientes com infraestrutura premium.</p>
                 </div>
-                <button
+                <Button
                     onClick={() => handleOpenModal()}
-                    className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                    variant="primary"
+                    size="lg"
+                    className="rounded-[1.25rem] gap-3 shadow-xl shadow-blue-900/20"
                 >
                     <Plus className="w-4 h-4" />
                     Novo Cliente
-                </button>
+                </Button>
             </div>
 
             <div className="bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
@@ -710,20 +713,22 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         {tokenCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                         {tokenCopied ? 'Copiado!' : 'Copiar Link'}
                                     </button>
-                                    <button
+                                    <Button
                                         onClick={handleGenerateToken}
-                                        className="flex items-center justify-center gap-2 px-4 py-3 border border-gray-200 text-gray-500 rounded-2xl text-button font-black uppercase tracking-widest hover:border-gray-300 hover:text-gray-700 transition-all"
+                                        variant="secondary"
+                                        className="rounded-2xl"
                                         title="Gerar novo link (invalida o anterior)"
                                     >
                                         <RefreshCw className="w-4 h-4" />
-                                    </button>
-                                    <button
+                                    </Button>
+                                    <Button
                                         onClick={handleRevokeToken}
-                                        className="flex items-center justify-center gap-2 px-4 py-3 border border-red-100 text-red-400 rounded-2xl text-button font-black uppercase tracking-widest hover:border-red-300 hover:text-red-600 transition-all"
+                                        variant="secondary"
+                                        className="rounded-2xl border-red-100 text-red-400 hover:border-red-300 hover:text-red-600"
                                         title="Revogar acesso"
                                     >
                                         <Trash2 className="w-4 h-4" />
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
                         ) : (
@@ -788,7 +793,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                 {comunicadoSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                                 {comunicadoSending ? 'Enviando...' : 'Enviar'}
                             </button>
-                            <button onClick={() => setComunicadoModal(null)} className="px-5 py-3 border border-gray-200 text-gray-500 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-gray-50 transition-all">Cancelar</button>
+                            <Button onClick={() => setComunicadoModal(null)} variant="secondary" className="rounded-2xl">Cancelar</Button>
                         </div>
                     </div>
                 </div>

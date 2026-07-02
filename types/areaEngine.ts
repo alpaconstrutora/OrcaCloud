@@ -1,4 +1,4 @@
-﻿export type AreaProjectStatus = 'draft' | 'active' | 'archived';
+export type AreaProjectStatus = 'draft' | 'active' | 'archived';
 export type AreaVersionStatus =
     | 'draft'
     | 'calculated'
@@ -136,6 +136,35 @@ export interface AreaQuadroIVBRow {
     [key: string]: unknown;
 }
 
+
+export interface AreaVersionApproval {
+    id: string;
+    area_version_id: string;
+    approval_type: AreaApprovalType;
+    status: AreaApprovalStatus;
+    requested_by?: string | null;
+    requested_at: string;
+    reviewed_by?: string | null;
+    reviewed_at?: string | null;
+    comments?: string | null;
+    approval_hash?: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface AreaVersionAuditLog {
+    id: string;
+    area_version_id: string;
+    entity_type: string;
+    entity_id?: string | null;
+    action: 'create' | 'update' | 'delete' | 'calculate' | 'approve' | 'reject' | 'lock' | 'export';
+    field_name?: string | null;
+    old_value?: Record<string, unknown> | null;
+    new_value?: Record<string, unknown> | null;
+    reason?: string | null;
+    performed_by?: string | null;
+    performed_at: string;
+}
 export interface AreaFractionIdeal {
     id: string;
     area_version_id: string;

@@ -3,6 +3,7 @@ import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star,
 import { warrantyService } from '../services/warrantyService';
 import { useToast } from '../hooks/useToast';
 import type { WarrantyClaim, ClaimState, WarrantyKPIs, ClaimFilters } from '../types/warranty';
+import Button from './ui/Button';
 
 // ── Sub-componentes inline ────────────────────────────────────────────────────
 
@@ -159,13 +160,15 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                         Gestão de chamados de assistência técnica e controle de prazos NBR 17170.
                     </p>
                 </div>
-                <button
+                <Button
                     onClick={() => { setShowModal(true); onOpenClaim?.(); }}
-                    className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                    variant="primary"
+                    size="lg"
+                    className="rounded-[1.25rem] shadow-xl shadow-blue-900/20"
                 >
                     <Plus className="w-4 h-4" />
                     Abrir Chamado
-                </button>
+                </Button>
             </div>
 
             {/* KPIs */}
@@ -323,7 +326,7 @@ export function WarrantyClaimModal({
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                     <h2 className="text-lg font-black text-gray-900">Abrir Chamado de Garantia</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors">✕</button>
+                    <Button onClick={onClose} variant="ghost" size="icon">✕</Button>
                 </div>
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
@@ -416,16 +419,16 @@ export function WarrantyClaimModal({
                         </div>
                     </div>
                     <div className="flex justify-end gap-3 pt-2">
-                        <button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors">
+                        <Button type="button" onClick={onClose} variant="ghost">
                             Cancelar
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                             type="submit"
                             disabled={submitting}
-                            className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all disabled:opacity-60"
+                            variant="primary"
                         >
                             {submitting ? 'Abrindo...' : 'Abrir Chamado'}
-                        </button>
+                        </Button>
                     </div>
                 </form>
             </div>
@@ -617,19 +620,21 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                         <p className="text-sm font-semibold text-red-700">Excluir este chamado permanentemente?</p>
                         <p className="text-xs text-red-500">Esta ação não pode ser desfeita. Todo o histórico e evidências serão removidos.</p>
                         <div className="flex gap-2">
-                            <button
+                            <Button
                                 onClick={handleDelete}
                                 disabled={deleting}
-                                className="flex-1 py-2 bg-red-600 text-white rounded-xl text-button font-black hover:bg-red-700 transition-all disabled:opacity-60"
+                                variant="danger"
+                                className="flex-1"
                             >
                                 {deleting ? 'Excluindo...' : 'Sim, excluir'}
-                            </button>
-                            <button
+                            </Button>
+                            <Button
                                 onClick={() => setConfirmDelete(false)}
-                                className="flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-button font-bold hover:bg-gray-50 transition-all"
+                                variant="secondary"
+                                className="flex-1"
                             >
                                 Cancelar
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 )}
@@ -725,19 +730,20 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 />
                             </div>
                             <div className="flex gap-2 pt-1">
-                                <button
+                                <Button
                                     onClick={handleSave}
                                     disabled={saving || !editForm.sistema_descricao || !editForm.descricao}
-                                    className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 transition-all disabled:opacity-60"
+                                    variant="primary"
+                                    className="flex-1"
                                 >
                                     {saving ? 'Salvando...' : 'Salvar alterações'}
-                                </button>
-                                <button
+                                </Button>
+                                <Button
                                     onClick={() => setEditMode(false)}
-                                    className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-button font-bold hover:bg-gray-50 transition-all"
+                                    variant="secondary"
                                 >
                                     Cancelar
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     )}
@@ -795,13 +801,14 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                         >
                                             ✓ Em Garantia
                                         </button>
-                                        <button
+                                        <Button
                                             onClick={() => handleTriage(false)}
                                             disabled={triaging}
-                                            className="flex-1 py-2 bg-red-600 text-white rounded-xl text-button font-black hover:bg-red-700 transition-all disabled:opacity-60"
+                                            variant="danger"
+                                            className="flex-1"
                                         >
                                             ✗ Fora de Garantia
-                                        </button>
+                                        </Button>
                                     </div>
                                 </div>
                             )}

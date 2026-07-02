@@ -8,6 +8,7 @@ import { OfficesAI } from './OfficesAI';
 import OfficesFinanceiro from './OfficesFinanceiro';
 import { officesService } from '../services/officesService';
 import { LayoutDashboard, Users, Folder, Palette, Clock, DollarSign, LogOut } from 'lucide-react';
+import Button from './ui/Button';
 
 interface OfficesModuleProps {
   activeView: string;
@@ -230,10 +231,10 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
             </div>
 
             {/* Notificações */}
-            <button className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-500 transition-colors relative">
+            <Button variant="ghost" size="icon" className="p-1.5 rounded-xl text-slate-500 relative">
               <span className="text-xs">🔔</span>
               <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-[#D47A55] rounded-full" />
-            </button>
+            </Button>
 
             {/* Perfil */}
             <div className="flex items-center gap-2.5 pl-3 border-l border-slate-200/80">

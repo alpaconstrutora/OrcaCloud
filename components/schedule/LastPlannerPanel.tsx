@@ -414,12 +414,14 @@ const WeeklyView: React.FC<{
                     <ChevronRight className="w-4 h-4" />
                 </Button>
                 {weekOffset !== 0 && (
-                    <button
+                    <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setWeekOffset(0)}
-                        className="text-xs text-indigo-600 font-medium px-2 py-1 rounded-lg hover:bg-indigo-50 transition-all"
+                        className="text-indigo-600 hover:bg-indigo-50"
                     >
                         Hoje
-                    </button>
+                    </Button>
                 )}
             </div>
 
@@ -532,9 +534,9 @@ const WeeklyView: React.FC<{
                     <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-96 p-6 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-200">
                         <div className="flex items-center justify-between">
                             <h3 className="text-sm font-bold text-gray-800">Motivo de não cumprimento</h3>
-                            <button onClick={() => setFailureModal(null)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
+                            <Button variant="ghost" size="icon" onClick={() => setFailureModal(null)} className="text-gray-400">
                                 <X className="w-4 h-4" />
-                            </button>
+                            </Button>
                         </div>
                         <p className="text-xs text-gray-500 truncate">{failureModal.item.name}</p>
                         <div className="space-y-2">
@@ -556,17 +558,18 @@ const WeeklyView: React.FC<{
                             />
                         </div>
                         <div className="flex justify-end gap-2 pt-1">
-                            <button onClick={() => setFailureModal(null)} className="px-3 py-1.5 text-button font-medium text-gray-500 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                            <button
+                            <Button variant="ghost" size="sm" onClick={() => setFailureModal(null)}>Cancelar</Button>
+                            <Button
+                                variant="danger"
+                                size="sm"
                                 onClick={async () => {
                                     await onMarkComplete(failureModal.item, false, failureReason || 'Outro');
                                     setFailureModal(null);
                                 }}
                                 disabled={!failureReason.trim()}
-                                className="px-3 py-1.5 bg-red-600 text-white text-button font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-all"
                             >
                                 Confirmar
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>

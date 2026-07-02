@@ -22,6 +22,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
 import { contractService } from '../../services/contractService';
+import Button from '../ui/Button';
 import { 
   PartnerWorkspace, 
   PartnerUser, 
@@ -229,12 +230,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
           <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-bold text-white mb-2">Acesso Negado</h3>
           <p className="text-sm text-gray-400 mb-6">{error}</p>
-          <button 
+          <Button
             onClick={() => window.location.reload()}
-            className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 active:scale-95 transition-all rounded-xl text-white font-semibold text-sm"
+            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold normal-case tracking-normal"
           >
             Tentar Novamente
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -442,9 +443,9 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                         placeholder={`Enviar mensagem em #${selectedConversation.name}...`}
                         className="flex-1 bg-[#121212] border border-white/5 rounded-xl px-4 py-2 text-form-input text-white focus:outline-none focus:border-orange-500/50"
                       />
-                      <button type="submit" className="p-2.5 bg-orange-500 text-white hover:bg-orange-600 active:scale-95 transition-all rounded-xl">
+                      <Button type="submit" size="icon" className="bg-orange-500 hover:bg-orange-600 text-white">
                         <Send className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </form>
                   </>
                 ) : (
@@ -554,13 +555,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
             <div className="flex flex-col gap-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-md font-bold text-white">Solicitações de Atendimento</h3>
-                <button
+                <Button
                   onClick={() => setIsNewRequestModalOpen(true)}
-                  className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 active:scale-95 px-4 py-2 rounded-xl text-button text-white transition-all font-bold shadow-lg shadow-orange-500/10"
+                  className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10 normal-case tracking-normal"
                 >
                   <Plus className="w-4 h-4" />
                   Nova Solicitação
-                </button>
+                </Button>
               </div>
 
               <div className="flex flex-col gap-3">
@@ -662,19 +663,20 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
               </div>
 
               <div className="flex justify-end gap-2 border-t border-white/5 pt-4 mt-2">
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => setIsNewRequestModalOpen(false)}
-                  className="px-4 py-2 border border-white/10 rounded-xl text-button text-gray-400 hover:text-white transition-all font-semibold"
+                  className="bg-transparent border-white/10 text-gray-400 hover:text-white hover:bg-transparent normal-case tracking-normal"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  className="px-4 py-2 bg-orange-500 hover:bg-orange-600 active:scale-95 rounded-xl text-button text-white font-bold transition-all"
+                  className="bg-orange-500 hover:bg-orange-600 text-white normal-case tracking-normal"
                 >
                   Enviar Solicitação
-                </button>
+                </Button>
               </div>
             </form>
           </div>

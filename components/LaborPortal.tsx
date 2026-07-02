@@ -12,6 +12,7 @@ import { PayrollRun } from '../services/payrollService';
 import { supabase } from '../lib/supabase';
 import PaystubModal from './PaystubModal';
 import { STALE } from '../lib/queryClient';
+import Button from './ui/Button';
 
 // Helper: chama RPC SECURITY DEFINER e retorna array (funciona sem sessão Supabase)
 async function portalRpc<T>(fn: string, employeeId: string): Promise<T[]> {
@@ -166,14 +167,14 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             <p className="text-sm font-bold text-slate-800">{emp?.hire_date || '—'}</p>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                            <button onClick={() => setActiveSection('ponto')} className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center gap-2 hover:shadow-md transition-all">
+                            <Button variant="secondary" onClick={() => setActiveSection('ponto')} className="p-4 rounded-2xl flex flex-col items-center gap-2 h-auto normal-case tracking-normal">
                                 <Clock className="w-6 h-6 text-indigo-500" />
                                 <span className="text-xs font-black text-slate-700">Meu Ponto</span>
-                            </button>
-                            <button onClick={() => setActiveSection('ferias')} className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm flex flex-col items-center gap-2 hover:shadow-md transition-all">
+                            </Button>
+                            <Button variant="secondary" onClick={() => setActiveSection('ferias')} className="p-4 rounded-2xl flex flex-col items-center gap-2 h-auto normal-case tracking-normal">
                                 <Umbrella className="w-6 h-6 text-blue-500" />
                                 <span className="text-xs font-black text-slate-700">Férias</span>
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 )}
@@ -286,10 +287,11 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                 const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
                                 const periodLabel = `${months[parseInt(m) - 1]}/${y}`;
                                 return (
-                                    <button
+                                    <Button
                                         key={run.id}
+                                        variant="secondary"
                                         onClick={() => setPaystubOpen({ runId: run.id })}
-                                        className="w-full flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md hover:border-indigo-100 transition-all text-left"
+                                        className="w-full flex items-center justify-between p-3 rounded-xl hover:border-indigo-100 text-left h-auto normal-case tracking-normal"
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center shrink-0">
@@ -306,7 +308,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                             </p>
                                             <p className="text-xs text-slate-400">líquido</p>
                                         </div>
-                                    </button>
+                                    </Button>
                                 );
                             })
                         )}

@@ -1,4 +1,4 @@
-﻿import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import type {
     AreaApprovalType,
     AreaEngineRpcResult,
@@ -10,6 +10,8 @@ import type {
     AreaQuadroIRow,
     AreaQuadroIVBRow,
     AreaVersion,
+    AreaVersionApproval,
+    AreaVersionAuditLog,
     AreaVersionInsert,
     AreaVersionUpdate,
     AreaVersionStructure,
@@ -29,6 +31,44 @@ export interface AreaMinimalStructureInput {
     unit2Code?: string;
     unit2Area: number;
     commonArea: number;
+}
+export interface AreaBlockInput {
+    code?: string;
+    name: string;
+    sortOrder?: number;
+}
+
+export interface AreaFloorInput {
+    blockId: string;
+    code?: string;
+    name: string;
+    floorType?: string;
+    sortOrder?: number;
+}
+
+export interface AreaUnitInput {
+    blockId: string;
+    primaryFloorId?: string | null;
+    code: string;
+    name?: string;
+    unitType?: string;
+    typologyCode?: string;
+    materializedIndex?: number;
+}
+
+export interface AreaSpaceInput {
+    blockId: string;
+    floorId?: string | null;
+    unitId?: string | null;
+    code?: string;
+    name: string;
+    useClass: 'private' | 'common';
+    realArea: number;
+    coverageClass?: string;
+    commonDivisionClass?: 'proportional' | 'non_proportional';
+    coefficientValue?: number | null;
+    materializedIndex?: number;
+    distributionScope?: 'global' | 'block';
 }
 
 function raiseAreaEngineError(context: string, error: { message: string }): never {
@@ -179,6 +219,29 @@ export const areaEngineService = {
         return data as AreaEngineRpcResult;
     },
 
+
+    async listApprovals(versionId: string): Promise<AreaVersionApproval[]> {
+        const { data, error } = await supabase
+            .from('area_version_approvals')
+            .select('*')
+            .eq('area_version_id', versionId)
+            .order('approval_type', { ascending: true });
+
+        if (error) raiseAreaEngineError('listApprovals', error);
+        return (data || []) as AreaVersionApproval[];
+    },
+
+    async listAuditLogs(versionId: string, limit = 20): Promise<AreaVersionAuditLog[]> {
+        const { data, error } = await supabase
+            .from('area_version_audit_logs')
+            .select('*')
+            .eq('area_version_id', versionId)
+            .order('performed_at', { ascending: false })
+            .limit(limit);
+
+        if (error) raiseAreaEngineError('listAuditLogs', error);
+        return (data || []) as AreaVersionAuditLog[];
+    },
     async getStructure(versionId: string): Promise<AreaVersionStructure> {
         const [blocksRes, floorsRes, unitsRes, spacesRes] = await Promise.all([
             supabase.from('area_version_blocks').select('*').eq('area_version_id', versionId).order('sort_order', { ascending: true }),
@@ -199,6 +262,145 @@ export const areaEngineService = {
             spaces: (spacesRes.data || []) as AreaVersionSpace[],
         };
     },
+
+    async createBlock(versionId: string, input: AreaBlockInput): Promise<AreaVersionBlock> {
+        const { data, error } = await supabase
+            .from('area_version_blocks')
+            .insert({
+                area_version_id: versionId,
+                code: input.code?.trim() || null,
+                name: input.name.trim(),
+                sort_order: input.sortOrder ?? 0,
+            })
+            .select()
+            .single();
+
+        if (error) raiseAreaEngineError('createBlock', error);
+        return data as AreaVersionBlock;
+    },
+
+    async createFloor(versionId: string, input: AreaFloorInput): Promise<AreaVersionFloor> {
+        const sortOrder = input.sortOrder ?? 0;
+        const { data, error } = await supabase
+            .from('area_version_floors')
+            .insert({
+                area_version_id: versionId,
+                block_id: input.blockId,
+                code: input.code?.trim() || null,
+                name: input.name.trim(),
+                floor_type: input.floorType || 'other',
+                sort_order: sortOrder,
+                is_template: false,
+                is_materialized: true,
+                materialized_label: input.name.trim(),
+                materialized_index: sortOrder,
+            })
+            .select()
+            .single();
+
+        if (error) raiseAreaEngineError('createFloor', error);
+        return data as AreaVersionFloor;
+    },
+
+    async createUnit(versionId: string, input: AreaUnitInput): Promise<AreaVersionUnit> {
+        const materializedIndex = input.materializedIndex ?? 0;
+        const { data, error } = await supabase
+            .from('area_version_units')
+            .insert({
+                area_version_id: versionId,
+                block_id: input.blockId,
+                primary_floor_id: input.primaryFloorId || null,
+                code: input.code.trim(),
+                name: input.name?.trim() || null,
+                unit_type: input.unitType || 'apartment',
+                typology_code: input.typologyCode?.trim() || null,
+                is_autonomous: true,
+                is_active: true,
+                is_template: false,
+                is_materialized: true,
+                materialized_label: input.code.trim(),
+                materialized_index: materializedIndex,
+            })
+            .select()
+            .single();
+
+        if (error) raiseAreaEngineError('createUnit', error);
+        return data as AreaVersionUnit;
+    },
+
+    async createSpace(versionId: string, input: AreaSpaceInput): Promise<AreaVersionSpace> {
+        const isCommon = input.useClass === 'common';
+        const commonDivisionClass = isCommon ? (input.commonDivisionClass || 'proportional') : 'not_applicable';
+        const coefficientValue = input.coefficientValue === undefined ? 1 : input.coefficientValue;
+        const materializedIndex = input.materializedIndex ?? 0;
+
+        const { data, error } = await supabase
+            .from('area_version_spaces')
+            .insert({
+                area_version_id: versionId,
+                block_id: input.blockId,
+                floor_id: input.floorId || null,
+                unit_id: isCommon ? null : input.unitId || null,
+                code: input.code?.trim() || null,
+                name: input.name.trim(),
+                use_class: input.useClass,
+                private_nature: isCommon ? 'not_applicable' : 'main',
+                coverage_class: input.coverageClass || 'covered_standard',
+                common_division_class: commonDivisionClass,
+                ownership_accounting_mode: isCommon ? 'common_area' : 'direct_unit',
+                real_area_m2_raw: input.realArea,
+                coefficient_value: coefficientValue,
+                source_type: 'manual',
+                is_template: false,
+                is_materialized: true,
+                materialized_label: input.name.trim(),
+                materialized_index: materializedIndex,
+            })
+            .select()
+            .single();
+
+        if (error) raiseAreaEngineError('createSpace', error);
+        const space = data as AreaVersionSpace;
+
+        if (isCommon) {
+            const distributionScope = input.distributionScope || 'global';
+            const { error: scopeError } = await supabase
+                .from('area_version_common_distribution_scopes')
+                .insert({
+                    area_version_id: versionId,
+                    common_space_id: space.id,
+                    distribution_scope: distributionScope,
+                    block_id: distributionScope === 'block' ? input.blockId : null,
+                    notes: 'Escopo criado pelo editor granular do app',
+                });
+            if (scopeError) raiseAreaEngineError('createSpace.scope', scopeError);
+        }
+
+        return space;
+    },
+
+    async deleteBlock(blockId: string): Promise<void> {
+        const { error } = await supabase.from('area_version_blocks').delete().eq('id', blockId);
+        if (error) raiseAreaEngineError('deleteBlock', error);
+    },
+
+    async deleteFloor(floorId: string): Promise<void> {
+        const { error } = await supabase.from('area_version_floors').delete().eq('id', floorId);
+        if (error) raiseAreaEngineError('deleteFloor', error);
+    },
+
+    async deleteUnit(unitId: string): Promise<void> {
+        const { error: spacesError } = await supabase.from('area_version_spaces').delete().eq('unit_id', unitId);
+        if (spacesError) raiseAreaEngineError('deleteUnit.spaces', spacesError);
+        const { error } = await supabase.from('area_version_units').delete().eq('id', unitId);
+        if (error) raiseAreaEngineError('deleteUnit', error);
+    },
+
+    async deleteSpace(spaceId: string): Promise<void> {
+        const { error } = await supabase.from('area_version_spaces').delete().eq('id', spaceId);
+        if (error) raiseAreaEngineError('deleteSpace', error);
+    },
+
     async createMinimalStructure(versionId: string, input: AreaMinimalStructureInput): Promise<void> {
         const { count, error: countError } = await supabase
             .from('area_version_blocks')
@@ -404,6 +606,3 @@ export const areaEngineService = {
         return (data || []) as AreaFractionIdeal[];
     },
 };
-
-
-

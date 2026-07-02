@@ -21,6 +21,7 @@ import { imovibService } from '../../services/imovibService';
 import { useImovibMath } from '../../hooks/useImovibMath';
 import { ImovibStudy } from '../../types';
 import { InvestmentSimulator } from './InvestmentSimulator';
+import Button from '../ui/Button';
 import {
     ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, BarChart, Bar
@@ -217,13 +218,15 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
 
                 {/* navbar */}
                 <div className="max-w-5xl mx-auto px-6 h-14 flex items-center gap-3 relative z-10">
-                    <button
+                    <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={onClose}
-                        className="flex items-center gap-2 text-sm font-bold text-white/60 hover:text-white transition-colors"
+                        className="gap-2 text-sm font-bold text-white/60 hover:text-white hover:bg-transparent transition-colors"
                     >
                         <X className="w-4 h-4" />
                         Voltar
-                    </button>
+                    </Button>
                     <span className="text-sm text-white/40 truncate flex-1 hidden sm:block">{op.title}</span>
                 </div>
 
@@ -338,13 +341,15 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                 <p className="text-xs font-black text-gray-400 uppercase tracking-widest">TIR</p>
                                 <p className="font-black text-emerald-600">{studyMath?.annualIrr ? fmtPct(studyMath.annualIrr) : op.tir_pct != null ? fmtPct(op.tir_pct) : '—'}</p>
                             </div>
-                            <button
+                            <Button
+                                variant="primary"
+                                size="md"
                                 onClick={() => setFormStep('form')}
-                                className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white text-button font-black uppercase tracking-widest rounded-xl shadow-md transition-colors"
+                                className="gap-2 px-5 py-3 text-button font-black uppercase tracking-widest rounded-xl transition-colors"
                             >
                                 <Handshake className="w-4 h-4" />
                                 Manifestar Interesse
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 )}
@@ -571,14 +576,16 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
 
                                         {/* CTA Manifestar Interesse */}
                                         <div className="pt-4">
-                                            <button
+                                            <Button
+                                                variant="primary"
+                                                size="lg"
                                                 onClick={() => setFormStep('form')}
-                                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl transition-all shadow-xl text-sm uppercase tracking-wider"
+                                                className="w-full sm:w-auto justify-center gap-2 px-8 py-4 font-black rounded-2xl transition-all shadow-xl text-sm uppercase tracking-wider"
                                             >
                                                 <Handshake className="w-4 h-4" />
                                                 Manifestar Interesse
                                                 <ChevronRight className="w-4 h-4" />
-                                            </button>
+                                            </Button>
                                         </div>
                                     </div>
                                 )}
@@ -601,16 +608,18 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                             <SlidersHorizontal className="w-5 h-5 text-blue-650" />
                                                             <h4 className="text-sm font-black text-blue-900 uppercase tracking-wider">Simulador de Cenários Interativo</h4>
                                                         </div>
-                                                        <button 
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
                                                             onClick={() => {
                                                                 setSliderCostPct(0);
                                                                 setSliderVgvPct(0);
                                                                 setSliderDurationDelta(0);
                                                             }}
-                                                            className="text-xs text-blue-650 hover:text-blue-750 font-bold"
+                                                            className="text-xs text-blue-650 hover:text-blue-750 hover:bg-transparent font-bold"
                                                         >
                                                             Resetar Valores
-                                                        </button>
+                                                        </Button>
                                                     </div>
                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                                         {/* Slider 1: Custo de Obra */}
@@ -852,14 +861,16 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
 
                                         {/* CTA Manifestar Interesse */}
                                         <div className="pt-4">
-                                            <button
+                                            <Button
+                                                variant="primary"
+                                                size="lg"
                                                 onClick={() => setFormStep('form')}
-                                                className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl transition-all shadow-xl text-sm uppercase tracking-wider"
+                                                className="w-full sm:w-auto justify-center gap-2 px-8 py-4 font-black rounded-2xl transition-all shadow-xl text-sm uppercase tracking-wider"
                                             >
                                                 <Handshake className="w-4 h-4" />
                                                 Manifestar Interesse
                                                 <ChevronRight className="w-4 h-4" />
-                                            </button>
+                                            </Button>
                                         </div>
                                     </div>
                                 )}
@@ -872,14 +883,16 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                             organizationId={organizationId}
                                             costEstimate={op.cost_estimate}
                                         />
-                                        <button
+                                        <Button
+                                            variant="primary"
+                                            size="lg"
                                             onClick={() => setFormStep('form')}
-                                            className="flex items-center gap-2 px-8 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl text-sm"
+                                            className="gap-2 px-8 py-4 bg-[#0B1727] hover:bg-blue-900 font-bold rounded-2xl transition-all shadow-xl text-sm"
                                         >
                                             <Handshake className="w-4 h-4" />
                                             Manifestar Interesse
                                             <ChevronRight className="w-4 h-4" />
-                                        </button>
+                                        </Button>
                                     </div>
                                 )}
 
@@ -962,9 +975,9 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                 {/* ── Formulário de interesse ── */}
                 {formStep === 'form' && (
                     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8 max-w-lg">
-                        <button onClick={() => setFormStep('view')} className="text-button font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 mb-5">
+                        <Button variant="ghost" size="sm" onClick={() => setFormStep('view')} className="text-button font-bold text-blue-600 hover:text-blue-700 hover:bg-transparent gap-1 mb-5">
                             ← Voltar
-                        </button>
+                        </Button>
                         <h3 className="text-2xl font-black text-gray-900 mb-1">Manifestar Interesse</h3>
                         <p className="text-sm text-gray-500 mb-6">{op.title}</p>
                         <form onSubmit={handleInterestSubmit} className="space-y-4">
@@ -1022,11 +1035,11 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                     className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 resize-none"
                                 />
                             </div>
-                            <button type="submit" disabled={saving}
-                                className="w-full px-6 py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-2xl transition-colors shadow-lg shadow-blue-600/20"
+                            <Button type="submit" variant="primary" size="lg" disabled={saving}
+                                className="w-full px-6 py-4 font-bold rounded-2xl transition-colors shadow-lg shadow-blue-600/20"
                             >
                                 {saving ? 'Enviando...' : 'Enviar manifestação'}
-                            </button>
+                            </Button>
                         </form>
                     </div>
                 )}
@@ -1041,9 +1054,9 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                         <p className="text-gray-500 mb-8 text-sm">
                             Sua manifestação de interesse em <strong>{op.title}</strong> foi recebida. Nossa equipe entrará em contato em breve.
                         </p>
-                        <button onClick={onClose} className="px-8 py-3 bg-gray-900 text-white font-bold rounded-2xl hover:bg-gray-700 transition-colors">
+                        <Button variant="primary" size="lg" onClick={onClose} className="px-8 py-3 bg-gray-900 hover:bg-gray-700 font-bold rounded-2xl transition-colors">
                             Voltar às oportunidades
-                        </button>
+                        </Button>
                     </div>
                 )}
             </div>

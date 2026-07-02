@@ -38,6 +38,7 @@ import LaborIncentivos from './LaborIncentivos';
 import LaborCargos from './LaborCargos';
 import { useLaborModuleData } from '../hooks/useLaborQueries';
 import { buildPartialFailureMessage } from '../lib/collectSettled';
+import Button from './ui/Button';
 
 // ─── Types ──────────────────────────────────────────────────
 type LaborTab = 'dashboard' | 'employees' | 'teams' | 'allocations' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary' | 'ats' | 'portal' | 'evaluation' | 'comunicacao' | 'bi_analytics' | 'esocial' | 'vale_refeicao' | 'incentivos' | 'cargos';

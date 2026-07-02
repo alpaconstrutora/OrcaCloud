@@ -1069,12 +1069,14 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                           </div>
                         </div>
                         {snapshots.length > 0 && (
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setSnapshots([])}
-                            className="text-xs font-black text-red-400 hover:text-red-500 uppercase tracking-widest flex items-center gap-1 p-2"
+                            className="text-red-400 hover:text-red-500 hover:bg-transparent normal-case tracking-widest"
                           >
                             <Trash2 className="w-3.5 h-3.5" /> Limpar Tudo
-                          </button>
+                          </Button>
                         )}
                       </div>
 
@@ -1123,24 +1125,28 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                                 </div>
 
                                 <div className="flex items-center gap-2 lg:border-l lg:pl-8 lg:ml-4 border-gray-100">
-                                  <button
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     onClick={() => {
                                       if (window.confirm("Deseja aplicar as taxas deste cenário na simulação atual?")) {
                                         setKFactor(snap.kFactor);
                                       }
                                     }}
-                                    className="p-3 bg-gray-50 text-gray-400 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-all shadow-sm"
+                                    className="bg-gray-50 text-gray-400 hover:bg-blue-50 hover:text-blue-600 shadow-sm"
                                     title="Restaurar Parâmetros"
                                   >
                                     <RefreshCw className="w-5 h-5" />
-                                  </button>
-                                  <button
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
                                     onClick={() => setSnapshots(snapshots.filter(s => s.id !== snap.id))}
-                                    className="p-3 bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded-xl transition-all shadow-sm"
+                                    className="bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-600 shadow-sm"
                                     title="Excluir"
                                   >
                                     <Trash2 className="w-5 h-5" />
-                                  </button>
+                                  </Button>
                                 </div>
                               </div>
                             );

@@ -15,6 +15,7 @@ import {
 } from '../types';
 import { ImportListingsModal } from './ImportListingsModal';
 import { CityRulesModal } from './CityRulesModal';
+import Button from './ui/Button';
 
 interface OpuraMarketModuleProps {
   organizationId: string;
@@ -868,12 +869,14 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           {onBack && (
-            <button
+            <Button
+              variant="secondary"
+              size="icon"
               onClick={onBack}
-              className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-button active:scale-95 transition-transform hover:bg-slate-50"
+              className="w-9 h-9 rounded-xl shadow-sm text-button active:scale-95 transition-transform"
             >
               ⬅
-            </button>
+            </Button>
           )}
           <div>
             <h1 className="text-xl font-black text-slate-900 tracking-tight">🗺️ ÒPURA Market Intelligence</h1>
@@ -904,13 +907,15 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           )}
 
           {/* Botão de regras */}
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setIsRulesModalOpen(true)}
-            className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-button font-black uppercase tracking-wider shadow-xs transition-all flex items-center gap-1.5"
+            className="rounded-xl text-button font-black uppercase tracking-wider shadow-xs transition-all flex items-center gap-1.5"
             title="Configurar regras de padrão construtivo e tipologias da praça ativa"
           >
             ⚙️ Regras da Praça
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1250,13 +1255,15 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                             </button>
 
                             {setActiveView && (
-                              <button
+                              <Button
+                                variant="primary"
+                                size="md"
                                 onClick={handleCreateViability}
                                 disabled={analyzing}
-                                className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
+                                className="w-full rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
                               >
                                 🏗️ Criar Viabilidade (IMOVIB)
-                              </button>
+                              </Button>
                             )}
                           </div>
                         </div>

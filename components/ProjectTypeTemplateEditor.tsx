@@ -6,6 +6,7 @@ import {
 import { TipoObra, ProjectTypeTemplate, EapPhase, RequiredDoc, TemplateIndicator, ChecklistTemplateItem } from '../types/project'
 import { projectTypeTemplatesService } from '../services/projectTypeTemplatesService'
 import { obraTypeService, ObraType } from '../services/obraTypeService'
+import Button from './ui/Button'
 
 const TIPO_OBRA_LABELS_FALLBACK: Record<string, string> = {
   residencial_multifamiliar: 'Residencial Multifamiliar',
@@ -186,9 +187,10 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
 
   // ── Section toggle helper ─────────────────────────────────────────────────────
   const SectionHeader: React.FC<{ id: string; label: string; count: number }> = ({ id, label, count }) => (
-    <button
+    <Button
+      variant="ghost"
       onClick={() => toggleSection(id)}
-      className="w-full flex items-center justify-between py-2 border-b border-slate-100"
+      className="w-full flex items-center justify-between py-2 border-b border-slate-100 rounded-none"
     >
       <span className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
         {label}
@@ -197,7 +199,7 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
       {collapsedSections[id]
         ? <ChevronRight className="w-4 h-4 text-slate-400" />
         : <ChevronDown className="w-4 h-4 text-slate-400" />}
-    </button>
+    </Button>
   )
 
   return (
@@ -247,13 +249,14 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                 {orgTemplate ? 'Template personalizado da organização' : 'Usando template padrão do sistema'}
               </span>
               {orgTemplate && systemTemplate && (
-                <button
+                <Button
+                  variant="ghost"
                   onClick={handleResetToSystem}
-                  className="flex items-center gap-1.5 text-button text-slate-500 hover:text-red-600 transition-colors"
+                  className="flex items-center gap-1.5 text-button text-slate-500 hover:text-red-600"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Resetar para padrão
-                </button>
+                </Button>
               )}
             </div>
 
@@ -284,9 +287,9 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                           value={phase.name}
                           onChange={e => updateEapPhase(i, 'name', e.target.value)}
                         />
-                        <button onClick={() => removeEapPhase(i)} className="text-slate-300 hover:text-red-500 transition-colors shrink-0">
+                        <Button variant="ghost" size="icon" onClick={() => removeEapPhase(i)} className="text-slate-300 hover:text-red-500 shrink-0">
                           <Trash2 className="w-4 h-4" />
-                        </button>
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -304,9 +307,9 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                       placeholder="Nome da fase"
                       onKeyDown={e => e.key === 'Enter' && addEapPhase()}
                     />
-                    <button onClick={addEapPhase} className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shrink-0">
+                    <Button variant="primary" size="icon" onClick={addEapPhase} className="p-1.5 rounded-lg shrink-0">
                       <Plus className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}
@@ -334,9 +337,9 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                           />
                           Obrig.
                         </label>
-                        <button onClick={() => removeDoc(i)} className="text-slate-300 hover:text-red-500 transition-colors shrink-0">
+                        <Button variant="ghost" size="icon" onClick={() => removeDoc(i)} className="text-slate-300 hover:text-red-500 shrink-0">
                           <Trash2 className="w-4 h-4" />
-                        </button>
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -352,9 +355,9 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                       <input type="checkbox" checked={newDocRequired} onChange={e => setNewDocRequired(e.target.checked)} className="rounded" />
                       Obrig.
                     </label>
-                    <button onClick={addDoc} className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shrink-0">
+                    <Button variant="primary" size="icon" onClick={addDoc} className="p-1.5 rounded-lg shrink-0">
                       <Plus className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}
@@ -386,9 +389,9 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                           onChange={e => updateIndicator(i, 'unit', e.target.value)}
                           placeholder="unid."
                         />
-                        <button onClick={() => removeIndicator(i)} className="text-slate-300 hover:text-red-500 transition-colors shrink-0">
+                        <Button variant="ghost" size="icon" onClick={() => removeIndicator(i)} className="text-slate-300 hover:text-red-500 shrink-0">
                           <Trash2 className="w-4 h-4" />
-                        </button>
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -412,9 +415,9 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                       placeholder="unid."
                       onKeyDown={e => e.key === 'Enter' && addIndicator()}
                     />
-                    <button onClick={addIndicator} className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shrink-0">
+                    <Button variant="primary" size="icon" onClick={addIndicator} className="p-1.5 rounded-lg shrink-0">
                       <Plus className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}
@@ -433,9 +436,9 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                         {ct.items.map((item, idx) => (
                           <div key={idx} className="flex items-center gap-2">
                             <span className="flex-1 text-xs text-slate-700 bg-slate-50 rounded-lg px-3 py-1.5 border border-slate-100">{item}</span>
-                            <button onClick={() => removeChecklistItem(phase, idx)} className="text-slate-300 hover:text-red-500 transition-colors">
+                            <Button variant="ghost" size="icon" onClick={() => removeChecklistItem(phase, idx)} className="text-slate-300 hover:text-red-500">
                               <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            </Button>
                           </div>
                         ))}
                         <div className="flex items-center gap-2">
@@ -446,9 +449,9 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                             placeholder="Adicionar item..."
                             onKeyDown={e => e.key === 'Enter' && addChecklistItem(phase)}
                           />
-                          <button onClick={() => addChecklistItem(phase)} className="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shrink-0">
+                          <Button variant="primary" size="icon" onClick={() => addChecklistItem(phase)} className="p-1.5 rounded-lg shrink-0">
                             <Plus className="w-3.5 h-3.5" />
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     )
@@ -459,14 +462,16 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
 
             {/* Save button */}
             <div className="flex items-center gap-3">
-              <button
+              <Button
+                variant="primary"
+                size="lg"
                 onClick={handleSave}
                 disabled={saving}
-                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl text-sm font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-900/20 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-xl text-sm font-black uppercase tracking-widest shadow-lg shadow-indigo-900/20"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Salvar personalização
-              </button>
+              </Button>
               {saved && (
                 <div className="flex items-center gap-1.5 text-emerald-600 text-sm font-bold">
                   <CheckCircle2 className="w-4 h-4" />

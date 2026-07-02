@@ -228,12 +228,13 @@ const OpportunitiesTab: React.FC<Props> = ({
                                 {isAdmin ? 'Nenhuma oportunidade cadastrada' : 'Nenhuma oportunidade disponível no momento'}
                             </p>
                             {isAdmin && organizationId && (
-                                <button
+                                <Button
+                                    variant="primary"
+                                    className="mt-4"
                                     onClick={() => setEditing('new')}
-                                    className="mt-4 px-4 py-2 bg-blue-600 text-white text-button font-bold rounded-xl hover:bg-blue-700 transition-colors"
                                 >
                                     Criar primeira oportunidade
-                                </button>
+                                </Button>
                             )}
                         </div>
                     ) : viewMode === 'grid' ? (
@@ -387,12 +388,14 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                 {[op.location_city, op.location_state].filter(Boolean).join(', ') || 'Local não informado'}
                                             </span>
                                             <div className="flex items-center gap-1 flex-shrink-0">
-                                                <button
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="bg-blue-50 text-blue-600 hover:bg-blue-100"
                                                     onClick={() => setDetail(op)}
-                                                    className="px-3 py-1.5 bg-blue-50 text-blue-600 text-button font-bold rounded-lg"
                                                 >
                                                     Ver
-                                                </button>
+                                                </Button>
                                                 {isAdmin && (
                                                     <>
                                                         <button onClick={() => handleTogglePublish(op)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
@@ -457,12 +460,14 @@ const OpportunitiesTab: React.FC<Props> = ({
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-1">
-                                                    <button
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                                         onClick={() => setDetail(op)}
-                                                        className="text-button font-bold text-blue-600 hover:text-blue-700 px-3 py-1.5 hover:bg-blue-50 rounded-lg transition-colors"
                                                     >
                                                         Ver
-                                                    </button>
+                                                    </Button>
                                                     {isAdmin && (
                                                         <>
                                                             <button

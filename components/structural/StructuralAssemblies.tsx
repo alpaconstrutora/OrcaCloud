@@ -3,6 +3,7 @@ import { Plus, Trash2, Pencil, ChevronRight, FolderOpen, X, Check, Loader2 } fro
 import { useAssemblies } from '../../hooks/useStructuralQueries'
 import { useUpsertAssembly, useDeleteAssembly } from '../../hooks/useStructuralMutations'
 import type { StructuralAssembly, UpsertAssemblyInput } from '../../types/structural'
+import Button from '../ui/Button'
 
 interface Props {
   orgId: string
@@ -67,13 +68,13 @@ const StructuralAssemblies: React.FC<Props> = ({ orgId, projectId, selected, onS
             placeholder="Nome da estrutura"
             className="flex-1 rounded-lg border border-blue-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
-          <button onClick={submit} disabled={upsert.isPending || !nome.trim()}
-            className="p-1.5 bg-blue-600 text-white rounded-lg disabled:opacity-50">
+          <Button onClick={submit} disabled={upsert.isPending || !nome.trim()}
+            variant="primary" size="icon" className="rounded-lg">
             {upsert.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-          </button>
-          <button onClick={cancel} className="p-1.5 text-slate-400 hover:text-slate-700">
+          </Button>
+          <Button onClick={cancel} variant="ghost" size="icon" className="rounded-lg">
             <X className="w-3.5 h-3.5" />
-          </button>
+          </Button>
         </div>
       )}
 
@@ -96,11 +97,13 @@ const StructuralAssemblies: React.FC<Props> = ({ orgId, projectId, selected, onS
                   onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') cancel() }}
                   className="flex-1 rounded-lg border border-blue-300 px-2 py-1.5 text-sm focus:outline-none"
                 />
-                <button onClick={submit} disabled={upsert.isPending || !nome.trim()}
-                  className="p-1.5 bg-blue-600 text-white rounded-lg disabled:opacity-50">
+                <Button onClick={submit} disabled={upsert.isPending || !nome.trim()}
+                  variant="primary" size="icon" className="rounded-lg">
                   {upsert.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                </button>
-                <button onClick={cancel} className="p-1.5 text-slate-400"><X className="w-3.5 h-3.5" /></button>
+                </Button>
+                <Button onClick={cancel} variant="ghost" size="icon" className="rounded-lg text-slate-400">
+                  <X className="w-3.5 h-3.5" />
+                </Button>
               </div>
             ) : (
               <button

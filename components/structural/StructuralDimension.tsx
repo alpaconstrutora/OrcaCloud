@@ -505,12 +505,14 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <button
+                    <Button
                       onClick={(e) => handleDeleteProject(p.id, e)}
-                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                      variant="ghost"
+                      size="icon"
+                      className="text-slate-300 hover:text-red-500 hover:bg-red-50"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </button>
+                    </Button>
                     <ChevronRight className="w-5 h-5 text-slate-400" />
                   </div>
                 </div>
@@ -523,12 +525,14 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
         <div className="space-y-5">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div className="flex items-center gap-3">
-              <button
+              <Button
                 onClick={() => setSelectedProject(null)}
-                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all"
+                variant="ghost"
+                size="icon"
+                className="text-slate-400 hover:text-slate-700 hover:bg-slate-100"
               >
                 <ArrowLeft className="w-5 h-5" />
-              </button>
+              </Button>
               <div>
                 <h2 className="text-xl font-black text-slate-900">{selectedProject.nome}</h2>
                 <div className="flex items-center gap-4 text-xs font-semibold text-slate-400 mt-1">
@@ -541,30 +545,29 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
             </div>
             
             <div className="flex items-center gap-2">
-              <button
+              <Button
                 onClick={handleExportConsolidatedPDF}
                 disabled={exportingPDF || elements.length === 0}
-                className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-50 disabled:text-slate-300 text-slate-700 rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
+                variant="secondary"
               >
                 {exportingPDF ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <FileText className="w-4.5 h-4.5" />}
                 Caderno PDF
-              </button>
+              </Button>
 
-              <button
+              <Button
                 onClick={handleExportConsolidatedExcel}
                 disabled={exportingExcel || elements.length === 0}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white"
               >
                 {exportingExcel ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <FileSpreadsheet className="w-4.5 h-4.5" />}
                 Planilha (.xlsx)
-              </button>
+              </Button>
 
-              <button
+              <Button
                 onClick={() => setIsNewElementModalOpen(true)}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest transition-all shadow-md active:scale-95"
               >
                 <Plus className="w-4 h-4" /> Novo Elemento
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -678,9 +681,9 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
               <h3 className="font-black text-lg text-slate-800">Novo Projeto Estrutural</h3>
-              <button onClick={() => setIsNewProjectModalOpen(false)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+              <Button onClick={() => setIsNewProjectModalOpen(false)} variant="ghost" size="icon" className="text-slate-400 hover:text-slate-600">
                 <XCircle className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
             
             <form onSubmit={handleCreateProject} className="space-y-4">
@@ -727,18 +730,17 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
               </div>
 
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-50">
-                <button
+                <Button
                   type="button" onClick={() => setIsNewProjectModalOpen(false)}
-                  className="px-4 py-2.5 text-button font-black uppercase text-slate-500 hover:bg-slate-100 rounded-xl"
+                  variant="ghost"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  className="px-5 py-2.5 text-button font-black uppercase bg-blue-600 text-white hover:bg-blue-700 rounded-xl shadow-md"
                 >
                   Criar Cálculo
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -751,9 +753,9 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
               <h3 className="font-black text-lg text-slate-800">Adicionar Elemento</h3>
-              <button onClick={() => setIsNewElementModalOpen(false)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+              <Button onClick={() => setIsNewElementModalOpen(false)} variant="ghost" size="icon" className="text-slate-400 hover:text-slate-600">
                 <XCircle className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
             
             <form onSubmit={handleCreateElement} className="space-y-4">
@@ -791,18 +793,17 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
               </label>
 
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-50">
-                <button
+                <Button
                   type="button" onClick={() => setIsNewElementModalOpen(false)}
-                  className="px-4 py-2.5 text-button font-black uppercase text-slate-500 hover:bg-slate-100 rounded-xl"
+                  variant="ghost"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  className="px-5 py-2.5 text-button font-black uppercase bg-blue-600 text-white hover:bg-blue-700 rounded-xl shadow-md"
                 >
                   Adicionar
-                </button>
+                </Button>
               </div>
             </form>
           </div>

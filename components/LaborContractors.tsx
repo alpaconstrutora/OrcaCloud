@@ -11,6 +11,7 @@ import {
 } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
+import Button from './ui/Button';
 
 const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -177,11 +178,11 @@ const ContractorForm: React.FC<ContractorFormProps> = ({ orgId, contractor, onCl
                     </div>
                 </div>
                 <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50/50">
-                    <button onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancelar</button>
-                    <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-blue-700 text-white rounded-xl font-bold text-sm hover:bg-blue-800 shadow-lg disabled:opacity-50">
+                    <Button variant="ghost" size="md" onClick={onClose} className="font-bold rounded-xl">Cancelar</Button>
+                    <Button variant="primary" size="md" onClick={handleSave} disabled={saving} className="flex items-center gap-2 rounded-xl font-bold disabled:opacity-50">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                         {saving ? 'Salvando...' : (isEditing ? 'Salvar' : 'Cadastrar')}
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>
@@ -319,7 +320,7 @@ const MeasurementForm: React.FC<MeasurementFormProps> = ({ orgId, contractors, p
                     </InputGroup>
                 </div>
                 <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50/50">
-                    <button onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancelar</button>
+                    <Button variant="ghost" size="md" onClick={onClose} className="font-bold rounded-xl">Cancelar</Button>
                     <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 shadow-lg disabled:opacity-50">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                         {saving ? 'Salvando...' : 'Registrar Medição'}
@@ -432,12 +433,13 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
                     </div>
-                    <button
+                    <Button
+                        variant="primary" size="md"
                         onClick={() => view === 'measurements' ? setShowMeasForm(true) : (setEditingContractor(null), setShowContractorForm(true))}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white rounded-xl hover:bg-blue-800 font-bold text-button shadow-md">
+                        className="flex items-center gap-2 rounded-xl font-bold text-button">
                         <Plus className="w-3.5 h-3.5" />
                         {view === 'measurements' ? 'Nova Medição' : 'Novo Empreiteiro'}
-                    </button>
+                    </Button>
                 </div>
             </div>
 

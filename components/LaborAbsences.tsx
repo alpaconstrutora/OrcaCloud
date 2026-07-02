@@ -12,6 +12,7 @@ import {
 } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
+import Button from './ui/Button';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

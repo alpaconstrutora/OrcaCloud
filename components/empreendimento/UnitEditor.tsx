@@ -12,6 +12,7 @@ import {
 import {
   POSITION_LABEL, VIEW_LABEL, SUN_LABEL, POSITION_STYLE, VIEW_STYLE, SUN_STYLE,
 } from '../../utils/empreendimentoComercial';
+import Button from '../ui/Button';
 
 // ── Constantes de exibição ───────────────────────────────────────────────────
 
@@ -369,9 +370,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
           <option value="">Orientação</option>
           {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
         </select>
-        <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5">
+        <Button type="submit" disabled={saving}>
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Add
-        </button>
+        </Button>
       </form>
 
       {/* Geração automática */}
@@ -422,11 +423,10 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
               ))}
             </div>
             <div className="flex justify-end">
-              <button type="submit" disabled={generating || genTotal === 0}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2">
+              <Button type="submit" disabled={generating || genTotal === 0}>
                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                 Gerar {genTotal > 0 ? `${genTotal} unidades` : 'Unidades'}
-              </button>
+              </Button>
             </div>
           </form>
         )}
@@ -668,11 +668,10 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
               <option value="">Orientação...</option>
               {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
             </select>
-            <button onClick={handleBulkSave} disabled={bulkSaving}
-              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5">
+            <Button size="sm" onClick={handleBulkSave} disabled={bulkSaving}>
               {bulkSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
               Aplicar
-            </button>
+            </Button>
           </div>
         </div>
       )}

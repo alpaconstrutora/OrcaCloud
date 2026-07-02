@@ -1,5 +1,6 @@
 import React from 'react';
 import { Users, X, Trash2, Plus } from 'lucide-react';
+import Button from '../ui/Button';
 import { ProjectSchedule, ResourceAllocation } from '../../types';
 
 interface ResourceAllocationModalProps {
@@ -137,10 +138,10 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                                         <input name="hoursPerDay" type="number" step="0.5" defaultValue="8" required className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
                                     </div>
                                 </div>
-                                <button type="submit" className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-sm">
+                                <Button type="submit" className="w-full shadow-sm">
                                     <Plus className="w-4 h-4" />
                                     Adicionar Recurso
-                                </button>
+                                </Button>
                             </form>
                         </div>
                     </div>

@@ -420,7 +420,6 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'project-financial', label: 'Contas a pagar', group: 'Financeiro', icon: DollarSign },
       { id: 'contas-a-receber', label: 'Contas a receber', group: 'Financeiro', icon: TrendingUp },
       { id: 'financial-cashflow', label: 'Fluxo de caixa', group: 'Financeiro', icon: LineChart },
-      { id: 'gestao-vendas', label: 'Cockpit CRM', group: 'Comercial', icon: Target },
       { id: 'sales', label: 'Vendas de ativos', group: 'Comercial', icon: Building2 },
       { id: 'empreendimentos', label: 'Empreendimentos', group: 'Comercial', icon: Building2 },
       { id: 'imovib', label: 'Estudos de viabilidade', group: 'Comercial', icon: BarChart3 },
@@ -943,7 +942,6 @@ const Layout: React.FC<LayoutProps> = ({
                   >
                     {(mod.crm || isDev) && (
                       <>
-                        <DropdownItem id="gestao-vendas" label="Cockpit CRM" icon={Target} />
                         <DropdownItem id="sales" label="Vendas de Ativos" icon={Building2} />
                         <DropdownItem id="rentals" label="Locações" icon={Building2} />
                         <DropdownItem id="service-contracts" label="Contratos de Serviço" icon={FileText} />
@@ -1411,4 +1409,3 @@ const Layout: React.FC<LayoutProps> = ({
 };
 
 export default Layout;
-

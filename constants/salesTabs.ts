@@ -1,4 +1,4 @@
-export type SalesTab = 'cockpit' | 'espelho' | 'alugueis' | 'corretores' | 'crm' | 'contratos' | 'viabilidade';
+export type SalesTab = 'espelho' | 'alugueis' | 'corretores' | 'crm' | 'contratos' | 'viabilidade';
 
 export const VIEW_TO_SALES_TAB: Record<string, SalesTab> = {
     'sales':               'espelho',
@@ -18,6 +18,5 @@ export const VIEW_TO_SALES_TAB: Record<string, SalesTab> = {
     'services-commercial': 'crm',
     'service-contracts':   'contratos',
     'imovib':              'viabilidade',
-    'gestao-vendas':       'cockpit',
+    'gestao-vendas':       'espelho',
 };
-

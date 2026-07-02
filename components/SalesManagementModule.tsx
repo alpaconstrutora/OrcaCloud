@@ -1,9 +1,8 @@
 import React, { Suspense, useState } from 'react'
-import { Building2, Home, Briefcase, FileText, BarChart3, ArrowLeft, Target } from 'lucide-react'
+import { Building2, Home, Briefcase, FileText, BarChart3, ArrowLeft } from 'lucide-react'
 import type { BrokerProfile } from '../types'
 
 // Sub-módulos carregados sob demanda (lazy) por aba
-const CommercialCrmCockpit     = React.lazy(() => import('./CommercialCrmCockpit'))
 const SalesModule              = React.lazy(() => import('./SalesModule'))
 const RentalsModule            = React.lazy(() => import('./RentalsModule'))
 const BrokerList               = React.lazy(() => import('./BrokerList'))
@@ -39,7 +38,6 @@ interface Props {
 }
 
 const TABS: Array<{ id: SalesTab; label: string; icon: React.ElementType }> = [
-  { id: 'cockpit',    label: 'Cockpit CRM',        icon: Target    },
   { id: 'espelho',    label: 'Vendas de Ativos',   icon: Building2 },
   { id: 'alugueis',   label: 'Aluguéis',            icon: Home      },
   { id: 'crm',        label: 'CRM Serviços',         icon: Briefcase },
@@ -151,10 +149,6 @@ const SalesManagementModule: React.FC<Props> = ({
       {/* Conteúdo da aba ativa */}
       <div className="pt-4">
         <Suspense fallback={<Spinner />}>
-          {activeTab === 'cockpit' && (
-            <CommercialCrmCockpit organizationId={organizationId} />
-          )}
-
           {activeTab === 'espelho' && (
             <SalesModule organizationId={organizationId} />
           )}
@@ -206,5 +200,3 @@ const SalesManagementModule: React.FC<Props> = ({
 }
 
 export default SalesManagementModule
-
-

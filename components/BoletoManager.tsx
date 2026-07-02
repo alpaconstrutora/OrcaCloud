@@ -810,10 +810,11 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             )}
 
-            {/* Barra de ações em lote */}
+            {/* Barra de ações em lote — fixa (fora do fluxo normal) para não forçar
+                reflow da lista inteira de boletos ao selecionar/desmarcar o primeiro item */}
             {selectedIds.size > 0 && (
-                <div className="flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
-                    <span className="flex-1 text-sm font-bold">
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                    <span className="flex-1 text-sm font-bold whitespace-nowrap">
                         {selectedIds.size} boleto{selectedIds.size !== 1 ? 's' : ''} selecionado{selectedIds.size !== 1 ? 's' : ''}
                         <span className="ml-2 font-normal opacity-75">
                             · {formatBRL(filtered.filter(b => selectedIds.has(b.id)).reduce((s, b) => s + (b.valor ?? 0), 0))}

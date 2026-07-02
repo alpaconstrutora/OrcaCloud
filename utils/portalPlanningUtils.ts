@@ -35,6 +35,19 @@ export interface SCurvePoint {
     realized?: number;   // só preenchido no ponto "hoje"
 }
 
+export interface SCurveMoneyPoint {
+    label: string;       // 'MMM/AA'
+    plannedValue: number;   // R$ acumulado planejado
+    realizedValue?: number; // R$ acumulado realizado, só no ponto "hoje"
+}
+
+export interface FinancialView {
+    totalPlanned: number;   // R$ total previsto (soma plannedValue)
+    totalRealized: number;  // R$ realizado até hoje
+    plannedTodayValue: number; // R$ previsto p/ hoje
+    curve: SCurveMoneyPoint[];
+}
+
 export interface PlanningView {
     progress: number;            // % geral
     start: Date | null;
@@ -44,6 +57,7 @@ export interface PlanningView {
     plannedToday: number;        // % planejado p/ hoje
     phases: PlanningPhase[];
     sCurve: SCurvePoint[];
+    financial?: FinancialView;
 }
 
 const itemMap = (items: PortalPlanningItem[]): Map<string, PortalPlanningItem> => {
@@ -84,6 +98,59 @@ const plannedAt = (items: PortalPlanningItem[], at: Date): number => {
 };
 
 const cleanLabel = (s: string) => s.replace(/^[\d.]+\s+/, '');
+
+// R$ planejado acumulado até uma data (soma de plannedValue ponderado pela fração decorrida).
+const plannedValueAt = (items: PortalPlanningItem[], at: Date): number => {
+    let sum = 0;
+    for (const it of items) {
+        const v = it.plannedValue ?? 0;
+        if (v <= 0) continue;
+        sum += v * itemFraction(it, at);
+    }
+    return sum;
+};
+
+// R$ realizado por item: valor real medido, ou estimado pelo % de avanço manual sobre o previsto.
+const realizedValue = (it: PortalPlanningItem): number => {
+    if (typeof it.actualValue === 'number') return it.actualValue;
+    const v = it.plannedValue ?? 0;
+    const pct = Math.max(0, Math.min(100, it.manualRealPct ?? 0));
+    return v * (pct / 100);
+};
+
+const buildFinancialCurve = (
+    items: PortalPlanningItem[], start: Date, end: Date, now: Date,
+): FinancialView | null => {
+    const totalPlanned = items.reduce((s, it) => s + (it.plannedValue ?? 0), 0);
+    if (totalPlanned <= 0 || end <= start) return null;
+
+    const total = end.getTime() - start.getTime();
+    const steps = 14;
+    const todayClamped = new Date(Math.min(Math.max(now.getTime(), start.getTime()), end.getTime()));
+    const curve: SCurveMoneyPoint[] = [];
+    for (let i = 0; i <= steps; i++) {
+        const at = new Date(start.getTime() + (total * i) / steps);
+        curve.push({
+            label: at.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+            plannedValue: Math.round(plannedValueAt(items, at) * 100) / 100,
+        });
+    }
+
+    const totalRealized = items.reduce((s, it) => s + realizedValue(it), 0);
+    const plannedTodayValue = plannedValueAt(items, todayClamped);
+    const todayFrac = (todayClamped.getTime() - start.getTime()) / total;
+    const idx = Math.round(todayFrac * steps);
+    if (curve[idx]) {
+        curve[idx] = { ...curve[idx], realizedValue: Math.round(totalRealized * 100) / 100 };
+    }
+
+    return {
+        totalPlanned: Math.round(totalPlanned * 100) / 100,
+        totalRealized: Math.round(totalRealized * 100) / 100,
+        plannedTodayValue: Math.round(plannedTodayValue * 100) / 100,
+        curve,
+    };
+};
 
 // Calcula uma fase a partir de um conjunto de ids de itens.
 const computePhase = (
@@ -219,5 +286,10 @@ export const buildPlanningView = (planning: PortalPlanning): PlanningView => {
     const daysRemaining = end ? Math.ceil((end.getTime() - now.getTime()) / dayMs) : null;
     const onSchedule = start && end ? progress >= plannedToday : null;
 
-    return { progress, start, end, daysRemaining, onSchedule, plannedToday, phases, sCurve };
+    // Curva financeira: só quando o servidor liberou valores (cliente Serviços).
+    const financial = (planning.financialEnabled && start && end)
+        ? buildFinancialCurve(items, start, end, now) ?? undefined
+        : undefined;
+
+    return { progress, start, end, daysRemaining, onSchedule, plannedToday, phases, sCurve, financial };
 };

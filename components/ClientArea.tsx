@@ -48,6 +48,7 @@ import {
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, Line, ComposedChart } from 'recharts';
 import { buildPlanningView, type PlanningView } from '../utils/portalPlanningUtils';
+import { fmtBRL } from '../utils/format';
 import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment, Contract } from '../types';
 import { calculateProjectProgress, calculateUpcomingPhases, getPhaseSchedule, calculateRealizedFinancialProgress, calculatePlannedFinancialProgress } from '../utils/projectUtils';
 import ProjectGallery from './ProjectGallery';
@@ -76,7 +77,7 @@ interface ClientAreaProps {
     clientProfile?: Client | null;
     clients?: Client[]; // For admin selection
     organizationId?: string | null; // Fallback quando settings não traz organizationId (ex.: portal sem projeto aberto)
-    activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'obra' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao';
+    activeTab?: 'dashboard' | 'clientes' | 'jornada' | 'obra' | 'cronograma-ff' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao';
     portalToken?: string;
     onUpdateSettings?: (settings: ProjectSettings) => void;
     onClientSelect?: (client: Client) => void;
@@ -94,7 +95,7 @@ const contractDashBadge = (status?: string): { label: string; cls: string } =>
 
 export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false }) => {
     const confirm = useConfirm();
-    const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'obra' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao'>(initialTab || 'dashboard');
+    const [activeTab, setActiveTab] = React.useState<'dashboard' | 'clientes' | 'jornada' | 'obra' | 'cronograma-ff' | 'visual' | 'personalizacao' | 'diario' | 'documentos' | 'contratos' | 'financeiro' | 'suporte' | 'manutencao'>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
     const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
@@ -183,7 +184,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         // Planejamento/Obra: carrega quando a aba é aberta (1x por cliente/token).
         // Portal (anon) → via token; prévia do admin (autenticado) → via client_id.
         const planningKey = portalToken || clientProfile?.id || '';
-        if (activeTab === 'obra' && planningKey && planningLoadedKey !== planningKey) {
+        if ((activeTab === 'obra' || activeTab === 'cronograma-ff') && planningKey && planningLoadedKey !== planningKey) {
             setPlanningLoadedKey(planningKey);
             setPlanningView(null);
             const loadPlanning = portalToken
@@ -2249,6 +2250,95 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         );
     };
 
+    const renderCronogramaFinanceiro = () => {
+        const pv = planningView;
+
+        if (planningLoadedKey && !pv?.financial) {
+            return (
+                <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center justify-center py-20 animate-in fade-in duration-500">
+                    <TrendingUp className="w-16 h-16 text-gray-200 mb-6" />
+                    <p className="text-lg font-black text-gray-400 uppercase tracking-widest text-center">Cronograma físico-financeiro ainda não disponível</p>
+                    <p className="text-sm font-bold text-gray-300 uppercase tracking-wider mt-2 text-center">Ele aparecerá aqui assim que o planejamento com valores for publicado.</p>
+                </div>
+            );
+        }
+        if (!pv?.financial) {
+            return (
+                <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-center py-20">
+                    <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+            );
+        }
+
+        const fv = pv.financial;
+        const pctRealized = fv.totalPlanned > 0 ? Math.round((fv.totalRealized / fv.totalPlanned) * 100) : 0;
+        const pctToday = fv.totalPlanned > 0 ? Math.round((fv.plannedTodayValue / fv.totalPlanned) * 100) : 0;
+
+        return (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="bg-gradient-to-br from-[#0c1a6e] via-blue-800 to-indigo-600 rounded-3xl p-8 text-white">
+                    <div>
+                        <h3 className="text-2xl font-black tracking-tight uppercase">Cronograma Físico-Financeiro</h3>
+                        <p className="text-blue-200 text-sm font-medium mt-1">Desembolso previsto × realizado ao longo do serviço.</p>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+                        <div className="bg-white/10 rounded-2xl p-4">
+                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Total Previsto</p>
+                            <p className="text-xl font-black">{fmtBRL(fv.totalPlanned)}</p>
+                        </div>
+                        <div className="bg-white/10 rounded-2xl p-4">
+                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Previsto p/ hoje</p>
+                            <p className="text-xl font-black">{fmtBRL(fv.plannedTodayValue)}</p>
+                        </div>
+                        <div className="bg-white/10 rounded-2xl p-4">
+                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Desembolsado</p>
+                            <p className="text-xl font-black">{fmtBRL(fv.totalRealized)}</p>
+                        </div>
+                        <div className="bg-white/10 rounded-2xl p-4">
+                            <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">% Financeiro</p>
+                            <p className="text-xl font-black">{pctRealized}%</p>
+                        </div>
+                    </div>
+                    <div className="mt-6">
+                        <div className="h-3 bg-white/15 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-400 rounded-full transition-all duration-700" style={{ width: `${Math.min(pctRealized, 100)}%` }} />
+                        </div>
+                    </div>
+                </div>
+
+                {fv.curve.length > 0 && (
+                    <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
+                            <h3 className="text-lg font-black text-gray-900 tracking-tight uppercase">Curva de Desembolso</h3>
+                        </div>
+                        <ResponsiveContainer width="100%" height={260}>
+                            <ComposedChart data={fv.curve} margin={{ top: 8, right: 12, left: 8, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={(v) => fmtBRL(v)} width={80} />
+                                <RechartsTooltip formatter={(v) => fmtBRL(Number(v) || 0)} />
+                                <Area type="monotone" dataKey="plannedValue" name="Planejado" stroke="#6366f1" strokeWidth={2} fill="#eef2ff" />
+                                <Line type="monotone" dataKey="realizedValue" name="Realizado" stroke="#10b981" strokeWidth={3} dot={{ r: 5, fill: '#10b981' }} connectNulls={false} />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                        <div className="flex items-center justify-center gap-6 mt-2">
+                            <span className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-sm bg-indigo-200 border border-indigo-400" /> Planejado</span>
+                            <span className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-full bg-emerald-500" /> Realizado (hoje)</span>
+                        </div>
+                    </div>
+                )}
+
+                <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between text-sm font-bold text-gray-500">
+                        <span>Previsto acumulado p/ hoje</span>
+                        <span className="text-gray-900">{pctToday}%</span>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const renderJornada = () => {
         const schedule = getPhaseSchedule(settings, budget);
 
@@ -3465,6 +3555,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
         { id: 'jornada', label: 'Minha Jornada', icon: <Calendar className="w-4 h-4" /> },
         { id: 'obra', label: clientProfile?.category === 'Serviços' ? 'Andamento do Serviço' : 'Obra', icon: <HardHat className="w-4 h-4" /> },
+        { id: 'cronograma-ff', label: 'Cronograma Físico-Financeiro', icon: <TrendingUp className="w-4 h-4" /> },
         { id: 'visual', label: 'Visual', icon: <Camera className="w-4 h-4" /> },
         { id: 'personalizacao', label: 'Personalização', icon: <Palette className="w-4 h-4" /> },
         { id: 'diario', label: 'Diário de Obra', icon: <BookOpen className="w-4 h-4" /> },
@@ -3478,7 +3569,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const CATEGORY_TAB_PRESETS: Record<string, string[]> = {
         'Vendas':   ['dashboard', 'jornada', 'obra', 'visual', 'personalizacao', 'diario', 'documentos', 'contratos', 'financeiro', 'suporte'],
         'Locação':  ['dashboard', 'obra', 'financeiro', 'contratos', 'documentos', 'manutencao'],
-        'Serviços': ['dashboard', 'obra', 'financeiro', 'contratos', 'documentos'],
+        'Serviços': ['dashboard', 'obra', 'cronograma-ff', 'financeiro', 'contratos', 'documentos'],
     };
 
     const clientCategory = clientProfile?.category ?? '';
@@ -4062,6 +4153,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 )}
                 {activeTab === 'jornada' && renderJornada()}
                 {activeTab === 'obra' && renderObra()}
+                {activeTab === 'cronograma-ff' && renderCronogramaFinanceiro()}
                 {activeTab === 'personalizacao' && <FinishSelection />}
                 {activeTab === 'visual' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">

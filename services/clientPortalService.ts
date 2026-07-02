@@ -26,6 +26,9 @@ export interface PortalPlanningItem {
     endDate?: string;
     duration?: number;
     manualRealPct?: number;
+    plannedValue?: number;
+    actualValue?: number;
+    budgetedValue?: number;
 }
 
 export interface PortalPlanningOutlineNode {
@@ -51,6 +54,7 @@ export interface PortalPlanning {
     outline?: PortalPlanningOutlineNode[] | null;
     itemSchedules?: PortalPlanningItem[];
     budget?: PortalPlanningBudgetItem[];
+    financialEnabled?: boolean;
 }
 
 export const clientPortalService = {

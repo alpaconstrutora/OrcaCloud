@@ -3,6 +3,7 @@ import { Building2, Plus, Trash2, Users, ChevronDown, ChevronUp, DollarSign, Ale
 import { formatCurrency } from '../../utils/financialMath';
 import { speService, SpeEntity, SpePartner } from '../../services/speService';
 import { investorService, Investor } from '../../services/investorService';
+import Button from '../ui/Button';
 
 interface Props {
     organizationId: string;
@@ -129,12 +130,12 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
             <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-gray-900">Gestão de SPEs</h3>
                 {isAdmin && (
-                    <button
+                    <Button
                         onClick={() => setShowNewEntity(v => !v)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-bold hover:bg-blue-700"
+                        className="flex items-center gap-2 rounded-xl text-button"
                     >
                         <Plus className="w-4 h-4" /> Nova SPE
-                    </button>
+                    </Button>
                 )}
             </div>
 
@@ -166,10 +167,10 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                     </div>
                     <div className="flex gap-3 justify-end">
                         <button onClick={() => setShowNewEntity(false)} className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-700">Cancelar</button>
-                        <button onClick={handleSaveEntity} disabled={savingEntity}
-                            className="px-5 py-2 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 disabled:opacity-60">
+                        <Button onClick={handleSaveEntity} disabled={savingEntity}
+                            className="rounded-xl">
                             {savingEntity ? 'Salvando...' : 'Criar SPE'}
-                        </button>
+                        </Button>
                     </div>
                 </div>
             )}
@@ -262,12 +263,13 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                                                                                 className="w-24 px-2 py-1 border border-gray-200 rounded text-form-input focus:outline-none"
                                                                                 placeholder="0,00"
                                                                             />
-                                                                            <button
+                                                                            <Button
+                                                                                size="icon"
                                                                                 onClick={() => handleCapitalAction(p.id!, entity.id!)}
-                                                                                className="p-1.5 bg-blue-600 text-white rounded text-button hover:bg-blue-700"
+                                                                                className="rounded text-button"
                                                                             >
                                                                                 <DollarSign className="w-3 h-3" />
-                                                                            </button>
+                                                                            </Button>
                                                                         </div>
                                                                     </td>
                                                                 )}
@@ -310,12 +312,13 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                                                         placeholder="0,00"
                                                     />
                                                 </label>
-                                                <button
+                                                <Button
+                                                    size="sm"
                                                     onClick={() => handleAddPartner(entity.id!)}
-                                                    className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg text-button font-bold hover:bg-blue-700"
+                                                    className="flex items-center gap-1 rounded-lg text-button"
                                                 >
                                                     <Plus className="w-4 h-4" /> Sócio
-                                                </button>
+                                                </Button>
                                             </div>
                                         )}
                                     </div>

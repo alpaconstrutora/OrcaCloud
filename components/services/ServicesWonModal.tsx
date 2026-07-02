@@ -1,5 +1,6 @@
 import React from 'react';
 import { CheckCircle, FileText, Layers, ArrowRight } from 'lucide-react';
+import Button from '../ui/Button';
 
 interface Props {
   contactName: string;
@@ -69,12 +70,12 @@ const ServicesWonModal: React.FC<Props> = ({
           </button>
         )}
         {onGoToProject && projectName && (
-          <button
+          <Button
             onClick={onGoToProject}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors"
+            className="w-full flex items-center justify-center gap-2"
           >
             Ir para a obra <ArrowRight size={15} />
-          </button>
+          </Button>
         )}
         <button
           onClick={onClose}

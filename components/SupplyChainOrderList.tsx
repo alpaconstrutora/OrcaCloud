@@ -2,6 +2,7 @@ import React from 'react';
 import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, Pencil, FileCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import Button from './ui/Button';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
@@ -225,13 +226,14 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                             <Table2 className="w-4 h-4" />
                         </button>
                     </div>
-                    <button
+                    <Button
                         onClick={onCreateNew}
-                        className="flex items-center gap-3 bg-blue-600 text-white px-6 py-3 rounded-[1.25rem] font-black text-button uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                        size="lg"
+                        className="gap-3 rounded-[1.25rem] shadow-xl shadow-blue-900/20"
                     >
                         <Plus className="w-4 h-4" />
                         <span>Novo Pedido</span>
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -703,12 +705,13 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                         >
                             Cancelar
                         </button>
-                        <button
+                        <Button
+                            variant="danger"
                             onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }}
-                            className="px-6 py-3 bg-red-600 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-red-700 transition-all"
+                            className="rounded-2xl"
                         >
                             Confirmar
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>

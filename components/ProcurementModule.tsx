@@ -20,6 +20,7 @@ import {
     RiskItem,
     MonthlyBreakdown,
 } from '../types/procurement';
+import Button from './ui/Button';
 
 interface Props {
     activeOrganizationId: string | null;
@@ -117,12 +118,12 @@ function QuotationModal({
                 </div>
                 <div className="flex gap-2 justify-end p-4 border-t">
                     <button onClick={onClose} className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50">Cancelar</button>
-                    <button
+                    <Button
                         onClick={submit} disabled={loading || !title}
-                        className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded disabled:opacity-50 hover:bg-blue-700"
+                        size="sm"
                     >
                         {loading ? 'Gerando…' : 'Gerar Cotação'}
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>
@@ -1280,9 +1281,9 @@ function QuotationModalConsolidation({
                 </div>
                 <div className="flex gap-2 justify-end p-4 border-t">
                     <button onClick={onClose} className="px-3 py-1.5 text-sm border rounded">Cancelar</button>
-                    <button onClick={submit} disabled={loading} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded disabled:opacity-50">
+                    <Button onClick={submit} disabled={loading} size="sm">
                         {loading ? 'Gerando…' : 'Gerar Cotação'}
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>

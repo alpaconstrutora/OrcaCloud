@@ -11,6 +11,7 @@ import { Client, Investor } from '../types';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import CityStateSelect from './CityStateSelect';
+import Button from './ui/Button';
 
 interface NewProjectData {
   id?: string;
@@ -2183,15 +2184,15 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
               >
                 Cancelar
               </button>
-              <button
+              <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-8 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="px-8 py-2 rounded-xl shadow-lg shadow-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? 'Salvando...' : mode === 'create'
                   ? (formData.classification === 'OBRA' ? 'Criar Obra' : formData.classification === 'PLANEJAMENTO' ? 'Criar Planejamento' : 'Criar Orçamento')
                   : 'Salvar Alterações'}
-              </button>
+              </Button>
             </div>
           </div>
         </form>

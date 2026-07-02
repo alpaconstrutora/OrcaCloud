@@ -12,6 +12,7 @@ import {
 } from '../services/opuraAnalyticsService';
 import { useToast } from '../hooks/useToast';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
+import Button from './ui/Button';
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
 
@@ -241,11 +242,10 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                         className="px-3 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50">
                         <Download className="w-3.5 h-3.5" /> CSV
                     </button>
-                    <button onClick={load} disabled={loading}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 flex items-center gap-2 transition-all disabled:opacity-60">
+                    <Button onClick={load} disabled={loading}>
                         <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                         Atualizar
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -350,10 +350,9 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                     </div>
                     <p className="text-sm font-bold text-gray-800">Não foi possível carregar o relatório</p>
                     <p className="text-xs text-gray-500 max-w-md break-words">{error}</p>
-                    <button onClick={load}
-                        className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 flex items-center gap-2">
+                    <Button onClick={load} className="mt-2">
                         <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
-                    </button>
+                    </Button>
                 </div>
             ) : compareMode ? (
                 compareRows.length === 0 ? (

@@ -5,6 +5,7 @@ import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeO
 import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
 import { useConfirm } from './ui/confirm';
+import Button from './ui/Button';
 
 const Settings: React.FC = () => {
     const confirm = useConfirm();
@@ -241,10 +242,10 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex justify-end mt-4">
-                    <button onClick={handleAppSettingsSave} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 transition-all">
+                    <Button onClick={handleAppSettingsSave} className="gap-2">
                         {appSettingsSaved ? <CheckCircle className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
                         {appSettingsSaved ? 'Salvo!' : 'Salvar'}
-                    </button>
+                    </Button>
                 </div>
             </div>
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Trash2, Pencil, Settings } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
+import Button from './ui/Button';
 import { projectService, ProjectData } from '../services/projectService';
 import { supplierService } from '../services/supplierService';
 import { orderService } from '../services/orderService';
@@ -559,14 +560,15 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                             </p>
                         </div>
                     </div>
-                    <button
+                    <Button
                         onClick={handleSaveOrder}
                         disabled={!selectedSupplierId || !selectedProjectId || (selectedItems.size === 0 && avulsoItems.length === 0)}
-                        className="flex items-center gap-2 bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-900/20 active:scale-95 transition-all"
+                        size="lg"
+                        className="gap-2 shadow-xl shadow-blue-900/20"
                     >
                         <Save className="w-4 h-4" />
                         <span>Salvar Pedido</span>
-                    </button>
+                    </Button>
                 </div>
 
                 {formError && (
@@ -1113,9 +1115,9 @@ const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClos
                             placeholder="Nova unidade..."
                             className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
                         />
-                        <button onClick={handleAdd} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-button font-black transition-all whitespace-nowrap">
+                        <Button onClick={handleAdd} size="sm" className="gap-1.5 whitespace-nowrap">
                             <Plus className="w-3.5 h-3.5" /> Adicionar
-                        </button>
+                        </Button>
                     </div>
                     {error && <p className="text-xs text-red-500 -mt-2">{error}</p>}
 

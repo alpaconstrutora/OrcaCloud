@@ -28,6 +28,7 @@ import {
     ClipboardList,
 } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
+import Button from './ui/Button';
 import { useStore } from '../store/useStore';
 import type {
     Warehouse as WarehouseType,
@@ -194,13 +195,13 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
                     <button onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800">
                         Cancelar
                     </button>
-                    <button
+                    <Button
                         onClick={save} disabled={saving}
-                        className="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                        className="flex-1 justify-center"
                     >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                         Registrar
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>
@@ -297,10 +298,10 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
 
                 <div className="flex gap-3 pt-2">
                     <button onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800">Cancelar</button>
-                    <button onClick={save} disabled={saving} className="flex-1 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50">
+                    <Button onClick={save} disabled={saving} className="flex-1 justify-center">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                         Salvar
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>
@@ -412,12 +413,12 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     >
                         <ArrowDownCircle className="w-4 h-4" /> Entrada
                     </button>
-                    <button
+                    <Button
+                        variant="danger"
                         onClick={() => setMovementModal('out')}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white text-sm font-medium"
                     >
                         <ArrowUpCircle className="w-4 h-4" /> Saída
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -778,12 +779,11 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     {tab === 'transferencias' && (
                         <div className="space-y-3">
                             <div className="flex justify-end">
-                                <button
+                                <Button
                                     onClick={() => setTransferModal(true)}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium"
                                 >
                                     <Plus className="w-4 h-4" /> Nova Transferência
-                                </button>
+                                </Button>
                             </div>
                             <div className="bg-gray-800/30 border border-gray-700 rounded-xl overflow-hidden">
                                 {transfers.length === 0 ? (
@@ -865,12 +865,11 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     {tab === 'almoxarifados' && (
                         <div className="space-y-3">
                             <div className="flex justify-end">
-                                <button
+                                <Button
                                     onClick={() => setWarehouseModal(true)}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium"
                                 >
                                     <Plus className="w-4 h-4" /> Novo Almoxarifado
-                                </button>
+                                </Button>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {warehouses.length === 0 && (
@@ -1147,10 +1146,10 @@ const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClos
                     {err && <p className="text-red-400 text-xs mb-3">{err}</p>}
                     <div className="flex gap-3">
                         <button onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800">Cancelar</button>
-                        <button onClick={save} disabled={saving} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50">
+                        <Button onClick={save} disabled={saving} className="flex-1 justify-center">
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                             Enviar Transferência
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>
@@ -1230,12 +1229,11 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
                         </button>
                     ))}
                 </div>
-                <button
+                <Button
                     onClick={() => setShowRequestModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium"
                 >
                     <Plus className="w-4 h-4" /> Nova Requisição
-                </button>
+                </Button>
             </div>
 
             {err && <p className="text-red-400 text-xs">{err}</p>}
@@ -1267,14 +1265,14 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
                                     </button>
                                 )}
                                 {(req.status === 'approved' || req.status === 'separated') && (
-                                    <button
+                                    <Button
+                                        size="sm"
                                         onClick={() => handleDeliver(req.id)}
                                         disabled={delivering === req.id}
-                                        className="px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-button font-medium flex items-center gap-1 disabled:opacity-50"
                                     >
                                         {delivering === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
                                         Entregar
-                                    </button>
+                                    </Button>
                                 )}
                                 {(req.status === 'pending' || req.status === 'approved' || req.status === 'separated') && (
                                     <button
@@ -1497,13 +1495,13 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
                     {err && <p className="text-red-400 text-xs mb-3">{err}</p>}
                     <div className="flex gap-3">
                         <button onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800">Cancelar</button>
-                        <button
+                        <Button
                             onClick={save} disabled={saving}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium disabled:opacity-50"
+                            className="flex-1 justify-center"
                         >
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                             Enviar Requisição
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>
@@ -1592,13 +1590,14 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ request, onClose, onDone })
                 <div className="px-6 py-4 border-t border-gray-700 shrink-0">
                     {err && <p className="text-red-400 text-xs mb-3">{err}</p>}
                     <div className="flex gap-3">
-                        <button
+                        <Button
+                            variant="danger"
                             onClick={() => handle('reject')} disabled={saving}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-800 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50"
+                            className="flex-1 justify-center"
                         >
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
                             Rejeitar
-                        </button>
+                        </Button>
                         <button
                             onClick={() => handle('approve')} disabled={saving}
                             className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 text-white text-sm font-medium disabled:opacity-50"

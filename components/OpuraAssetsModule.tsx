@@ -38,6 +38,7 @@ import { assetService } from '../services/assetService';
 import { laborService } from '../services/laborService';
 import { useStore } from '../store/useStore';
 import { AssetImportModal } from './AssetImportModal';
+import Button from './ui/Button';
 import {
   OpuraAsset,
   AssetCategory,
@@ -815,15 +816,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
             Importar Planilha
           </button>
 
-          <button
+          <Button
             onClick={() => setIsNewAssetModalOpen(true)}
             disabled={isWriteDisabled}
             title={isWriteDisabled ? "Selecione uma organização específica para cadastrar ativos" : "Cadastrar novo ativo"}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 text-white rounded-[1.25rem] font-black text-button uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-blue-900/10 active:scale-95"
           >
             <Plus className="w-4 h-4" />
             Cadastrar Ativo
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1622,7 +1622,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       <option value="cancelada">Cancelada</option>
                     </select>
 
-                    <button
+                    <Button
+                      size="sm"
                       onClick={() => {
                         setMaintForm({
                           asset_id: selectedAsset?.id || '',
@@ -1636,11 +1637,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                         });
                         setIsNewMaintModalOpen(true);
                       }}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black text-button uppercase tracking-wider flex items-center gap-1.5 transition-colors shadow-lg shadow-blue-900/10 active:scale-95"
                     >
                       <Plus className="w-4 h-4" />
                       Agendar Manutenção
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
@@ -2073,14 +2073,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 >
                   Cancelar
                 </button>
-                <button
+                <Button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-50"
                 >
                   {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                   {editingAssetId ? 'Salvar Alterações' : isDuplicate ? 'Salvar Duplicata' : 'Finalizar Cadastro'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -2137,14 +2136,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 >
                   Cancelar
                 </button>
-                <button
+                <Button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-50"
                 >
                   {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                   Confirmar Transferência
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -2238,14 +2236,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 >
                   Cancelar
                 </button>
-                <button
+                <Button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-50"
                 >
                   {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                   Confirmar Reserva
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -2371,13 +2368,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 placeholder="Ex: Makita, Bosch, Caterpillar..."
                 className="flex-1 px-4 py-2 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors font-semibold"
               />
-              <button
+              <Button
                 type="submit"
+                size="sm"
                 disabled={actionLoading}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold uppercase tracking-wider flex items-center gap-1 active:scale-95 transition-all"
               >
                 Adicionar
-              </button>
+              </Button>
             </form>
 
             <div className="max-h-60 overflow-y-auto space-y-2 pr-1 text-xs">
@@ -2575,14 +2572,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 >
                   Cancelar
                 </button>
-                <button
+                <Button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-50"
                 >
                   {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                   Confirmar Abertura
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -2776,14 +2772,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 >
                   Cancelar
                 </button>
-                <button
+                <Button
                   type="submit"
                   disabled={actionLoading}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase tracking-wider flex items-center gap-2 disabled:opacity-50"
                 >
                   {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                   Confirmar Anexo
-                </button>
+                </Button>
               </div>
             </form>
           </div>

@@ -10,6 +10,7 @@ import {
 import { supplierBankAccountService } from '../services/supplierBankAccountService';
 import { masterDataService, MasterBank } from '../services/masterDataService';
 import { useStore } from '../store/useStore';
+import Button from './ui/Button';
 
 // ─── Estilos reutilizáveis (consistentes com SupplierModal) ───────────────────
 const inputCls = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all bg-white';
@@ -571,13 +572,14 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                         {showInactive ? 'Ocultar inativas' : 'Ver inativas'}
                     </button>
                     {!showForm && (
-                        <button
+                        <Button
                             onClick={startAdd}
-                            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-button font-black uppercase tracking-wider rounded-xl hover:bg-blue-700 transition-all shadow-sm active:scale-95"
+                            size="sm"
+                            className="gap-1.5"
                         >
                             <Plus className="w-3.5 h-3.5" />
                             Adicionar
-                        </button>
+                        </Button>
                     )}
                 </div>
             </div>

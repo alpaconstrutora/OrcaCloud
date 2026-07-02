@@ -9,6 +9,7 @@ import {
 import { supabase } from '../lib/supabase'
 import type { WorkOrderStatus, WorkOrderPriority } from '../types/operational-control'
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils'
+import Button from './ui/Button'
 
 const OPERACIONAL_COLUMNS: ColumnConfig[] = [
   { key: 'title', label: 'Código / Título', sortable: true },
@@ -316,13 +317,12 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
           />
         )}
 
-        <button
+        <Button
           onClick={onCreateNew}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/20 active:scale-95"
         >
           <Plus className="w-4 h-4" />
           Nova OE
-        </button>
+        </Button>
       </div>
 
       {/* Status filter pills */}
@@ -357,13 +357,13 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
           <ClipboardList className="w-10 h-10 text-slate-200 mb-2" />
           <p className="text-slate-400 font-bold">Nenhuma ordem encontrada</p>
           {workOrders.length === 0 && (
-            <button
+            <Button
               onClick={onCreateNew}
-              className="mt-3 flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700"
+              className="mt-3"
             >
               <Plus className="w-3 h-3" />
               Criar primeira OE
-            </button>
+            </Button>
           )}
         </div>
       ) : viewMode === 'cards' ? (

@@ -10,6 +10,7 @@ import { resolveFields, describeMapping } from '../services/docxFieldCatalog';
 import { Contract } from '../types/contracts';
 import { Client, Organization } from '../types/users';
 import { ProjectSettings } from '../types/project';
+import Button from './ui/Button';
 
 interface Props {
     organizationId: string;
@@ -157,9 +158,9 @@ const EmitDocumentModal: React.FC<Props> = ({
                             <p className="text-sm max-w-xs">Nenhum modelo de documento cadastrado. Suba um .docx em "Modelos de Documento" para emitir contratos personalizados.</p>
                             <div className="flex flex-wrap gap-2 justify-center">
                                 {onManageTemplates && (
-                                    <button onClick={onManageTemplates} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+                                    <Button onClick={onManageTemplates} className="gap-2">
                                         <Settings className="w-4 h-4" /> Cadastrar modelo
-                                    </button>
+                                    </Button>
                                 )}
                                 {onFallbackPdf && (
                                     <button onClick={onFallbackPdf} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50">
@@ -205,9 +206,9 @@ const EmitDocumentModal: React.FC<Props> = ({
                                         </div>
                                     </div>
                                     {onManageTemplates && (
-                                        <button onClick={onManageTemplates} className="self-start flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-button font-medium hover:bg-red-700">
+                                        <Button onClick={onManageTemplates} variant="danger" size="sm" className="self-start gap-1.5">
                                             <Settings className="w-3.5 h-3.5" /> Editar modelo agora
-                                        </button>
+                                        </Button>
                                     )}
                                 </div>
                             )}
@@ -263,14 +264,14 @@ const EmitDocumentModal: React.FC<Props> = ({
                             {busy === 'docx' ? <Loader2 className="w-4 h-4 animate-spin" /> : <File className="w-4 h-4 text-blue-600" />}
                             {busy === 'docx' ? 'Gerando…' : 'Baixar .docx'}
                         </button>
-                        <button
+                        <Button
                             onClick={() => emit('pdf')}
                             disabled={!template || busy !== null}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                            className="gap-2"
                         >
                             {busy === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
                             {busy === 'pdf' ? 'Gerando PDF…' : 'Baixar PDF'}
-                        </button>
+                        </Button>
                     </div>
                 )}
             </div>

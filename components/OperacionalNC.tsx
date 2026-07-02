@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { AlertTriangle, Plus, Loader2, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import Button from './ui/Button'
 
 interface NonConformance {
   id: string
@@ -156,13 +157,14 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
         </div>
       )}
 
-      <button
+      <Button
+        variant="danger"
         onClick={() => setShowForm(s => !s)}
-        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-red-700 transition-colors"
+        className="flex items-center gap-2 rounded-xl text-button font-black uppercase tracking-widest"
       >
         <Plus className="w-4 h-4" />
         {showForm ? 'Cancelar' : 'Registrar NC'}
-      </button>
+      </Button>
 
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-100">
@@ -211,14 +213,15 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
             </div>
           </div>
           <div className="flex justify-end">
-            <button
+            <Button
+              variant="danger"
               type="submit"
               disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 bg-red-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-red-700 disabled:opacity-60 transition-colors"
+              className="flex items-center gap-2 rounded-xl text-button font-black uppercase tracking-widest disabled:opacity-60"
             >
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
               Registrar
-            </button>
+            </Button>
           </div>
         </form>
       )}

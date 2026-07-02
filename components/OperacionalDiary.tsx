@@ -4,6 +4,7 @@ import {
   Users, Loader2, AlertCircle, ChevronLeft, ChevronRight, Save
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import Button from './ui/Button'
 import type { WeatherCondition, FieldCondition, SiteDiarySnapshot } from '../types/operational-control'
 
 interface SiteDiary {
@@ -330,14 +331,13 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
           >
             Cancelar
           </button>
-          <button
+          <Button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 disabled:opacity-60 transition-colors"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Salvar
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -358,14 +358,13 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
             max={new Date().toISOString().split('T')[0]}
             className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
           />
-          <button
+          <Button
             onClick={handleAutoGenerate}
             disabled={generating}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-60 transition-colors"
           >
             {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             {generating ? 'Gerando...' : 'Registrar dia'}
-          </button>
+          </Button>
         </div>
       </div>
 

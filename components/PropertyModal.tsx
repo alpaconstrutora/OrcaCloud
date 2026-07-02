@@ -1232,13 +1232,15 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                 {formData.images.map((url, idx) => (
                                     <div key={idx} className="relative group aspect-video rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
                                         <img src={url} className="w-full h-full object-cover" alt={`Propriedade ${idx + 1}`} />
-                                        <button
+                                        <Button
                                             type="button"
+                                            variant="danger"
+                                            size="icon"
                                             onClick={() => update({ images: formData.images?.filter((_, i) => i !== idx) })}
-                                            className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                                            className="absolute top-2 right-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-lg w-auto h-auto p-1.5"
                                         >
                                             <X className="w-4 h-4" />
-                                        </button>
+                                        </Button>
                                     </div>
                                 ))}
                             </div>
@@ -1293,13 +1295,13 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                     >
                         Cancelar
                     </button>
-                    <button
+                    <Button
                         type="submit"
-                        className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all flex items-center gap-2 active:scale-95 text-sm"
+                        className="px-8 py-2.5 rounded-xl shadow-lg shadow-blue-600/20 flex items-center gap-2 active:scale-95 text-sm"
                     >
                         <Check className="w-4 h-4" />
                         Salvar Alterações
-                    </button>
+                    </Button>
                 </SheetFooter>
                 </form>
             </Sheet>

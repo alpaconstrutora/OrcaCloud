@@ -13,6 +13,7 @@ import {
     BarChart2,
 } from 'lucide-react';
 import { HierarchyNode, ProjectSchedule, EapLocation, EapNode } from '../../types';
+import Button from '../ui/Button';
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -594,13 +595,13 @@ const LocationForm: React.FC<{
             >
                 Cancelar
             </button>
-            <button
+            <Button
                 onClick={onSave}
-                className="flex items-center gap-1 px-3 py-1 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+                size="sm"
             >
-                <Check className="w-3 h-3" />
+                <Check className="w-3 h-3 mr-1" />
                 Salvar
-            </button>
+            </Button>
         </div>
     </div>
 );

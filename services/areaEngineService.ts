@@ -71,6 +71,10 @@ export interface AreaSpaceInput {
     distributionScope?: 'global' | 'block';
 }
 
+function omitCloneFields<T extends Record<string, unknown>>(row: T): Omit<T, 'id' | 'created_at' | 'updated_at' | 'created_by' | 'updated_by'> {
+    const { id: _id, created_at: _createdAt, updated_at: _updatedAt, created_by: _createdBy, updated_by: _updatedBy, ...rest } = row;
+    return rest;
+}
 function raiseAreaEngineError(context: string, error: { message: string }): never {
     console.error(`[areaEngineService] ${context}:`, error);
     throw new Error(`Erro no motor de areas: ${error.message}`);
@@ -155,6 +159,163 @@ export const areaEngineService = {
         return data as AreaVersion;
     },
 
+
+    async createRevisionFromVersion(sourceVersionId: string, label?: string): Promise<AreaVersion> {
+        const sourceVersion = await this.getVersion(sourceVersionId);
+        if (!sourceVersion) throw new Error('Versao de origem nao encontrada.');
+
+        const versions = await this.listVersions(sourceVersion.area_project_id);
+        const nextNumber = Math.max(0, ...versions.map(version => version.version_number || 0)) + 1;
+        const revision = await this.createVersion({
+            area_project_id: sourceVersion.area_project_id,
+            version_number: nextNumber,
+            version_label: label?.trim() || `Revisao ${nextNumber}`,
+            source_version_id: sourceVersion.id,
+            rounding_profile: sourceVersion.rounding_profile,
+            normative_reference: sourceVersion.normative_reference,
+            normative_valid_from: sourceVersion.normative_valid_from,
+        });
+
+        const [blocksRes, floorsRes, unitsRes, spacesRes, accessoryLinksRes, allocationsRes, scopesRes] = await Promise.all([
+            supabase.from('area_version_blocks').select('*').eq('area_version_id', sourceVersionId).order('sort_order', { ascending: true }),
+            supabase.from('area_version_floors').select('*').eq('area_version_id', sourceVersionId).order('sort_order', { ascending: true }),
+            supabase.from('area_version_units').select('*').eq('area_version_id', sourceVersionId).order('materialized_index', { ascending: true }),
+            supabase.from('area_version_spaces').select('*').eq('area_version_id', sourceVersionId).order('materialized_index', { ascending: true }),
+            supabase.from('area_version_accessory_links').select('*').eq('area_version_id', sourceVersionId),
+            supabase.from('area_version_common_allocations').select('*').eq('area_version_id', sourceVersionId),
+            supabase.from('area_version_common_distribution_scopes').select('*').eq('area_version_id', sourceVersionId),
+        ]);
+
+        if (blocksRes.error) raiseAreaEngineError('createRevisionFromVersion.blocks.select', blocksRes.error);
+        if (floorsRes.error) raiseAreaEngineError('createRevisionFromVersion.floors.select', floorsRes.error);
+        if (unitsRes.error) raiseAreaEngineError('createRevisionFromVersion.units.select', unitsRes.error);
+        if (spacesRes.error) raiseAreaEngineError('createRevisionFromVersion.spaces.select', spacesRes.error);
+        if (accessoryLinksRes.error) raiseAreaEngineError('createRevisionFromVersion.accessoryLinks.select', accessoryLinksRes.error);
+        if (allocationsRes.error) raiseAreaEngineError('createRevisionFromVersion.allocations.select', allocationsRes.error);
+        if (scopesRes.error) raiseAreaEngineError('createRevisionFromVersion.scopes.select', scopesRes.error);
+
+        const blockIdMap = new Map<string, string>();
+        const floorIdMap = new Map<string, string>();
+        const unitIdMap = new Map<string, string>();
+        const spaceIdMap = new Map<string, string>();
+
+        const sourceBlocks = (blocksRes.data || []) as Record<string, unknown>[];
+        if (sourceBlocks.length > 0) {
+            const { data, error } = await supabase
+                .from('area_version_blocks')
+                .insert(sourceBlocks.map(block => ({ ...omitCloneFields(block), area_version_id: revision.id })))
+                .select('id');
+            if (error) raiseAreaEngineError('createRevisionFromVersion.blocks.insert', error);
+            sourceBlocks.forEach((block, index) => blockIdMap.set(String(block.id), data?.[index]?.id));
+        }
+
+        const sourceFloors = (floorsRes.data || []) as Record<string, unknown>[];
+        if (sourceFloors.length > 0) {
+            const { data, error } = await supabase
+                .from('area_version_floors')
+                .insert(sourceFloors.map(floor => ({
+                    ...omitCloneFields(floor),
+                    area_version_id: revision.id,
+                    block_id: blockIdMap.get(String(floor.block_id)),
+                    template_source_id: null,
+                    materialization_batch_id: null,
+                })))
+                .select('id');
+            if (error) raiseAreaEngineError('createRevisionFromVersion.floors.insert', error);
+            sourceFloors.forEach((floor, index) => floorIdMap.set(String(floor.id), data?.[index]?.id));
+        }
+
+        const sourceUnits = (unitsRes.data || []) as Record<string, unknown>[];
+        if (sourceUnits.length > 0) {
+            const { data, error } = await supabase
+                .from('area_version_units')
+                .insert(sourceUnits.map(unit => ({
+                    ...omitCloneFields(unit),
+                    area_version_id: revision.id,
+                    block_id: blockIdMap.get(String(unit.block_id)),
+                    primary_floor_id: unit.primary_floor_id ? floorIdMap.get(String(unit.primary_floor_id)) : null,
+                    template_source_id: null,
+                    materialization_batch_id: null,
+                })))
+                .select('id');
+            if (error) raiseAreaEngineError('createRevisionFromVersion.units.insert', error);
+            sourceUnits.forEach((unit, index) => unitIdMap.set(String(unit.id), data?.[index]?.id));
+        }
+
+        const sourceSpaces = (spacesRes.data || []) as Record<string, unknown>[];
+        if (sourceSpaces.length > 0) {
+            const { data, error } = await supabase
+                .from('area_version_spaces')
+                .insert(sourceSpaces.map(space => ({
+                    ...omitCloneFields(space),
+                    area_version_id: revision.id,
+                    block_id: blockIdMap.get(String(space.block_id)),
+                    floor_id: space.floor_id ? floorIdMap.get(String(space.floor_id)) : null,
+                    unit_id: space.unit_id ? unitIdMap.get(String(space.unit_id)) : null,
+                    coefficient_id: null,
+                    template_source_id: null,
+                    materialization_batch_id: null,
+                })))
+                .select('id');
+            if (error) raiseAreaEngineError('createRevisionFromVersion.spaces.insert', error);
+            sourceSpaces.forEach((space, index) => spaceIdMap.set(String(space.id), data?.[index]?.id));
+        }
+
+        const sourceAccessoryLinks = (accessoryLinksRes.data || []) as Record<string, unknown>[];
+        if (sourceAccessoryLinks.length > 0) {
+            const { error } = await supabase
+                .from('area_version_accessory_links')
+                .insert(sourceAccessoryLinks.map(link => ({
+                    ...omitCloneFields(link),
+                    area_version_id: revision.id,
+                    parent_unit_id: unitIdMap.get(String(link.parent_unit_id)),
+                    accessory_space_id: link.accessory_space_id ? spaceIdMap.get(String(link.accessory_space_id)) : null,
+                    accessory_unit_id: link.accessory_unit_id ? unitIdMap.get(String(link.accessory_unit_id)) : null,
+                })));
+            if (error) raiseAreaEngineError('createRevisionFromVersion.accessoryLinks.insert', error);
+        }
+
+        const sourceAllocations = (allocationsRes.data || []) as Record<string, unknown>[];
+        if (sourceAllocations.length > 0) {
+            const { error } = await supabase
+                .from('area_version_common_allocations')
+                .insert(sourceAllocations.map(allocation => ({
+                    ...omitCloneFields(allocation),
+                    area_version_id: revision.id,
+                    common_space_id: spaceIdMap.get(String(allocation.common_space_id)),
+                    target_unit_id: unitIdMap.get(String(allocation.target_unit_id)),
+                })));
+            if (error) raiseAreaEngineError('createRevisionFromVersion.allocations.insert', error);
+        }
+        const sourceScopes = (scopesRes.data || []) as Record<string, unknown>[];
+        if (sourceScopes.length > 0) {
+            const { error } = await supabase
+                .from('area_version_common_distribution_scopes')
+                .insert(sourceScopes.map(scope => ({
+                    ...omitCloneFields(scope),
+                    area_version_id: revision.id,
+                    common_space_id: spaceIdMap.get(String(scope.common_space_id)),
+                    block_id: scope.block_id ? blockIdMap.get(String(scope.block_id)) : null,
+                })));
+            if (error) raiseAreaEngineError('createRevisionFromVersion.scopes.insert', error);
+        }
+
+        const { error: auditError } = await supabase
+            .from('area_version_audit_logs')
+            .insert({
+                area_version_id: revision.id,
+                entity_type: 'area_versions',
+                entity_id: revision.id,
+                action: 'create',
+                field_name: 'source_version_id',
+                old_value: null,
+                new_value: { source_version_id: sourceVersion.id, source_version_number: sourceVersion.version_number },
+                reason: 'Nova revisao criada a partir de versao existente',
+            });
+        if (auditError) raiseAreaEngineError('createRevisionFromVersion.audit', auditError);
+
+        return revision;
+    },
     async updateVersion(versionId: string, updates: AreaVersionUpdate): Promise<AreaVersion> {
         const { data, error } = await supabase
             .from('area_versions')
@@ -231,6 +392,23 @@ export const areaEngineService = {
         return (data || []) as AreaVersionApproval[];
     },
 
+
+    async recordExportAudit(versionId: string, exportType: 'pdf' | 'xlsx', payload: Record<string, unknown>): Promise<void> {
+        const { error } = await supabase
+            .from('area_version_audit_logs')
+            .insert({
+                area_version_id: versionId,
+                entity_type: 'area_export_package',
+                entity_id: versionId,
+                action: 'export',
+                field_name: exportType,
+                old_value: null,
+                new_value: payload,
+                reason: `Exportacao ${exportType.toUpperCase()} via app`,
+            });
+
+        if (error) raiseAreaEngineError('recordExportAudit', error);
+    },
     async listAuditLogs(versionId: string, limit = 20): Promise<AreaVersionAuditLog[]> {
         const { data, error } = await supabase
             .from('area_version_audit_logs')
@@ -279,6 +457,22 @@ export const areaEngineService = {
         return data as AreaVersionBlock;
     },
 
+    async updateBlock(blockId: string, input: AreaBlockInput): Promise<AreaVersionBlock> {
+        const { data, error } = await supabase
+            .from('area_version_blocks')
+            .update({
+                code: input.code?.trim() || null,
+                name: input.name.trim(),
+                sort_order: input.sortOrder ?? 0,
+            })
+            .eq('id', blockId)
+            .select()
+            .single();
+
+        if (error) raiseAreaEngineError('updateBlock', error);
+        return data as AreaVersionBlock;
+    },
+
     async createFloor(versionId: string, input: AreaFloorInput): Promise<AreaVersionFloor> {
         const sortOrder = input.sortOrder ?? 0;
         const { data, error } = await supabase
@@ -299,6 +493,27 @@ export const areaEngineService = {
             .single();
 
         if (error) raiseAreaEngineError('createFloor', error);
+        return data as AreaVersionFloor;
+    },
+
+    async updateFloor(floorId: string, input: AreaFloorInput): Promise<AreaVersionFloor> {
+        const sortOrder = input.sortOrder ?? 0;
+        const { data, error } = await supabase
+            .from('area_version_floors')
+            .update({
+                block_id: input.blockId,
+                code: input.code?.trim() || null,
+                name: input.name.trim(),
+                floor_type: input.floorType || 'other',
+                sort_order: sortOrder,
+                materialized_label: input.name.trim(),
+                materialized_index: sortOrder,
+            })
+            .eq('id', floorId)
+            .select()
+            .single();
+
+        if (error) raiseAreaEngineError('updateFloor', error);
         return data as AreaVersionFloor;
     },
 
@@ -325,6 +540,28 @@ export const areaEngineService = {
             .single();
 
         if (error) raiseAreaEngineError('createUnit', error);
+        return data as AreaVersionUnit;
+    },
+
+    async updateUnit(unitId: string, input: AreaUnitInput): Promise<AreaVersionUnit> {
+        const materializedIndex = input.materializedIndex ?? 0;
+        const { data, error } = await supabase
+            .from('area_version_units')
+            .update({
+                block_id: input.blockId,
+                primary_floor_id: input.primaryFloorId || null,
+                code: input.code.trim(),
+                name: input.name?.trim() || null,
+                unit_type: input.unitType || 'apartment',
+                typology_code: input.typologyCode?.trim() || null,
+                materialized_label: input.code.trim(),
+                materialized_index: materializedIndex,
+            })
+            .eq('id', unitId)
+            .select()
+            .single();
+
+        if (error) raiseAreaEngineError('updateUnit', error);
         return data as AreaVersionUnit;
     },
 
@@ -374,6 +611,60 @@ export const areaEngineService = {
                     notes: 'Escopo criado pelo editor granular do app',
                 });
             if (scopeError) raiseAreaEngineError('createSpace.scope', scopeError);
+        }
+
+        return space;
+    },
+
+    async updateSpace(spaceId: string, input: AreaSpaceInput): Promise<AreaVersionSpace> {
+        const isCommon = input.useClass === 'common';
+        const commonDivisionClass = isCommon ? (input.commonDivisionClass || 'proportional') : 'not_applicable';
+        const coefficientValue = input.coefficientValue === undefined ? 1 : input.coefficientValue;
+        const materializedIndex = input.materializedIndex ?? 0;
+
+        const { data, error } = await supabase
+            .from('area_version_spaces')
+            .update({
+                block_id: input.blockId,
+                floor_id: input.floorId || null,
+                unit_id: isCommon ? null : input.unitId || null,
+                code: input.code?.trim() || null,
+                name: input.name.trim(),
+                use_class: input.useClass,
+                private_nature: isCommon ? 'not_applicable' : 'main',
+                coverage_class: input.coverageClass || 'covered_standard',
+                common_division_class: commonDivisionClass,
+                ownership_accounting_mode: isCommon ? 'common_area' : 'direct_unit',
+                real_area_m2_raw: input.realArea,
+                coefficient_value: coefficientValue,
+                materialized_label: input.name.trim(),
+                materialized_index: materializedIndex,
+            })
+            .eq('id', spaceId)
+            .select()
+            .single();
+
+        if (error) raiseAreaEngineError('updateSpace', error);
+        const space = data as AreaVersionSpace;
+
+        if (isCommon) {
+            const distributionScope = input.distributionScope || 'global';
+            const { error: scopeError } = await supabase
+                .from('area_version_common_distribution_scopes')
+                .upsert({
+                    area_version_id: space.area_version_id,
+                    common_space_id: space.id,
+                    distribution_scope: distributionScope,
+                    block_id: distributionScope === 'block' ? input.blockId : null,
+                    notes: 'Escopo atualizado pelo editor granular do app',
+                }, { onConflict: 'area_version_id,common_space_id' });
+            if (scopeError) raiseAreaEngineError('updateSpace.scope', scopeError);
+        } else {
+            const { error: scopeError } = await supabase
+                .from('area_version_common_distribution_scopes')
+                .delete()
+                .eq('common_space_id', space.id);
+            if (scopeError) raiseAreaEngineError('updateSpace.scopeDelete', scopeError);
         }
 
         return space;

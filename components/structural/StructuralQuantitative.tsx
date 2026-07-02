@@ -7,6 +7,7 @@ import { useProjectStructure, useSteelCatalog } from '../../hooks/useStructuralQ
 import { buildCutTable } from '../../utils/cutTable'
 import { buildQuantitative } from '../../utils/cutTable'
 import type { QuantRow } from '../../utils/cutTable'
+import Button from '../ui/Button'
 
 interface Props {
   orgId: string
@@ -181,11 +182,11 @@ const StructuralQuantitative: React.FC<Props> = ({ orgId, projectId, projectName
               {exporting === 'excel' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
               Excel
             </button>
-            <button onClick={handleExportPdf} disabled={exporting !== null}
-              className="flex items-center gap-2 bg-red-600 disabled:bg-slate-300 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest hover:bg-red-700">
+            <Button onClick={handleExportPdf} disabled={exporting !== null} variant="danger"
+              className="flex items-center gap-2">
               {exporting === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
               PDF
-            </button>
+            </Button>
           </div>
         )}
       </div>

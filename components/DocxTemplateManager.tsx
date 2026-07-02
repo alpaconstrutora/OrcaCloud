@@ -9,6 +9,7 @@ import { detectTokens } from '../services/docxRenderService';
 import { FIELD_GROUPS, TokenMap, TokenMapping } from '../services/docxFieldCatalog';
 import { organizationService } from '../services/organizationService';
 import { supabase } from '../lib/supabase';
+import Button from './ui/Button';
 
 interface Props {
     organizationId: string;
@@ -326,25 +327,18 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                                 <button onClick={() => setDraft(null)} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">
                                     Cancelar
                                 </button>
-                                <button
-                                    onClick={save}
-                                    disabled={!canSave || saving || parsing}
-                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                                >
+                                <Button onClick={save} disabled={!canSave || saving || parsing}>
                                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                     Salvar modelo
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     ) : (
                         /* ─── Lista ─── */
                         <div className="space-y-3">
-                            <button
-                                onClick={startNew}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
-                            >
+                            <Button onClick={startNew}>
                                 <Plus className="w-4 h-4" /> Novo modelo
-                            </button>
+                            </Button>
 
                             {loading ? (
                                 <div className="space-y-2">

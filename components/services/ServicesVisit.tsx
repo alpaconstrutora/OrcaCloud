@@ -4,6 +4,7 @@ import { ArrowLeft, Camera, MapPin, Plus, Check, X, Trash2 } from 'lucide-react'
 import { servicesCommercialService, ServiceVisit } from '../../services/servicesCommercialService';
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
+import Button from '../ui/Button';
 
 interface ChecklistItem { item: string; ok: boolean; note: string }
 
@@ -225,13 +226,13 @@ const ServicesVisit: React.FC<Props> = ({ opportunityId, organizationId, onBack 
         <textarea className={INPUT} rows={4} value={observations} onChange={e => setObservations(e.target.value)} />
       </div>
 
-      <button
+      <Button
         onClick={save}
         disabled={saving}
-        className="w-full py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+        className="w-full"
       >
         {saving ? 'Salvando...' : 'Salvar visita'}
-      </button>
+      </Button>
       <ServicesToast toasts={toasts} onDismiss={dismiss} />
     </div>
   );

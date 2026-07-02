@@ -8,6 +8,7 @@ import { bankReconciliationService } from '../services/bankReconciliationService
 import { useToast } from '../hooks/useToast';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
 import GroupMatchPanel from './GroupMatchPanel';
+import Button from './ui/Button';
 
 function formatBRL(v?: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -379,7 +380,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                 </ModalBody>
                 <ModalFooter>
                     <button onClick={() => setShowSettings(false)} className="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100">Cancelar</button>
-                    <button onClick={saveSettings} disabled={savingSettings} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-black hover:bg-blue-700 disabled:opacity-50">Salvar</button>
+                    <Button onClick={saveSettings} disabled={savingSettings}>Salvar</Button>
                 </ModalFooter>
             </Modal>
         </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, Clock, DollarSign, ChevronDown, ChevronUp, Loader2, AlertCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import Button from './ui/Button'
 
 interface WorkLog {
   id: string
@@ -164,13 +165,13 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
       )}
 
       {/* Add button */}
-      <button
+      <Button
         onClick={() => setShowForm(s => !s)}
-        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 transition-colors"
+        className="flex items-center gap-2 rounded-xl text-button font-black uppercase tracking-widest"
       >
         {showForm ? <ChevronUp className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
         {showForm ? 'Cancelar' : 'Novo Apontamento'}
-      </button>
+      </Button>
 
       {/* Form */}
       {showForm && (
@@ -235,14 +236,14 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
             </div>
           </div>
           <div className="flex justify-end">
-            <button
+            <Button
               type="submit"
               disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-60 transition-colors"
+              className="flex items-center gap-2 rounded-xl text-button font-black uppercase tracking-widest disabled:opacity-60"
             >
               {saving && <Loader2 className="w-3 h-3 animate-spin" />}
               Salvar
-            </button>
+            </Button>
           </div>
         </form>
       )}

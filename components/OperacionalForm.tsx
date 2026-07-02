@@ -955,14 +955,14 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
           >
             Cancelar
           </button>
-          <button
+          <Button
             type="submit"
             disabled={saving}
-            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 disabled:opacity-60 transition-colors shadow-lg shadow-blue-900/20"
+            className="flex items-center gap-2 rounded-xl text-sm font-black disabled:opacity-60 shadow-lg shadow-blue-900/20"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {isEditing ? 'Salvar alterações' : 'Criar OE'}
-          </button>
+          </Button>
         </div>
       </form>
 

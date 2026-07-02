@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { useToast } from '../hooks/useToast';
 import { useConfirm } from './ui/confirm';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
+import Button from './ui/Button';
 import type {
     ReconciliationDivergences, BankWithoutInternal, InternalWithoutBank, ValueMismatch,
 } from '../types/financial';
@@ -438,12 +439,9 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                     >
                         Cancelar
                     </button>
-                    <button
-                        onClick={submitCreate}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-black hover:bg-blue-700"
-                    >
+                    <Button onClick={submitCreate}>
                         <Plus className="w-4 h-4" /> Criar e conciliar
-                    </button>
+                    </Button>
                 </ModalFooter>
             </Modal>
         </div>

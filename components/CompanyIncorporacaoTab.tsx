@@ -9,6 +9,7 @@ import {
 } from '../types';
 import { companyService } from '../services/companyService';
 import { supabase } from '../lib/supabase';
+import Button from './ui/Button';
 
 interface Props {
     companyId: string;
@@ -290,11 +291,10 @@ const CompanyIncorporacaoTab: React.FC<Props> = ({ companyId, orgId }) => {
             </Section>
 
             <div className="flex justify-end pt-2 border-t border-gray-100">
-                <button type="submit" disabled={saving}
-                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
+                <Button type="submit" disabled={saving}>
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     Salvar Incorporação
-                </button>
+                </Button>
             </div>
         </form>
     );

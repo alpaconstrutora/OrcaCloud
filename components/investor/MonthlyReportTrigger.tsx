@@ -3,6 +3,7 @@ import { FileText, RefreshCw, CheckCircle2, Calendar, Download, Loader2 } from '
 import { supabase } from '../../lib/supabase';
 import { investorPortalService, InvestorReport } from '../../services/investorPortalService';
 import { generateMonthlyReportPdf } from '../../services/pdfReportService';
+import Button from '../ui/Button';
 
 interface Props {
     organizationId: string;
@@ -119,17 +120,17 @@ const MonthlyReportTrigger: React.FC<Props> = ({ organizationId }) => {
                         Gerado automaticamente no dia 1º de cada mês. Pode ser disparado manualmente abaixo.
                     </p>
                 </div>
-                <button
+                <Button
                     onClick={handleTrigger}
                     disabled={triggering}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-60 transition-colors"
+                    className="flex items-center gap-2 rounded-xl transition-colors"
                 >
                     {triggering
                         ? <Loader2 className="w-4 h-4 animate-spin" />
                         : <RefreshCw className="w-4 h-4" />
                     }
                     {triggering ? (STEP_LABELS[step] || 'Gerando...') : 'Gerar Agora'}
-                </button>
+                </Button>
             </div>
 
             {/* Feedback de progresso */}

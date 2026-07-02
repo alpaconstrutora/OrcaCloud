@@ -9,6 +9,7 @@ import SinapiRebaseModal from './SinapiRebaseModal';
 import { WBSImportModal } from './WBSImportModal';
 import { WBSTemplateModal } from './WBSTemplateModal';
 import { useConfirm } from './ui/confirm';
+import Button from './ui/Button';
 import * as XLSX from 'xlsx';
 
 interface BudgetEditorProps {
@@ -1813,13 +1814,13 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           </div>
 
           {/* Ação primária */}
-          <button
+          <Button
             onClick={handleAddGroup}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-button font-bold shadow-sm"
+            className="gap-2 text-button"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
             Novo Grupo
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1866,7 +1867,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             onKeyDown={e => { if (e.key === 'Enter') handleRenameVersion(v.id); if (e.key === 'Escape') setEditingVersionId(null); }}
                             className="flex-1 text-sm border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
                           />
-                          <button onClick={() => handleRenameVersion(v.id)} className="px-2 py-1 bg-blue-600 text-white rounded text-button font-bold hover:bg-blue-700">OK</button>
+                          <Button onClick={() => handleRenameVersion(v.id)} size="sm" className="text-button">OK</Button>
                           <button onClick={() => setEditingVersionId(null)} className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-button hover:bg-gray-200"><X className="w-3 h-3" /></button>
                         </div>
                       ) : (
@@ -2179,7 +2180,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 </div>
                 <div className="flex gap-2 pt-2">
                   <button onClick={() => setWbsModal({ ...wbsModal, isOpen: false })} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors">Cancelar</button>
-                  <button onClick={handleConfirmWBSAction} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-sm transition-colors">{wbsModal.mode === 'CREATE' ? 'Inserir' : 'Salvar'}</button>
+                  <Button onClick={handleConfirmWBSAction} className="flex-1 font-medium">{wbsModal.mode === 'CREATE' ? 'Inserir' : 'Salvar'}</Button>
                 </div>
               </div>
             </div>
@@ -2533,12 +2534,12 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   </label>
 
                   {selectedSearchItems.length > 0 && (
-                    <button
+                    <Button
                       onClick={handleBulkAdd}
-                      className="bg-blue-600 hover:bg-blue-700 text-white text-button font-black uppercase tracking-wider py-2 px-4 rounded-lg shadow-lg shadow-blue-600/20 transition-all flex items-center gap-2 active:scale-95 animate-in zoom-in-95"
+                      className="gap-2 text-button animate-in zoom-in-95"
                     >
                       <Plus className="w-3.5 h-3.5 stroke-[3]" /> Incluir {selectedSearchItems.length} {selectedSearchItems.length === 1 ? 'Item' : 'Itens'}
-                    </button>
+                    </Button>
                   )}
                 </div>
               )}
@@ -2930,13 +2931,13 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <X className="w-4 h-4" />
                       Substituir Orçamento Atual
                     </button>
-                    <button
+                    <Button
                       onClick={() => handleGenerateParametric('APPEND')}
-                      className="w-full py-3 bg-blue-600 text-white hover:bg-blue-700 shadow-md rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+                      className="w-full font-semibold justify-center gap-2"
                     >
                       <Plus className="w-4 h-4" />
                       Adicionar/Mesclar Itens
-                    </button>
+                    </Button>
                   </div>
                 </div>
 

@@ -36,6 +36,7 @@ import { ContractsDashboard } from './ContractsDashboard';
 import { ContractModal } from './ContractModal';
 import ContractDetailView from './ContractDetailView';
 import { contractService } from '../services/contractService';
+import Button from './ui/Button';
 
 interface SalesModuleProps {
     organizationId?: string;
@@ -691,16 +692,16 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         <Maximize2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
                         Relatórios
                     </button>
-                    <button
+                    <Button
                         onClick={() => {
                             setEditingProperty(undefined);
                             setIsPropertyModalOpen(true);
                         }}
-                        className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 hover:scale-[1.02] active:scale-95 group"
+                        className="!rounded-2xl shadow-xl shadow-blue-600/20 hover:scale-[1.02] group"
                     >
-                        <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
+                        <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform mr-2" />
                         Novo Imóvel
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -1050,12 +1051,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             </div>
                             <h3 className="text-2xl font-black text-gray-900 mb-3 tracking-tight">Expandindo Horizontes...</h3>
                             <p className="text-gray-500 font-bold text-center max-w-sm leading-relaxed">Seu portfólio está pronto para crescer. Adicione o primeiro imóvel para iniciar a gestão comercial.</p>
-                            <button
+                            <Button
                                 onClick={() => setIsPropertyModalOpen(true)}
-                                className="mt-10 px-10 py-4 bg-blue-600 text-white rounded-[1.5rem] font-black shadow-2xl shadow-blue-600/30 hover:scale-105 active:scale-95 transition-all"
+                                size="lg"
+                                className="mt-10 !rounded-[1.5rem] shadow-2xl shadow-blue-600/30 hover:scale-105"
                             >
                                 Cadastrar Primeiro Imóvel
-                            </button>
+                            </Button>
                         </div>
                     )}
 

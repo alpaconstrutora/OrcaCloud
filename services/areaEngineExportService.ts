@@ -16,6 +16,7 @@ export interface AreaEngineExportPackage {
     quadroI: AreaQuadroIRow[];
     quadroII: AreaQuadroIIRow[];
     quadroIVB: AreaQuadroIVBRow[];
+    fractions: import('../types/areaEngine').AreaFractionIdeal[];
     approvals: AreaVersionApproval[];
     auditLogs: AreaVersionAuditLog[];
 }
@@ -83,6 +84,10 @@ export const areaEngineExportService = {
             ['Unidade', 'Area real total', 'Coeficiente', 'Fracao decimal'],
             ...pkg.quadroIVB.map(row => [row.unit_label, row.qivb_f_real_total_area_raw, row.qivb_g_proportionality_coefficient_raw, row.fraction_decimal_raw]),
         ]), 'Quadro IV-B');
+        XLSX.utils.book_append_sheet(wb, aoaSheet([
+            ['Unit ID', 'Coeficiente origem', 'Fracao decimal', 'Fracao percentual', 'Milesimos', 'Metodo'],
+            ...pkg.fractions.map(row => [row.unit_id, row.source_coefficient, row.fraction_decimal_raw, row.fraction_percent_raw, row.fraction_thousandths_raw, row.derivation_method]),
+        ]), 'Fracoes');
 
         XLSX.utils.book_append_sheet(wb, aoaSheet([
             ['Tipo', 'Status', 'Reviewed at', 'Hash', 'Comentarios'],

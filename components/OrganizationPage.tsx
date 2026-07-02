@@ -3,6 +3,7 @@ import { Organization } from '../types';
 import { PaymentAccount } from '../types/financial';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { Building2, Save, Upload, Trash2, Globe, Mail, Phone, MapPin, Landmark, Plus, X } from 'lucide-react';
+import Button from './ui/Button';
 
 interface OrganizationPageProps {
     organization: Organization | null;
@@ -125,13 +126,13 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                     </h1>
                     <p className="text-gray-500">Gerencie os dados da sua empresa para relatórios e documentos.</p>
                 </div>
-                <button
+                <Button
                     onClick={handleSubmit}
-                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all shadow-sm"
+                    className="flex items-center transition-all"
                 >
                     <Save className="w-4 h-4 mr-2" />
                     Salvar Alterações
-                </button>
+                </Button>
             </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {/* Left Column - Logo & Basic Info */}
@@ -423,13 +424,14 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                                             >
                                                 Cancelar
                                             </button>
-                                            <button
+                                            <Button
                                                 onClick={handleAddAccount}
                                                 disabled={accountSaving || !accountForm.name.trim()}
-                                                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                                                size="sm"
+                                                className="disabled:opacity-50"
                                             >
                                                 {accountSaving ? 'Salvando…' : 'Salvar conta'}
-                                            </button>
+                                            </Button>
                                         </div>
                                     </div>
                                 )}

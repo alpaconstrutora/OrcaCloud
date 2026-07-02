@@ -4,6 +4,7 @@ import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as S
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
+import Button from './ui/Button';
 
 interface OrganizationUsersProps {
     organizationId?: string;
@@ -493,25 +494,23 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     )}
                 </div>
                 {activeSubTab === 'members' ? (
-                    <button
+                    <Button
                         onClick={() => setIsInviteModalOpen(true)}
-                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm text-sm font-medium"
                     >
                         <Plus className="w-4 h-4 mr-2" />
                         Convidar Membro
-                    </button>
+                    </Button>
                 ) : activeSubTab === 'roles' ? (
-                    <button
+                    <Button
                         onClick={() => {
                             setEditingRoleId(null);
                             setRoleFormData({ name: '', permissions: getDefaultPermissions('member') });
                             setIsRoleModalOpen(true);
                         }}
-                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm text-sm font-medium"
                     >
                         <Plus className="w-4 h-4 mr-2" />
                         Novo Cargo
-                    </button>
+                    </Button>
                 ) : (
                     <button
                         onClick={handleSaveVisibility}
@@ -884,7 +883,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                             </div>
                             <div className="flex justify-end gap-3 pt-2">
                                 <button type="button" onClick={() => setEditingMember(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
-                                <button type="submit" className="px-6 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all shadow-md shadow-blue-100">Salvar</button>
+                                <Button type="submit">Salvar</Button>
                             </div>
                         </form>
                     </div>
@@ -1007,9 +1006,9 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 )}
                                 <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 mt-6">
                                     <button type="button" onClick={() => { setIsInviteModalOpen(false); setInviteError(null); }} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
-                                    <button type="submit" disabled={isInviting} className="px-6 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all shadow-md shadow-blue-100 disabled:opacity-60 disabled:cursor-not-allowed">
+                                    <Button type="submit" disabled={isInviting}>
                                         {isInviting ? 'Enviando...' : 'Enviar Convite'}
-                                    </button>
+                                    </Button>
                                 </div>
                             </form>
                         </div>
@@ -1079,7 +1078,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
 
                                 <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 mt-6">
                                     <button type="button" onClick={() => setIsRoleModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
-                                    <button type="submit" className="px-6 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all shadow-md shadow-blue-100">Salvar Template</button>
+                                    <Button type="submit">Salvar Template</Button>
                                 </div>
                             </form>
                         </div>

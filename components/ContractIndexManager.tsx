@@ -6,6 +6,7 @@ import {
 import { contractIndexService, ContractIndexValue, IndexName } from '../services/contractIndexService';
 import { contractService } from '../services/contractService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import Button from './ui/Button';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'reference', label: 'Referência', sortable: true },
@@ -227,10 +228,9 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
                             placeholder="ex: 3326.33"
                             className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
-                    <button onClick={handleAdd} disabled={saving || !newValue || !newMonth}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                    <Button onClick={handleAdd} disabled={saving || !newValue || !newMonth}>
                         <Plus size={14} /> {saving ? 'Salvando…' : 'Adicionar'}
-                    </button>
+                    </Button>
                 </div>
             </div>
 

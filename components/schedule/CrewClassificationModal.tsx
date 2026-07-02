@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X, Users, Plus, RotateCcw, Loader2, Info } from 'lucide-react';
 import { CrewClassificationConfig, SchedulingEngine } from '../../utils/schedulingEngine';
 import { crewClassificationService, effectiveCrewClassification } from '../../services/crewClassificationService';
+import Button from '../ui/Button';
 
 interface CrewClassificationModalProps {
     isOpen: boolean;
@@ -186,14 +187,14 @@ export const CrewClassificationModal: React.FC<CrewClassificationModalProps> = (
                         <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100 disabled:opacity-50">
                             Cancelar
                         </button>
-                        <button
+                        <Button
                             onClick={handleSave}
                             disabled={saving || loading}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50"
+                            size="sm"
                         >
-                            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                            {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                             Salvar
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>

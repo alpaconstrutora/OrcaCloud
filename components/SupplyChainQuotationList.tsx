@@ -3,6 +3,7 @@ import { Plus, FileText, Calendar, Clock, ChevronRight, Search, Filter, LayoutDa
 import { QuotationRequest } from '../types';
 import { quotationService } from '../services/quotationService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import Button from './ui/Button';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
@@ -125,13 +126,14 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                             <Table2 className="w-4 h-4" />
                         </button>
                     </div>
-                    <button
+                    <Button
                         onClick={onCreateNew}
-                        className="flex items-center gap-3 bg-blue-600 text-white px-6 py-3 rounded-[1.25rem] font-black text-button uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                        size="lg"
+                        className="gap-3 rounded-[1.25rem] shadow-xl shadow-blue-900/20"
                     >
                         <Plus className="w-4 h-4" />
                         <span>Nova Cotação</span>
-                    </button>
+                    </Button>
                 </div>
             </div>
 

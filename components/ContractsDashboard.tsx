@@ -6,6 +6,7 @@ import {
 import { contractService } from '../services/contractService';
 import { supabase } from '../lib/supabase';
 import { Contract } from '../types';
+import Button from './ui/Button';
 
 interface Props {
     organizationId: string;
@@ -185,10 +186,9 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Carteira de Contratos</h2>
                 <div className="flex items-center gap-3">
                     {onCreateNew && (
-                        <button onClick={onCreateNew}
-                            className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3.5 py-1.5 rounded-lg transition-colors">
+                        <Button onClick={onCreateNew} size="sm">
                             <Plus size={15} /> Novo Contrato
-                        </button>
+                        </Button>
                     )}
                     <button onClick={load} disabled={loading} className="text-gray-400 hover:text-gray-700 disabled:opacity-50">
                         <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />

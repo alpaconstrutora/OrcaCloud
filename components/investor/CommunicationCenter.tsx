@@ -7,6 +7,7 @@ import {
     ANNOUNCEMENT_TYPE_LABELS,
 } from '../../services/announcementsService';
 import MigrationBanner, { isTableMissing } from './MigrationBanner';
+import Button from '../ui/Button';
 
 interface Props {
     organizationId: string;
@@ -123,13 +124,13 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
                     )}
                 </div>
                 {isAdmin && (
-                    <button
+                    <Button
                         onClick={() => setShowForm(v => !v)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-bold hover:bg-blue-700"
+                        className="flex items-center gap-2 rounded-xl text-button"
                     >
                         <Plus className="w-4 h-4" />
                         Novo Comunicado
-                    </button>
+                    </Button>
                 )}
             </div>
 
@@ -181,14 +182,14 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
                     </div>
                     <div className="flex gap-3 justify-end">
                         <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-700">Cancelar</button>
-                        <button
+                        <Button
                             onClick={handleSave}
                             disabled={saving}
-                            className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 disabled:opacity-60"
+                            className="flex items-center gap-2 rounded-xl"
                         >
                             <Send className="w-4 h-4" />
                             {saving ? 'Salvando...' : 'Salvar Rascunho'}
-                        </button>
+                        </Button>
                     </div>
                 </div>
             )}
@@ -244,12 +245,13 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
                                         {isAdmin && isDraft && (
-                                            <button
+                                            <Button
+                                                size="sm"
                                                 onClick={e => { e.stopPropagation(); handlePublish(item); }}
-                                                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-button font-bold hover:bg-blue-700"
+                                                className="flex items-center gap-1 rounded-lg text-button"
                                             >
                                                 <Send className="w-3.5 h-3.5" /> Publicar
-                                            </button>
+                                            </Button>
                                         )}
                                         {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                                     </div>
@@ -292,14 +294,14 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
 
                                         {/* Aceite simples */}
                                         {item.requires_acknowledgment && item.type !== 'votacao' && !item.user_acknowledged && !isAdmin && (
-                                            <button
+                                            <Button
                                                 disabled={ackPending === item.id}
                                                 onClick={() => handleAck(item)}
-                                                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 disabled:opacity-60 transition-colors"
+                                                className="flex items-center gap-2 rounded-xl transition-colors"
                                             >
                                                 <CheckCircle2 className="w-4 h-4" />
                                                 {ackPending === item.id ? 'Confirmando...' : 'Confirmar Leitura'}
-                                            </button>
+                                            </Button>
                                         )}
                                     </div>
                                 )}

@@ -33,6 +33,7 @@ import { exportService } from '../services/exportService';
 import { webhookService } from '../services/webhookService';
 import { supplierService } from '../services/supplierService';
 import { Organization } from '../types';
+import Button from './ui/Button';
 
 // ─── Avulso helpers ────────────────────────────────────────────────────────────
 interface AvulsoItem { code: string; description: string; unit: string; quantity: number; unitPrice: number; }
@@ -924,15 +925,15 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         {syncingFinance ? 'Lançando...' : 'Lançar Financeiro'}
                     </button>
 
-                    <button
+                    <Button
                         onClick={() => handleSendWebhook()}
                         disabled={loading}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 font-medium text-button uppercase tracking-widest disabled:opacity-50"
+                        className="rounded-2xl shadow-xl shadow-blue-200"
                         title="Enviar para Automação (Make.com)"
                     >
                         <Zap className="w-4 h-4" />
                         Enviar Automação
-                    </button>
+                    </Button>
 
                     {/* Gerar Obra — visível apenas para contratos OUTGOING assinados/ativos sem obra vinculada */}
                     {(contract as any).direction === 'OUTGOING' && !contract.project_id && ['Assinado', 'Ativo'].includes(contract.status) && (
@@ -1280,10 +1281,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                             </div>
 
-                            <button
+                            <Button
                                 onClick={handleExportReport}
                                 disabled={exporting}
-                                className={`w-full py-2.5 ${exporting ? 'bg-gray-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'} text-white rounded-2xl transition-all font-medium text-button uppercase tracking-widest shadow-xl shadow-blue-950/20 active:scale-95 flex items-center justify-center gap-2`}
+                                className={`w-full rounded-2xl shadow-xl shadow-blue-950/20 ${exporting ? 'bg-gray-700 hover:bg-gray-700 cursor-not-allowed' : ''}`}
                             >
                                 {exporting ? (
                                     <>
@@ -1296,7 +1297,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         Emitir Relatório Completo
                                     </>
                                 )}
-                            </button>
+                            </Button>
                         </div>
 
                         {/* Partes do Contrato */}
@@ -1334,7 +1335,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     <div className="flex items-center gap-2">
                                         <span className="text-xs font-medium text-blue-600 uppercase">{contract.reajuste_index || '—'}</span>
                                         {contract.reajuste_index && (
-                                            <button
+                                            <Button
+                                                size="sm"
                                                 onClick={async () => {
                                                     setReajusteModal(true);
                                                     setReajusteSuggestion(null);
@@ -1355,10 +1357,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                         }
                                                     } catch { /* sugestão é opcional */ }
                                                 }}
-                                                className="text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 px-2 py-0.5 rounded-full transition-colors"
+                                                className="rounded-full"
                                             >
                                                 Aplicar
-                                            </button>
+                                            </Button>
                                         )}
                                     </div>
                                 </div>
@@ -1453,14 +1455,14 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
                     {/* Ações de emissão */}
                     <div className="flex flex-wrap gap-3">
-                        <button
+                        <Button
                             onClick={() => setEmitModalOpen(true)}
                             disabled={loading}
-                            className="flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all font-medium text-button uppercase tracking-widest shadow-lg shadow-blue-100 active:scale-95"
+                            className="rounded-2xl shadow-lg shadow-blue-100"
                         >
                             <FileDown className="w-4 h-4" />
                             Emitir Contrato (.docx)
-                        </button>
+                        </Button>
                         <button
                             onClick={() => setDocxManagerOpen(true)}
                             className="flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 text-gray-600 rounded-2xl hover:bg-gray-50 hover:border-blue-200 hover:text-blue-600 transition-all font-medium text-button uppercase tracking-widest shadow-sm active:scale-95"
@@ -2332,12 +2334,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             >
                                 Cancelar
                             </button>
-                            <button
+                            <Button
+                                variant="danger"
                                 onClick={pendingConfirm.onConfirm}
-                                className="px-6 py-3 bg-red-600 text-white rounded-xl font-medium text-button uppercase tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-200"
+                                className="shadow-lg shadow-red-200"
                             >
                                 Confirmar
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -2503,13 +2506,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             >
                                 Cancelar
                             </button>
-                            <button
+                            <Button
                                 onClick={handleApplyReajuste}
                                 disabled={applyingReajuste}
-                                className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
                             >
                                 {applyingReajuste ? 'Aplicando…' : 'Aplicar Reajuste'}
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -2536,13 +2538,14 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             >
                                 Cancelar
                             </button>
-                            <button
+                            <Button
+                                variant="danger"
                                 onClick={handleRejectMeasurement}
                                 disabled={!rejectReason.trim() || measurementActionBusy !== null}
-                                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                                className="flex-1"
                             >
                                 Confirmar Rejeição
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -2598,9 +2601,9 @@ const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClos
                             placeholder="Nova unidade..."
                             className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
                         />
-                        <button onClick={handleAdd} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-button font-black transition-all whitespace-nowrap">
+                        <Button size="sm" onClick={handleAdd} className="whitespace-nowrap">
                             <Plus className="w-3.5 h-3.5" /> Adicionar
-                        </button>
+                        </Button>
                     </div>
                     {error && <p className="text-xs text-red-500 -mt-2">{error}</p>}
                     <div className="space-y-1.5 max-h-60 overflow-y-auto">

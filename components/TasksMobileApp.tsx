@@ -5,6 +5,7 @@ import {
   Folder, ChevronLeft, User, AlignLeft, Tag,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import Button from './ui/Button'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Task {
@@ -500,13 +501,13 @@ const TaskEditSheet: React.FC<{
             <p className="text-xs font-bold text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>
           )}
 
-          <button
+          <Button
             onClick={save} disabled={saving}
-            className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-blue-200 disabled:opacity-50 active:scale-[0.98] transition-all"
+            className="w-full py-3.5 rounded-2xl shadow-lg shadow-blue-200 active:scale-[0.98]"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             Salvar alterações
-          </button>
+          </Button>
         </div>
       </div>
     </>
@@ -625,12 +626,12 @@ const AddTaskModal: React.FC<{
             </button>
           </div>
           {error && <p className="text-button font-bold text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
-          <button onClick={save} disabled={saving}
-            className="w-full flex items-center justify-center gap-2 py-3.5 bg-blue-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-blue-200 disabled:opacity-50 active:scale-[0.98] transition-all"
+          <Button onClick={save} disabled={saving}
+            className="w-full py-3.5 rounded-2xl shadow-lg shadow-blue-200 active:scale-[0.98]"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             Add task
-          </button>
+          </Button>
         </div>
       </div>
     </>
@@ -941,12 +942,13 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
 
       {/* FAB */}
       <div className="absolute bottom-[72px] right-5 z-10">
-        <button
+        <Button
           onClick={() => setShowAddTask(true)}
-          className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center shadow-xl shadow-blue-300 active:scale-95 transition-transform"
+          size="icon"
+          className="w-14 h-14 rounded-full shadow-xl shadow-blue-300 active:scale-95"
         >
           <Plus className="w-6 h-6 text-white" />
-        </button>
+        </Button>
       </div>
 
       {/* Bottom nav */}

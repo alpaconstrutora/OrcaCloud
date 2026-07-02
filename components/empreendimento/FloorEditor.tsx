@@ -5,6 +5,7 @@
 import React from 'react';
 import { Plus, Trash2, Loader2, Layers, Zap, Edit, Check, X } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
+import Button from '../ui/Button';
 import { EmpreendimentoTower, EmpreendimentoFloor, EmpreendimentoFloorInsert, FloorTipo } from '../../types';
 
 interface Props {
@@ -160,14 +161,14 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
         {floors.length > 0 && (
           <div className="flex items-center gap-3 text-xs text-gray-400 font-semibold">
             <span>{totalAndares} andares · {totalUnidades} unidades</span>
-            <button
+            <Button
               onClick={handleGenerate}
               disabled={generating}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-black text-xs uppercase tracking-wider"
+              size="sm"
             >
               {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
               Gerar Unidades ({totalUnidades})
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -201,11 +202,10 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
           <input className={inputCls + ' w-full'} type="number" min="1" placeholder="—" value={form.units_per_floor}
             onChange={e => setForm(p => ({ ...p, units_per_floor: e.target.value }))} />
         </div>
-        <button type="submit" disabled={saving}
-          className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-black text-form-input uppercase tracking-wider flex items-center justify-center gap-1.5">
+        <Button type="submit" disabled={saving} size="sm">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           Add
-        </button>
+        </Button>
       </form>
 
       {/* Lista de pavimentos */}

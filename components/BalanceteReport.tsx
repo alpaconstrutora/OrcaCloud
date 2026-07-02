@@ -2,6 +2,7 @@ import React from 'react'
 import { financialReportService } from '../services/financialReportService'
 import type { BalanceteLine, DREGroup, RegimeContabil } from '../types/financial'
 import { useToast } from '../hooks/useToast'
+import Button from './ui/Button'
 
 // ── Labels ────────────────────────────────────────────────────────────────────
 
@@ -149,13 +150,12 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                         <option value="COMPETENCIA">Competência</option>
                     </select>
                 </div>
-                <button
+                <Button
                     onClick={load}
                     disabled={loading}
-                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-button font-black uppercase tracking-widest rounded-xl transition-colors"
                 >
                     {loading ? 'Carregando…' : 'Atualizar'}
-                </button>
+                </Button>
                 {lines.length > 0 && (
                     <span className="ml-auto text-xs text-slate-400">
                         {lines.length} contas · {totals.n.toLocaleString('pt-BR')} lançamentos

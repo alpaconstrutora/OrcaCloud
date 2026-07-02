@@ -5,6 +5,7 @@ import {
   PipelineStageConfig,
   OpportunityStage,
 } from '../../services/servicesCommercialService';
+import Button from '../ui/Button';
 
 // Estágios canônicos (motor) + rótulo/cor padrão. A engrenagem só personaliza
 // apresentação por organização — não cria nem remove estágios.
@@ -159,13 +160,12 @@ const ServicesPipelineConfigModal: React.FC<Props> = ({ organizationId, onClose,
 
         <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900">Cancelar</button>
-          <button
+          <Button
             onClick={handleSave}
             disabled={saving || loading}
-            className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
           >
             {saving ? 'Salvando…' : 'Salvar'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

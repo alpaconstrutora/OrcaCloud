@@ -22,6 +22,7 @@ import { supabase } from '../lib/supabase'
 import { workOrderService } from '../services/workOrderService'
 import { ALLOWED_TRANSITIONS } from '../types/operational-control'
 import type { WorkOrderStatus, WorkOrderPriority } from '../types/operational-control'
+import Button from './ui/Button'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -419,13 +420,13 @@ const OperacionalKanban: React.FC<Props> = ({
         </div>
 
         <div className="ml-auto">
-          <button
+          <Button
             onClick={onCreateNew}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 active:scale-95 transition-all shadow-sm"
+            className="flex items-center gap-2 rounded-xl text-button font-black uppercase tracking-widest active:scale-95 shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" />
             Nova OE
-          </button>
+          </Button>
         </div>
       </div>
 

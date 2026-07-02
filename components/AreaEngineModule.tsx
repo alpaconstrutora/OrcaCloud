@@ -6,6 +6,7 @@ import {
     FileSpreadsheet,
     FileText,
     Lock,
+    Pencil,
     Plus,
     RefreshCw,
     ShieldCheck,
@@ -16,6 +17,7 @@ import { areaEngineService } from '../services/areaEngineService';
 import { areaEngineExportService } from '../services/areaEngineExportService';
 import type {
     AreaEngineRpcResult,
+    AreaFractionIdeal,
     AreaProject,
     AreaQuadroIIRow,
     AreaQuadroIRow,
@@ -31,6 +33,7 @@ interface AreaEngineModuleProps {
 }
 
 type TableView = 'estrutura' | 'quadro_i' | 'quadro_ii' | 'quadro_ivb';
+type StructureEditKind = 'block' | 'floor' | 'unit' | 'space';
 
 const statusLabel: Record<string, string> = {
     draft: 'Rascunho',
@@ -131,6 +134,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const [structure, setStructure] = React.useState<AreaVersionStructure>({ blocks: [], floors: [], units: [], spaces: [] });
     const [approvals, setApprovals] = React.useState<AreaVersionApproval[]>([]);
     const [auditLogs, setAuditLogs] = React.useState<AreaVersionAuditLog[]>([]);
+    const [areaFractions, setAreaFractions] = React.useState<AreaFractionIdeal[]>([]);
     const [quadroI, setQuadroI] = React.useState<AreaQuadroIRow[]>([]);
     const [quadroII, setQuadroII] = React.useState<AreaQuadroIIRow[]>([]);
     const [quadroIVB, setQuadroIVB] = React.useState<AreaQuadroIVBRow[]>([]);
@@ -172,6 +176,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const [editorSpaceDivision, setEditorSpaceDivision] = React.useState<'proportional' | 'non_proportional'>('proportional');
     const [editorSpaceCoefficient, setEditorSpaceCoefficient] = React.useState('1');
     const [editorSpaceScope, setEditorSpaceScope] = React.useState<'global' | 'block'>('global');
+    const [editingStructure, setEditingStructure] = React.useState<{ kind: StructureEditKind; id: string } | null>(null);
 
     const selectedVersion = versions.find(v => v.id === selectedVersionId) || null;
     const technicalApproval = approvals.find(approval => approval.approval_type === 'technical');
@@ -219,6 +224,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             setStructure({ blocks: [], floors: [], units: [], spaces: [] });
             setApprovals([]);
             setAuditLogs([]);
+            setAreaFractions([]);
             setQuadroI([]);
             setQuadroII([]);
             setQuadroIVB([]);
@@ -227,10 +233,11 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         setLoading(true);
         setError(null);
         try {
-            const [structureData, approvalRows, auditRows, qi, qii, qivb] = await Promise.all([
+            const [structureData, approvalRows, auditRows, fractionRows, qi, qii, qivb] = await Promise.all([
                 areaEngineService.getStructure(versionId),
                 areaEngineService.listApprovals(versionId),
                 areaEngineService.listAuditLogs(versionId),
+                areaEngineService.listFractions(versionId),
                 areaEngineService.listQuadroI(versionId),
                 areaEngineService.listQuadroII(versionId),
                 areaEngineService.listQuadroIVB(versionId),
@@ -238,6 +245,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             setStructure(structureData);
             setApprovals(approvalRows);
             setAuditLogs(auditRows);
+            setAreaFractions(fractionRows);
             setQuadroI(qi);
             setQuadroII(qii);
             setQuadroIVB(qivb);
@@ -263,6 +271,25 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         setEditorSpaceUnitId(prev => prev || firstUnitId);
     }, [structure.blocks, structure.floors, structure.units]);
 
+    async function createRevisionFromSelectedVersion() {
+        if (!selectedVersion || !selectedProjectId) return;
+        setActionLoading('create-revision');
+        setError(null);
+        setFeedback(null);
+        try {
+            const revision = await areaEngineService.createRevisionFromVersion(selectedVersion.id);
+            const rows = await areaEngineService.listVersions(selectedProjectId);
+            setVersions(rows);
+            setSelectedVersionId(revision.id);
+            setActiveTable('estrutura');
+            await loadResults(revision.id);
+            setFeedback({ status: 'success', warnings: [], blocking_errors: [], message: `Revisao v${revision.version_number} criada.` });
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao criar revisao da versao.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
     async function runAction(action: string, fn: () => Promise<AreaEngineRpcResult>) {
         setActionLoading(action);
         setError(null);
@@ -310,6 +337,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             quadroI,
             quadroII,
             quadroIVB,
+            fractions: areaFractions,
             approvals,
             auditLogs,
         };
@@ -330,6 +358,16 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             } else {
                 await areaEngineExportService.exportPdf(payload);
             }
+            await areaEngineService.recordExportAudit(selectedVersionId, kind, {
+                projectName: payload.projectName,
+                versionId: selectedVersionId,
+                payloadHash: selectedVersion?.version_payload_hash || null,
+                identityHash: selectedVersion?.version_identity_hash || null,
+                quadroIRows: quadroI.length,
+                quadroIIRows: quadroII.length,
+                quadroIVBRows: quadroIVB.length,
+            });
+            await loadResults(selectedVersionId);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Erro ao exportar pacote de areas.');
         } finally {
@@ -448,24 +486,87 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         return parsed;
     }
 
+    function cancelStructureEdit() {
+        setEditingStructure(null);
+        setError(null);
+    }
+
+    function beginStructureEdit(kind: StructureEditKind, id: string) {
+        if (!versionIsEditable()) return;
+        setError(null);
+        setEditingStructure({ kind, id });
+
+        if (kind === 'block') {
+            const block = structure.blocks.find(item => item.id === id);
+            if (!block) return;
+            setEditorBlockCode(block.code || '');
+            setEditorBlockName(block.name || '');
+            return;
+        }
+
+        if (kind === 'floor') {
+            const floor = structure.floors.find(item => item.id === id);
+            if (!floor) return;
+            setEditorFloorBlockId(floor.block_id || '');
+            setEditorFloorCode(floor.code || '');
+            setEditorFloorName(floor.name || '');
+            setEditorFloorType(floor.floor_type || 'other');
+            return;
+        }
+
+        if (kind === 'unit') {
+            const unit = structure.units.find(item => item.id === id);
+            if (!unit) return;
+            setEditorUnitBlockId(unit.block_id || '');
+            setEditorUnitFloorId(unit.primary_floor_id || '');
+            setEditorUnitCode(unit.code || '');
+            setEditorUnitType(unit.unit_type || 'apartment');
+            setEditorUnitTypology(unit.typology_code || '');
+            return;
+        }
+
+        const space = structure.spaces.find(item => item.id === id);
+        if (!space) return;
+        setEditorSpaceUseClass(space.use_class === 'common' ? 'common' : 'private');
+        setEditorSpaceBlockId(space.block_id || '');
+        setEditorSpaceFloorId(space.floor_id || '');
+        setEditorSpaceUnitId(space.unit_id || '');
+        setEditorSpaceCode(space.code || '');
+        setEditorSpaceName(space.name || '');
+        setEditorSpaceArea(String(space.real_area_m2_raw || ''));
+        setEditorSpaceCoverage(space.coverage_class || 'covered_standard');
+        setEditorSpaceDivision(space.common_division_class === 'non_proportional' ? 'non_proportional' : 'proportional');
+        setEditorSpaceCoefficient(space.coefficient_value === null || space.coefficient_value === undefined ? '' : String(space.coefficient_value));
+    }
     async function addBlock(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
         if (!versionIsEditable()) return;
         const name = editorBlockName.trim();
         if (!name) { setError('Informe o nome do bloco.'); return; }
-        setActionLoading('add-block');
+        const isEditing = editingStructure?.kind === 'block';
+        setActionLoading(isEditing ? 'edit-block' : 'add-block');
         setError(null);
         try {
-            await areaEngineService.createBlock(selectedVersionId, {
-                code: editorBlockCode.trim() || undefined,
-                name,
-                sortOrder: structure.blocks.length + 1,
-            });
+            if (isEditing && editingStructure) {
+                const block = structure.blocks.find(item => item.id === editingStructure.id);
+                await areaEngineService.updateBlock(editingStructure.id, {
+                    code: editorBlockCode.trim() || undefined,
+                    name,
+                    sortOrder: block?.sort_order ?? structure.blocks.length + 1,
+                });
+            } else {
+                await areaEngineService.createBlock(selectedVersionId, {
+                    code: editorBlockCode.trim() || undefined,
+                    name,
+                    sortOrder: structure.blocks.length + 1,
+                });
+            }
             await loadResults(selectedVersionId);
             setEditorBlockCode('');
             setEditorBlockName('');
+            setEditingStructure(null);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Erro ao adicionar bloco.');
+            setError(err instanceof Error ? err.message : 'Erro ao salvar bloco.');
         } finally {
             setActionLoading(null);
         }
@@ -478,21 +579,34 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         const name = editorFloorName.trim();
         if (!blockId) { setError('Cadastre um bloco antes de criar pavimentos.'); return; }
         if (!name) { setError('Informe o nome do pavimento.'); return; }
-        setActionLoading('add-floor');
+        const isEditing = editingStructure?.kind === 'floor';
+        setActionLoading(isEditing ? 'edit-floor' : 'add-floor');
         setError(null);
         try {
-            await areaEngineService.createFloor(selectedVersionId, {
-                blockId,
-                code: editorFloorCode.trim() || undefined,
-                name,
-                floorType: editorFloorType,
-                sortOrder: structure.floors.length + 1,
-            });
+            if (isEditing && editingStructure) {
+                const floor = structure.floors.find(item => item.id === editingStructure.id);
+                await areaEngineService.updateFloor(editingStructure.id, {
+                    blockId,
+                    code: editorFloorCode.trim() || undefined,
+                    name,
+                    floorType: editorFloorType,
+                    sortOrder: floor?.sort_order ?? structure.floors.length + 1,
+                });
+            } else {
+                await areaEngineService.createFloor(selectedVersionId, {
+                    blockId,
+                    code: editorFloorCode.trim() || undefined,
+                    name,
+                    floorType: editorFloorType,
+                    sortOrder: structure.floors.length + 1,
+                });
+            }
             await loadResults(selectedVersionId);
             setEditorFloorCode('');
             setEditorFloorName('');
+            setEditingStructure(null);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Erro ao adicionar pavimento.');
+            setError(err instanceof Error ? err.message : 'Erro ao salvar pavimento.');
         } finally {
             setActionLoading(null);
         }
@@ -505,21 +619,35 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         const code = editorUnitCode.trim();
         if (!blockId) { setError('Cadastre um bloco antes de criar unidades.'); return; }
         if (!code) { setError('Informe o codigo da unidade.'); return; }
-        setActionLoading('add-unit');
+        const isEditing = editingStructure?.kind === 'unit';
+        setActionLoading(isEditing ? 'edit-unit' : 'add-unit');
         setError(null);
         try {
-            await areaEngineService.createUnit(selectedVersionId, {
-                blockId,
-                primaryFloorId: editorUnitFloorId || null,
-                code,
-                unitType: editorUnitType,
-                typologyCode: editorUnitTypology.trim() || undefined,
-                materializedIndex: structure.units.length + 1,
-            });
+            if (isEditing && editingStructure) {
+                const unit = structure.units.find(item => item.id === editingStructure.id);
+                await areaEngineService.updateUnit(editingStructure.id, {
+                    blockId,
+                    primaryFloorId: editorUnitFloorId || null,
+                    code,
+                    unitType: editorUnitType,
+                    typologyCode: editorUnitTypology.trim() || undefined,
+                    materializedIndex: Number(unit?.materialized_index ?? structure.units.length + 1),
+                });
+            } else {
+                await areaEngineService.createUnit(selectedVersionId, {
+                    blockId,
+                    primaryFloorId: editorUnitFloorId || null,
+                    code,
+                    unitType: editorUnitType,
+                    typologyCode: editorUnitTypology.trim() || undefined,
+                    materializedIndex: structure.units.length + 1,
+                });
+            }
             await loadResults(selectedVersionId);
             setEditorUnitCode('');
+            setEditingStructure(null);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Erro ao adicionar unidade.');
+            setError(err instanceof Error ? err.message : 'Erro ao salvar unidade.');
         } finally {
             setActionLoading(null);
         }
@@ -539,29 +667,49 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         if (!name) { setError('Informe o nome do espaco.'); return; }
         if (realArea === null) return;
         if (coefficient !== null && (!Number.isFinite(coefficient) || coefficient <= 0)) { setError('Coeficiente deve ser vazio ou maior que zero.'); return; }
-        setActionLoading('add-space');
+        const isEditing = editingStructure?.kind === 'space';
+        setActionLoading(isEditing ? 'edit-space' : 'add-space');
         setError(null);
         try {
-            await areaEngineService.createSpace(selectedVersionId, {
-                blockId,
-                floorId: editorSpaceFloorId || null,
-                unitId: isPrivate ? unitId : null,
-                code: editorSpaceCode.trim() || undefined,
-                name,
-                useClass: editorSpaceUseClass,
-                realArea,
-                coverageClass: editorSpaceCoverage,
-                commonDivisionClass: editorSpaceDivision,
-                coefficientValue: coefficient,
-                materializedIndex: structure.spaces.length + 1,
-                distributionScope: editorSpaceScope,
-            });
+            if (isEditing && editingStructure) {
+                const space = structure.spaces.find(item => item.id === editingStructure.id);
+                await areaEngineService.updateSpace(editingStructure.id, {
+                    blockId,
+                    floorId: editorSpaceFloorId || null,
+                    unitId: isPrivate ? unitId : null,
+                    code: editorSpaceCode.trim() || undefined,
+                    name,
+                    useClass: editorSpaceUseClass,
+                    realArea,
+                    coverageClass: editorSpaceCoverage,
+                    commonDivisionClass: editorSpaceDivision,
+                    coefficientValue: coefficient,
+                    materializedIndex: Number(space?.materialized_index ?? structure.spaces.length + 1),
+                    distributionScope: editorSpaceScope,
+                });
+            } else {
+                await areaEngineService.createSpace(selectedVersionId, {
+                    blockId,
+                    floorId: editorSpaceFloorId || null,
+                    unitId: isPrivate ? unitId : null,
+                    code: editorSpaceCode.trim() || undefined,
+                    name,
+                    useClass: editorSpaceUseClass,
+                    realArea,
+                    coverageClass: editorSpaceCoverage,
+                    commonDivisionClass: editorSpaceDivision,
+                    coefficientValue: coefficient,
+                    materializedIndex: structure.spaces.length + 1,
+                    distributionScope: editorSpaceScope,
+                });
+            }
             await loadResults(selectedVersionId);
             setEditorSpaceCode('');
             setEditorSpaceName('Area');
             setEditorSpaceArea('10');
+            setEditingStructure(null);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Erro ao adicionar espaco.');
+            setError(err instanceof Error ? err.message : 'Erro ao salvar espaco.');
         } finally {
             setActionLoading(null);
         }
@@ -608,6 +756,9 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                     </Button>
                     <Button variant="secondary" onClick={() => setIsStructureOpen(true)} disabled={!selectedVersionId || !!actionLoading}>
                         <Plus className="w-4 h-4" /> Estrutura
+                    </Button>
+                    <Button variant="secondary" onClick={createRevisionFromSelectedVersion} disabled={!selectedVersionId || !!actionLoading}>
+                        <Plus className="w-4 h-4" /> Nova revisao
                     </Button>
                     <Button variant="secondary" onClick={loadProjects} disabled={loading}>
                         <RefreshCw className="w-4 h-4" /> Atualizar
@@ -801,6 +952,13 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                         </div>
                     </div>
 
+                    <AreaQaPanel
+                        quadroI={quadroI}
+                        quadroII={quadroII}
+                        quadroIVB={quadroIVB}
+                        fractions={areaFractions}
+                    />
+
                     <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                             <div>
@@ -864,9 +1022,14 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                             <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">Editor granular</h3>
                                             <p className="text-xs text-slate-500 mt-1">Cadastre blocos, pavimentos, unidades e espacos reais da versao.</p>
                                         </div>
-                                        {selectedVersion && ['locked', 'superseded', 'cancelled'].includes(selectedVersion.status) && (
-                                            <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-widest text-amber-700">Somente leitura</span>
-                                        )}
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {editingStructure && (
+                                                <Button type="button" variant="secondary" size="sm" onClick={cancelStructureEdit} disabled={!!actionLoading}>Cancelar edicao</Button>
+                                            )}
+                                            {selectedVersion && ['locked', 'superseded', 'cancelled'].includes(selectedVersion.status) && (
+                                                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-widest text-amber-700">Somente leitura</span>
+                                            )}
+                                        </div>
                                     </div>
 
                                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -876,7 +1039,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                                 <input value={editorBlockCode} onChange={event => setEditorBlockCode(event.target.value)} placeholder="Codigo" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
                                                 <input value={editorBlockName} onChange={event => setEditorBlockName(event.target.value)} placeholder="Nome do bloco" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
                                             </div>
-                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> Adicionar bloco</Button>
+                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'block' ? 'Salvar bloco' : 'Adicionar bloco'}</Button>
                                         </form>
 
                                         <form onSubmit={addFloor} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
@@ -891,12 +1054,13 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                                 <select value={editorFloorType} onChange={event => setEditorFloorType(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm">
                                                     <option value="ground">Terreo</option>
                                                     <option value="type">Tipo</option>
-                                                    <option value="garage">Garagem</option>
+                                                    <option value="basement">Subsolo</option>
+                                                    <option value="technical">Tecnico</option>
                                                     <option value="roof">Cobertura</option>
                                                     <option value="other">Outro</option>
                                                 </select>
                                             </div>
-                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> Adicionar pavimento</Button>
+                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'floor' ? 'Salvar pavimento' : 'Adicionar pavimento'}</Button>
                                         </form>
 
                                         <form onSubmit={addUnit} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
@@ -920,7 +1084,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                                     <option value="other">Outro</option>
                                                 </select>
                                             </div>
-                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> Adicionar unidade</Button>
+                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'unit' ? 'Salvar unidade' : 'Adicionar unidade'}</Button>
                                         </form>
 
                                         <form onSubmit={addSpace} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
@@ -938,15 +1102,15 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                                 <select value={editorSpaceDivision} onChange={event => setEditorSpaceDivision(event.target.value as 'proportional' | 'non_proportional')} disabled={editorSpaceUseClass === 'private'} className="h-9 rounded-lg border border-slate-200 px-3 text-sm disabled:bg-slate-100"><option value="proportional">Comum proporcional</option><option value="non_proportional">Comum nao proporcional</option></select>
                                                 <select value={editorSpaceScope} onChange={event => setEditorSpaceScope(event.target.value as 'global' | 'block')} disabled={editorSpaceUseClass === 'private'} className="h-9 rounded-lg border border-slate-200 px-3 text-sm disabled:bg-slate-100"><option value="global">Escopo global</option><option value="block">Escopo bloco</option></select>
                                             </div>
-                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> Adicionar espaco</Button>
+                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'space' ? 'Salvar espaco' : 'Adicionar espaco'}</Button>
                                         </form>
                                     </div>
 
                                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                        <StructureAdminList title="Blocos" empty="Nenhum bloco cadastrado." rows={structure.blocks.map(block => ({ id: block.id, label: `${block.code || '-'} - ${block.name}`, detail: `Ordem ${block.sort_order || 0}` }))} onDelete={id => deleteStructureRecord('block', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
-                                        <StructureAdminList title="Pavimentos" empty="Nenhum pavimento cadastrado." rows={structure.floors.map(floor => ({ id: floor.id, label: `${floor.code || '-'} - ${floor.name}`, detail: floor.floor_type }))} onDelete={id => deleteStructureRecord('floor', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
-                                        <StructureAdminList title="Unidades" empty="Nenhuma unidade cadastrada." rows={structure.units.map(unit => ({ id: unit.id, label: unit.code, detail: `${unit.unit_type} ${unit.typology_code || ''}`.trim() }))} onDelete={id => deleteStructureRecord('unit', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
-                                        <StructureAdminList title="Espacos" empty="Nenhum espaco cadastrado." rows={structure.spaces.map(space => ({ id: space.id, label: `${space.code || '-'} - ${space.name}`, detail: `${space.use_class === 'private' ? 'Privativo' : 'Comum'} - ${formatNumber(space.real_area_m2_raw)} m2` }))} onDelete={id => deleteStructureRecord('space', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
+                                        <StructureAdminList title="Blocos" empty="Nenhum bloco cadastrado." rows={structure.blocks.map(block => ({ id: block.id, label: `${block.code || '-'} - ${block.name}`, detail: `Ordem ${block.sort_order || 0}` }))} onEdit={id => beginStructureEdit('block', id)} onDelete={id => deleteStructureRecord('block', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
+                                        <StructureAdminList title="Pavimentos" empty="Nenhum pavimento cadastrado." rows={structure.floors.map(floor => ({ id: floor.id, label: `${floor.code || '-'} - ${floor.name}`, detail: floor.floor_type }))} onEdit={id => beginStructureEdit('floor', id)} onDelete={id => deleteStructureRecord('floor', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
+                                        <StructureAdminList title="Unidades" empty="Nenhuma unidade cadastrada." rows={structure.units.map(unit => ({ id: unit.id, label: unit.code, detail: `${unit.unit_type} ${unit.typology_code || ''}`.trim() }))} onEdit={id => beginStructureEdit('unit', id)} onDelete={id => deleteStructureRecord('unit', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
+                                        <StructureAdminList title="Espacos" empty="Nenhum espaco cadastrado." rows={structure.spaces.map(space => ({ id: space.id, label: `${space.code || '-'} - ${space.name}`, detail: `${space.use_class === 'private' ? 'Privativo' : 'Comum'} - ${formatNumber(space.real_area_m2_raw)} m2` }))} onEdit={id => beginStructureEdit('space', id)} onDelete={id => deleteStructureRecord('space', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1010,6 +1174,56 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     );
 }
 
+function nearlyEqual(a: number, b: number, tolerance = 0.000001): boolean {
+    return Math.abs(a - b) <= tolerance;
+}
+
+function AreaQaPanel({ quadroI, quadroII, quadroIVB, fractions }: { quadroI: AreaQuadroIRow[]; quadroII: AreaQuadroIIRow[]; quadroIVB: AreaQuadroIVBRow[]; fractions: AreaFractionIdeal[] }) {
+    const coefficientSum = quadroII.reduce((sum, row) => sum + Number(row.qii_31_proportionality_coefficient_raw || 0), 0);
+    const fractionSum = fractions.reduce((sum, row) => sum + Number(row.fraction_decimal_raw || 0), 0);
+    const qiiRealTotal = quadroII.reduce((sum, row) => sum + Number(row.qii_37_unit_real_total_raw || 0), 0);
+    const qivbRealTotal = quadroIVB.reduce((sum, row) => sum + Number(row.qivb_f_real_total_area_raw || 0), 0);
+    const qiiEquivalentTotal = quadroII.reduce((sum, row) => sum + Number(row.qii_38_unit_equivalent_total_raw || 0), 0);
+    const qiEquivalentTotal = quadroI.reduce((sum, row) => sum + Number(row.qi_18_floor_equivalent_total_raw || 0), 0);
+    const uniqueQiiUnits = new Set(quadroII.map(row => row.unit_id)).size;
+    const uniqueQivbUnits = new Set(quadroIVB.map(row => row.unit_id)).size;
+    const hasRows = quadroI.length > 0 || quadroII.length > 0 || quadroIVB.length > 0;
+
+    const checks = [
+        { label: 'Soma dos coeficientes = 1', ok: hasRows && nearlyEqual(coefficientSum, 1, 0.000001), value: formatNumber(coefficientSum, 12) },
+        { label: 'Soma das fracoes = 1', ok: hasRows && nearlyEqual(fractionSum, 1, 0.000001), value: formatNumber(fractionSum, 12) },
+        { label: 'Quadro II real = IV-B real', ok: hasRows && nearlyEqual(qiiRealTotal, qivbRealTotal, 0.000001), value: `${formatNumber(qiiRealTotal)} / ${formatNumber(qivbRealTotal)}` },
+        { label: 'Quadro II equivalente = Quadro I equivalente', ok: hasRows && nearlyEqual(qiiEquivalentTotal, qiEquivalentTotal, 0.000001), value: `${formatNumber(qiiEquivalentTotal)} / ${formatNumber(qiEquivalentTotal)}` },
+        { label: 'Sem duplicidade de unidades', ok: hasRows && uniqueQiiUnits === quadroII.length && uniqueQivbUnits === quadroIVB.length, value: `${quadroII.length} QII / ${quadroIVB.length} IV-B` },
+    ];
+
+    const failed = checks.filter(check => !check.ok).length;
+
+    return (
+        <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">QA tecnico</h2>
+                    <p className="text-xs text-slate-500 mt-1">Fechamentos calculados a partir dos Quadros gerados.</p>
+                </div>
+                <span className={`w-fit rounded-full border px-3 py-1 text-xs font-black uppercase tracking-widest ${failed === 0 && hasRows ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+                    {hasRows ? `${checks.length - failed}/${checks.length} ok` : 'Aguardando calculo'}
+                </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-2">
+                {checks.map(check => (
+                    <div key={check.label} className={`rounded-lg border p-3 ${check.ok ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+                        <div className="flex items-center gap-2">
+                            {check.ok ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-amber-600" />}
+                            <p className="text-xs font-black uppercase tracking-widest text-slate-600">{check.label}</p>
+                        </div>
+                        <p className="mt-2 text-sm font-black text-slate-900">{check.value}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
 function formatDateTime(value?: string | null): string {
     if (!value) return '-';
     const date = new Date(value);
@@ -1068,7 +1282,7 @@ function LifecycleAuditPanel({ version, technicalApproval, legalApproval, auditL
         </div>
     );
 }
-function StructureAdminList({ title, rows, empty, disabled, onDelete }: { title: string; rows: { id: string; label: string; detail: string }[]; empty: string; disabled: boolean; onDelete: (id: string) => void }) {
+function StructureAdminList({ title, rows, empty, disabled, onEdit, onDelete }: { title: string; rows: { id: string; label: string; detail: string }[]; empty: string; disabled: boolean; onEdit: (id: string) => void; onDelete: (id: string) => void }) {
     return (
         <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
             <div className="border-b border-slate-200 bg-slate-50 px-3 py-2">
@@ -1084,9 +1298,14 @@ function StructureAdminList({ title, rows, empty, disabled, onDelete }: { title:
                                 <p className="truncate text-sm font-bold text-slate-800">{row.label}</p>
                                 <p className="truncate text-xs text-slate-500">{row.detail}</p>
                             </div>
-                            <Button type="button" variant="ghost" size="icon" onClick={() => onDelete(row.id)} disabled={disabled} className="shrink-0 text-red-600 hover:text-red-700">
-                                <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <div className="flex shrink-0 items-center gap-1">
+                                <Button type="button" variant="ghost" size="icon" onClick={() => onEdit(row.id)} disabled={disabled} className="text-slate-600 hover:text-blue-700">
+                                    <Pencil className="w-4 h-4" />
+                                </Button>
+                                <Button type="button" variant="ghost" size="icon" onClick={() => onDelete(row.id)} disabled={disabled} className="text-red-600 hover:text-red-700">
+                                    <Trash2 className="w-4 h-4" />
+                                </Button>
+                            </div>
                         </div>
                     ))}
                 </div>

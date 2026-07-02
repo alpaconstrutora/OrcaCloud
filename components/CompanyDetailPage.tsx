@@ -20,6 +20,7 @@ import CompanyBranchesTab from './CompanyBranchesTab';
 import CompanyDocumentsTab from './CompanyDocumentsTab';
 import CompanyTargetsTab from './CompanyTargetsTab';
 import CompanyDepartmentsTab from './CompanyDepartmentsTab';
+import Button from './ui/Button';
 
 interface Props {
     company: Company;
@@ -380,11 +381,10 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
 
     const SaveButton: React.FC = () => (
         <div className="flex justify-end pt-2 border-t border-gray-100">
-            <button type="submit" disabled={saving}
-                className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
+            <Button type="submit" disabled={saving} size="lg" className="gap-2">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Salvar
-            </button>
+            </Button>
         </div>
     );
 
@@ -748,10 +748,9 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                                         : 'Empresas de Lucro Presumido/Real estão sujeitas às retenções de PIS/COFINS/CSLL na fonte conforme Lei 10.833/2003.'}
                                 </p>
                             </div>
-                            <button type="button" onClick={aplicarSugestaoRetencao}
-                                className="flex-shrink-0 px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
+                            <Button type="button" onClick={aplicarSugestaoRetencao} className="flex-shrink-0">
                                 Aplicar sugestão
-                            </button>
+                            </Button>
                         </div>
                     )}
 

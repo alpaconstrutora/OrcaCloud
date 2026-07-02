@@ -8,6 +8,7 @@ import {
     DEPT_COLORS,
 } from '../types';
 import { companyService } from '../services/companyService';
+import Button from './ui/Button';
 
 interface Props {
     companyId: string;
@@ -84,12 +85,11 @@ const InlineForm: React.FC<InlineFormProps> = ({ initial = EMPTY_FORM, onSave, o
                     className="px-3 py-1.5 text-button font-black uppercase text-gray-500 hover:text-gray-700">
                     Cancelar
                 </button>
-                <button type="button" disabled={saving || !form.nome.trim()}
-                    onClick={() => onSave(form)}
-                    className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 disabled:opacity-50 active:scale-95">
+                <Button type="button" size="sm" disabled={saving || !form.nome.trim()}
+                    onClick={() => onSave(form)}>
                     {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                     Salvar
-                </button>
+                </Button>
             </div>
         </div>
     );
@@ -339,10 +339,9 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
                             Pré-carregar estrutura
                         </button>
                     )}
-                    <button onClick={openAddRoot}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
+                    <Button onClick={openAddRoot} size="sm">
                         <Plus className="w-3.5 h-3.5" /> Novo Departamento
-                    </button>
+                    </Button>
                 </div>
             </div>
 

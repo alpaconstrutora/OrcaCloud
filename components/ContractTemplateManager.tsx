@@ -7,6 +7,7 @@ import {
     contractTemplateService, ContractTemplate, TEMPLATE_VARIABLES, renderTemplate,
 } from '../services/contractTemplateService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import Button from './ui/Button';
 
 const CONTRACT_TEMPLATE_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Nome', sortable: true },
@@ -152,10 +153,10 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                         {previewMode ? <EyeOff size={14} /> : <Eye size={14} />}
                         {previewMode ? 'Editar' : 'Preview'}
                     </button>
-                    <button onClick={handleSave} disabled={busy || !name.trim()}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                    <Button onClick={handleSave} disabled={busy || !name.trim()}
+                        className="gap-2">
                         <Save size={14} /> {busy ? 'Salvando…' : 'Salvar'}
-                    </button>
+                    </Button>
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
@@ -267,10 +268,9 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                         onToggleColumn={tableColumns.toggleColumn}
                         onReset={tableColumns.resetColumns}
                     />
-                    <button onClick={openNew}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700">
+                    <Button onClick={openNew} className="gap-2">
                         <Plus size={15} /> Novo Template
-                    </button>
+                    </Button>
                 </div>
             </div>
 

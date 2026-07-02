@@ -6,6 +6,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { TipoObra, ProjectTypeTemplate } from '../types/project'
 import { projectTypeTemplatesService } from '../services/projectTypeTemplatesService'
+import Button from './ui/Button'
 
 type ResponseStatus = 'conforme' | 'nao_conforme' | 'parcial' | 'nao_aplicavel'
 
@@ -457,14 +458,14 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
-            <button
+            <Button
               onClick={handleApplyTemplate}
               disabled={!selectedTemplateId || applyingTemplate}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 disabled:opacity-40 transition-colors"
+              className="flex items-center gap-1.5 rounded-xl text-button font-black disabled:opacity-40"
             >
               {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
               Aplicar
-            </button>
+            </Button>
           </div>
         )}
 
@@ -519,14 +520,14 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
-              <button
+              <Button
                 onClick={handleApplyTemplate}
                 disabled={applyingTemplate}
-                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                className="flex items-center gap-1.5 rounded-xl text-button font-black disabled:opacity-40"
               >
                 {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
                 Aplicar
-              </button>
+              </Button>
               <button
                 onClick={() => { setShowTemplateSelector(false); setSelectedTemplateId(currentTemplateId ?? '') }}
                 className="px-3 py-2 text-slate-500 hover:bg-slate-100 rounded-xl text-button font-bold"
@@ -745,14 +746,15 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                             >
                               Cancelar
                             </button>
-                            <button
+                            <Button
+                              variant="danger"
                               disabled={isSaving || !ncForm.description.trim()}
                               onClick={() => handleNCSubmit(item)}
-                              className="flex items-center gap-1.5 px-4 py-1.5 bg-red-600 text-white rounded-xl text-button font-black hover:bg-red-700 disabled:opacity-50"
+                              className="flex items-center gap-1.5 rounded-xl text-button font-black disabled:opacity-50"
                             >
                               {isSaving && <Loader2 className="w-3 h-3 animate-spin" />}
                               Confirmar NC
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       )}

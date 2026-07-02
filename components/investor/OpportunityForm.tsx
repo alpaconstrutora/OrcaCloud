@@ -538,7 +538,8 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                         <option value="Alto">Impacto: Alto</option>
                                     </select>
                                 </div>
-                                <button
+                                <Button
+                                    size="icon"
                                     type="button"
                                     onClick={() => {
                                         if (newRisk.title.trim()) {
@@ -546,10 +547,10 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                             setNewRisk({ title: '', probability: 'Média', impact: 'Médio', mitigation: '' });
                                         }
                                     }}
-                                    className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all"
+                                    className="rounded-xl transition-all"
                                 >
                                     <Plus className="w-5 h-5" />
-                                </button>
+                                </Button>
                             </div>
                             {form.risks_json && form.risks_json.length > 0 && (
                                 <div className="border border-gray-150 rounded-2xl overflow-hidden mt-2">
@@ -619,7 +620,8 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                         placeholder="Experiência (Ex: 15 anos de mercado)"
                                         className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                                     />
-                                    <button
+                                    <Button
+                                        size="icon"
                                         type="button"
                                         onClick={() => {
                                             if (newMember.name.trim() && newMember.role.trim()) {
@@ -627,10 +629,10 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                                 setNewMember({ name: '', role: '', experience: '' });
                                             }
                                         }}
-                                        className="p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all"
+                                        className="rounded-xl transition-all"
                                     >
                                         <Plus className="w-5 h-5" />
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
                             {form.team_json && form.team_json.length > 0 && (
@@ -703,7 +705,8 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 />
                             </div>
                             <div className="flex justify-end">
-                                <button
+                                <Button
+                                    size="sm"
                                     type="button"
                                     onClick={() => {
                                         if (newCompetitor.name.trim() && newCompetitor.price_per_m2.trim()) {
@@ -721,11 +724,11 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                             setNewCompetitor({ name: '', price_per_m2: '', sales_velocity_pct: '', appreciation_pct: '', distance_km: '' });
                                         }
                                     }}
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all text-xs font-bold flex items-center gap-1"
+                                    className="rounded-xl transition-all flex items-center gap-1"
                                 >
                                     <Plus className="w-4 h-4" />
                                     Adicionar Concorrente
-                                </button>
+                                </Button>
                             </div>
 
                             {competitors && competitors.length > 0 && (
@@ -1045,12 +1048,12 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
 
                     {/* ── Ações ─────────────────────────────────────────── */}
                     <div className="flex gap-3 pt-2">
-                        <button
+                        <Button
                             type="submit"
-                            className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-colors shadow-lg shadow-blue-600/20"
+                            className="flex-1 rounded-2xl transition-colors shadow-lg shadow-blue-600/20"
                         >
                             {initial?.id ? 'Salvar alterações' : 'Criar oportunidade'}
-                        </button>
+                        </Button>
                         <button
                             type="button"
                             onClick={onClose}

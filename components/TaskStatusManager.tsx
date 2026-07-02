@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { X, Plus, Trash2, Save, Loader2, GripVertical, Check } from 'lucide-react'
 import { taskStatusService, type TaskStatus } from '../services/taskService'
+import Button from './ui/Button'
 
 const COLORS = [
   { hex: '#94a3b8', label: 'Cinza' },
@@ -181,14 +182,15 @@ const TaskStatusManager: React.FC<Props> = ({ orgId, onClose, onChanged }) => {
           <button onClick={onCancel} className="px-3 py-1.5 text-button font-black text-slate-500 hover:bg-slate-200 rounded-lg">
             Cancelar
           </button>
-          <button
+          <Button
             onClick={onSave}
             disabled={saving !== null}
-            className="flex items-center gap-1.5 px-4 py-1.5 text-button font-black bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            size="sm"
+            className="flex items-center gap-1.5"
           >
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
             Salvar
-          </button>
+          </Button>
         </div>
       </div>
     )

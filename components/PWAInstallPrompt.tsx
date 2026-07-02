@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Download, X, Wifi, WifiOff } from 'lucide-react'
+import Button from './ui/Button'
 
 // ── Offline indicator ─────────────────────────────────────────────────────────
 export const OfflineIndicator: React.FC = () => {
@@ -68,12 +69,13 @@ export const PWAInstallPrompt: React.FC = () => {
         <p className="text-sm font-black text-slate-900">Instalar Opura</p>
         <p className="text-xs text-slate-500 mt-0.5">Acesse diretamente da tela inicial, sem abrir o navegador.</p>
         <div className="flex gap-2 mt-3">
-          <button
+          <Button
             onClick={handleInstall}
-            className="flex-1 py-1.5 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 transition-colors"
+            size="sm"
+            className="flex-1 py-1.5 rounded-xl text-button font-black"
           >
             Instalar
-          </button>
+          </Button>
           <button
             onClick={handleDismiss}
             className="px-3 py-1.5 text-slate-500 hover:bg-slate-100 rounded-xl text-button font-bold transition-colors"

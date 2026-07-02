@@ -9,6 +9,7 @@ import {
 } from '../../services/servicesCommercialService';
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
+import Button from '../ui/Button';
 
 interface Props {
   opportunityId: string;
@@ -299,13 +300,13 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
         >
           <Download size={15} /> PDF
         </button>
-        <button
+        <Button
           onClick={markSent}
           disabled={(!budget && !engineeringSummary) || saving}
-          className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          className="flex items-center gap-1.5"
         >
           <Send size={15} /> Marcar enviada
-        </button>
+        </Button>
       </div>
       <ServicesToast toasts={toasts} onDismiss={dismiss} />
     </div>

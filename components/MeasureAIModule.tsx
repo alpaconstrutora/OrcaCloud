@@ -4,6 +4,7 @@ import {
   Calculator, Layers, Ruler, Plus, Trash2, Edit, Save, FileText, ChevronRight,
   ChevronLeft, ZoomIn, ZoomOut, Maximize, RefreshCw, Upload, Download, Eye, EyeOff, Lock, Unlock, Play, FileSpreadsheet, Check, CheckSquare
 } from 'lucide-react';
+import Button from './ui/Button';
 import { measureService } from '../services/measureService';
 import { proService } from '../services/proService';
 import { projectService } from '../services/projectService';
@@ -985,12 +986,12 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               >
                 Cancelar
               </button>
-              <button
+              <Button
                 type="submit"
-                className="px-3 py-1.5 bg-blue-600 rounded-lg text-white font-bold hover:bg-blue-500"
+                size="sm"
               >
                 Criar
-              </button>
+              </Button>
             </div>
           </form>
         )}
@@ -1343,16 +1344,16 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
                 >
                   Cancelar (Esc)
                 </button>
-                <button
+                <Button
                   onClick={() => {
                     finishDrawing(tempPoints, tool);
                   }}
                   disabled={(tool === 'POLYGON' && tempPoints.length < 3) || (tool === 'LINE' && tempPoints.length < 2)}
-                  className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-xs font-bold rounded-lg text-white transition-colors flex items-center gap-1 cursor-pointer"
+                  size="sm"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>Concluir (Enter)</span>
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -1465,13 +1466,13 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               >
                 Cancelar
               </button>
-              <button
+              <Button
                 type="button"
                 onClick={handleCreateLibraryItem}
-                className="px-3 py-1.5 bg-blue-600 rounded-lg text-white font-bold hover:bg-blue-500"
+                size="sm"
               >
                 Salvar
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -1582,12 +1583,12 @@ export const MeasureAIModule: React.FC<MeasureAIModuleProps> = ({ userId, active
               >
                 Cancelar
               </button>
-              <button
+              <Button
                 onClick={handleSaveScale}
-                className="px-4 py-2.5 bg-red-600 rounded-xl text-white hover:bg-red-500 transition-all shadow-lg shadow-red-500/25"
+                variant="danger"
               >
                 Salvar Escala
-              </button>
+              </Button>
             </div>
           </div>
         </div>

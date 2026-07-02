@@ -3,6 +3,7 @@ import { financialReportService } from '../services/financialReportService'
 import type { WIPLine } from '../types/financial'
 import { useToast } from '../hooks/useToast'
 import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
+import Button from './ui/Button'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtPct = (v: number | null) => v === null ? '—' : `${v.toFixed(1)}%`
@@ -117,13 +118,12 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
                         className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                 </div>
-                <button
+                <Button
                     onClick={load}
                     disabled={loading}
-                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-button font-black uppercase tracking-widest rounded-xl transition-colors"
                 >
                     {loading ? 'Carregando…' : 'Atualizar'}
-                </button>
+                </Button>
                 {rows.length > 0 && (
                     <span className="ml-auto text-xs text-slate-400">
                         {rows.length} obra{rows.length !== 1 ? 's' : ''} com movimentação

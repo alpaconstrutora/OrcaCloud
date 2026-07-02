@@ -9,6 +9,7 @@ import {
 } from 'recharts';
 import { SchedulingEngine } from '../utils/schedulingEngine';
 import { ResourceRole, ResourceWorker, ResourceTeam, Organization, ItemScheduleDetails, ResourceAllocation, BudgetEntry } from '../types';
+import Button from './ui/Button';
 
 // Local types for capacity histogram data
 interface CapacityResourceEntry {
@@ -709,9 +710,9 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                             </button>
                         )}
                         {activeTab !== 'capacity' && (
-                            <button onClick={() => { setIsAdding(true); setEditingId(null); }} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-all font-bold text-sm">
+                            <Button onClick={() => { setIsAdding(true); setEditingId(null); }} className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm">
                                 <Plus className="w-4 h-4" /> Novo {activeTab === 'roles' ? 'Cargo' : activeTab === 'workers' ? 'Trabalhador' : 'Equipe'}
-                            </button>
+                            </Button>
                         )}
                     </div>
                 </div>
@@ -739,7 +740,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                             )}
                             <div className="flex justify-end gap-2">
                                 <button type="button" onClick={() => setIsAdding(false)} className="px-6 py-2">Cancelar</button>
-                                <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-xl">Salvar</button>
+                                <Button type="submit" className="px-6 py-2 rounded-xl">Salvar</Button>
                             </div>
                         </form>
                     </div>
@@ -1236,7 +1237,7 @@ const ResourceImportModal: React.FC<{
                     <span className="font-bold text-gray-500">{selRoles.size + selWorkers.size + selTeams.size} selecionados</span>
                     <div className="flex gap-2">
                         <button onClick={onClose} className="px-6 py-2 font-bold text-gray-500 hover:bg-gray-200 rounded-xl transition-all">Cancelar</button>
-                        <button onClick={() => onConfirm(Array.from(selRoles), Array.from(selWorkers), Array.from(selTeams), selectedOrgId)} className="bg-blue-600 text-white px-10 py-2 rounded-xl font-bold shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all">Confirmar</button>
+                        <Button onClick={() => onConfirm(Array.from(selRoles), Array.from(selWorkers), Array.from(selTeams), selectedOrgId)} className="px-10 py-2 rounded-xl font-bold shadow-lg shadow-blue-600/20">Confirmar</Button>
                     </div>
                 </div>
             </div>

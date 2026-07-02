@@ -12,6 +12,7 @@ import StructuralRebars from './structural/StructuralRebars'
 import StructuralCutTable from './structural/StructuralCutTable'
 import StructuralQuantitative from './structural/StructuralQuantitative'
 import StructuralDimension from './structural/StructuralDimension'
+import Button from './ui/Button'
 
 interface Props {
   activeOrganizationId?: string
@@ -139,14 +140,15 @@ const SteelForm: React.FC<{
         />
       </label>
       <div className="flex items-center gap-2">
-        <button
+        <Button
           onClick={() => onSubmit(f)}
           disabled={!valid || saving}
-          className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 disabled:bg-slate-300 text-white rounded-lg px-3 py-2 text-button font-black uppercase tracking-wide"
+          size="sm"
+          className="flex-1 flex items-center justify-center gap-1.5"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Salvar
-        </button>
+        </Button>
         <button
           onClick={onCancel}
           className="flex items-center justify-center bg-white border border-slate-200 text-slate-500 rounded-lg p-2"
@@ -233,12 +235,12 @@ const SteelCatalog: React.FC<{ orgId?: string }> = ({ orgId }) => {
           </p>
         </div>
         {canEdit && (
-          <button
+          <Button
             onClick={startNew}
-            className="flex items-center gap-2 bg-blue-600 text-white rounded-xl px-4 py-2.5 text-button font-black uppercase tracking-widest hover:bg-blue-700"
+            className="flex items-center gap-2"
           >
             <Plus className="w-4 h-4" /> Novo aço
-          </button>
+          </Button>
         )}
       </div>
 

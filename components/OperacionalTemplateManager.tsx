@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import Button from './ui/Button'
 
 interface Template {
   id: string
@@ -171,14 +172,14 @@ const ItemRow: React.FC<{
         >
           <X className="w-4 h-4" />
         </button>
-        <button
+        <Button
+          size="sm"
           disabled={saving || !draft.description.trim()}
           onClick={handleSave}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 disabled:opacity-50"
         >
           {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
           Salvar
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -444,14 +445,14 @@ const TemplateCard: React.FC<{
                 >
                   Cancelar
                 </button>
-                <button
+                <Button
+                  size="sm"
                   disabled={savingNew || !newItem.description.trim()}
                   onClick={handleAddItem}
-                  className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 disabled:opacity-50"
                 >
                   {savingNew ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                   Adicionar
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -819,13 +820,13 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
             {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
             Importar Excel
           </button>
-          <button
+          <Button
             onClick={() => setShowNewForm(s => !s)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20"
+            className="shadow-lg shadow-blue-900/20"
           >
             <Plus className="w-4 h-4" />
             Novo template
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -864,14 +865,13 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
             >
               Cancelar
             </button>
-            <button
+            <Button
               disabled={savingNew || !newName.trim()}
               onClick={handleCreateTemplate}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-button font-black hover:bg-blue-700 disabled:opacity-50"
             >
               {savingNew ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
               Criar
-            </button>
+            </Button>
           </div>
         </div>
       )}

@@ -10,6 +10,7 @@ import {
 } from '../types';
 import { companyService } from '../services/companyService';
 import { masterDataService, MasterBank } from '../services/masterDataService';
+import Button from './ui/Button';
 
 interface Props {
     companyId: string;
@@ -158,11 +159,10 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
                     Contas Bancárias
                 </p>
                 {!showForm && (
-                    <button onClick={openNew}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all active:scale-95">
+                    <Button onClick={openNew} className="gap-1.5">
                         <Plus className="w-3.5 h-3.5" />
                         Adicionar Conta
-                    </button>
+                    </Button>
                 )}
             </div>
 
@@ -293,11 +293,10 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
                             className="px-4 py-2 text-button font-black uppercase tracking-wide text-gray-500 hover:text-gray-700">
                             Cancelar
                         </button>
-                        <button type="submit" disabled={saving}
-                            className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 text-white rounded-xl font-black text-button uppercase tracking-wide hover:bg-blue-700 transition-all disabled:opacity-60 active:scale-95">
+                        <Button type="submit" disabled={saving} className="gap-1.5">
                             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                             Salvar
-                        </button>
+                        </Button>
                     </div>
                 </form>
             )}

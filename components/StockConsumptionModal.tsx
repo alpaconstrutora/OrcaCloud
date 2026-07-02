@@ -5,6 +5,7 @@
 import React from 'react';
 import { X, Plus, Trash2, Loader2, PackageMinus, Check, AlertTriangle } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
+import Button from './ui/Button';
 import type { Warehouse, StockBalance, StockConsumptionItem } from '../types/inventory';
 
 interface Props {
@@ -266,13 +267,13 @@ export const StockConsumptionModal: React.FC<Props> = ({
                             <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800">
                                 Cancelar
                             </button>
-                            <button
+                            <Button
+                                variant="danger"
                                 onClick={save} disabled={saving || lines.length === 0}
-                                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white text-sm font-medium disabled:opacity-50"
                             >
                                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                                 Registrar Consumo
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>

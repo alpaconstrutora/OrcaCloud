@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Check, X, MessageSquare, Loader2, Compass, AlertTriangle } from 'lucide-react';
 import { officesService } from '../services/officesService';
 import { OfficesEspecificacao } from '../types';
+import Button from './ui/Button';
 
 interface PublicEspecificacoesViewProps {
   projetoId: string;
@@ -109,12 +110,12 @@ export const PublicEspecificacoesView: React.FC<PublicEspecificacoesViewProps> =
           <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold mb-2">Erro de Carregamento</h2>
           <p className="text-slate-400 text-sm leading-relaxed mb-6">{error}</p>
-          <button
+          <Button
             onClick={loadData}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-button uppercase tracking-widest rounded-xl transition-all"
+            className="px-6 py-2.5 font-bold text-button uppercase tracking-widest rounded-xl"
           >
             Tentar Novamente
-          </button>
+          </Button>
         </div>
       </div>
     );

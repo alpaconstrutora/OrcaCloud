@@ -664,13 +664,12 @@ export default function OpuraGovernanceModule({
                   <h3 className="text-lg font-black text-white">Delegações de Autoridade</h3>
                   <p className="text-xs text-gray-500 mt-0.5">Designe substitutos temporários com alçadas de decisão vigentes.</p>
                 </div>
-                <button
+                <Button
                   onClick={() => setIsDelegationModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[1rem] font-bold text-button uppercase tracking-wider transition-all"
                 >
                   <Plus className="w-4 h-4" />
                   Criar Delegação
-                </button>
+                </Button>
               </div>
 
               <div className="overflow-x-auto">
@@ -892,7 +891,7 @@ export default function OpuraGovernanceModule({
                 <p className="text-xs text-gray-400">
                   O modo Sandbox tira uma foto instantânea da estrutura organizacional ativa para permitir simulações sem alterar o organograma produtivo.
                 </p>
-                <button
+                <Button
                   onClick={async () => {
                     const name = prompt('Nome do Cenário:');
                     if (name) {
@@ -908,10 +907,9 @@ export default function OpuraGovernanceModule({
                       setSandboxScenarios(data);
                     }
                   }}
-                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-button uppercase tracking-wider rounded-[1rem] transition-all"
                 >
                   Criar Novo Cenário
-                </button>
+                </Button>
               </div>
 
               {sandboxScenarios.length > 0 && (
@@ -1041,12 +1039,11 @@ export default function OpuraGovernanceModule({
                 >
                   Cancelar
                 </button>
-                <button
+                <Button
                   type="submit"
-                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-button uppercase tracking-wider rounded-[1rem] transition-all"
                 >
                   Salvar Alçada
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -1163,12 +1160,11 @@ export default function OpuraGovernanceModule({
                 >
                   Cancelar
                 </button>
-                <button
+                <Button
                   type="submit"
-                  className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-button uppercase tracking-wider rounded-[1rem] transition-all"
                 >
                   Confirmar
-                </button>
+                </Button>
               </div>
             </form>
           </div>

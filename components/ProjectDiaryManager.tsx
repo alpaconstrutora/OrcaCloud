@@ -33,6 +33,7 @@ import {
 import { ProjectSettings, DiaryEntry, BudgetEntry, WeatherShift, DiaryActivity, LaborEntry, ProjectSchedule } from '../types';
 import { projectService } from '../services/projectService';
 import { useStore } from '../store/useStore';
+import Button from './ui/Button';
 
 
 // Bug 2: tipo explícito para substituir projects: any[]
@@ -1269,13 +1270,13 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                         {(formData.images || []).map((img, i) => (
                                             <div key={i} className="aspect-square relative group bg-gray-100 rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all">
                                                 <img src={img} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                                                <button onClick={() => removeFile(i, 'image')} className="absolute top-3 right-3 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:bg-red-600 scale-75 group-hover:scale-100"><X className="w-4 h-4" /></button>
+                                                <Button onClick={() => removeFile(i, 'image')} variant="danger" size="icon" className="absolute top-3 right-3 rounded-full opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100"><X className="w-4 h-4" /></Button>
                                             </div>
                                         ))}
                                         {(formData.videos || []).map((vid, i) => (
                                             <div key={i} className="aspect-square relative group bg-slate-900 rounded-3xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-xl transition-all flex items-center justify-center">
                                                 <Video className="w-10 h-10 text-white/50" />
-                                                <button onClick={() => removeFile(i, 'video')} className="absolute top-3 right-3 p-2 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:bg-red-600 scale-75 group-hover:scale-100"><X className="w-4 h-4" /></button>
+                                                <Button onClick={() => removeFile(i, 'video')} variant="danger" size="icon" className="absolute top-3 right-3 rounded-full opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100"><X className="w-4 h-4" /></Button>
                                             </div>
                                         ))}
                                     </div>
@@ -1454,12 +1455,13 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                             >
                                 Cancelar
                             </button>
-                            <button
+                            <Button
                                 onClick={confirmDelete}
-                                className="px-5 py-2 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-100"
+                                variant="danger"
+                                className="shadow-lg shadow-red-100"
                             >
                                 Excluir
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>

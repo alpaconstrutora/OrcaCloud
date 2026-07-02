@@ -19,6 +19,7 @@ import {
     Clock,
 } from 'lucide-react';
 import { dunningService, DunningRule, DunningEvent, DUNNING_VARS } from '../services/dunningService';
+import Button from './ui/Button';
 
 // ── helpers ──────────────────────────────────────────────────
 
@@ -247,14 +248,13 @@ function RuleModal({
 
                 <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-100">
                     <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
-                    <button
+                    <Button
                         onClick={handleSave}
                         disabled={saving}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
                     >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                         Salvar
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>
@@ -354,13 +354,13 @@ function ReguaTab({ organizationId }: { organizationId: string }) {
                         {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
                         Executar agora
                     </button>
-                    <button
+                    <Button
                         onClick={() => setEditing({} as DunningRule)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-button font-medium rounded-lg"
+                        size="sm"
                     >
                         <Plus className="w-3.5 h-3.5" />
                         Nova regra
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -393,14 +393,15 @@ function ReguaTab({ organizationId }: { organizationId: string }) {
                     <Bell className="w-10 h-10 mx-auto text-gray-300 mb-3" />
                     <p className="text-sm font-medium text-gray-500">Nenhuma regra configurada</p>
                     <p className="text-xs text-gray-400 mt-1 mb-4">Crie a primeira regra ou carregue as 6 regras padrão.</p>
-                    <button
+                    <Button
                         onClick={handleSeed}
                         disabled={seeding}
-                        className="flex items-center gap-1.5 mx-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-button font-medium rounded-lg disabled:opacity-50"
+                        size="sm"
+                        className="mx-auto"
                     >
                         {seeding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                         Carregar regras padrão
-                    </button>
+                    </Button>
                 </div>
             )}
 

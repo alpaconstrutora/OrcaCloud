@@ -12,6 +12,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useToast } from '../hooks/useToast';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
+import Button from './ui/Button';
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
 function fBRL(v: number | null): string {
@@ -158,10 +159,10 @@ const CentralFornecedor: React.FC<CentralFornecedorProps> = ({ organizationId })
                     <span className="text-gray-400 text-sm">até</span>
                     <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
                         className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
-                    <button onClick={load} disabled={loading}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 flex items-center gap-2 disabled:opacity-60">
+                    <Button onClick={load} disabled={loading}
+                        className="text-sm gap-2">
                         <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Atualizar
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -172,9 +173,9 @@ const CentralFornecedor: React.FC<CentralFornecedorProps> = ({ organizationId })
                     </div>
                     <p className="text-sm font-bold text-gray-800">Não foi possível carregar a Central de Fornecedores</p>
                     <p className="text-xs text-gray-500 max-w-md break-words">{error}</p>
-                    <button onClick={load} className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 flex items-center gap-2">
+                    <Button onClick={load} className="mt-2 text-sm gap-2">
                         <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
-                    </button>
+                    </Button>
                 </div>
             ) : !supplierId ? (
                 <div className="flex items-center justify-center h-48 text-sm text-gray-400">Selecione um fornecedor.</div>

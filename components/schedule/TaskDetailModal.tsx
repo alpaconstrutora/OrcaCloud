@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, AlertTriangle, CheckCircle2, Clock, TrendingUp, TrendingDown, Users, Link2, Calendar, Hash, Layers, Package } from 'lucide-react';
+import { X, AlertTriangle, CheckCircle2, Clock, TrendingUp, TrendingDown, Users, Link2, Calendar, Hash, Layers, Package, SplitSquareHorizontal } from 'lucide-react';
 import { HierarchyNode, ItemScheduleDetails } from '../../types/schedule';
 import { BudgetEntry } from '../../types/budget';
 
@@ -14,6 +14,8 @@ interface TaskDetailModalProps {
     handleUpdateRealPct: (itemId: string, value: string) => void;
     handleUpdateCrewField: (id: string, field: string, value: string | number | boolean) => void;
     onEditPredecessors: () => void;
+    /** Divide/une a tarefa (split). `split=true` aplica uma divisão; `false` remove todas. */
+    onToggleSplit?: (itemId: string, split: boolean, gapDays?: number) => void;
     // Fase 4 — medição de empreitada desta tarefa (undefined quando não há contrato vinculado).
     measurement?: { measured: number; approved: number; paid: number };
 }
@@ -98,8 +100,9 @@ const EditField: React.FC<EditFieldProps> = ({ label, type = 'number', value, su
 export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     node, item, itemSchedule, idToUid, allItems, onClose,
     handleUpdateItemSchedule, handleUpdateRealPct, handleUpdateCrewField,
-    onEditPredecessors, measurement,
+    onEditPredecessors, onToggleSplit, measurement,
 }) => {
+    const isSplit = !!(itemSchedule?.segments && itemSchedule.segments.length > 0);
     const isCritical = itemSchedule?.isCritical ?? node.isCritical;
     const totalFloat = itemSchedule?.totalFloat ?? node.totalFloat ?? 0;
     const unitCost = item.sinapiItem.price;
@@ -206,6 +209,51 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                 </div>
                             )}
                         </div>
+
+                        {/* Dividir tarefa (split) — só p/ tarefas de trabalho ≥ 2 dias */}
+                        {onToggleSplit && !itemSchedule?.isMilestone && (
+                            <div className="mt-3 flex items-center justify-between bg-gray-50 border border-gray-100 rounded-xl p-3">
+                                <div className="flex items-center gap-2">
+                                    <SplitSquareHorizontal className="w-4 h-4 text-indigo-500" />
+                                    <div>
+                                        <span className="text-xs font-bold text-gray-700">
+                                            {isSplit ? 'Tarefa dividida' : 'Dividir tarefa'}
+                                        </span>
+                                        <p className="text-[11px] text-gray-400 leading-tight">
+                                            {isSplit
+                                                ? `${itemSchedule?.segments?.length} trechos de trabalho com pausa entre eles`
+                                                : 'Interrompe o trabalho com uma pausa, estendendo o prazo'}
+                                        </p>
+                                    </div>
+                                </div>
+                                {isSplit ? (
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <button
+                                            onClick={() => onToggleSplit(item.id, true)}
+                                            className="px-2 py-1 rounded-lg text-xs font-bold text-indigo-600 hover:bg-indigo-50 border border-indigo-200 transition-colors"
+                                            title="Adicionar outra divisão"
+                                        >
+                                            + Dividir
+                                        </button>
+                                        <button
+                                            onClick={() => onToggleSplit(item.id, false)}
+                                            className="px-2 py-1 rounded-lg text-xs font-bold text-gray-500 hover:bg-gray-100 border border-gray-200 transition-colors"
+                                        >
+                                            Unir
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => onToggleSplit(item.id, true)}
+                                        disabled={(itemSchedule?.duration ?? 0) < 2}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-600 hover:bg-indigo-50 border border-indigo-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                                        title={(itemSchedule?.duration ?? 0) < 2 ? 'Precisa de ao menos 2 dias de duração' : undefined}
+                                    >
+                                        Dividir
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </section>
 
                     {/* Progresso — editável */}

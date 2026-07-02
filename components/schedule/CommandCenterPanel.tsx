@@ -132,6 +132,8 @@ function computeKpis(
 
     let baselineEnd = '';
     let devioDias: number | null = null;
+    let costVarianceVsBaseline: number | null = null;
+    let hhVarianceVsBaseline: number | null = null;
     if (schedule.activeBaselineId && schedule.baselines) {
         const bl = schedule.baselines.find(b => b.id === schedule.activeBaselineId);
         if (bl) {
@@ -139,6 +141,16 @@ function computeKpis(
                 return !max || d.endDate > max ? d.endDate : max;
             }, '');
             if (baselineEnd && projectEnd) devioDias = daysBetween(baselineEnd, projectEnd);
+
+            if (bl.itemData) {
+                // node.variation já foi calculado contra esta mesma baseline em buildHierarchy;
+                // basta somar as folhas. workVariance vem do ItemScheduleDetails (calculado no motor).
+                costVarianceVsBaseline = leaves.reduce((sum, l) => sum + (l.variation || 0), 0);
+                hhVarianceVsBaseline = leaves.reduce((sum, l) => {
+                    const sched = schedule.itemSchedules?.find(s => s.id === l.id);
+                    return sum + (sched?.workVariance || 0);
+                }, 0);
+            }
         }
     }
 
@@ -147,6 +159,7 @@ function computeKpis(
         ac, bac, cpi, eac, etc,
         criticalItems, criticalCount: criticalItems.length,
         atrasadas, projectEnd, baselineEnd, devioDias,
+        costVarianceVsBaseline, hhVarianceVsBaseline,
         totalLeaves: leaves.length,
     };
 }
@@ -310,6 +323,12 @@ export const CommandCenterPanel: React.FC<Props> = ({
                     sub={`${kpis.criticalCount} ativ. críticas`}
                     color={openConstraints === null ? 'gray' : openConstraints === 0 ? 'emerald' : openConstraints <= 3 ? 'amber' : 'red'}
                     icon={<AlertTriangle className="w-4 h-4" />} />
+                <KpiCard label="Desvio de custo"
+                    value={kpis.costVarianceVsBaseline !== null ? `${kpis.costVarianceVsBaseline > 0 ? '+' : ''}${fmtBRL(kpis.costVarianceVsBaseline)}` : '—'}
+                    sub={kpis.costVarianceVsBaseline !== null ? 'vs. baseline ativa (planejado)' : 'ative uma baseline'}
+                    color={kpis.costVarianceVsBaseline === null ? 'gray' : kpis.costVarianceVsBaseline <= 0 ? 'emerald' : 'red'}
+                    icon={kpis.costVarianceVsBaseline !== null && kpis.costVarianceVsBaseline > 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                    tooltip="Soma do Valor Planejado atual menos o valor planejado quando a baseline foi salva" />
             </div>
 
             {/* ── Curva S dupla: Físico × Financeiro (reusa dados já calculados) ── */}

@@ -38,6 +38,9 @@ import { ResourceAllocationModal } from './schedule/ResourceAllocationModal';
 import { ScheduleGantt } from './schedule/ScheduleGantt';
 import { SchedulingEngine, DEFAULT_CREW_CLASSIFICATION } from '../utils/schedulingEngine';
 import * as outlineOps from '../utils/scheduleOutline';
+import { exportScheduleToXlsx, exportScheduleToCsv } from '../utils/scheduleExport';
+import { RecurrenceRule, expandRecurrenceDates } from '../utils/recurrence';
+import { applySplitToTask, removeSplitFromTask } from '../utils/scheduleSegments';
 import { useConfirm } from './ui/confirm';
 import { ResourceManagement } from './ResourceManagement';
 import { ScheduleRiskDashboard } from './schedule/ScheduleRiskDashboard';
@@ -47,6 +50,7 @@ import { ScenariosPanel } from './schedule/ScenariosPanel';
 import { CommandCenterPanel } from './schedule/CommandCenterPanel';
 import { SupplyPanel } from './schedule/SupplyPanel';
 import { EapPanel } from './schedule/EapPanel';
+import NetworkDiagramView from './schedule/NetworkDiagramView';
 import { orderService } from '../services/orderService';
 import { projectService } from '../services/projectService';
 import { contractService } from '../services/contractService';
@@ -392,6 +396,7 @@ function makeItemHierNode(
     wbsCode: string,
     realized: RealizedMaps,
     globalBdi: number,
+    activeBaseline?: Baseline,
 ): HierarchyNode {
     const itemBdi = item.bdi !== undefined ? item.bdi : globalBdi;
     const itemRawTotal = item.quantity * item.sinapiItem.price;
@@ -402,6 +407,10 @@ function makeItemHierNode(
     const pValue = itemSchedule?.plannedValue ?? itemSchedule?.totalLaborCost ?? itemTotal;
     const bValue = itemSchedule?.budgetedValue ?? itemRawTotal;
     const bValueWithBdi = bValue * (1 + itemBdi / 100);
+    // Variação de custo vs. baseline ativa: comparada contra pValue (mesmo valor efetivo exibido),
+    // não contra itemSchedule.costVariation (campo legado, quase nunca populado — ver PLANO_MODULO_PLANEJAMENTO_GAPS.md #4).
+    const baselineItemData = activeBaseline?.itemData?.[item.id];
+    const variation = baselineItemData ? (pValue - baselineItemData.plannedValue) : 0;
     return {
         id: item.id,
         uid: '',
@@ -417,7 +426,7 @@ function makeItemHierNode(
         budgetedTotal: bValue,
         budgetedWithBdiTotal: bValueWithBdi,
         plannedTotal: pValue,
-        variation: itemSchedule?.costVariation || 0,
+        variation,
         isCritical: itemSchedule?.isCritical,
         isMilestone: itemSchedule?.isMilestone,
         earlyStart: itemSchedule?.earlyStart,
@@ -478,6 +487,7 @@ function buildHierarchyFromOutline(
     itemSchedules: ItemScheduleDetails[],
     realized: RealizedMaps,
     globalBdi: number,
+    activeBaseline?: Baseline,
 ): HierarchyNode[] {
     const budgetById = new Map(budget.map(b => [b.id, b]));
     const schedById = new Map(itemSchedules.map(s => [s.id, s]));
@@ -489,7 +499,7 @@ function buildHierarchyFromOutline(
             const budgetItem = node.budgetItemId ? budgetById.get(node.budgetItemId) : undefined;
             const leaf = budgetItem
                 // Orphan item (budget entry removed/rebased): degrade to a schedule-only activity.
-                ? makeItemHierNode(budgetItem, schedById.get(node.id), level, wbsCode, realized, globalBdi)
+                ? makeItemHierNode(budgetItem, schedById.get(node.id), level, wbsCode, realized, globalBdi, activeBaseline)
                 : makeActivityHierNode(node.id, node.name || 'Item removido', schedById.get(node.id), level, wbsCode);
             leaf.nature = node.nature;
             return leaf;
@@ -535,14 +545,14 @@ function buildHierarchyFromOutline(
     return finalizeHierarchy(result);
 }
 
-function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetails[] = [], realized: RealizedMaps, globalBdi: number = 0, outline?: OutlineNode[]): HierarchyNode[] {
+function buildHierarchy(budget: BudgetEntry[], itemSchedules: ItemScheduleDetails[] = [], realized: RealizedMaps, globalBdi: number = 0, outline?: OutlineNode[], activeBaseline?: Baseline): HierarchyNode[] {
     if (outline && outline.length > 0) {
-        return buildHierarchyFromOutline(outline, budget, itemSchedules, realized, globalBdi);
+        return buildHierarchyFromOutline(outline, budget, itemSchedules, realized, globalBdi, activeBaseline);
     }
-    return buildHierarchyFromBudget(budget, itemSchedules, realized, globalBdi);
+    return buildHierarchyFromBudget(budget, itemSchedules, realized, globalBdi, activeBaseline);
 }
 
-function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemScheduleDetails[] = [], realized: RealizedMaps, globalBdi: number = 0): HierarchyNode[] {
+function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemScheduleDetails[] = [], realized: RealizedMaps, globalBdi: number = 0, activeBaseline?: Baseline): HierarchyNode[] {
     const groups: Record<string, HierarchyNode> = {};
     // Track item index per subphase for WBS code generation
     const subphaseItemCounters = new Map<string, number>();
@@ -560,6 +570,9 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
         const pValue = itemSchedule?.plannedValue ?? itemSchedule?.totalLaborCost ?? itemTotal;
         const bValue = itemSchedule?.budgetedValue ?? itemRawTotal;
         const bValueWithBdi = bValue * (1 + itemBdi / 100);
+        // Variação de custo vs. baseline ativa (ver makeItemHierNode acima para a mesma lógica)
+        const baselineItemData = activeBaseline?.itemData?.[item.id];
+        const itemVariation = baselineItemData ? (pValue - baselineItemData.plannedValue) : 0;
 
         // 1. Group Level
         const groupName = item.group || 'Sem Grupo';
@@ -591,7 +604,7 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
         groups[groupId].budgetedTotal += bValue;
         groups[groupId].budgetedWithBdiTotal += bValueWithBdi;
         groups[groupId].plannedTotal += pValue;
-        groups[groupId].variation = (groups[groupId].variation || 0) + (itemSchedule?.costVariation || 0);
+        groups[groupId].variation = (groups[groupId].variation || 0) + itemVariation;
 
         // 2. Phase Level
         const phaseName = item.phase || 'Sem Etapa';
@@ -625,7 +638,7 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
         phaseNode.budgetedTotal += bValue;
         phaseNode.budgetedWithBdiTotal += bValueWithBdi;
         phaseNode.plannedTotal += pValue;
-        phaseNode.variation = (phaseNode.variation || 0) + (itemSchedule?.costVariation || 0);
+        phaseNode.variation = (phaseNode.variation || 0) + itemVariation;
 
         // 3. SubPhase Level (Optional)
         let parentForItems = phaseNode;
@@ -661,7 +674,7 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
             subPhaseNode.budgetedTotal += bValue;
             subPhaseNode.budgetedWithBdiTotal += bValueWithBdi;
             subPhaseNode.plannedTotal += pValue;
-            subPhaseNode.variation = (subPhaseNode.variation || 0) + (itemSchedule?.costVariation || 0);
+            subPhaseNode.variation = (subPhaseNode.variation || 0) + itemVariation;
             parentForItems = subPhaseNode;
         }
 
@@ -686,7 +699,7 @@ function buildHierarchyFromBudget(budget: BudgetEntry[], itemSchedules: ItemSche
             budgetedTotal: bValue,
         budgetedWithBdiTotal: bValueWithBdi,
             plannedTotal: pValue,
-            variation: itemSchedule?.costVariation || 0,
+            variation: itemVariation,
             isCritical: itemSchedule?.isCritical,
             isMilestone: itemSchedule?.isMilestone,
             earlyStart: itemSchedule?.earlyStart,
@@ -846,17 +859,17 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         }
     );
 
-    const [viewMode, setViewModeState] = useState<'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap'>(() => {
+    const [viewMode, setViewModeState] = useState<'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap' | 'network'>(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('schedule-view-mode');
-            if (saved === 'table' || saved === 'gantt' || saved === 's-curve' || saved === 'resources' || saved === 'risks' || saved === 'constraints' || saved === 'weekly' || saved === 'scenarios' || saved === 'command' || saved === 'supply' || saved === 'eap') {
+            if (saved === 'table' || saved === 'gantt' || saved === 's-curve' || saved === 'resources' || saved === 'risks' || saved === 'constraints' || saved === 'weekly' || saved === 'scenarios' || saved === 'command' || saved === 'supply' || saved === 'eap' || saved === 'network') {
                 return saved;
             }
         }
         return 'table';
     });
 
-    const setViewMode = (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap') => {
+    const setViewMode = (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap' | 'network') => {
         setViewModeState(mode);
         localStorage.setItem('schedule-view-mode', mode);
     };
@@ -907,7 +920,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     const [crewPopoverItem, setCrewPopoverItem] = useState<string | null>(null);
     const [crewPopoverPos, setCrewPopoverPos] = useState<{ top: number; left: number } | null>(null);
     const [resourceAllocationTask, setResourceAllocationTask] = useState<string | null>(null);
-    const [allocationType, setAllocationType] = useState<'ROLE' | 'WORKER' | 'TEAM'>('ROLE');
+    const [allocationType, setAllocationType] = useState<'ROLE' | 'WORKER' | 'TEAM' | 'MATERIAL' | 'COST'>('ROLE');
     const [levelingIssues, setLevelingIssues] = useState<LevelingIssue[] | null>(null);
 
     // Apply the org's saved crew classification to the (global) scheduling engine so
@@ -1710,6 +1723,10 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
     }, [measurementRollup]);
 
     // Calculate Hierarchy
+    const activeBaselineForVariation = React.useMemo(
+        () => schedule.baselines?.find(b => b.id === schedule.activeBaselineId),
+        [schedule.baselines, schedule.activeBaselineId]
+    );
     const hierarchy = React.useMemo(
         () => buildHierarchy(
             budget,
@@ -1717,8 +1734,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             { physical: realizedState.physicalValues, financial: realizedState.financialValues },
             effectiveBudgetBdi,
             schedule.outline,
+            activeBaselineForVariation,
         ),
-        [budget, schedule.itemSchedules, realizedState.physicalValues, realizedState.financialValues, effectiveBudgetBdi, schedule.outline]
+        [budget, schedule.itemSchedules, realizedState.physicalValues, realizedState.financialValues, effectiveBudgetBdi, schedule.outline, activeBaselineForVariation]
     );
 
     // Wrapper that expands group/phase predecessors before calling the engine and
@@ -1735,10 +1753,12 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         const activeItems = items.filter(s => !s.inactive);
         const inactiveItems = items.filter(s => s.inactive);
         const expanded = expandGroupPredecessors(activeItems, hierarchyRef.current);
-        // Always inject workDays from current schedule so every call site respects the work schedule
-        // args[8] = workDays (the 10th param of calculate, minus the leading 'tasks' which is not in args)
+        // Always inject workDays/holidays/materials from current schedule so every call site respects them
+        // args[8]=workDays, args[9]=holidays, args[10]=materials (params 10-12 of calculate, minus the leading 'tasks')
         const workDays = scheduleRef.current.workSchedule?.workDays ?? [1, 2, 3, 4, 5];
         (args as unknown[])[8] = workDays;
+        (args as unknown[])[9] = scheduleRef.current.holidays ?? [];
+        (args as unknown[])[10] = scheduleRef.current.resources?.materials ?? [];
         const calculated = SchedulingEngine.calculate(expanded, ...args);
         // Restore original predecessors AND constraint types: group-derived constraints (SNET/FNLT)
         // are transient helpers for the CPM calculation only and must never be persisted.
@@ -2219,7 +2239,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 currentItemSchedules,
                 schedule.useWorkingDays ?? true,
                 schedule.resources?.workers || [],
-                schedule.resources?.teams || []
+                schedule.resources?.teams || [],
+                schedule.holidays || [],
+                schedule.resources?.roles || []
             );
             const limits = new Map<string, number>();
             schedule.resources?.roles.forEach(r => {
@@ -2256,7 +2278,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 schedule.resources?.roles || [],
                 schedule.resources?.workers || [],
                 schedule.resources?.teams || [],
-                itemQuantities
+                itemQuantities,
+                schedule.holidays || []
             );
 
             if (result.issues.length > 0) {
@@ -2269,7 +2292,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     result.leveledSchedules,
                     schedule.useWorkingDays ?? true,
                     schedule.resources?.workers || [],
-                    schedule.resources?.teams || []
+                    schedule.resources?.teams || [],
+                    schedule.holidays || [],
+                    schedule.resources?.roles || []
                 );
 
                 let levelSucceeded = true;
@@ -2365,7 +2390,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 updatedResources.roles,
                 updatedResources.workers,
                 updatedResources.teams,
-                itemQuantities
+                itemQuantities,
+                prev.holidays || []
             );
 
             // Check if bottlenecks remain after resolving inherent ones
@@ -2373,7 +2399,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 finalResult.leveledSchedules,
                 prev.useWorkingDays ?? true,
                 updatedResources.workers,
-                updatedResources.teams
+                updatedResources.teams,
+                prev.holidays || [],
+                updatedResources.roles
             );
             const limits = new Map<string, number>();
             updatedResources.roles.forEach(r => {
@@ -2607,6 +2635,50 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         });
     };
 
+    // Divide/une uma tarefa (split). `split=true` → aplica uma divisão; `false` → remove todas.
+    // O trabalho (duration) é preservado; o gap estende a janela no tempo (ver util scheduleSegments).
+    const handleToggleSplit = (itemId: string, split: boolean, gapDays: number = 2) => {
+        setSchedule(prev => {
+            const currentItems = prev.itemSchedules || [];
+            const taskIdx = currentItems.findIndex(s => s.id === itemId);
+            if (taskIdx < 0) return prev;
+
+            const task = currentItems[taskIdx];
+            if (split && (task.duration || 0) < 2) return prev; // precisa de ao menos 2 dias para dividir
+
+            const newTask = split
+                ? applySplitToTask(task, Math.max(1, Math.floor((task.duration || 2) / 2)), gapDays)
+                : removeSplitFromTask(task);
+
+            const updatedSchedules = [...currentItems];
+            updatedSchedules[taskIdx] = newTask;
+
+            try {
+                const activeBaseline = prev.baselines?.find(b => b.id === prev.activeBaselineId);
+                const itemQuantities = new Map<string, number>();
+                budget.forEach(entry => itemQuantities.set(entry.id, entry.quantity));
+                const calculated = calcWithGroups(
+                    ensureFullScheduleList(updatedSchedules, budget),
+                    prev.startDate,
+                    activeBaseline,
+                    prev.useWorkingDays ?? true,
+                    prev.replanMode ?? ReplanMode.AFFECTED_TASK,
+                    prev.resources?.roles || [],
+                    itemQuantities,
+                    prev.resources?.workers || [],
+                    prev.resources?.teams || []
+                );
+                const newSchedule = { ...prev, itemSchedules: calculated };
+                persistSchedule(newSchedule);
+                onUpdateSettings({ ...settings, schedule: newSchedule });
+                return newSchedule;
+            } catch (err: unknown) {
+                console.error('Split recalculate error:', err);
+                return { ...prev, itemSchedules: updatedSchedules };
+            }
+        });
+    };
+
     // ── Bulk: Apply auto-duration to ALL items ──
     const handleApplyAutoAllItems = () => {
         setSchedule(prev => {
@@ -2764,10 +2836,31 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
     // Cria grupo/etapa/subetapa/atividade (item com custo vai por handleCreateBudgetItem).
     // `opts.nature` aplica a folhas (atividade); `opts.milestone` cria um Marco (duração 0).
-    const handleOutlineCreate = (parentId: string | null, type: outlineOps.OutlineNodeType, name: string, opts?: { nature?: TaskNature; milestone?: boolean }) => {
+    // `opts.recurrence` materializa N atividades independentes (uma por ocorrência) em vez de uma só.
+    const handleOutlineCreate = (parentId: string | null, type: outlineOps.OutlineNodeType, name: string, opts?: { nature?: TaskNature; milestone?: boolean; recurrence?: RecurrenceRule }) => {
         setSchedule(prev => {
             const outline = ensureOutline(prev);
-            const node: OutlineNode = { id: outlineOps.genId(), type, name: name.trim() || defaultNodeName(type), children: [] };
+            const baseName = name.trim() || defaultNodeName(type);
+
+            if (type === 'activity' && opts?.recurrence) {
+                const dates = expandRecurrenceDates(
+                    new Date().toISOString().split('T')[0],
+                    opts.recurrence,
+                    prev.workSchedule?.workDays ?? [1, 2, 3, 4, 5],
+                    prev.holidays ?? []
+                );
+                let nextOutline = outline;
+                let nextSchedules = prev.itemSchedules ?? [];
+                dates.forEach((startDate, idx) => {
+                    const node: OutlineNode = { id: outlineOps.genId(), type, name: `${baseName} ${idx + 1}`, children: [] };
+                    if (opts?.nature) node.nature = opts.nature;
+                    nextOutline = outlineOps.insertNode(nextOutline, parentId, node);
+                    nextSchedules = [...nextSchedules, { id: node.id, autoDuration: false, duration: 1, startDate, endDate: startDate, hoursPerDay: 8, efficiencyFactor: 1.0 }];
+                });
+                return persistOutline(prev, nextOutline, nextSchedules);
+            }
+
+            const node: OutlineNode = { id: outlineOps.genId(), type, name: baseName, children: [] };
             if (type === 'activity' && opts?.nature) node.nature = opts.nature;
             const nextOutline = outlineOps.insertNode(outline, parentId, node);
             let nextSchedules = prev.itemSchedules ?? [];
@@ -2950,12 +3043,30 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             }
         });
 
+        // Snapshot de custo/HH a partir da hierarchy (mesmo valor efetivo exibido na UI:
+        // node.plannedTotal já resolve a cascata schedule.plannedValue ?? totalLaborCost ?? itemTotal).
+        const itemData: Record<string, { plannedValue: number; totalManHours: number; duration: number }> = {};
+        const collectLeaves = (nodes: HierarchyNode[]) => {
+            nodes.forEach(node => {
+                if (node.type === 'item') {
+                    itemData[node.id] = {
+                        plannedValue: node.plannedTotal || 0,
+                        totalManHours: node.schedule?.totalManHours ?? 0,
+                        duration: node.schedule?.duration ?? 0
+                    };
+                }
+                if (node.children?.length) collectLeaves(node.children);
+            });
+        };
+        collectLeaves(hierarchy);
+
         const newBaseline: Baseline = {
             id: crypto.randomUUID(),
             name,
             description,
             createdAt: new Date().toISOString(),
-            itemDates
+            itemDates,
+            itemData
         };
 
         const newSchedule = {
@@ -3133,6 +3244,16 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         } finally {
             setIsExportingPDF(false);
         }
+    };
+
+    const handleExportExcel = () => {
+        const projectName = projects?.find(p => p.id === settings.id)?.name || settings.name || 'Cronograma_Projeto';
+        exportScheduleToXlsx(hierarchy, projectName);
+    };
+
+    const handleExportCSV = () => {
+        const projectName = projects?.find(p => p.id === settings.id)?.name || settings.name || 'Cronograma_Projeto';
+        exportScheduleToCsv(hierarchy, projectName);
     };
 
     const getPhotosForItem = (itemId: string): string[] => {
@@ -3914,6 +4035,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 handleToggleSimulation={handleToggleSimulation}
                 handleExportPDF={handleExportPDF}
                 isExportingPDF={isExportingPDF}
+                handleExportExcel={handleExportExcel}
+                handleExportCSV={handleExportCSV}
                 setIsConfigModalOpen={setIsConfigModalOpen}
                 handleLevelResources={handleLevelResources}
                 handleRecalculate={handleRecalculate}
@@ -4334,6 +4457,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             resources={schedule.resources || { roles: [], workers: [], teams: [] }}
                             itemSchedules={schedule.itemSchedules || []}
                             useWorkingDays={schedule.useWorkingDays}
+                            holidays={schedule.holidays || []}
                             organizations={organizations}
                             localLabel="Planejamento"
                             onUpdateResources={(resources, updatedItemSchedules) => {
@@ -4420,6 +4544,10 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             onUpdateLocation={handleUpdateLocation}
                         />
                     </div>
+                )}
+
+                {viewMode === 'network' && (
+                    <NetworkDiagramView hierarchy={hierarchy} />
                 )}
 
                 {/* Content Area - Only visible in Table or Gantt mode */}
@@ -4524,6 +4652,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 handleUpdatePredecessorField={handleUpdatePredecessorField}
                                                 handleUpdateCrewField={handleUpdateCrewField}
                                                 handleUpdateItemSchedule={handleUpdateItemSchedule}
+                                                onToggleSplit={handleToggleSplit}
                                                 handleGanttBarMouseDown={handleGanttBarMouseDown}
                                                 crewPopoverItem={crewPopoverItem}
                                                 crewPopoverPos={crewPopoverPos}
@@ -4705,11 +4834,12 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     initialName={outlineEditor.name}
                     showNature={outlineOps.isLeaf(outlineEditor.nodeType)}
                     initialNature={outlineEditor.nature}
+                    showRecurrence={outlineEditor.mode === 'create' && outlineEditor.nodeType === 'activity' && !outlineEditor.milestone}
                     titleOverride={outlineEditor.milestone ? 'Adicionar Marco' : undefined}
                     onCancel={() => setOutlineEditor(null)}
-                    onSubmit={(name, nature) => {
+                    onSubmit={(name, nature, recurrence) => {
                         if (outlineEditor.mode === 'create') {
-                            handleOutlineCreate(outlineEditor.parentId, outlineEditor.nodeType, name, { nature, milestone: outlineEditor.milestone });
+                            handleOutlineCreate(outlineEditor.parentId, outlineEditor.nodeType, name, { nature, milestone: outlineEditor.milestone, recurrence });
                         } else if (outlineEditor.nodeId) {
                             handleOutlineRename(outlineEditor.nodeId, name, nature);
                         }

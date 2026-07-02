@@ -319,7 +319,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                         <th className="px-4 py-3 text-right relative">Orçado c/ BDI<ResizeHandle colKey="budgetedWithBdi" /></th>
                         <th className="px-4 py-3 text-right relative">Plan. (C)<ResizeHandle colKey="planned" /></th>
                         <th className="px-4 py-3 text-right relative">Real<ResizeHandle colKey="realized" /></th>
-                        <th className="px-4 py-3 text-right relative">Var.<ResizeHandle colKey="variation" /></th>
+                        <th className="px-4 py-3 text-right relative" title="Valor Planejado atual menos o valor planejado quando a baseline ativa foi salva">Var.<ResizeHandle colKey="variation" /></th>
                         <th className="px-4 py-3 text-left relative text-table-header text-gray-400 uppercase tracking-widest font-medium">Recursos</th>
                         <th className="px-4 py-3 text-center border-l border-gray-200 relative">% Físico<ResizeHandle colKey="realPct" /></th>
                         <th className="px-4 py-3 text-center relative">% Financeiro<ResizeHandle colKey="finPct" /></th>

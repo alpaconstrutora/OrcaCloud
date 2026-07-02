@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Repeat } from 'lucide-react';
 import { OutlineNodeType } from '../../utils/scheduleOutline';
 import { TaskNature } from '../../types';
 import { TASK_NATURE_LIST, TASK_NATURE_META } from '../../utils/taskNature';
+import { RecurrenceRule } from '../../utils/recurrence';
 
 const TYPE_LABEL: Record<OutlineNodeType, string> = {
     group: 'Grupo', phase: 'Etapa', subphase: 'Subetapa', activity: 'Atividade', item: 'Item',
@@ -15,21 +16,33 @@ interface OutlineNodeModalProps {
     /** Mostra o seletor de Natureza (apenas folhas: item/activity). */
     showNature?: boolean;
     initialNature?: TaskNature;
+    /** Mostra a opção de recorrência (só faz sentido ao criar uma Atividade). */
+    showRecurrence?: boolean;
     /** Sobrescreve o título (ex.: "Adicionar Marco"). */
     titleOverride?: string;
     onCancel: () => void;
-    onSubmit: (name: string, nature?: TaskNature) => void;
+    onSubmit: (name: string, nature?: TaskNature, recurrence?: RecurrenceRule) => void;
 }
 
 export const OutlineNodeModal: React.FC<OutlineNodeModalProps> = ({
-    mode, nodeType, initialName, showNature, initialNature, titleOverride, onCancel, onSubmit,
+    mode, nodeType, initialName, showNature, initialNature, showRecurrence, titleOverride, onCancel, onSubmit,
 }) => {
     const [name, setName] = useState(initialName);
     const [nature, setNature] = useState<TaskNature | undefined>(initialNature);
+    const [recurring, setRecurring] = useState(false);
+    const [frequency, setFrequency] = useState<RecurrenceRule['frequency']>('WEEKLY');
+    const [interval, setInterval] = useState(1);
+    const [count, setCount] = useState(4);
     useEffect(() => { setName(initialName); setNature(initialNature); }, [initialName, initialNature]);
 
     const title = titleOverride ?? (mode === 'create' ? `Adicionar ${TYPE_LABEL[nodeType]}` : `Renomear ${TYPE_LABEL[nodeType]}`);
-    const submit = () => { if (name.trim()) onSubmit(name.trim(), showNature ? nature : undefined); };
+    const submit = () => {
+        if (!name.trim()) return;
+        const rule: RecurrenceRule | undefined = (showRecurrence && recurring)
+            ? { frequency, interval, count }
+            : undefined;
+        onSubmit(name.trim(), showNature ? nature : undefined, rule);
+    };
 
     return (
         <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -80,6 +93,39 @@ export const OutlineNodeModal: React.FC<OutlineNodeModalProps> = ({
                                     );
                                 })}
                             </div>
+                        </div>
+                    )}
+
+                    {showRecurrence && (
+                        <div className="space-y-2 pt-1 border-t border-gray-100">
+                            <label className="flex items-center gap-2 pt-3 cursor-pointer">
+                                <input type="checkbox" checked={recurring} onChange={e => setRecurring(e.target.checked)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-400" />
+                                <span className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                                    <Repeat className="w-3.5 h-3.5" /> Repetir esta atividade
+                                </span>
+                            </label>
+                            {recurring && (
+                                <div className="grid grid-cols-3 gap-2 pl-6">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase">A cada</label>
+                                        <div className="flex items-center gap-1">
+                                            <input type="number" min={1} value={interval} onChange={e => setInterval(Math.max(1, parseInt(e.target.value, 10) || 1))} className="w-12 px-2 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-200" />
+                                            <select value={frequency} onChange={e => setFrequency(e.target.value as RecurrenceRule['frequency'])} className="flex-1 px-1.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-200 bg-white">
+                                                <option value="DAILY">dia(s)</option>
+                                                <option value="WEEKLY">semana(s)</option>
+                                                <option value="MONTHLY">mês(es)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase">Nº de ocorrências</label>
+                                        <input type="number" min={1} max={365} value={count} onChange={e => setCount(Math.max(1, Math.min(365, parseInt(e.target.value, 10) || 1)))} className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-200" />
+                                    </div>
+                                    <p className="col-span-3 text-[10px] text-gray-400 leading-tight">
+                                        Cria {count} tarefas independentes (1 dia cada), a partir de hoje — cada uma pode ser editada ou removida individualmente depois.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

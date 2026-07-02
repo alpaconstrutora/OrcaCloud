@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, Clock, Eye } from 'lucide-react';
+import { X, Clock, Eye, CalendarOff, Plus, Trash2, Download } from 'lucide-react';
 import { ProjectSchedule, ReplanMode } from '../../types';
+import { getBrazilianHolidays } from '../../utils/brazilianHolidays';
 // ProjectSchedule is used for the workSchedule type helper below
 
 interface ConfigModalProps {
@@ -31,7 +32,26 @@ function totalWeekHours(workDays: number[], hoursPerDay: number, dayHours?: Reco
 
 export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, schedule, onUpdate, showGanttFloat = true, onToggleGanttFloat }) => {
     const [activeTab, setActiveTab] = React.useState<'geral' | 'exibicao'>('geral');
+    const [newHoliday, setNewHoliday] = React.useState('');
+    const [importYear, setImportYear] = React.useState(new Date().getFullYear());
     if (!isOpen) return null;
+
+    const holidays = schedule.holidays ?? [];
+
+    const addHoliday = (date: string) => {
+        if (!date || holidays.includes(date)) return;
+        onUpdate({ holidays: [...holidays, date].sort() });
+    };
+
+    const removeHoliday = (date: string) => {
+        onUpdate({ holidays: holidays.filter(h => h !== date) });
+    };
+
+    const importBrazilianHolidays = (year: number) => {
+        const merged = new Set(holidays);
+        getBrazilianHolidays(year).forEach(h => merged.add(h.date));
+        onUpdate({ holidays: Array.from(merged).sort() });
+    };
 
     const workDays = schedule.workSchedule?.workDays ?? DEFAULT_WORK_DAYS;
     const hoursPerDay = schedule.workSchedule?.hoursPerDay ?? DEFAULT_HOURS_PER_DAY;
@@ -219,6 +239,66 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                                 )}
                             </div>
                         </div>
+                    </div>
+
+                    <div className="h-px bg-gray-100" />
+
+                    {/* ── Feriados / Exceções de Calendário ── */}
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <CalendarOff className="w-4 h-4 text-blue-500" />
+                                <span className="text-sm font-black text-gray-700 uppercase tracking-wide">Feriados</span>
+                            </div>
+                            <span className="text-xs font-bold text-gray-400">{holidays.length} data{holidays.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <p className="text-xs text-gray-400 -mt-2">Datas tratadas como não úteis pelo cronograma (CPM, folga, nivelamento)</p>
+
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="date"
+                                value={newHoliday}
+                                onChange={(e) => setNewHoliday(e.target.value)}
+                                className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-400"
+                            />
+                            <button
+                                onClick={() => { addHoliday(newHoliday); setNewHoliday(''); }}
+                                disabled={!newHoliday}
+                                className="p-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                title="Adicionar feriado"
+                            >
+                                <Plus className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="number"
+                                value={importYear}
+                                onChange={(e) => setImportYear(Number(e.target.value))}
+                                className="w-24 text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-400"
+                            />
+                            <button
+                                onClick={() => importBrazilianHolidays(importYear)}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all"
+                            >
+                                <Download className="w-3.5 h-3.5" />
+                                Importar feriados nacionais BR do ano
+                            </button>
+                        </div>
+
+                        {holidays.length > 0 && (
+                            <div className="max-h-40 overflow-y-auto space-y-1 border border-gray-100 rounded-lg p-1.5">
+                                {holidays.map(h => (
+                                    <div key={h} className="flex items-center justify-between px-2 py-1 rounded-md hover:bg-gray-50 text-xs">
+                                        <span className="font-bold text-gray-600">{h.split('-').reverse().join('/')}</span>
+                                        <button onClick={() => removeHoliday(h)} className="text-gray-300 hover:text-red-500 transition-colors">
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className="h-px bg-gray-100" />

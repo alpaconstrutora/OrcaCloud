@@ -42,6 +42,7 @@ interface ScheduleGanttProps {
     handleUpdatePredecessorField: (itemId: string, field: 'uid' | 'type' | 'lag', value: any) => void;
     handleUpdateCrewField: (id: string, field: string, value: any) => void;
     handleUpdateItemSchedule: (itemId: string, field: 'duration' | 'startDate' | 'endDate', value: string | number) => void;
+    onToggleSplit?: (itemId: string, split: boolean, gapDays?: number) => void;
     handleGanttBarMouseDown: (e: React.MouseEvent, id: string, date: string) => void;
     dragGhostOffset: number;
     crewPopoverItem: string | null;
@@ -93,6 +94,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     handleUpdatePredecessorField,
     handleUpdateCrewField,
     handleUpdateItemSchedule,
+    onToggleSplit,
     handleGanttBarMouseDown,
     dragGhostOffset,
     crewPopoverItem,
@@ -609,9 +611,35 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         {itemSchedule?.startDate && (itemSchedule?.duration !== undefined) ? (() => {
                             const itemStart = new Date(itemSchedule.startDate).getTime();
                             const startOffset = Math.max(0, (itemStart - minDate.getTime()) / (1000 * 60 * 60 * 24));
-                            const width = Math.max(pxPerDay / 2, (itemSchedule.duration || 0) * pxPerDay);
+                            // Tarefa dividida (split): a barra ocupa a janela real início→fim (com as pausas);
+                            // caso contrário, mantém a largura = duração (trabalho), como sempre.
+                            const isSplit = !!(itemSchedule.segments && itemSchedule.segments.length > 0);
+                            const spanDays = isSplit && itemSchedule.endDate
+                                ? Math.max(1, (new Date(itemSchedule.endDate).getTime() - itemStart) / (1000 * 60 * 60 * 24))
+                                : (itemSchedule.duration || 0);
+                            const width = Math.max(pxPerDay / 2, spanDays * pxPerDay);
                             const left = startOffset * pxPerDay;
                             const baseColor = node.color || '#3b82f6';
+                            // Gaps (pausas) a sobrepor na barra dividida, em px relativos ao início da barra.
+                            const splitGaps: Array<{ leftPx: number; widthPx: number }> = [];
+                            if (isSplit) {
+                                const segDates = SchedulingEngine.resolveSegmentDates(
+                                    itemSchedule,
+                                    schedule.useWorkingDays ?? true,
+                                    schedule.workSchedule?.workDays ?? [1, 2, 3, 4, 5],
+                                    schedule.holidays ?? []
+                                ) as Array<{ start: string; end: string }>;
+                                for (let i = 0; i < segDates.length - 1; i++) {
+                                    const gapStart = new Date(segDates[i].end).getTime();
+                                    const gapEnd = new Date(segDates[i + 1].start).getTime();
+                                    if (gapEnd > gapStart) {
+                                        splitGaps.push({
+                                            leftPx: (gapStart - itemStart) / (1000 * 60 * 60 * 24) * pxPerDay,
+                                            widthPx: (gapEnd - gapStart) / (1000 * 60 * 60 * 24) * pxPerDay,
+                                        });
+                                    }
+                                }
+                            }
                             const progress = itemSchedule?.manualRealPct !== undefined
                                 ? itemSchedule.manualRealPct
                                 : (node.total > 0 ? (node.realizedPhysicalTotal / node.total * 100) : 0);
@@ -686,6 +714,16 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                             style={{ width: `${Math.min(100, progress)}%`, backgroundColor: baseColor }}
                                         />
 
+                                        {/* Split gaps (pausas) — recortes brancos hachurados sobre a janela da tarefa dividida */}
+                                        {splitGaps.map((gap, gi) => (
+                                            <div
+                                                key={`gap-${gi}`}
+                                                className="absolute inset-y-0 bg-white z-[6] border-x border-dashed border-gray-300"
+                                                style={{ left: `${gap.leftPx}px`, width: `${gap.widthPx}px`, backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, #e5e7eb 3px, #e5e7eb 4px)' }}
+                                                title="Pausa (tarefa dividida)"
+                                            />
+                                        ))}
+
                                         {/* Progress Text overlay */}
                                         {width > 40 && (
                                             <div
@@ -708,7 +746,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         )}
 
                                         <div className="opacity-0 group-hover/bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none">
-                                            {fmtLocalDate(itemSchedule.startDate)} - {itemSchedule.endDate ? fmtLocalDate(itemSchedule.endDate) : ''} ({itemSchedule.duration}d)
+                                            {fmtLocalDate(itemSchedule.startDate)} - {itemSchedule.endDate ? fmtLocalDate(itemSchedule.endDate) : ''} ({itemSchedule.duration}d{isSplit ? ' de trabalho, dividida' : ''})
                                             {itemSchedule.totalFloat ? ` | Folga: ${itemSchedule.totalFloat}d` : ''}
                                         </div>
                                     </div>
@@ -989,6 +1027,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         handleUpdateRealPct={handleUpdateRealPct}
                         handleUpdateCrewField={handleUpdateCrewField}
                         onEditPredecessors={() => { setSelectedTaskId(null); setPredecessorModalTask(sn.item.id); }}
+                        onToggleSplit={onToggleSplit}
                         measurement={measurementRollup?.[sn.item.id]}
                     />
                 );

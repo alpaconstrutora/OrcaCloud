@@ -1,4 +1,17 @@
-import { DependencyType, ItemScheduleDetails, ConstraintType, Baseline, ReplanMode, ResourceRole, ResourceWorker, ResourceTeam, ResourceAllocation, LevelingResult, LevelingIssue, CompositionComponent } from '../types';
+import { DependencyType, ItemScheduleDetails, ConstraintType, Baseline, ReplanMode, ResourceRole, ResourceWorker, ResourceTeam, ResourceAllocation, ResourceMaterial, ScheduleSegment, LevelingResult, LevelingIssue, CompositionComponent } from '../types';
+
+/**
+ * Duração efetiva de uma tarefa para cálculo de datas (envelope). Quando a tarefa está
+ * dividida (segments), o intervalo início→fim inclui os gaps entre os trechos de trabalho;
+ * caso contrário, é apenas `duration` (dias úteis de trabalho). `duration` NUNCA muda — ele
+ * segue representando o trabalho (custo/HH); só a janela no tempo cresce com as pausas.
+ */
+export function effectiveSpan(task: Pick<ItemScheduleDetails, 'duration' | 'segments'>): number {
+    if (task.segments && task.segments.length > 0) {
+        return task.segments.reduce((sum, s) => sum + (s.workDays || 0) + (s.gapAfter || 0), 0);
+    }
+    return task.duration || 0;
+}
 
 /**
  * ═══════════════════════════════════════════════════════════════════
@@ -231,10 +244,10 @@ class CPMEngine {
                             candidate = calendar.addWorkingDays(predES, pred.lag, useWorkingDays);
                             break;
                         case DependencyType.FF:
-                            candidate = calendar.addWorkingDays(predEF, pred.lag - (task.duration || 0), useWorkingDays);
+                            candidate = calendar.addWorkingDays(predEF, pred.lag - effectiveSpan(task), useWorkingDays);
                             break;
                         case DependencyType.SF:
-                            candidate = calendar.addWorkingDays(predES, pred.lag - (task.duration || 0), useWorkingDays);
+                            candidate = calendar.addWorkingDays(predES, pred.lag - effectiveSpan(task), useWorkingDays);
                             break;
                         default:
                             candidate = calendar.addWorkingDays(predEF, pred.lag, useWorkingDays);
@@ -261,7 +274,7 @@ class CPMEngine {
                         if (earlyStart < cDate) earlyStart = cDate;
                         break;
                     case ConstraintType.FNET: // Finish No Earlier Than
-                        const minES = calendar.addWorkingDays(cDate, -(task.duration || 0), useWorkingDays);
+                        const minES = calendar.addWorkingDays(cDate, -effectiveSpan(task), useWorkingDays);
                         if (earlyStart < minES) earlyStart = minES;
                         break;
                 }
@@ -272,7 +285,7 @@ class CPMEngine {
             task.earlyStart = fmt(earlyStart);
             task.startDate = task.earlyStart;
 
-            const earlyFinish = calendar.addWorkingDays(earlyStart, task.duration || 0, useWorkingDays);
+            const earlyFinish = calendar.addWorkingDays(earlyStart, effectiveSpan(task), useWorkingDays);
             task.earlyFinish = fmt(earlyFinish);
             task.endDate = task.earlyFinish;
         }
@@ -339,7 +352,7 @@ class CPMEngine {
                             break;
                         case DependencyType.SS:
                             // LF(A) ≤ LS(B) - lag + duration(A)
-                            candidate = calendar.addWorkingDays(succLS, -succ.lag + (task.duration || 0), useWorkingDays);
+                            candidate = calendar.addWorkingDays(succLS, -succ.lag + effectiveSpan(task), useWorkingDays);
                             break;
                         case DependencyType.FF:
                             // LF(A) ≤ LF(B) - lag
@@ -347,7 +360,7 @@ class CPMEngine {
                             break;
                         case DependencyType.SF:
                             // LF(A) ≤ LF(B) - lag + duration(A)
-                            candidate = calendar.addWorkingDays(succLF, -succ.lag + (task.duration || 0), useWorkingDays);
+                            candidate = calendar.addWorkingDays(succLF, -succ.lag + effectiveSpan(task), useWorkingDays);
                             break;
                         default:
                             candidate = calendar.addWorkingDays(succLS, -succ.lag, useWorkingDays);
@@ -375,7 +388,7 @@ class CPMEngine {
             }
 
             task.lateFinish = fmt(lateFinish);
-            const lateStart = calendar.addWorkingDays(lateFinish, -(task.duration || 0), useWorkingDays);
+            const lateStart = calendar.addWorkingDays(lateFinish, -effectiveSpan(task), useWorkingDays);
             task.lateStart = fmt(lateStart);
 
             // Calculate Total Float: TF = LS - ES (in working days)
@@ -415,6 +428,15 @@ class BaselineEngine {
                     new Date(t.startDate!), currentEnd, useWorkingDays
                 ));
                 t.spi = baselineDur / currentDur;
+            }
+
+            // Nota: variação de custo (plannedValue) NÃO é calculada aqui — o engine não tem
+            // acesso ao orçamento (quantidade×preço×BDI) que resolve o valor efetivo quando
+            // o item não tem plannedValue próprio. Ver makeItemHierNode em FinancialSchedule.tsx,
+            // onde pValue já é resolvido e comparado contra a baseline.
+            const baselineData = baseline.itemData?.[t.id];
+            if (baselineData) {
+                t.workVariance = (t.totalManHours ?? 0) - baselineData.totalManHours;
             }
         });
     }
@@ -802,11 +824,13 @@ export class SchedulingEngine {
         itemQuantities?: Map<string, number>,
         workers: ResourceWorker[] = [],
         teams: ResourceTeam[] = [],
-        workDays: number[] = [1, 2, 3, 4, 5]
+        workDays: number[] = [1, 2, 3, 4, 5],
+        holidays: string[] = [],
+        materials: ResourceMaterial[] = []
     ): ItemScheduleDetails[] {
         if (!tasks.length) return [];
 
-        const calendar = new CalendarEngine([], workDays);
+        const calendar = new CalendarEngine(holidays, workDays);
 
         // 1. Initialize task map
         const taskMap = new Map<string, ItemScheduleDetails>(
@@ -848,7 +872,7 @@ export class SchedulingEngine {
 
         // 7. Labor cost calculation
         const taskList = Array.from(taskMap.values());
-        this.calculateLaborCosts(taskList, roles, workers, teams);
+        this.calculateLaborCosts(taskList, roles, workers, teams, materials);
 
         // 8. Baseline comparison
         if (activeBaseline) {
@@ -887,9 +911,24 @@ export class SchedulingEngine {
     }
 
     /**
-     * Calculate labor costs and man-hours for each task from resource allocations.
+     * Calculate resource costs and man-hours for each task from resource allocations.
+     * Inclui mão de obra (ROLE/WORKER/TEAM, com hora extra e custo por uso) e recursos
+     * não-humanos (MATERIAL/COST). Mantém o nome `totalLaborCost` por compatibilidade —
+     * o campo já era usado como fallback de "valor planejado" em toda a UI (ver pValue
+     * em makeItemHierNode), então segue acumulando o custo total de recursos da tarefa,
+     * não só mão de obra.
      */
-    private static calculateLaborCosts(tasks: ItemScheduleDetails[], roles: ResourceRole[], workers: ResourceWorker[] = [], teams: ResourceTeam[] = []) {
+    private static calculateLaborCosts(tasks: ItemScheduleDetails[], roles: ResourceRole[], workers: ResourceWorker[] = [], teams: ResourceTeam[] = [], materials: ResourceMaterial[] = []) {
+        const roleLaborCost = (role: ResourceRole, alloc: ResourceAllocation, hoursPerDay: number, duration: number): number => {
+            let cost = alloc.quantity * role.costPerHour * hoursPerDay * duration;
+            if (alloc.overtimeHours) {
+                const otRate = role.overtimeCostPerHour ?? role.costPerHour * 1.5;
+                cost += alloc.quantity * otRate * alloc.overtimeHours * duration;
+            }
+            if (role.costPerUse) cost += alloc.quantity * role.costPerUse;
+            return cost;
+        };
+
         for (const task of tasks) {
             if (task.allocations && task.allocations.length > 0) {
                 let laborCost = 0;
@@ -902,7 +941,7 @@ export class SchedulingEngine {
                         const role = roles.find(r => r.id === alloc.resourceId);
                         if (role) {
                             manHours += alloc.quantity * hoursPerDay * duration;
-                            laborCost += alloc.quantity * role.costPerHour * hoursPerDay * duration;
+                            laborCost += roleLaborCost(role, alloc, hoursPerDay, duration);
                         }
                     } else if (alloc.resourceType === 'WORKER') {
                         const worker = workers.find(w => w.id === alloc.resourceId);
@@ -910,7 +949,7 @@ export class SchedulingEngine {
                             const role = roles.find(r => r.id === worker.roleId);
                             if (role) {
                                 manHours += alloc.quantity * hoursPerDay * duration;
-                                laborCost += alloc.quantity * role.costPerHour * hoursPerDay * duration;
+                                laborCost += roleLaborCost(role, alloc, hoursPerDay, duration);
                             }
                         }
                     } else if (alloc.resourceType === 'TEAM') {
@@ -922,11 +961,18 @@ export class SchedulingEngine {
                                     const role = roles.find(r => r.id === worker.roleId);
                                     if (role) {
                                         manHours += alloc.quantity * hoursPerDay * duration; // alloc.quantity acts as a multiplier for the team
-                                        laborCost += alloc.quantity * role.costPerHour * hoursPerDay * duration;
+                                        laborCost += roleLaborCost(role, alloc, hoursPerDay, duration);
                                     }
                                 }
                             });
                         }
+                    } else if (alloc.resourceType === 'MATERIAL') {
+                        // Consumo de material: custo único (não multiplica por duração) e não conta HH.
+                        const material = materials.find(m => m.id === alloc.resourceId);
+                        if (material) laborCost += alloc.quantity * material.costPerUnit;
+                    } else if (alloc.resourceType === 'COST') {
+                        // Custo fixo avulso por tarefa (ex: mobilização, taxa). Não conta HH.
+                        laborCost += alloc.fixedCost ?? 0;
                     }
                 }
                 task.totalLaborCost = laborCost;
@@ -940,16 +986,29 @@ export class SchedulingEngine {
     }
 
     /**
-     * Generates a daily resource usage map (Histogram data)
+     * Generates a daily resource usage map (Histogram data).
+     * Respeita o calendário individual do recurso (ResourceRole/ResourceWorker.workDays/holidays)
+     * quando definido — herda o calendário do projeto quando ausente. O gate por `useWorkingDays`/
+     * calendário do projeto continua valendo primeiro (modo "sem calendário" ignora tudo).
      */
     static calculateResourceHistogram(
         tasks: ItemScheduleDetails[],
         useWorkingDays: boolean,
         workers: ResourceWorker[] = [],
-        teams: ResourceTeam[] = []
+        teams: ResourceTeam[] = [],
+        holidays: string[] = [],
+        roles: ResourceRole[] = []
     ): Record<string, Record<string, { total: number, taskIds: string[] }>> {
-        const calendar = new CalendarEngine();
+        const calendar = new CalendarEngine(holidays);
         const histogram: Record<string, Record<string, { total: number, taskIds: string[] }>> = {};
+
+        // Disponibilidade do recurso no dia: workDays/holidays próprios têm prioridade;
+        // ausentes = herda o calendário do projeto (já garantido pelo gate externo).
+        const isResourceAvailable = (date: Date, ownWorkDays?: number[], ownHolidays?: string[]): boolean => {
+            if (ownWorkDays && !ownWorkDays.includes(date.getUTCDay())) return false;
+            if (ownHolidays && ownHolidays.includes(date.toISOString().split('T')[0])) return false;
+            return true;
+        };
 
         tasks.forEach(task => {
             if (!task.startDate || !task.endDate || !task.allocations || task.allocations.length === 0) return;
@@ -965,7 +1024,8 @@ export class SchedulingEngine {
                     if (!histogram[dateStr]) histogram[dateStr] = {};
 
                     task.allocations.forEach(alloc => {
-                        const processResource = (resId: string, quantity: number) => {
+                        const processResource = (resId: string, quantity: number, ownWorkDays?: number[], ownHolidays?: string[]) => {
+                            if (useWorkingDays && !isResourceAvailable(curr, ownWorkDays, ownHolidays)) return;
                             if (!histogram[dateStr][resId]) {
                                 histogram[dateStr][resId] = { total: 0, taskIds: [] };
                             }
@@ -976,24 +1036,31 @@ export class SchedulingEngine {
                         };
 
                         if (alloc.resourceType === 'ROLE' || !alloc.resourceType) {
-                            processResource(alloc.resourceId, alloc.quantity);
+                            const role = roles.find(r => r.id === alloc.resourceId);
+                            processResource(alloc.resourceId, alloc.quantity, role?.workDays, role?.holidays);
                         } else if (alloc.resourceType === 'WORKER') {
-                            processResource(alloc.resourceId, alloc.quantity);
-                            // Propagate to Role
                             const worker = workers.find(w => w.id === alloc.resourceId);
+                            const role = worker ? roles.find(r => r.id === worker.roleId) : undefined;
+                            const workDays = worker?.workDays ?? role?.workDays;
+                            const workerHolidays = [...(role?.holidays || []), ...(worker?.holidays || [])];
+                            processResource(alloc.resourceId, alloc.quantity, workDays, workerHolidays.length ? workerHolidays : undefined);
+                            // Propagate to Role
                             if (worker) {
-                                processResource(worker.roleId, alloc.quantity);
+                                processResource(worker.roleId, alloc.quantity, role?.workDays, role?.holidays);
                             }
                         } else if (alloc.resourceType === 'TEAM') {
                             processResource(alloc.resourceId, alloc.quantity);
                             const team = teams.find(t => t.id === alloc.resourceId);
                             if (team) {
                                 team.memberIds.forEach(memberId => {
-                                    processResource(memberId, alloc.quantity);
-                                    // Propagate to Role
                                     const worker = workers.find(w => w.id === memberId);
+                                    const role = worker ? roles.find(r => r.id === worker.roleId) : undefined;
+                                    const workDays = worker?.workDays ?? role?.workDays;
+                                    const memberHolidays = [...(role?.holidays || []), ...(worker?.holidays || [])];
+                                    processResource(memberId, alloc.quantity, workDays, memberHolidays.length ? memberHolidays : undefined);
+                                    // Propagate to Role
                                     if (worker) {
-                                        processResource(worker.roleId, alloc.quantity);
+                                        processResource(worker.roleId, alloc.quantity, role?.workDays, role?.holidays);
                                     }
                                 });
                             }
@@ -1018,7 +1085,8 @@ export class SchedulingEngine {
         roles: ResourceRole[],
         workers: ResourceWorker[],
         teams: ResourceTeam[] = [],
-        itemQuantities?: Map<string, number>
+        itemQuantities?: Map<string, number>,
+        holidays: string[] = []
     ): LevelingResult {
         const limits = new Map<string, number>();
         roles.forEach(r => {
@@ -1042,10 +1110,10 @@ export class SchedulingEngine {
             iterations++;
 
             // 1. Recalculate schedule
-            leveledTasks = this.calculate(leveledTasks, projectStartDate, undefined, useWorkingDays, ReplanMode.AFFECTED_TASK, roles, itemQuantities, workers, teams);
+            leveledTasks = this.calculate(leveledTasks, projectStartDate, undefined, useWorkingDays, ReplanMode.AFFECTED_TASK, roles, itemQuantities, workers, teams, undefined, holidays);
 
             // 2. Check for over-allocations
-            const histogram = this.calculateResourceHistogram(leveledTasks, useWorkingDays, workers, teams);
+            const histogram = this.calculateResourceHistogram(leveledTasks, useWorkingDays, workers, teams, holidays, roles);
             const dates = Object.keys(histogram).sort();
 
             for (const dateStr of dates) {
@@ -1086,7 +1154,7 @@ export class SchedulingEngine {
 
                             otherTasks.sort((a, b) => (b.totalFloat || 0) - (a.totalFloat || 0));
                             const taskToPush = otherTasks[0];
-                            const calendar = new CalendarEngine();
+                            const calendar = new CalendarEngine(holidays);
                             const newStart = calendar.addWorkingDays(new Date(taskToPush.startDate!), 1, useWorkingDays);
                             taskToPush.constraintType = ConstraintType.SNET;
                             taskToPush.constraintDate = newStart.toISOString().split('T')[0];
@@ -1101,7 +1169,7 @@ export class SchedulingEngine {
                             });
 
                             const taskToPush = overlappingTasks[0];
-                            const calendar = new CalendarEngine();
+                            const calendar = new CalendarEngine(holidays);
                             const newStart = calendar.addWorkingDays(new Date(taskToPush.startDate!), 1, useWorkingDays);
                             taskToPush.constraintType = ConstraintType.SNET;
                             taskToPush.constraintDate = newStart.toISOString().split('T')[0];
@@ -1162,6 +1230,41 @@ export class SchedulingEngine {
     static isWorkingDay(date: Date): boolean {
         const calendar = new CalendarEngine();
         return calendar.isWorkingDay(date);
+    }
+
+    /** Ordem topológica dos IDs (Kahn's). Usado pelo Diagrama de Rede para layout por nível. Lança em caso de ciclo. */
+    static getTopologicalOrder(tasks: ItemScheduleDetails[]): string[] {
+        return GraphEngine.topologicalSort(tasks);
+    }
+
+    /** Duração efetiva (envelope início→fim em dias úteis): duration, ou soma trabalho+pausas se dividida. */
+    static getEffectiveSpan(task: Pick<ItemScheduleDetails, 'duration' | 'segments'>): number {
+        return effectiveSpan(task);
+    }
+
+    /**
+     * Datas absolutas de cada trecho de trabalho de uma tarefa dividida, a partir do seu
+     * início. Usado pelo Gantt para desenhar sub-barras com os gaps entre elas. Retorna
+     * [] se a tarefa não estiver dividida ou não tiver data de início.
+     */
+    static resolveSegmentDates(
+        task: ItemScheduleDetails,
+        useWorkingDays: boolean = true,
+        workDays: number[] = [1, 2, 3, 4, 5],
+        holidays: string[] = []
+    ): Array<{ start: string; end: string }> {
+        if (!task.segments || task.segments.length === 0 || !task.startDate) return [];
+        const calendar = new CalendarEngine(holidays, workDays);
+        const fmt = (d: Date) => d.toISOString().split('T')[0];
+        const result: Array<{ start: string; end: string }> = [];
+        let cursor = new Date(task.startDate);
+        for (const seg of task.segments) {
+            const segStart = new Date(cursor);
+            const segEnd = calendar.addWorkingDays(segStart, seg.workDays || 0, useWorkingDays);
+            result.push({ start: fmt(segStart), end: fmt(segEnd) });
+            cursor = calendar.addWorkingDays(segEnd, seg.gapAfter || 0, useWorkingDays);
+        }
+        return result;
     }
 
     static hasCircularDependency(tasks: ItemScheduleDetails[]): boolean {

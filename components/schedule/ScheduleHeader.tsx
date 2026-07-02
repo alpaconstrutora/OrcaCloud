@@ -17,6 +17,8 @@ import {
     MoreHorizontal,
     Settings,
     FlaskConical,
+    FileSpreadsheet,
+    FileText,
 } from 'lucide-react';
 import Button from '../ui/Button';
 import { ProjectSchedule, ProjectSettings, ItemScheduleDetails } from '../../types';
@@ -29,8 +31,8 @@ interface ScheduleHeaderProps {
     setIsProjectSelectorOpen: (open: boolean) => void;
     projects: any[];
     onLoadProject: (id: string, view: string) => void;
-    viewMode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap';
-    setViewMode: (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap') => void;
+    viewMode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap' | 'network';
+    setViewMode: (mode: 'table' | 'gantt' | 's-curve' | 'resources' | 'risks' | 'constraints' | 'weekly' | 'scenarios' | 'command' | 'supply' | 'eap' | 'network') => void;
     timeScale: 'day' | 'week' | 'month' | 'year';
     setTimeScale: (scale: 'day' | 'week' | 'month' | 'year') => void;
     schedule: ProjectSchedule;
@@ -39,6 +41,8 @@ interface ScheduleHeaderProps {
     handleToggleSimulation: () => void;
     handleExportPDF: () => void;
     isExportingPDF: boolean;
+    handleExportExcel: () => void;
+    handleExportCSV: () => void;
     setIsConfigModalOpen: (open: boolean) => void;
     handleLevelResources: () => void;
     handleRecalculate: (currentSchedules?: ItemScheduleDetails[], newStartDate?: string) => void;
@@ -78,6 +82,8 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     handleToggleSimulation,
     handleExportPDF,
     isExportingPDF,
+    handleExportExcel,
+    handleExportCSV,
     setIsConfigModalOpen,
     handleLevelResources,
     handleRecalculate,
@@ -169,6 +175,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     {([
                         { key: 'table', label: 'Tabela' },
                         { key: 'gantt', label: 'Gantt' },
+                        { key: 'network', label: 'Rede' },
                         { key: 's-curve', label: 'Curva S' },
                         { key: 'resources', label: 'Recursos' },
                         { key: 'risks', label: 'Riscos' },
@@ -294,10 +301,18 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                     {isSimulationMode && <span className="ml-auto text-[9px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-bold">ativo</span>}
                                 </Button>
 
-                                {/* Exportar PDF */}
+                                {/* Exportar */}
                                 <Button variant="ghost" onClick={() => { handleExportPDF(); closeOverflow(); }} disabled={isExportingPDF} className="w-full justify-start rounded-none px-4 py-2 text-gray-600 hover:bg-gray-50">
                                     {isExportingPDF ? <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-blue-500" /> : <FileDown className="w-3.5 h-3.5 shrink-0" />}
                                     Exportar PDF
+                                </Button>
+                                <Button variant="ghost" onClick={() => { handleExportExcel(); closeOverflow(); }} className="w-full justify-start rounded-none px-4 py-2 text-gray-600 hover:bg-gray-50">
+                                    <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+                                    Exportar Excel
+                                </Button>
+                                <Button variant="ghost" onClick={() => { handleExportCSV(); closeOverflow(); }} className="w-full justify-start rounded-none px-4 py-2 text-gray-600 hover:bg-gray-50">
+                                    <FileText className="w-3.5 h-3.5 shrink-0" />
+                                    Exportar CSV
                                 </Button>
 
                                 <div className="h-px bg-gray-100 my-1 mx-3" />

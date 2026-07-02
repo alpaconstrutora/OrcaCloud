@@ -95,6 +95,12 @@ export interface Baseline {
     description?: string;
     createdAt: string;
     itemDates: Record<string, { startDate: string; endDate: string }>;
+    /**
+     * Custo/esforço no momento do snapshot, por item. Opcional: baselines criadas antes
+     * desta feature só têm `itemDates` — BaselineEngine.compare trata a ausência calculando
+     * variação 0 para esses itens (retrocompatível, sem migração de dados).
+     */
+    itemData?: Record<string, { plannedValue: number; totalManHours: number; duration: number }>;
 }
 
 export interface ScheduleHistoryEntry {
@@ -113,6 +119,17 @@ export interface Predecessor {
     id: string;
     type: DependencyType;
     lag: number;
+}
+
+/**
+ * Segmento de uma tarefa dividida (split). Cada segmento é um trecho contíguo de
+ * trabalho seguido de uma pausa. A "duração efetiva" da tarefa para fins de datas =
+ * soma de (workDays + gapAfter); `duration` continua sendo só o trabalho (custo/HH).
+ * Ver PLANO_MODULO_PLANEJAMENTO_GAPS.md #5b.
+ */
+export interface ScheduleSegment {
+    workDays: number;  // dias úteis de trabalho neste trecho
+    gapAfter: number;  // dias úteis de pausa após este trecho (0 no último)
 }
 
 export interface SchedulePeriod {
@@ -168,6 +185,7 @@ export interface ItemScheduleDetails {
     constraintDate?: string;
     slippage?: number;
     spi?: number;
+    workVariance?: number;      // totalManHours atual − totalManHours na baseline ativa
     allocations?: ResourceAllocation[];
     budgetedValue?: number;
     plannedValue?: number;
@@ -185,6 +203,7 @@ export interface ItemScheduleDetails {
     helperProd?: number;
     autoDuration?: boolean;
     inactive?: boolean;        // tarefa suspensa: ignorada pelo motor (CPM/duração/curva S)
+    segments?: ScheduleSegment[]; // tarefa dividida (split): trechos de trabalho + pausas
     location?: EapLocation;
 }
 

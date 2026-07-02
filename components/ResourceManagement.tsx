@@ -8,7 +8,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import { SchedulingEngine } from '../utils/schedulingEngine';
-import { ResourceRole, ResourceWorker, ResourceTeam, Organization, ItemScheduleDetails, ResourceAllocation, BudgetEntry } from '../types';
+import { ResourceRole, ResourceWorker, ResourceTeam, ResourceMaterial, Organization, ItemScheduleDetails, ResourceAllocation, BudgetEntry } from '../types';
 import Button from './ui/Button';
 
 // Local types for capacity histogram data
@@ -29,6 +29,36 @@ interface ChartDataEntry {
     name: string;
     [key: string]: string | number;
 }
+
+const WEEK_DAY_LABELS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+/**
+ * Calendário próprio (opcional) para Função/Trabalhador — quando ausente, o recurso herda
+ * o calendário do projeto. Usa checkboxes não-controlados (name="workDays") lidos via FormData.
+ */
+const ResourceCalendarField: React.FC<{ initialWorkDays?: number[] }> = ({ initialWorkDays }) => {
+    const [enabled, setEnabled] = useState(!!initialWorkDays);
+    const defaultDays = initialWorkDays ?? [1, 2, 3, 4, 5];
+
+    return (
+        <div className="space-y-2 border border-gray-100 rounded-xl p-3 bg-gray-50/50">
+            <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="hasCustomCalendar" checked={enabled} onChange={e => setEnabled(e.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-400" />
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Calendário próprio (diferente do projeto)</span>
+            </label>
+            {enabled && (
+                <div className="flex gap-1.5 pl-6">
+                    {WEEK_DAY_LABELS.map((label, day) => (
+                        <label key={day} className="flex flex-col items-center gap-1 cursor-pointer">
+                            <input type="checkbox" name="workDays" value={day} defaultChecked={defaultDays.includes(day)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-400" />
+                            <span className="text-[10px] font-bold text-gray-400">{label}</span>
+                        </label>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
 
 type AllocationStatus = 'CONFIRMED' | 'SUGGESTION' | 'GAP';
 type AllocationSource = 'COMPOSITION' | 'MANUAL';
@@ -64,14 +94,17 @@ interface ResourceManagementProps {
         roles: ResourceRole[];
         workers: ResourceWorker[];
         teams: ResourceTeam[];
+        materials?: ResourceMaterial[];
     };
     itemSchedules?: ItemScheduleDetails[];
     useWorkingDays?: boolean;
+    holidays?: string[];
     onUpdateResources: (
         resources: {
             roles: ResourceRole[];
             workers: ResourceWorker[];
             teams: ResourceTeam[];
+            materials?: ResourceMaterial[];
         },
         updatedItemSchedules?: ItemScheduleDetails[]
     ) => void;
@@ -84,9 +117,10 @@ interface ResourceManagementProps {
 }
 
 export const ResourceManagement: React.FC<ResourceManagementProps> = ({
-    resources = { roles: [], workers: [], teams: [] },
+    resources = { roles: [], workers: [], teams: [], materials: [] },
     itemSchedules = [],
     useWorkingDays = true,
+    holidays = [],
     budget = [],
     onUpdateResources,
     title = "Gestão de Mão de Obra",
@@ -94,7 +128,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
     organizations = [],
     localLabel = "Local"
 }) => {
-    const [activeTab, setActiveTab] = useState<'roles' | 'workers' | 'teams' | 'capacity' | 'allocation'>('roles');
+    const [activeTab, setActiveTab] = useState<'roles' | 'workers' | 'teams' | 'materials' | 'capacity' | 'allocation'>('roles');
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [capacityScale, setCapacityScale] = useState<'day' | 'week' | 'month'>('week');
@@ -109,7 +143,9 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
             itemSchedules,
             useWorkingDays ?? true,
             resources.workers,
-            resources.teams
+            resources.teams,
+            holidays,
+            resources.roles
         );
 
         const resourceLimits = new Map<string, number>();
@@ -183,7 +219,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
         });
 
         return Object.values(grouped).sort((a, b) => a.timestamp - b.timestamp);
-    }, [itemSchedules, useWorkingDays, resources, capacityScale, selectedResourceId]);
+    }, [itemSchedules, useWorkingDays, holidays, resources, capacityScale, selectedResourceId]);
 
     // Calcular nomes das séries para o gráfico (Top 10 + Outros)
     const chartSeries = useMemo(() => {
@@ -530,6 +566,12 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
     };
 
     // --- Save Handlers ---
+    /** undefined = herda o calendário do projeto; array = calendário próprio deste recurso. */
+    const getWorkDaysFromForm = (formData: FormData): number[] | undefined => {
+        if (!formData.get('hasCustomCalendar')) return undefined;
+        return formData.getAll('workDays').map(v => parseInt(v as string, 10));
+    };
+
     const handleSaveRole = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
@@ -538,6 +580,9 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
             description: formData.get('description') as string,
             costPerHour: parseFloat(formData.get('costPerHour') as string) || 0,
             costPerDay: parseFloat(formData.get('costPerDay') as string) || 0,
+            overtimeCostPerHour: formData.get('overtimeCostPerHour') ? parseFloat(formData.get('overtimeCostPerHour') as string) || undefined : undefined,
+            costPerUse: formData.get('costPerUse') ? parseFloat(formData.get('costPerUse') as string) || undefined : undefined,
+            workDays: getWorkDaysFromForm(formData),
             organizationId: formData.get('organizationId') as string || undefined,
         };
         if (editingId) {
@@ -556,6 +601,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
             roleId: formData.get('roleId') as string,
             email: formData.get('email') as string || undefined,
             phone: formData.get('phone') as string || undefined,
+            workDays: getWorkDaysFromForm(formData),
             organizationId: formData.get('organizationId') as string || undefined,
         };
         if (editingId) {
@@ -578,6 +624,31 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
         }
         setIsAdding(false); setEditingId(null);
     };
+
+    const handleSaveMaterial = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const data = {
+            name: formData.get('name') as string,
+            unit: formData.get('unit') as string,
+            costPerUnit: parseFloat(formData.get('costPerUnit') as string) || 0,
+            organizationId: formData.get('organizationId') as string || undefined,
+        };
+        const materials = resources.materials || [];
+        if (editingId) {
+            onUpdateResources({ ...resources, materials: materials.map(m => m.id === editingId ? { ...m, ...data } : m) });
+        } else {
+            onUpdateResources({ ...resources, materials: [...materials, { id: crypto.randomUUID(), ...data, source: localLabel }] });
+        }
+        setIsAdding(false); setEditingId(null);
+    };
+
+    const handleDeleteMaterial = (id: string) => {
+        if (!confirm('Excluir material?')) return;
+        onUpdateResources({ ...resources, materials: (resources.materials || []).filter(m => m.id !== id) });
+    };
+
+    const handleEditMaterial = (m: ResourceMaterial) => { setEditingId(m.id); setIsAdding(true); };
 
     const handleDeleteRole = (id: string) => {
         if (!confirm('Excluir função?')) return;
@@ -693,6 +764,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
     const editingRole = activeTab === 'roles' ? resources.roles.find(r => r.id === editingId) : null;
     const editingWorker = activeTab === 'workers' ? resources.workers.find(w => w.id === editingId) : null;
     const editingTeam = activeTab === 'teams' ? resources.teams.find(t => t.id === editingId) : null;
+    const editingMaterial = activeTab === 'materials' ? (resources.materials || []).find(m => m.id === editingId) : null;
 
     return (
         <div className="flex flex-col h-full bg-gray-50/50">
@@ -709,18 +781,18 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                 <Building2 className="w-4 h-4" /> Importar da Empresa
                             </button>
                         )}
-                        {activeTab !== 'capacity' && (
+                        {activeTab !== 'capacity' && activeTab !== 'allocation' && (
                             <Button onClick={() => { setIsAdding(true); setEditingId(null); }} className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm">
-                                <Plus className="w-4 h-4" /> Novo {activeTab === 'roles' ? 'Cargo' : activeTab === 'workers' ? 'Trabalhador' : 'Equipe'}
+                                <Plus className="w-4 h-4" /> Novo {activeTab === 'roles' ? 'Cargo' : activeTab === 'workers' ? 'Trabalhador' : activeTab === 'materials' ? 'Material' : 'Equipe'}
                             </Button>
                         )}
                     </div>
                 </div>
-                
+
                 <div className="flex gap-8">
-                    {['roles', 'workers', 'teams', 'capacity', 'allocation'].map(tab => (
-                        <button key={tab} onClick={() => { setActiveTab(tab as 'roles' | 'workers' | 'teams' | 'capacity' | 'allocation'); setIsAdding(false); }} className={`pb-4 text-sm font-bold transition-all border-b-2 ${activeTab === tab ? 'text-blue-600 border-blue-600' : 'text-gray-400 border-transparent hover:text-gray-600'}`}>
-                            {tab === 'roles' ? 'Funções' : tab === 'workers' ? 'Trabalhadores' : tab === 'teams' ? 'Equipes' : tab === 'capacity' ? 'Capacidade' : 'Alocação'}
+                    {['roles', 'workers', 'teams', 'materials', 'capacity', 'allocation'].map(tab => (
+                        <button key={tab} onClick={() => { setActiveTab(tab as 'roles' | 'workers' | 'teams' | 'materials' | 'capacity' | 'allocation'); setIsAdding(false); }} className={`pb-4 text-sm font-bold transition-all border-b-2 ${activeTab === tab ? 'text-blue-600 border-blue-600' : 'text-gray-400 border-transparent hover:text-gray-600'}`}>
+                            {tab === 'roles' ? 'Funções' : tab === 'workers' ? 'Trabalhadores' : tab === 'teams' ? 'Equipes' : tab === 'materials' ? 'Materiais' : tab === 'capacity' ? 'Capacidade' : 'Alocação'}
                         </button>
                     ))}
                 </div>
@@ -729,14 +801,30 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
             <div className="flex-1 overflow-y-auto p-6">
                 {isAdding && (
                     <div className="mb-6 bg-white p-6 rounded-3xl border shadow-sm">
-                        <form onSubmit={activeTab === 'roles' ? handleSaveRole : activeTab === 'workers' ? handleSaveWorker : handleSaveTeam} className="space-y-4">
-                            <input name="name" defaultValue={editingRole?.name || editingWorker?.name || editingTeam?.name || ''} placeholder="Nome" className="w-full p-3 border rounded-xl" required />
-                            {activeTab === 'roles' && <input name="costPerHour" type="number" defaultValue={editingRole?.costPerHour} placeholder="Custo por hora" className="w-full p-3 border rounded-xl" />}
+                        <form onSubmit={activeTab === 'roles' ? handleSaveRole : activeTab === 'workers' ? handleSaveWorker : activeTab === 'materials' ? handleSaveMaterial : handleSaveTeam} className="space-y-4">
+                            <input name="name" defaultValue={editingRole?.name || editingWorker?.name || editingTeam?.name || editingMaterial?.name || ''} placeholder="Nome" className="w-full p-3 border rounded-xl" required />
+                            {activeTab === 'roles' && (
+                                <>
+                                    <input name="costPerHour" type="number" step="0.01" defaultValue={editingRole?.costPerHour} placeholder="Custo por hora" className="w-full p-3 border rounded-xl" />
+                                    <input name="overtimeCostPerHour" type="number" step="0.01" defaultValue={editingRole?.overtimeCostPerHour} placeholder="Custo/hora extra (opcional — padrão 1,5x)" className="w-full p-3 border rounded-xl" />
+                                    <input name="costPerUse" type="number" step="0.01" defaultValue={editingRole?.costPerUse} placeholder="Custo por uso (ex: deslocamento, opcional)" className="w-full p-3 border rounded-xl" />
+                                    <ResourceCalendarField initialWorkDays={editingRole?.workDays} />
+                                </>
+                            )}
                             {activeTab === 'workers' && (
-                                <select name="roleId" defaultValue={editingWorker?.roleId} className="w-full p-3 border rounded-xl" required>
-                                    <option value="">Selecionar Função</option>
-                                    {resources.roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                                </select>
+                                <>
+                                    <select name="roleId" defaultValue={editingWorker?.roleId} className="w-full p-3 border rounded-xl" required>
+                                        <option value="">Selecionar Função</option>
+                                        {resources.roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                    </select>
+                                    <ResourceCalendarField initialWorkDays={editingWorker?.workDays} />
+                                </>
+                            )}
+                            {activeTab === 'materials' && (
+                                <>
+                                    <input name="unit" defaultValue={editingMaterial?.unit} placeholder="Unidade (ex: m³, kg, un)" className="w-full p-3 border rounded-xl" required />
+                                    <input name="costPerUnit" type="number" step="0.01" defaultValue={editingMaterial?.costPerUnit} placeholder="Custo por unidade" className="w-full p-3 border rounded-xl" required />
+                                </>
                             )}
                             <div className="flex justify-end gap-2">
                                 <button type="button" onClick={() => setIsAdding(false)} className="px-6 py-2">Cancelar</button>
@@ -818,6 +906,32 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                             <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-400 bg-white rounded-3xl border border-dashed">
                                 <Users className="w-12 h-12 mb-4 opacity-10" />
                                 <p className="text-sm font-bold">Nenhuma equipe criada.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'materials' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {(resources.materials || []).map(m => (
+                            <div key={m.id} className="bg-white p-5 rounded-2xl border hover:border-blue-300 transition-all flex justify-between items-start shadow-sm">
+                                <div>
+                                    <h4 className="font-bold">{m.name}</h4>
+                                    <p className="text-xs text-gray-500 font-medium">
+                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.costPerUnit)} / {m.unit}
+                                    </p>
+                                    <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase mt-2 inline-block">{m.source || 'Local'}</span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => handleEditMaterial(m)}><Edit2 className="w-4 h-4 text-gray-400" /></button>
+                                    <button onClick={() => handleDeleteMaterial(m.id)}><Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" /></button>
+                                </div>
+                            </div>
+                        ))}
+                        {(resources.materials || []).length === 0 && (
+                            <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-400 bg-white rounded-3xl border border-dashed">
+                                <Users className="w-12 h-12 mb-4 opacity-10" />
+                                <p className="text-sm font-bold">Nenhum material cadastrado.</p>
                             </div>
                         )}
                     </div>

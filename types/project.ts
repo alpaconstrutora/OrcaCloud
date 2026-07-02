@@ -2,7 +2,7 @@ import { WBSGroup, BudgetEntry } from "./budget";
 import { DiaryEntry } from "./diary";
 import { FinancialInfo } from "./financial";
 import { SchedulePeriod, ItemDistribution, ItemScheduleDetails, OutlineNode, Baseline, ScheduleHistoryEntry, ReplanMode } from "./schedule";
-import { ResourceRole, ResourceWorker, ResourceTeam } from "./resources";
+import { ResourceRole, ResourceWorker, ResourceTeam, ResourceMaterial } from "./resources";
 
 export type TipoObra =
   | 'residencial_multifamiliar'
@@ -216,6 +216,7 @@ export interface ProjectSchedule {
     replanMode?: ReplanMode;
     useWorkingDays?: boolean;
     autoRollupParentDates?: boolean; // datas de grupo/etapa/subetapa seguem mín/máx das tarefas
+    holidays?: string[]; // feriados/exceções de calendário, ISO 'YYYY-MM-DD'; motor trata como dia não útil
     workSchedule?: {
         hoursPerDay: number;              // padrão de horas para todos os dias
         workDays: number[];               // 0=Dom 1=Seg 2=Ter 3=Qua 4=Qui 5=Sex 6=Sáb
@@ -225,6 +226,7 @@ export interface ProjectSchedule {
         roles: ResourceRole[];
         workers: ResourceWorker[];
         teams: ResourceTeam[];
+        materials?: ResourceMaterial[];
         };
     scenarios?: ScheduleScenario[];
 }

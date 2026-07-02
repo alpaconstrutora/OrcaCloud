@@ -23,6 +23,12 @@ import type {
     AreaVersionUnitAccessoryLink,
     AreaVersionCommonAllocation,
 } from '../types/areaEngine';
+import { empreendimentoService } from './empreendimentoService';
+import type {
+    EmpreendimentoWithChildren,
+    EmpreendimentoTipo,
+    FloorTipo,
+} from '../types/empreendimento';
 
 export interface AreaMinimalStructureInput {
     blockCode?: string;
@@ -156,6 +162,57 @@ async function invalidateVersionCalculation(versionId: string): Promise<void> {
         .in('status', ['draft', 'calculated']);
 
     if (error) raiseAreaEngineError('invalidateVersionCalculation.version', error);
+}
+
+// ── Import de Empreendimento → projeto de áreas (Camada A do PLANO) ──────────
+export interface AreaImportReport {
+    projectId: string;
+    versionId: string;
+    blocks: number;
+    floors: number;
+    units: number;
+    privateSpaces: number;
+    commonSpaces: number;
+    skippedUnitsNoArea: number;
+    skippedCommonsNoArea: number;
+    warnings: string[];
+}
+
+function mapEmpreendimentoTipo(tipo?: EmpreendimentoTipo | null): AreaProject['project_type'] {
+    switch (tipo) {
+        case 'VERTICAL': return 'vertical';
+        case 'HORIZONTAL': return 'horizontal';
+        case 'MISTO': return 'mixed';
+        case 'COND_LOGISTICO':
+        case 'COND_INDUSTRIAL': return 'commercial';
+        default: return 'vertical';
+    }
+}
+
+// FloorTipo do Empreendimento → area_floor_type do motor. Sem correspondência clara
+// (MEZANINO/GARAGEM/OUTRO) cai em 'other'; quando o tipo vem nulo, infere pelo número.
+function mapFloorTipo(tipo?: FloorTipo | null, floorNumber?: number): string {
+    switch (tipo) {
+        case 'SUBSOLO': return 'basement';
+        case 'TERREO': return 'ground';
+        case 'TIPO': return 'type';
+        case 'COBERTURA': return 'roof';
+        case 'TECNICO': return 'technical';
+        case 'MEZANINO':
+        case 'GARAGEM':
+        case 'OUTRO': return 'other';
+        default:
+            if (floorNumber === undefined || floorNumber === null) return 'type';
+            if (floorNumber < 0) return 'basement';
+            if (floorNumber === 0) return 'ground';
+            return 'type';
+    }
+}
+
+function floorLabelFromNumber(floorNumber: number): string {
+    if (floorNumber < 0) return `Subsolo ${Math.abs(floorNumber)}`;
+    if (floorNumber === 0) return 'Térreo';
+    return `Pavimento ${floorNumber}`;
 }
 
 export const areaEngineService = {
@@ -1221,6 +1278,260 @@ export const areaEngineService = {
                 notes: 'Escopo global criado pelo fluxo minimo do app',
             });
         if (scopeError) raiseAreaEngineError('createMinimalStructure.scope', scopeError);
+    },
+
+    // Camada A do PLANO_INTEGRACAO_AREAS_EMPREENDIMENTOS: gera projeto + versão v1 (draft)
+    // a partir de um Empreendimento. Materializa torres→blocos, andares distintos das
+    // unidades→pavimentos, unidades→unidades e 1 espaço privativo por unidade (private_area).
+    // Áreas comuns viram espaços proporcionais (global/bloco). NÃO importa common_area/
+    // total_area da unidade (o motor rateia a comum sozinho — evita dupla contagem) nem vagas.
+    async importFromEmpreendimento(empreendimentoId: string, organizationId: string): Promise<AreaImportReport> {
+        const emp = await empreendimentoService.getById(empreendimentoId, { includeChildren: true }) as EmpreendimentoWithChildren | null;
+        if (!emp) throw new Error('Empreendimento nao encontrado.');
+        if (emp.organization_id !== organizationId) throw new Error('Empreendimento pertence a outra organizacao.');
+        const towers = emp.towers || [];
+        if (towers.length === 0) throw new Error('Empreendimento sem torres cadastradas — nada a importar.');
+
+        const warnings: string[] = [];
+
+        // 1. Projeto + versao v1. notes guarda o que nao cabe no tipo (endereco/RT).
+        const enderecoResumo = [emp.endereco_street, emp.endereco_number, emp.endereco_neighborhood, emp.endereco_city, emp.endereco_state].filter(Boolean).join(', ');
+        const notesParts = [
+            `Importado do empreendimento "${emp.name}".`,
+            enderecoResumo ? `Endereco: ${enderecoResumo}.` : '',
+            emp.matricula ? `Matricula: ${emp.matricula}.` : '',
+            emp.responsavel_tecnico ? `Resp. tecnico: ${emp.responsavel_tecnico}${emp.crea_cau ? ` (${emp.crea_cau})` : ''}.` : '',
+        ].filter(Boolean);
+
+        const project = await this.createProject({
+            organization_id: organizationId,
+            empreendimento_id: emp.id,
+            name: emp.name,
+            normative_reference: 'ABNT NBR 12721:2006',
+            normative_valid_from: '2007-01-21',
+            project_type: mapEmpreendimentoTipo(emp.tipo),
+            status: 'active',
+            notes: notesParts.join(' '),
+        });
+
+        const version = await this.createVersion({
+            area_project_id: project.id,
+            version_number: 1,
+            version_label: `Importado de ${emp.name}`,
+        });
+        const versionId = version.id;
+
+        // 2. Blocos (1 por torre)
+        const blockRows = towers.map((t, i) => ({
+            area_version_id: versionId,
+            code: `B${i + 1}`,
+            name: t.name || `Torre ${i + 1}`,
+            sort_order: t.sort_order ?? i + 1,
+        }));
+        const { data: insertedBlocks, error: blockError } = await supabase
+            .from('area_version_blocks').insert(blockRows).select('id, code');
+        if (blockError) raiseAreaEngineError('importFromEmpreendimento.blocks', blockError);
+        const blockIdByCode = new Map<string, string>();
+        (insertedBlocks || []).forEach(b => blockIdByCode.set(b.code, b.id));
+        const blockIdByTower = new Map<string, string>();
+        towers.forEach((t, i) => { const id = blockIdByCode.get(`B${i + 1}`); if (id) blockIdByTower.set(t.id, id); });
+        const firstBlockId = blockIdByCode.get('B1');
+        if (!firstBlockId) throw new Error('Falha ao materializar blocos do empreendimento.');
+
+        // 3. Pavimentos: andares distintos das unidades de cada torre.
+        const floorRows: Record<string, unknown>[] = [];
+        const floorCodeByKey = new Map<string, string>(); // `${towerId}:${floorNum}` -> floorCode
+        let floorSeq = 0;
+        for (const t of towers) {
+            const seen = new Set<number>();
+            for (const u of (t.units || [])) {
+                const fn = u.floor;
+                if (fn === undefined || fn === null || seen.has(fn)) continue;
+                seen.add(fn);
+                const code = `F${++floorSeq}`;
+                floorCodeByKey.set(`${t.id}:${fn}`, code);
+                floorRows.push({
+                    area_version_id: versionId,
+                    block_id: blockIdByTower.get(t.id),
+                    code,
+                    name: floorLabelFromNumber(fn),
+                    floor_type: mapFloorTipo(u.floor_tipo, fn),
+                    sort_order: fn,
+                    is_template: false,
+                    is_materialized: true,
+                    materialized_label: floorLabelFromNumber(fn),
+                    materialized_index: fn,
+                });
+            }
+        }
+        const floorIdByCode = new Map<string, string>();
+        if (floorRows.length > 0) {
+            const { data: insertedFloors, error: floorError } = await supabase
+                .from('area_version_floors').insert(floorRows).select('id, code');
+            if (floorError) raiseAreaEngineError('importFromEmpreendimento.floors', floorError);
+            (insertedFloors || []).forEach(f => floorIdByCode.set(f.code, f.id));
+        }
+
+        // 4. Unidades (dedupe de codigo por versao)
+        const unitRows: Record<string, unknown>[] = [];
+        const usedCodes = new Set<string>();
+        const unitMeta: { empUnitId: string; code: string; towerId: string; floorNum?: number | null; privateArea?: number | null }[] = [];
+        let unitIdx = 0;
+        for (const t of towers) {
+            for (const u of (t.units || [])) {
+                let code = (u.name || '').trim() || `Unid ${++unitIdx}`;
+                if (usedCodes.has(code)) {
+                    let n = 2;
+                    while (usedCodes.has(`${code} (${n})`)) n++;
+                    code = `${code} (${n})`;
+                }
+                usedCodes.add(code);
+                const floorCode = (u.floor !== undefined && u.floor !== null) ? floorCodeByKey.get(`${t.id}:${u.floor}`) : undefined;
+                unitRows.push({
+                    area_version_id: versionId,
+                    block_id: blockIdByTower.get(t.id),
+                    primary_floor_id: floorCode ? floorIdByCode.get(floorCode) : null,
+                    code,
+                    unit_type: 'apartment',
+                    typology_code: u.typology?.trim() || null,
+                    is_autonomous: true,
+                    is_active: true,
+                    is_template: false,
+                    is_materialized: true,
+                    materialized_label: code,
+                    materialized_index: unitRows.length + 1,
+                });
+                unitMeta.push({ empUnitId: u.id, code, towerId: t.id, floorNum: u.floor, privateArea: u.private_area });
+            }
+        }
+        const unitIdByCode = new Map<string, string>();
+        if (unitRows.length > 0) {
+            const { data: insertedUnits, error: unitError } = await supabase
+                .from('area_version_units').insert(unitRows).select('id, code');
+            if (unitError) raiseAreaEngineError('importFromEmpreendimento.units', unitError);
+            (insertedUnits || []).forEach(u => unitIdByCode.set(u.code, u.id));
+        }
+
+        // 5. Espacos privativos (1 por unidade com private_area > 0) — coverage padrao, coef 1
+        const privateSpaceRows: Record<string, unknown>[] = [];
+        let skippedUnitsNoArea = 0;
+        for (const m of unitMeta) {
+            const area = Number(m.privateArea ?? 0);
+            if (!Number.isFinite(area) || area <= 0) { skippedUnitsNoArea++; continue; }
+            const unitId = unitIdByCode.get(m.code);
+            if (!unitId) continue;
+            const floorCode = (m.floorNum !== undefined && m.floorNum !== null) ? floorCodeByKey.get(`${m.towerId}:${m.floorNum}`) : undefined;
+            privateSpaceRows.push({
+                area_version_id: versionId,
+                block_id: blockIdByTower.get(m.towerId),
+                floor_id: floorCode ? floorIdByCode.get(floorCode) : null,
+                unit_id: unitId,
+                code: `${m.code}-PRIV`,
+                name: `Area privativa ${m.code}`,
+                use_class: 'private',
+                private_nature: 'main',
+                coverage_class: 'covered_standard',
+                common_division_class: 'not_applicable',
+                ownership_accounting_mode: 'direct_unit',
+                real_area_m2_raw: area,
+                coefficient_value: 1,
+                source_type: 'api',
+                source_reference: `empreendimento_unit:${m.empUnitId}`,
+                is_template: false,
+                is_materialized: true,
+                materialized_label: `Area privativa ${m.code}`,
+                materialized_index: privateSpaceRows.length + 1,
+            });
+        }
+        if (privateSpaceRows.length > 0) {
+            const { error: spaceError } = await supabase.from('area_version_spaces').insert(privateSpaceRows);
+            if (spaceError) raiseAreaEngineError('importFromEmpreendimento.privateSpaces', spaceError);
+        }
+        if (skippedUnitsNoArea > 0) warnings.push(`${skippedUnitsNoArea} unidade(s) sem area privativa nao geraram espaco — informe a area no editor.`);
+
+        // 6. Areas comuns (proporcional global/bloco) + escopo de distribuicao
+        const commonAreas = emp.common_areas || [];
+        let skippedCommonsNoArea = 0;
+        let commonSpaceCount = 0;
+        for (let i = 0; i < commonAreas.length; i++) {
+            const ca = commonAreas[i];
+            const area = Number(ca.area ?? 0);
+            if (!Number.isFinite(area) || area <= 0) { skippedCommonsNoArea++; continue; }
+            const towerBlockId = ca.tower_id ? blockIdByTower.get(ca.tower_id) : undefined;
+            const blockId = towerBlockId || firstBlockId;
+            const scope = towerBlockId ? 'block' : 'global';
+            const { data: commonSpace, error: commonError } = await supabase
+                .from('area_version_spaces')
+                .insert({
+                    area_version_id: versionId,
+                    block_id: blockId,
+                    floor_id: null,
+                    unit_id: null,
+                    code: `COM-${i + 1}`,
+                    name: ca.name || `Area comum ${i + 1}`,
+                    use_class: 'common',
+                    private_nature: 'not_applicable',
+                    coverage_class: 'covered_standard',
+                    common_division_class: 'proportional',
+                    ownership_accounting_mode: 'common_area',
+                    real_area_m2_raw: area,
+                    coefficient_value: 1,
+                    source_type: 'api',
+                    source_reference: `empreendimento_common_area:${ca.id}`,
+                    is_template: false,
+                    is_materialized: true,
+                    materialized_label: ca.name || `Area comum ${i + 1}`,
+                    materialized_index: privateSpaceRows.length + i + 1,
+                })
+                .select('id')
+                .single();
+            if (commonError) raiseAreaEngineError('importFromEmpreendimento.commonSpace', commonError);
+            const { error: scopeError } = await supabase
+                .from('area_version_common_distribution_scopes')
+                .insert({
+                    area_version_id: versionId,
+                    common_space_id: commonSpace.id,
+                    distribution_scope: scope,
+                    block_id: scope === 'block' ? blockId : null,
+                    notes: 'Escopo criado pelo importador de Empreendimento',
+                });
+            if (scopeError) raiseAreaEngineError('importFromEmpreendimento.scope', scopeError);
+            commonSpaceCount++;
+        }
+        if (skippedCommonsNoArea > 0) warnings.push(`${skippedCommonsNoArea} area(s) comum(ns) sem metragem nao foram importadas.`);
+        warnings.push('Revise coeficientes de equivalencia, coberturas e vagas no editor antes de calcular (Camada B).');
+
+        // 7. Auditoria da importacao
+        await supabase.from('area_version_audit_logs').insert({
+            area_version_id: versionId,
+            entity_type: 'area_versions',
+            entity_id: versionId,
+            action: 'create',
+            field_name: 'empreendimento_id',
+            old_value: null,
+            new_value: {
+                empreendimento_id: emp.id,
+                blocks: blockRows.length,
+                floors: floorRows.length,
+                units: unitRows.length,
+                private_spaces: privateSpaceRows.length,
+                common_spaces: commonSpaceCount,
+            },
+            reason: `Projeto de areas importado do empreendimento "${emp.name}"`,
+        });
+
+        return {
+            projectId: project.id,
+            versionId,
+            blocks: blockRows.length,
+            floors: floorRows.length,
+            units: unitRows.length,
+            privateSpaces: privateSpaceRows.length,
+            commonSpaces: commonSpaceCount,
+            skippedUnitsNoArea,
+            skippedCommonsNoArea,
+            warnings,
+        };
     },
     async listQuadroI(versionId: string): Promise<AreaQuadroIRow[]> {
         const { data, error } = await supabase

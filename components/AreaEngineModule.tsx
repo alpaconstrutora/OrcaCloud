@@ -1,6 +1,7 @@
 import React from 'react';
 import {
     AlertTriangle,
+    Building2,
     Calculator,
     CheckCircle2,
     FileSpreadsheet,
@@ -14,7 +15,9 @@ import {
 } from 'lucide-react';
 import Button from './ui/Button';
 import { areaEngineService } from '../services/areaEngineService';
+import type { AreaImportReport } from '../services/areaEngineService';
 import { areaEngineExportService } from '../services/areaEngineExportService';
+import { empreendimentoService } from '../services/empreendimentoService';
 import type {
     AreaEngineRpcResult,
     AreaFractionIdeal,
@@ -149,6 +152,10 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const [feedback, setFeedback] = React.useState<AreaEngineRpcResult | null>(null);
     const [error, setError] = React.useState<string | null>(null);
     const [isCreateOpen, setIsCreateOpen] = React.useState(false);
+    const [isImportOpen, setIsImportOpen] = React.useState(false);
+    const [empreendimentos, setEmpreendimentos] = React.useState<{ id: string; name: string }[]>([]);
+    const [selectedEmpreendimentoId, setSelectedEmpreendimentoId] = React.useState('');
+    const [importReport, setImportReport] = React.useState<AreaImportReport | null>(null);
     const [newProjectName, setNewProjectName] = React.useState('');
     const [newProjectType, setNewProjectType] = React.useState<'vertical' | 'mixed' | 'commercial' | 'residential' | 'horizontal' | 'other'>('vertical');
     const [newVersionLabel, setNewVersionLabel] = React.useState('Versao inicial');
@@ -439,6 +446,56 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             setIsStructureOpen(true);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Erro ao criar projeto de area.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
+    async function openImport() {
+        setIsImportOpen(true);
+        setImportReport(null);
+        if (empreendimentos.length === 0 && organizationId) {
+            try {
+                const rows = await empreendimentoService.list(organizationId);
+                const mapped = rows.map(row => ({ id: row.id, name: row.name }));
+                setEmpreendimentos(mapped);
+                setSelectedEmpreendimentoId(prev => prev || mapped[0]?.id || '');
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'Erro ao carregar empreendimentos.');
+            }
+        }
+    }
+
+    async function runImport(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!organizationId || !selectedEmpreendimentoId) {
+            setError('Selecione um empreendimento para importar.');
+            return;
+        }
+        setActionLoading('import');
+        setError(null);
+        setFeedback(null);
+        setImportReport(null);
+        try {
+            const report = await areaEngineService.importFromEmpreendimento(selectedEmpreendimentoId, organizationId);
+            const rows = await areaEngineService.listProjects(organizationId);
+            setProjects(rows);
+            setSelectedProjectId(report.projectId);
+            const versionRows = await areaEngineService.listVersions(report.projectId);
+            setVersions(versionRows);
+            setSelectedVersionId(report.versionId);
+            setActiveTable('estrutura');
+            await loadResults(report.versionId);
+            setImportReport(report);
+            setIsImportOpen(false);
+            setFeedback({
+                status: 'success',
+                warnings: report.warnings.map((message, idx) => ({ code: `IMPORT_${idx + 1}`, message })),
+                blocking_errors: [],
+                message: `Importado: ${report.blocks} bloco(s), ${report.units} unidade(s), ${report.privateSpaces} area(s) privativa(s), ${report.commonSpaces} comum(ns).`,
+            });
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao importar do empreendimento.');
         } finally {
             setActionLoading(null);
         }
@@ -868,6 +925,9 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                     <Button variant="secondary" onClick={() => setIsCreateOpen(true)} disabled={!!actionLoading}>
                         <Plus className="w-4 h-4" /> Novo projeto
                     </Button>
+                    <Button variant="secondary" onClick={openImport} disabled={!!actionLoading}>
+                        <Building2 className="w-4 h-4" /> Importar de Empreendimento
+                    </Button>
                     <Button variant="secondary" onClick={() => setIsStructureOpen(true)} disabled={!selectedVersionId || !!actionLoading}>
                         <Plus className="w-4 h-4" /> Estrutura
                     </Button>
@@ -951,6 +1011,55 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                         </Button>
                     </div>
                 </form>
+            )}
+
+            {isImportOpen && (
+                <form onSubmit={runImport} className="bg-white border border-slate-200 rounded-lg p-4 space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Importar de Empreendimento</h2>
+                            <p className="text-xs text-slate-500 mt-1">Gera projeto + versao inicial com torres, pavimentos, unidades e areas privativas/comuns. Coeficientes, coberturas e vagas sao revisados no editor antes de calcular.</p>
+                        </div>
+                        <button type="button" onClick={() => setIsImportOpen(false)} className="text-sm font-bold text-slate-500 hover:text-slate-800">
+                            Fechar
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_200px] gap-3 items-end">
+                        <label className="space-y-1">
+                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Empreendimento</span>
+                            <select
+                                value={selectedEmpreendimentoId}
+                                onChange={event => setSelectedEmpreendimentoId(event.target.value)}
+                                className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                            >
+                                {empreendimentos.length === 0 && <option value="">Nenhum empreendimento encontrado</option>}
+                                {empreendimentos.map(emp => (
+                                    <option key={emp.id} value={emp.id}>{emp.name}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <div className="flex justify-end gap-2">
+                            <Button type="button" variant="secondary" onClick={() => setIsImportOpen(false)}>Cancelar</Button>
+                            <Button type="submit" disabled={!selectedEmpreendimentoId || actionLoading === 'import'}>
+                                <Building2 className="w-4 h-4" /> Importar
+                            </Button>
+                        </div>
+                    </div>
+                </form>
+            )}
+
+            {importReport && (
+                <div className="border border-emerald-200 bg-emerald-50 text-emerald-800 rounded-lg px-4 py-3 text-sm">
+                    <p className="font-bold">Importacao concluida</p>
+                    <p className="mt-1 text-xs">
+                        {importReport.blocks} bloco(s) · {importReport.floors} pavimento(s) · {importReport.units} unidade(s) · {importReport.privateSpaces} area(s) privativa(s) · {importReport.commonSpaces} area(s) comum(ns).
+                    </p>
+                    {(importReport.skippedUnitsNoArea > 0 || importReport.skippedCommonsNoArea > 0) && (
+                        <p className="mt-1 text-xs text-amber-700">
+                            Ignorados: {importReport.skippedUnitsNoArea} unidade(s) sem area, {importReport.skippedCommonsNoArea} comum(ns) sem metragem.
+                        </p>
+                    )}
+                </div>
             )}
 
             {isStructureOpen && (

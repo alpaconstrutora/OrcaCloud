@@ -88,17 +88,19 @@ Permitir que um projeto de cálculo de áreas NBR 12721 seja **gerado a partir d
 
 ## 6. Fases de implementação
 
-- **F1 — Import básico**: função `importFromEmpreendimento` (só found + defaults), preenche FK, gera v1. Botão "Importar de Empreendimento" no `AreaEngineModule` (seleção de empreendimento). Mapa de enums em util.
+- **F1 — Import básico** ✅ **IMPLEMENTADO (2026-07-02)**: `areaEngineService.importFromEmpreendimento(empreendimentoId, organizationId)` — preenche `empreendimento_id`, cria projeto + versão v1 `draft`, materializa torres→blocos, andares distintos das unidades→pavimentos, unidades→unidades e 1 espaço privativo por unidade (`private_area`, coverage padrão, coef 1). Áreas comuns→espaços proporcionais global/bloco + `distribution_scope`. Ignora `common_area`/`total_area` (dupla contagem) e vagas. Mapas de enum (`mapEmpreendimentoTipo`/`mapFloorTipo`) no próprio serviço. Botão "Importar de Empreendimento" + painel de seleção + banner de resultado no `AreaEngineModule`. Retorna `AreaImportReport` (contagens + warnings). `source_type='api'`, `source_reference=empreendimento_unit:<id>`. Deixa em `draft` p/ enriquecimento (Camada B) antes de calcular.
 - **F2 — Materialização de réplicas**: usar `repeat_count`/`prefix`/`units_per_floor` do `EmpreendimentoFloor` para gerar pavimentos-tipo repetidos e suas unidades.
 - **F3 — Re-sync / drift**: ao reimportar, comparar topologia (novas torres/unidades) e gerar nova versão; relatório de diferenças (espelhar `EmpreendimentoSyncReport`).
 - **F4 (opcional) — Write-back**: gravar frações ideais/áreas equivalentes calculadas de volta em `EmpreendimentoUnit` (ex.: campo `fracao_ideal`), fechando o ciclo comercial ↔ legal.
 
-## 7. Riscos / decisões pendentes
+## 7. Decisões travadas (2026-07-02)
 
-- **Dupla contagem de comum** (§4.2.7) — regra firme: import usa só `private_area`. **Confirmar** que `private_area` no cadastro é área privativa "pura" (sem comum embutida).
-- **Vagas** — decidir política padrão: (a) não gerar (recomendado no MVP), (b) gerar N vagas vinculadas, (c) gerar como unidades autônomas. Depende do padrão de matrícula da incorporadora.
-- **Responsável técnico** — descasamento texto×UUID; no MVP guardar texto em `metadata`.
-- **1 torre = 1 obra (`project_id`)** — o `area_project` fica no nível do **empreendimento** (multi-bloco), não da obra. Confirmar que é o nível correto para o Quadro NBR (em geral sim: o cálculo é do edifício/incorporação inteira).
+- **Dupla contagem** — ✅ CONFIRMADO: `EmpreendimentoUnit.private_area` é privativa pura; a comum vive em campo separado (`common_area`). Import usa **só `private_area`** e **ignora `common_area`/`total_area`**.
+- **Vagas** — ✅ DECIDIDO: import **não gera** vagas a partir de `parking_spaces`. Fica para o editor de Áreas (Camada B).
+- **Nível do projeto** — ✅ DECIDIDO: `area_project` no nível do **empreendimento inteiro** (multi-torre), não por obra/torre. Correto para o Quadro NBR.
+
+Riscos residuais menores:
+- **Responsável técnico** — descasamento texto×UUID; no MVP guardar texto em `metadata`/`notes`.
 - **Migrations do motor aplicadas no remoto** — pré-requisito; confirmar antes de expor o botão.
 
 ## 8. Estimativa de cobertura

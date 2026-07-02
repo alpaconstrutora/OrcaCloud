@@ -63,11 +63,14 @@ export const areaEngineExportService = {
         ]), 'Resumo');
 
         XLSX.utils.book_append_sheet(wb, aoaSheet([
-            ['Tipo', 'Codigo', 'Nome', 'Uso/Classe', 'Area real', 'Coeficiente'],
-            ...pkg.structure.blocks.map(row => ['Bloco', row.code || '', row.name, '', '', '']),
-            ...pkg.structure.floors.map(row => ['Pavimento', row.code || '', row.name, row.floor_type, '', '']),
-            ...pkg.structure.units.map(row => ['Unidade', row.code, row.name || '', row.unit_type, '', '']),
-            ...pkg.structure.spaces.map(row => ['Espaco', row.code || '', row.name, row.use_class, row.real_area_m2_raw, row.coefficient_value ?? '']),
+            ['Tipo', 'Codigo', 'Nome', 'Uso/Classe', 'Area real', 'Coeficiente', 'Escopo comum'],
+            ...pkg.structure.blocks.map(row => ['Bloco', row.code || '', row.name, '', '', '', '']),
+            ...pkg.structure.floors.map(row => ['Pavimento', row.code || '', row.name, row.floor_type, '', '', '']),
+            ...pkg.structure.units.map(row => ['Unidade', row.code, row.name || '', row.unit_type, '', '', '']),
+            ...pkg.structure.spaces.map(row => {
+                const scope = pkg.structure.commonDistributionScopes.find(item => item.common_space_id === row.id);
+                return ['Espaco', row.code || '', row.name, row.use_class, row.real_area_m2_raw, row.coefficient_value ?? '', scope?.distribution_scope || ''];
+            }),
         ]), 'Estrutura');
 
         XLSX.utils.book_append_sheet(wb, aoaSheet([
@@ -88,6 +91,16 @@ export const areaEngineExportService = {
             ['Unit ID', 'Coeficiente origem', 'Fracao decimal', 'Fracao percentual', 'Milesimos', 'Metodo'],
             ...pkg.fractions.map(row => [row.unit_id, row.source_coefficient, row.fraction_decimal_raw, row.fraction_percent_raw, row.fraction_thousandths_raw, row.derivation_method]),
         ]), 'Fracoes');
+
+        XLSX.utils.book_append_sheet(wb, aoaSheet([
+            ['Unidade principal', 'Unidade acessoria', 'Tipo', 'Afeta area privativa', 'Afeta coeficiente', 'Nota legal'],
+            ...pkg.structure.accessoryLinks.map(row => [row.parent_unit_id, row.accessory_unit_id || row.accessory_space_id || '', row.link_type, row.affects_private_area ? 'sim' : 'nao', row.affects_coefficient ? 'sim' : 'nao', row.legal_note || '']),
+        ]), 'Vinculos acessorios');
+
+        XLSX.utils.book_append_sheet(wb, aoaSheet([
+            ['Area comum', 'Unidade alvo', 'Metodo', 'Area real alocada', 'Percentual', 'Justificativa'],
+            ...pkg.structure.commonAllocations.map(row => [row.common_space_id, row.target_unit_id, row.allocation_method, row.allocated_real_area_m2_raw || '', row.percentage || '', row.justification || '']),
+        ]), 'Alocacoes comuns');
 
         XLSX.utils.book_append_sheet(wb, aoaSheet([
             ['Tipo', 'Status', 'Reviewed at', 'Hash', 'Comentarios'],

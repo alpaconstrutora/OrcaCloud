@@ -66,6 +66,10 @@ function statusTone(status?: string): string {
     return 'bg-amber-50 text-amber-700 border-amber-200';
 }
 
+function isVersionStructureEditable(status?: string | null): boolean {
+    return status === 'draft' || status === 'calculated';
+}
+
 function RpcFeedback({ result }: { result: AreaEngineRpcResult | null }) {
     if (!result) return null;
     const errors = result.blocking_errors || [];
@@ -131,7 +135,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const [versions, setVersions] = React.useState<AreaVersion[]>([]);
     const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
     const [selectedVersionId, setSelectedVersionId] = React.useState<string>('');
-    const [structure, setStructure] = React.useState<AreaVersionStructure>({ blocks: [], floors: [], units: [], spaces: [] });
+    const [structure, setStructure] = React.useState<AreaVersionStructure>({ blocks: [], floors: [], units: [], spaces: [], commonDistributionScopes: [], accessoryLinks: [], commonAllocations: [] });
     const [approvals, setApprovals] = React.useState<AreaVersionApproval[]>([]);
     const [auditLogs, setAuditLogs] = React.useState<AreaVersionAuditLog[]>([]);
     const [areaFractions, setAreaFractions] = React.useState<AreaFractionIdeal[]>([]);
@@ -176,6 +180,17 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const [editorSpaceDivision, setEditorSpaceDivision] = React.useState<'proportional' | 'non_proportional'>('proportional');
     const [editorSpaceCoefficient, setEditorSpaceCoefficient] = React.useState('1');
     const [editorSpaceScope, setEditorSpaceScope] = React.useState<'global' | 'block'>('global');
+    const [accessoryParentUnitId, setAccessoryParentUnitId] = React.useState('');
+    const [accessoryUnitId, setAccessoryUnitId] = React.useState('');
+    const [accessoryLinkType, setAccessoryLinkType] = React.useState<'parking' | 'storage' | 'box' | 'exclusive_area' | 'other'>('parking');
+    const [accessoryAffectsPrivateArea, setAccessoryAffectsPrivateArea] = React.useState(true);
+    const [accessoryAffectsCoefficient, setAccessoryAffectsCoefficient] = React.useState(true);
+    const [accessoryLegalNote, setAccessoryLegalNote] = React.useState('');
+    const [allocationCommonSpaceId, setAllocationCommonSpaceId] = React.useState('');
+    const [allocationTargetUnitId, setAllocationTargetUnitId] = React.useState('');
+    const [allocationMethod, setAllocationMethod] = React.useState<'fixed_area' | 'percentage'>('fixed_area');
+    const [allocationValue, setAllocationValue] = React.useState('');
+    const [allocationJustification, setAllocationJustification] = React.useState('');
     const [editingStructure, setEditingStructure] = React.useState<{ kind: StructureEditKind; id: string } | null>(null);
 
     const selectedVersion = versions.find(v => v.id === selectedVersionId) || null;
@@ -184,6 +199,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const canApproveTechnical = selectedVersion?.status === 'calculated';
     const canApproveLegal = selectedVersion?.status === 'technically_approved';
     const canLockVersion = selectedVersion?.status === 'legally_approved';
+    const structureIsEditable = isVersionStructureEditable(selectedVersion?.status);
 
     const loadProjects = React.useCallback(async () => {
         if (!organizationId) return;
@@ -221,7 +237,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
 
     const loadResults = React.useCallback(async (versionId: string) => {
         if (!versionId) {
-            setStructure({ blocks: [], floors: [], units: [], spaces: [] });
+            setStructure({ blocks: [], floors: [], units: [], spaces: [], commonDistributionScopes: [], accessoryLinks: [], commonAllocations: [] });
             setApprovals([]);
             setAuditLogs([]);
             setAreaFractions([]);
@@ -269,7 +285,11 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         setEditorSpaceBlockId(prev => prev || firstBlockId);
         setEditorSpaceFloorId(prev => prev || firstFloorId);
         setEditorSpaceUnitId(prev => prev || firstUnitId);
-    }, [structure.blocks, structure.floors, structure.units]);
+        setAccessoryParentUnitId(prev => prev || firstUnitId);
+        setAccessoryUnitId(prev => prev || structure.units.find(unit => unit.id !== firstUnitId)?.id || '');
+        setAllocationTargetUnitId(prev => prev || firstUnitId);
+        setAllocationCommonSpaceId(prev => prev || structure.spaces.find(space => space.use_class === 'common' && space.common_division_class === 'non_proportional')?.id || '');
+    }, [structure.blocks, structure.floors, structure.units, structure.spaces]);
 
     async function createRevisionFromSelectedVersion() {
         if (!selectedVersion || !selectedProjectId) return;
@@ -470,8 +490,8 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             setError('Selecione uma versao para editar a estrutura.');
             return false;
         }
-        if (['locked', 'superseded', 'cancelled'].includes(selectedVersion.status)) {
-            setError('Esta versao esta bloqueada para edicao. Crie uma nova versao para alterar a estrutura.');
+        if (!isVersionStructureEditable(selectedVersion.status)) {
+            setError('Esta versao nao permite edicao estrutural. Crie uma nova revisao para alterar a estrutura.');
             return false;
         }
         return true;
@@ -537,6 +557,8 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         setEditorSpaceCoverage(space.coverage_class || 'covered_standard');
         setEditorSpaceDivision(space.common_division_class === 'non_proportional' ? 'non_proportional' : 'proportional');
         setEditorSpaceCoefficient(space.coefficient_value === null || space.coefficient_value === undefined ? '' : String(space.coefficient_value));
+        const scope = structure.commonDistributionScopes.find(item => item.common_space_id === space.id);
+        setEditorSpaceScope(scope?.distribution_scope === 'block' ? 'block' : 'global');
     }
     async function addBlock(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -562,6 +584,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                 });
             }
             await loadResults(selectedVersionId);
+            if (selectedProjectId) await loadVersions(selectedProjectId);
             setEditorBlockCode('');
             setEditorBlockName('');
             setEditingStructure(null);
@@ -602,6 +625,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                 });
             }
             await loadResults(selectedVersionId);
+            if (selectedProjectId) await loadVersions(selectedProjectId);
             setEditorFloorCode('');
             setEditorFloorName('');
             setEditingStructure(null);
@@ -644,6 +668,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                 });
             }
             await loadResults(selectedVersionId);
+            if (selectedProjectId) await loadVersions(selectedProjectId);
             setEditorUnitCode('');
             setEditingStructure(null);
         } catch (err) {
@@ -704,6 +729,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                 });
             }
             await loadResults(selectedVersionId);
+            if (selectedProjectId) await loadVersions(selectedProjectId);
             setEditorSpaceCode('');
             setEditorSpaceName('Area');
             setEditorSpaceArea('10');
@@ -725,12 +751,100 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             if (kind === 'unit') await areaEngineService.deleteUnit(id);
             if (kind === 'space') await areaEngineService.deleteSpace(id);
             await loadResults(selectedVersionId);
+            if (selectedProjectId) await loadVersions(selectedProjectId);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Erro ao remover registro da estrutura.');
         } finally {
             setActionLoading(null);
         }
     }
+
+    async function addAccessoryLink(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!versionIsEditable()) return;
+        if (!accessoryParentUnitId || !accessoryUnitId) { setError('Selecione a unidade principal e a unidade acessoria.'); return; }
+        if (accessoryParentUnitId === accessoryUnitId) { setError('A unidade acessoria deve ser diferente da unidade principal.'); return; }
+        setActionLoading('add-accessory-link');
+        setError(null);
+        try {
+            await areaEngineService.createAccessoryUnitLink(selectedVersionId, {
+                parentUnitId: accessoryParentUnitId,
+                accessoryUnitId,
+                linkType: accessoryLinkType,
+                affectsPrivateArea: accessoryAffectsPrivateArea,
+                affectsCoefficient: accessoryAffectsCoefficient,
+                legalNote: accessoryLegalNote,
+            });
+            await loadResults(selectedVersionId);
+            if (selectedProjectId) await loadVersions(selectedProjectId);
+            setAccessoryLegalNote('');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao criar vinculo acessorio.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
+    async function deleteAccessoryLink(id: string) {
+        if (!versionIsEditable()) return;
+        setActionLoading('delete-accessory-link');
+        setError(null);
+        try {
+            await areaEngineService.deleteAccessoryLink(id);
+            await loadResults(selectedVersionId);
+            if (selectedProjectId) await loadVersions(selectedProjectId);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao remover vinculo acessorio.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
+    async function addCommonAllocation(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!versionIsEditable()) return;
+        if (!allocationCommonSpaceId || !allocationTargetUnitId) { setError('Selecione a area comum e a unidade alvo.'); return; }
+        const numericValue = Number(allocationValue.replace(',', '.'));
+        if (!Number.isFinite(numericValue) || numericValue <= 0) { setError('Informe um valor maior que zero para a alocacao.'); return; }
+        if (allocationMethod === 'percentage' && numericValue > 1) { setError('Percentual deve ser informado em decimal entre 0 e 1. Exemplo: 0,25.'); return; }
+        setActionLoading('add-common-allocation');
+        setError(null);
+        try {
+            await areaEngineService.createCommonAllocation(selectedVersionId, {
+                commonSpaceId: allocationCommonSpaceId,
+                targetUnitId: allocationTargetUnitId,
+                allocationMethod,
+                allocatedRealArea: allocationMethod === 'fixed_area' ? numericValue : null,
+                percentage: allocationMethod === 'percentage' ? numericValue : null,
+                justification: allocationJustification,
+            });
+            await loadResults(selectedVersionId);
+            if (selectedProjectId) await loadVersions(selectedProjectId);
+            setAllocationValue('');
+            setAllocationJustification('');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao criar alocacao comum.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
+    async function deleteCommonAllocation(id: string) {
+        if (!versionIsEditable()) return;
+        setActionLoading('delete-common-allocation');
+        setError(null);
+        try {
+            await areaEngineService.deleteCommonAllocation(id);
+            await loadResults(selectedVersionId);
+            if (selectedProjectId) await loadVersions(selectedProjectId);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao remover alocacao comum.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+    const commonNonProportionalSpaces = structure.spaces.filter(space => space.use_class === 'common' && space.common_division_class === 'non_proportional');
+    const accessoryCandidateUnits = structure.units.filter(unit => ['parking', 'storage', 'technical', 'other'].includes(unit.unit_type));
     const privateAreaTotal = structure.spaces.filter(space => space.use_class === 'private').reduce((sum, space) => sum + Number(space.real_area_m2_raw || 0), 0);
     const commonAreaTotal = structure.spaces.filter(space => space.use_class === 'common').reduce((sum, space) => sum + Number(space.real_area_m2_raw || 0), 0);
 
@@ -1026,7 +1140,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                             {editingStructure && (
                                                 <Button type="button" variant="secondary" size="sm" onClick={cancelStructureEdit} disabled={!!actionLoading}>Cancelar edicao</Button>
                                             )}
-                                            {selectedVersion && ['locked', 'superseded', 'cancelled'].includes(selectedVersion.status) && (
+                                            {selectedVersion && !structureIsEditable && (
                                                 <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-widest text-amber-700">Somente leitura</span>
                                             )}
                                         </div>
@@ -1039,7 +1153,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                                 <input value={editorBlockCode} onChange={event => setEditorBlockCode(event.target.value)} placeholder="Codigo" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
                                                 <input value={editorBlockName} onChange={event => setEditorBlockName(event.target.value)} placeholder="Nome do bloco" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
                                             </div>
-                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'block' ? 'Salvar bloco' : 'Adicionar bloco'}</Button>
+                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'block' ? 'Salvar bloco' : 'Adicionar bloco'}</Button>
                                         </form>
 
                                         <form onSubmit={addFloor} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
@@ -1060,7 +1174,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                                     <option value="other">Outro</option>
                                                 </select>
                                             </div>
-                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'floor' ? 'Salvar pavimento' : 'Adicionar pavimento'}</Button>
+                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'floor' ? 'Salvar pavimento' : 'Adicionar pavimento'}</Button>
                                         </form>
 
                                         <form onSubmit={addUnit} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
@@ -1084,7 +1198,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                                     <option value="other">Outro</option>
                                                 </select>
                                             </div>
-                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'unit' ? 'Salvar unidade' : 'Adicionar unidade'}</Button>
+                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'unit' ? 'Salvar unidade' : 'Adicionar unidade'}</Button>
                                         </form>
 
                                         <form onSubmit={addSpace} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
@@ -1102,15 +1216,57 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                                 <select value={editorSpaceDivision} onChange={event => setEditorSpaceDivision(event.target.value as 'proportional' | 'non_proportional')} disabled={editorSpaceUseClass === 'private'} className="h-9 rounded-lg border border-slate-200 px-3 text-sm disabled:bg-slate-100"><option value="proportional">Comum proporcional</option><option value="non_proportional">Comum nao proporcional</option></select>
                                                 <select value={editorSpaceScope} onChange={event => setEditorSpaceScope(event.target.value as 'global' | 'block')} disabled={editorSpaceUseClass === 'private'} className="h-9 rounded-lg border border-slate-200 px-3 text-sm disabled:bg-slate-100"><option value="global">Escopo global</option><option value="block">Escopo bloco</option></select>
                                             </div>
-                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'space' ? 'Salvar espaco' : 'Adicionar espaco'}</Button>
+                                            <Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> {editingStructure?.kind === 'space' ? 'Salvar espaco' : 'Adicionar espaco'}</Button>
                                         </form>
                                     </div>
 
                                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                        <StructureAdminList title="Blocos" empty="Nenhum bloco cadastrado." rows={structure.blocks.map(block => ({ id: block.id, label: `${block.code || '-'} - ${block.name}`, detail: `Ordem ${block.sort_order || 0}` }))} onEdit={id => beginStructureEdit('block', id)} onDelete={id => deleteStructureRecord('block', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
-                                        <StructureAdminList title="Pavimentos" empty="Nenhum pavimento cadastrado." rows={structure.floors.map(floor => ({ id: floor.id, label: `${floor.code || '-'} - ${floor.name}`, detail: floor.floor_type }))} onEdit={id => beginStructureEdit('floor', id)} onDelete={id => deleteStructureRecord('floor', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
-                                        <StructureAdminList title="Unidades" empty="Nenhuma unidade cadastrada." rows={structure.units.map(unit => ({ id: unit.id, label: unit.code, detail: `${unit.unit_type} ${unit.typology_code || ''}`.trim() }))} onEdit={id => beginStructureEdit('unit', id)} onDelete={id => deleteStructureRecord('unit', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
-                                        <StructureAdminList title="Espacos" empty="Nenhum espaco cadastrado." rows={structure.spaces.map(space => ({ id: space.id, label: `${space.code || '-'} - ${space.name}`, detail: `${space.use_class === 'private' ? 'Privativo' : 'Comum'} - ${formatNumber(space.real_area_m2_raw)} m2` }))} onEdit={id => beginStructureEdit('space', id)} onDelete={id => deleteStructureRecord('space', id)} disabled={!!actionLoading || ['locked', 'superseded', 'cancelled'].includes(selectedVersion?.status || '')} />
+                                        <StructureAdminList title="Blocos" empty="Nenhum bloco cadastrado." rows={structure.blocks.map(block => ({ id: block.id, label: `${block.code || '-'} - ${block.name}`, detail: `Ordem ${block.sort_order || 0}` }))} onEdit={id => beginStructureEdit('block', id)} onDelete={id => deleteStructureRecord('block', id)} disabled={!!actionLoading || !structureIsEditable} />
+                                        <StructureAdminList title="Pavimentos" empty="Nenhum pavimento cadastrado." rows={structure.floors.map(floor => ({ id: floor.id, label: `${floor.code || '-'} - ${floor.name}`, detail: floor.floor_type }))} onEdit={id => beginStructureEdit('floor', id)} onDelete={id => deleteStructureRecord('floor', id)} disabled={!!actionLoading || !structureIsEditable} />
+                                        <StructureAdminList title="Unidades" empty="Nenhuma unidade cadastrada." rows={structure.units.map(unit => ({ id: unit.id, label: unit.code, detail: `${unit.unit_type} ${unit.typology_code || ''}`.trim() }))} onEdit={id => beginStructureEdit('unit', id)} onDelete={id => deleteStructureRecord('unit', id)} disabled={!!actionLoading || !structureIsEditable} />
+                                        <StructureAdminList title="Espacos" empty="Nenhum espaco cadastrado." rows={structure.spaces.map(space => {
+                                            const scope = structure.commonDistributionScopes.find(item => item.common_space_id === space.id);
+                                            const useLabel = space.use_class === 'private' ? 'Privativo' : `Comum ${scope?.distribution_scope === 'block' ? 'bloco' : 'global'}`;
+                                            return { id: space.id, label: `${space.code || '-'} - ${space.name}`, detail: `${useLabel} - ${formatNumber(space.real_area_m2_raw)} m2` };
+                                        })} onEdit={id => beginStructureEdit('space', id)} onDelete={id => deleteStructureRecord('space', id)} disabled={!!actionLoading || !structureIsEditable} />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                        <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+                                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Vinculos acessorios</h4>
+                                            <form onSubmit={addAccessoryLink} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                <select value={accessoryParentUnitId} onChange={event => setAccessoryParentUnitId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Unidade principal</option>{structure.units.map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>
+                                                <select value={accessoryUnitId} onChange={event => setAccessoryUnitId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Unidade acessoria</option>{(accessoryCandidateUnits.length > 0 ? accessoryCandidateUnits : structure.units).map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>
+                                                <select value={accessoryLinkType} onChange={event => setAccessoryLinkType(event.target.value as 'parking' | 'storage' | 'box' | 'exclusive_area' | 'other')} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="parking">Vaga</option><option value="storage">Deposito</option><option value="box">Box</option><option value="exclusive_area">Area exclusiva</option><option value="other">Outro</option></select>
+                                                <input value={accessoryLegalNote} onChange={event => setAccessoryLegalNote(event.target.value)} placeholder="Nota legal" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
+                                                <label className="flex items-center gap-2 text-xs font-bold text-slate-600"><input type="checkbox" checked={accessoryAffectsPrivateArea} onChange={event => setAccessoryAffectsPrivateArea(event.target.checked)} /> Afeta area privativa</label>
+                                                <label className="flex items-center gap-2 text-xs font-bold text-slate-600"><input type="checkbox" checked={accessoryAffectsCoefficient} onChange={event => setAccessoryAffectsCoefficient(event.target.checked)} /> Afeta coeficiente</label>
+                                                <div className="md:col-span-2"><Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable}><Plus className="w-4 h-4" /> Adicionar vinculo</Button></div>
+                                            </form>
+                                            <StructureAdminList title="Vinculos cadastrados" empty="Nenhum vinculo acessorio." rows={structure.accessoryLinks.map(link => {
+                                                const parent = structure.units.find(unit => unit.id === link.parent_unit_id);
+                                                const accessory = structure.units.find(unit => unit.id === link.accessory_unit_id);
+                                                return { id: link.id, label: `${parent?.code || '-'} -> ${accessory?.code || '-'}`, detail: `${link.link_type} | area ${link.affects_private_area ? 'sim' : 'nao'} | coef ${link.affects_coefficient ? 'sim' : 'nao'}` };
+                                            })} onDelete={deleteAccessoryLink} disabled={!!actionLoading || !structureIsEditable} />
+                                        </div>
+
+                                        <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+                                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Alocacoes comuns nao proporcionais</h4>
+                                            <form onSubmit={addCommonAllocation} className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                <select value={allocationCommonSpaceId} onChange={event => setAllocationCommonSpaceId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Area comum</option>{commonNonProportionalSpaces.map(space => <option key={space.id} value={space.id}>{space.code || space.name}</option>)}</select>
+                                                <select value={allocationTargetUnitId} onChange={event => setAllocationTargetUnitId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Unidade alvo</option>{structure.units.map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>
+                                                <select value={allocationMethod} onChange={event => setAllocationMethod(event.target.value as 'fixed_area' | 'percentage')} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="fixed_area">Area fixa</option><option value="percentage">Percentual decimal</option></select>
+                                                <input value={allocationValue} onChange={event => setAllocationValue(event.target.value)} placeholder={allocationMethod === 'fixed_area' ? 'Area m2' : '0,25'} className="h-9 rounded-lg border border-slate-200 px-3 text-sm" />
+                                                <input value={allocationJustification} onChange={event => setAllocationJustification(event.target.value)} placeholder="Justificativa" className="h-9 rounded-lg border border-slate-200 px-3 text-sm md:col-span-2" />
+                                                <div className="md:col-span-2"><Button type="submit" size="sm" disabled={!selectedVersionId || !!actionLoading || !structureIsEditable || commonNonProportionalSpaces.length === 0}><Plus className="w-4 h-4" /> Adicionar alocacao</Button></div>
+                                            </form>
+                                            <StructureAdminList title="Alocacoes cadastradas" empty="Nenhuma alocacao comum." rows={structure.commonAllocations.map(allocation => {
+                                                const space = structure.spaces.find(item => item.id === allocation.common_space_id);
+                                                const unit = structure.units.find(item => item.id === allocation.target_unit_id);
+                                                const value = allocation.allocation_method === 'percentage' ? formatNumber(allocation.percentage, 12) : `${formatNumber(allocation.allocated_real_area_m2_raw)} m2`;
+                                                return { id: allocation.id, label: `${space?.code || space?.name || '-'} -> ${unit?.code || '-'}`, detail: `${allocation.allocation_method} | ${value}` };
+                                            })} onDelete={deleteCommonAllocation} disabled={!!actionLoading || !structureIsEditable} />
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1130,7 +1286,11 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                         title="Espacos"
                                         empty="Nenhum espaco cadastrado."
                                         headers={['Codigo', 'Uso', 'Area', 'Coef.']}
-                                        rows={structure.spaces.map(space => [space.code || '-', space.use_class === 'private' ? 'Privativa' : 'Comum', `${formatNumber(space.real_area_m2_raw)} m2`, formatNumber(space.coefficient_value ?? 1, 6)])}
+                                        rows={structure.spaces.map(space => {
+                                            const scope = structure.commonDistributionScopes.find(item => item.common_space_id === space.id);
+                                            const useLabel = space.use_class === 'private' ? 'Privativa' : `Comum ${scope?.distribution_scope === 'block' ? 'bloco' : 'global'}`;
+                                            return [space.code || '-', useLabel, `${formatNumber(space.real_area_m2_raw)} m2`, formatNumber(space.coefficient_value ?? 1, 6)];
+                                        })}
                                     />
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1241,6 +1401,34 @@ function approvalLabel(approval?: AreaVersionApproval): string {
     return 'Pendente';
 }
 
+function auditActionLabel(action: AreaVersionAuditLog['action']): string {
+    const labels: Record<AreaVersionAuditLog['action'], string> = {
+        create: 'Criacao',
+        update: 'Edicao',
+        delete: 'Exclusao',
+        calculate: 'Calculo',
+        approve: 'Aprovacao',
+        reject: 'Rejeicao',
+        lock: 'Lock',
+        export: 'Exportacao',
+    };
+    return labels[action] || action;
+}
+
+function auditEntityLabel(entityType: string): string {
+    const labels: Record<string, string> = {
+        area_version_block: 'Bloco',
+        area_version_floor: 'Pavimento',
+        area_version_unit: 'Unidade',
+        area_version_space: 'Espaco',
+        area_export_package: 'Exportacao',
+        area_version: 'Versao',
+        area_version_approval: 'Aprovacao',
+        calculation_result: 'Calculo',
+    };
+    return labels[entityType] || entityType;
+}
+
 function LifecycleAuditPanel({ version, technicalApproval, legalApproval, auditLogs }: { version: AreaVersion | null; technicalApproval?: AreaVersionApproval; legalApproval?: AreaVersionApproval; auditLogs: AreaVersionAuditLog[] }) {
     return (
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr_1.2fr] gap-3">
@@ -1270,8 +1458,8 @@ function LifecycleAuditPanel({ version, technicalApproval, legalApproval, auditL
                         {auditLogs.slice(0, 4).map(log => (
                             <div key={log.id} className="flex items-center justify-between gap-3 text-xs">
                                 <div className="min-w-0">
-                                    <p className="truncate font-black uppercase text-slate-700">{log.action}</p>
-                                    <p className="truncate text-slate-500">{log.entity_type}</p>
+                                    <p className="truncate font-black uppercase text-slate-700">{auditActionLabel(log.action)} - {auditEntityLabel(log.entity_type)}</p>
+                                    <p className="truncate text-slate-500">{log.reason || log.field_name || '-'}</p>
                                 </div>
                                 <span className="shrink-0 text-slate-500">{formatDateTime(log.performed_at)}</span>
                             </div>
@@ -1282,7 +1470,7 @@ function LifecycleAuditPanel({ version, technicalApproval, legalApproval, auditL
         </div>
     );
 }
-function StructureAdminList({ title, rows, empty, disabled, onEdit, onDelete }: { title: string; rows: { id: string; label: string; detail: string }[]; empty: string; disabled: boolean; onEdit: (id: string) => void; onDelete: (id: string) => void }) {
+function StructureAdminList({ title, rows, empty, disabled, onEdit, onDelete }: { title: string; rows: { id: string; label: string; detail: string }[]; empty: string; disabled: boolean; onEdit?: (id: string) => void; onDelete: (id: string) => void }) {
     return (
         <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
             <div className="border-b border-slate-200 bg-slate-50 px-3 py-2">
@@ -1299,9 +1487,11 @@ function StructureAdminList({ title, rows, empty, disabled, onEdit, onDelete }: 
                                 <p className="truncate text-xs text-slate-500">{row.detail}</p>
                             </div>
                             <div className="flex shrink-0 items-center gap-1">
-                                <Button type="button" variant="ghost" size="icon" onClick={() => onEdit(row.id)} disabled={disabled} className="text-slate-600 hover:text-blue-700">
-                                    <Pencil className="w-4 h-4" />
-                                </Button>
+                                {onEdit && (
+                                    <Button type="button" variant="ghost" size="icon" onClick={() => onEdit(row.id)} disabled={disabled} className="text-slate-600 hover:text-blue-700">
+                                        <Pencil className="w-4 h-4" />
+                                    </Button>
+                                )}
                                 <Button type="button" variant="ghost" size="icon" onClick={() => onDelete(row.id)} disabled={disabled} className="text-red-600 hover:text-red-700">
                                     <Trash2 className="w-4 h-4" />
                                 </Button>

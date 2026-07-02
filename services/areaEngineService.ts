@@ -19,6 +19,9 @@ import type {
     AreaVersionFloor,
     AreaVersionUnit,
     AreaVersionSpace,
+    AreaVersionCommonDistributionScope,
+    AreaVersionUnitAccessoryLink,
+    AreaVersionCommonAllocation,
 } from '../types/areaEngine';
 
 export interface AreaMinimalStructureInput {
@@ -71,6 +74,24 @@ export interface AreaSpaceInput {
     distributionScope?: 'global' | 'block';
 }
 
+export interface AreaAccessoryLinkInput {
+    parentUnitId: string;
+    accessoryUnitId: string;
+    linkType: 'parking' | 'storage' | 'box' | 'exclusive_area' | 'other';
+    affectsPrivateArea: boolean;
+    affectsCoefficient: boolean;
+    legalNote?: string;
+}
+
+export interface AreaCommonAllocationInput {
+    commonSpaceId: string;
+    targetUnitId: string;
+    allocationMethod: 'fixed_area' | 'percentage';
+    allocatedRealArea?: number | null;
+    percentage?: number | null;
+    justification?: string;
+}
+
 function omitCloneFields<T extends Record<string, unknown>>(row: T): Omit<T, 'id' | 'created_at' | 'updated_at' | 'created_by' | 'updated_by'> {
     const { id: _id, created_at: _createdAt, updated_at: _updatedAt, created_by: _createdBy, updated_by: _updatedBy, ...rest } = row;
     return rest;
@@ -78,6 +99,63 @@ function omitCloneFields<T extends Record<string, unknown>>(row: T): Omit<T, 'id
 function raiseAreaEngineError(context: string, error: { message: string }): never {
     console.error(`[areaEngineService] ${context}:`, error);
     throw new Error(`Erro no motor de areas: ${error.message}`);
+}
+
+type AreaAuditAction = 'create' | 'update' | 'delete' | 'calculate' | 'approve' | 'reject' | 'lock' | 'export';
+
+async function recordStructureAudit(input: {
+    versionId: string;
+    entityType: string;
+    entityId?: string | null;
+    action: AreaAuditAction;
+    oldValue?: Record<string, unknown> | null;
+    newValue?: Record<string, unknown> | null;
+    reason: string;
+}): Promise<void> {
+    const { error } = await supabase
+        .from('area_version_audit_logs')
+        .insert({
+            area_version_id: input.versionId,
+            entity_type: input.entityType,
+            entity_id: input.entityId || null,
+            action: input.action,
+            field_name: 'structure',
+            old_value: input.oldValue || null,
+            new_value: input.newValue || null,
+            reason: input.reason,
+        });
+
+    if (error) raiseAreaEngineError(`recordStructureAudit.${input.entityType}.${input.action}`, error);
+}
+
+async function invalidateVersionCalculation(versionId: string): Promise<void> {
+    const deletions = await Promise.all([
+        supabase.from('area_version_quadro_i_rows').delete().eq('area_version_id', versionId),
+        supabase.from('area_version_quadro_ii_rows').delete().eq('area_version_id', versionId),
+        supabase.from('area_version_quadro_ivb_rows').delete().eq('area_version_id', versionId),
+        supabase.from('area_version_fraction_ideals').delete().eq('area_version_id', versionId),
+    ]);
+
+    deletions.forEach((result, index) => {
+        if (result.error) {
+            const labels = ['quadro_i', 'quadro_ii', 'quadro_ivb', 'fractions'];
+            raiseAreaEngineError(`invalidateVersionCalculation.${labels[index]}`, result.error);
+        }
+    });
+
+    const { error } = await supabase
+        .from('area_versions')
+        .update({
+            status: 'draft',
+            version_payload_hash: null,
+            version_identity_hash: null,
+            canonical_payload_json: null,
+            locked_at: null,
+        })
+        .eq('id', versionId)
+        .in('status', ['draft', 'calculated']);
+
+    if (error) raiseAreaEngineError('invalidateVersionCalculation.version', error);
 }
 
 export const areaEngineService = {
@@ -421,23 +499,32 @@ export const areaEngineService = {
         return (data || []) as AreaVersionAuditLog[];
     },
     async getStructure(versionId: string): Promise<AreaVersionStructure> {
-        const [blocksRes, floorsRes, unitsRes, spacesRes] = await Promise.all([
+        const [blocksRes, floorsRes, unitsRes, spacesRes, scopesRes, accessoryLinksRes, allocationsRes] = await Promise.all([
             supabase.from('area_version_blocks').select('*').eq('area_version_id', versionId).order('sort_order', { ascending: true }),
             supabase.from('area_version_floors').select('*').eq('area_version_id', versionId).order('sort_order', { ascending: true }),
             supabase.from('area_version_units').select('*').eq('area_version_id', versionId).order('materialized_index', { ascending: true }),
             supabase.from('area_version_spaces').select('*').eq('area_version_id', versionId).order('materialized_index', { ascending: true }),
+            supabase.from('area_version_common_distribution_scopes').select('*').eq('area_version_id', versionId),
+            supabase.from('area_version_unit_accessory_links').select('*').eq('area_version_id', versionId),
+            supabase.from('area_version_common_allocations').select('*').eq('area_version_id', versionId),
         ]);
 
         if (blocksRes.error) raiseAreaEngineError('getStructure.blocks', blocksRes.error);
         if (floorsRes.error) raiseAreaEngineError('getStructure.floors', floorsRes.error);
         if (unitsRes.error) raiseAreaEngineError('getStructure.units', unitsRes.error);
         if (spacesRes.error) raiseAreaEngineError('getStructure.spaces', spacesRes.error);
+        if (scopesRes.error) raiseAreaEngineError('getStructure.scopes', scopesRes.error);
+        if (accessoryLinksRes.error) raiseAreaEngineError('getStructure.accessoryLinks', accessoryLinksRes.error);
+        if (allocationsRes.error) raiseAreaEngineError('getStructure.allocations', allocationsRes.error);
 
         return {
             blocks: (blocksRes.data || []) as AreaVersionBlock[],
             floors: (floorsRes.data || []) as AreaVersionFloor[],
             units: (unitsRes.data || []) as AreaVersionUnit[],
             spaces: (spacesRes.data || []) as AreaVersionSpace[],
+            commonDistributionScopes: (scopesRes.data || []) as AreaVersionCommonDistributionScope[],
+            accessoryLinks: (accessoryLinksRes.data || []) as AreaVersionUnitAccessoryLink[],
+            commonAllocations: (allocationsRes.data || []) as AreaVersionCommonAllocation[],
         };
     },
 
@@ -454,10 +541,27 @@ export const areaEngineService = {
             .single();
 
         if (error) raiseAreaEngineError('createBlock', error);
-        return data as AreaVersionBlock;
+        const block = data as AreaVersionBlock;
+        await recordStructureAudit({
+            versionId,
+            entityType: 'area_version_block',
+            entityId: block.id,
+            action: 'create',
+            newValue: block as Record<string, unknown>,
+            reason: 'Bloco criado pelo editor granular do app',
+        });
+        await invalidateVersionCalculation(versionId);
+        return block;
     },
 
     async updateBlock(blockId: string, input: AreaBlockInput): Promise<AreaVersionBlock> {
+        const { data: before, error: beforeError } = await supabase
+            .from('area_version_blocks')
+            .select('*')
+            .eq('id', blockId)
+            .single();
+        if (beforeError) raiseAreaEngineError('updateBlock.before', beforeError);
+
         const { data, error } = await supabase
             .from('area_version_blocks')
             .update({
@@ -470,7 +574,18 @@ export const areaEngineService = {
             .single();
 
         if (error) raiseAreaEngineError('updateBlock', error);
-        return data as AreaVersionBlock;
+        const block = data as AreaVersionBlock;
+        await recordStructureAudit({
+            versionId: block.area_version_id,
+            entityType: 'area_version_block',
+            entityId: block.id,
+            action: 'update',
+            oldValue: before as Record<string, unknown>,
+            newValue: block as Record<string, unknown>,
+            reason: 'Bloco atualizado pelo editor granular do app',
+        });
+        await invalidateVersionCalculation(block.area_version_id);
+        return block;
     },
 
     async createFloor(versionId: string, input: AreaFloorInput): Promise<AreaVersionFloor> {
@@ -493,10 +608,27 @@ export const areaEngineService = {
             .single();
 
         if (error) raiseAreaEngineError('createFloor', error);
-        return data as AreaVersionFloor;
+        const floor = data as AreaVersionFloor;
+        await recordStructureAudit({
+            versionId,
+            entityType: 'area_version_floor',
+            entityId: floor.id,
+            action: 'create',
+            newValue: floor as Record<string, unknown>,
+            reason: 'Pavimento criado pelo editor granular do app',
+        });
+        await invalidateVersionCalculation(versionId);
+        return floor;
     },
 
     async updateFloor(floorId: string, input: AreaFloorInput): Promise<AreaVersionFloor> {
+        const { data: before, error: beforeError } = await supabase
+            .from('area_version_floors')
+            .select('*')
+            .eq('id', floorId)
+            .single();
+        if (beforeError) raiseAreaEngineError('updateFloor.before', beforeError);
+
         const sortOrder = input.sortOrder ?? 0;
         const { data, error } = await supabase
             .from('area_version_floors')
@@ -514,7 +646,18 @@ export const areaEngineService = {
             .single();
 
         if (error) raiseAreaEngineError('updateFloor', error);
-        return data as AreaVersionFloor;
+        const floor = data as AreaVersionFloor;
+        await recordStructureAudit({
+            versionId: floor.area_version_id,
+            entityType: 'area_version_floor',
+            entityId: floor.id,
+            action: 'update',
+            oldValue: before as Record<string, unknown>,
+            newValue: floor as Record<string, unknown>,
+            reason: 'Pavimento atualizado pelo editor granular do app',
+        });
+        await invalidateVersionCalculation(floor.area_version_id);
+        return floor;
     },
 
     async createUnit(versionId: string, input: AreaUnitInput): Promise<AreaVersionUnit> {
@@ -540,10 +683,27 @@ export const areaEngineService = {
             .single();
 
         if (error) raiseAreaEngineError('createUnit', error);
-        return data as AreaVersionUnit;
+        const unit = data as AreaVersionUnit;
+        await recordStructureAudit({
+            versionId,
+            entityType: 'area_version_unit',
+            entityId: unit.id,
+            action: 'create',
+            newValue: unit as Record<string, unknown>,
+            reason: 'Unidade criada pelo editor granular do app',
+        });
+        await invalidateVersionCalculation(versionId);
+        return unit;
     },
 
     async updateUnit(unitId: string, input: AreaUnitInput): Promise<AreaVersionUnit> {
+        const { data: before, error: beforeError } = await supabase
+            .from('area_version_units')
+            .select('*')
+            .eq('id', unitId)
+            .single();
+        if (beforeError) raiseAreaEngineError('updateUnit.before', beforeError);
+
         const materializedIndex = input.materializedIndex ?? 0;
         const { data, error } = await supabase
             .from('area_version_units')
@@ -562,7 +722,18 @@ export const areaEngineService = {
             .single();
 
         if (error) raiseAreaEngineError('updateUnit', error);
-        return data as AreaVersionUnit;
+        const unit = data as AreaVersionUnit;
+        await recordStructureAudit({
+            versionId: unit.area_version_id,
+            entityType: 'area_version_unit',
+            entityId: unit.id,
+            action: 'update',
+            oldValue: before as Record<string, unknown>,
+            newValue: unit as Record<string, unknown>,
+            reason: 'Unidade atualizada pelo editor granular do app',
+        });
+        await invalidateVersionCalculation(unit.area_version_id);
+        return unit;
     },
 
     async createSpace(versionId: string, input: AreaSpaceInput): Promise<AreaVersionSpace> {
@@ -613,10 +784,26 @@ export const areaEngineService = {
             if (scopeError) raiseAreaEngineError('createSpace.scope', scopeError);
         }
 
+        await recordStructureAudit({
+            versionId,
+            entityType: 'area_version_space',
+            entityId: space.id,
+            action: 'create',
+            newValue: space as Record<string, unknown>,
+            reason: 'Espaco criado pelo editor granular do app',
+        });
+        await invalidateVersionCalculation(versionId);
         return space;
     },
 
     async updateSpace(spaceId: string, input: AreaSpaceInput): Promise<AreaVersionSpace> {
+        const { data: before, error: beforeError } = await supabase
+            .from('area_version_spaces')
+            .select('*')
+            .eq('id', spaceId)
+            .single();
+        if (beforeError) raiseAreaEngineError('updateSpace.before', beforeError);
+
         const isCommon = input.useClass === 'common';
         const commonDivisionClass = isCommon ? (input.commonDivisionClass || 'proportional') : 'not_applicable';
         const coefficientValue = input.coefficientValue === undefined ? 1 : input.coefficientValue;
@@ -667,31 +854,212 @@ export const areaEngineService = {
             if (scopeError) raiseAreaEngineError('updateSpace.scopeDelete', scopeError);
         }
 
+        await recordStructureAudit({
+            versionId: space.area_version_id,
+            entityType: 'area_version_space',
+            entityId: space.id,
+            action: 'update',
+            oldValue: before as Record<string, unknown>,
+            newValue: space as Record<string, unknown>,
+            reason: 'Espaco atualizado pelo editor granular do app',
+        });
+        await invalidateVersionCalculation(space.area_version_id);
         return space;
     },
 
     async deleteBlock(blockId: string): Promise<void> {
+        const { data: before, error: beforeError } = await supabase
+            .from('area_version_blocks')
+            .select('*')
+            .eq('id', blockId)
+            .single();
+        if (beforeError) raiseAreaEngineError('deleteBlock.before', beforeError);
+
         const { error } = await supabase.from('area_version_blocks').delete().eq('id', blockId);
         if (error) raiseAreaEngineError('deleteBlock', error);
+        await recordStructureAudit({
+            versionId: before.area_version_id,
+            entityType: 'area_version_block',
+            entityId: blockId,
+            action: 'delete',
+            oldValue: before as Record<string, unknown>,
+            reason: 'Bloco removido pelo editor granular do app',
+        });
+        await invalidateVersionCalculation(before.area_version_id);
     },
 
     async deleteFloor(floorId: string): Promise<void> {
+        const { data: before, error: beforeError } = await supabase
+            .from('area_version_floors')
+            .select('*')
+            .eq('id', floorId)
+            .single();
+        if (beforeError) raiseAreaEngineError('deleteFloor.before', beforeError);
+
         const { error } = await supabase.from('area_version_floors').delete().eq('id', floorId);
         if (error) raiseAreaEngineError('deleteFloor', error);
+        await recordStructureAudit({
+            versionId: before.area_version_id,
+            entityType: 'area_version_floor',
+            entityId: floorId,
+            action: 'delete',
+            oldValue: before as Record<string, unknown>,
+            reason: 'Pavimento removido pelo editor granular do app',
+        });
+        await invalidateVersionCalculation(before.area_version_id);
     },
 
     async deleteUnit(unitId: string): Promise<void> {
+        const { data: before, error: beforeError } = await supabase
+            .from('area_version_units')
+            .select('*')
+            .eq('id', unitId)
+            .single();
+        if (beforeError) raiseAreaEngineError('deleteUnit.before', beforeError);
+
+        const { data: linkedSpaces, error: linkedSpacesError } = await supabase
+            .from('area_version_spaces')
+            .select('*')
+            .eq('unit_id', unitId);
+        if (linkedSpacesError) raiseAreaEngineError('deleteUnit.linkedSpaces', linkedSpacesError);
+
         const { error: spacesError } = await supabase.from('area_version_spaces').delete().eq('unit_id', unitId);
         if (spacesError) raiseAreaEngineError('deleteUnit.spaces', spacesError);
         const { error } = await supabase.from('area_version_units').delete().eq('id', unitId);
         if (error) raiseAreaEngineError('deleteUnit', error);
+        await recordStructureAudit({
+            versionId: before.area_version_id,
+            entityType: 'area_version_unit',
+            entityId: unitId,
+            action: 'delete',
+            oldValue: { unit: before, linkedSpaces: linkedSpaces || [] },
+            reason: 'Unidade removida pelo editor granular do app',
+        });
+        await invalidateVersionCalculation(before.area_version_id);
     },
 
     async deleteSpace(spaceId: string): Promise<void> {
+        const { data: before, error: beforeError } = await supabase
+            .from('area_version_spaces')
+            .select('*')
+            .eq('id', spaceId)
+            .single();
+        if (beforeError) raiseAreaEngineError('deleteSpace.before', beforeError);
+
         const { error } = await supabase.from('area_version_spaces').delete().eq('id', spaceId);
         if (error) raiseAreaEngineError('deleteSpace', error);
+        await recordStructureAudit({
+            versionId: before.area_version_id,
+            entityType: 'area_version_space',
+            entityId: spaceId,
+            action: 'delete',
+            oldValue: before as Record<string, unknown>,
+            reason: 'Espaco removido pelo editor granular do app',
+        });
+        await invalidateVersionCalculation(before.area_version_id);
     },
 
+    async createAccessoryUnitLink(versionId: string, input: AreaAccessoryLinkInput): Promise<AreaVersionUnitAccessoryLink> {
+        const { data, error } = await supabase
+            .from('area_version_unit_accessory_links')
+            .insert({
+                area_version_id: versionId,
+                parent_unit_id: input.parentUnitId,
+                accessory_unit_id: input.accessoryUnitId,
+                accessory_space_id: null,
+                link_type: input.linkType,
+                affects_private_area: input.affectsPrivateArea,
+                affects_coefficient: input.affectsCoefficient,
+                legal_note: input.legalNote?.trim() || null,
+            })
+            .select()
+            .single();
+
+        if (error) raiseAreaEngineError('createAccessoryUnitLink', error);
+        const link = data as AreaVersionUnitAccessoryLink;
+        await recordStructureAudit({
+            versionId,
+            entityType: 'area_version_unit_accessory_link',
+            entityId: link.id,
+            action: 'create',
+            newValue: link as Record<string, unknown>,
+            reason: 'Vinculo acessorio criado pelo editor do app',
+        });
+        await invalidateVersionCalculation(versionId);
+        return link;
+    },
+
+    async deleteAccessoryLink(linkId: string): Promise<void> {
+        const { data: before, error: beforeError } = await supabase
+            .from('area_version_unit_accessory_links')
+            .select('*')
+            .eq('id', linkId)
+            .single();
+        if (beforeError) raiseAreaEngineError('deleteAccessoryLink.before', beforeError);
+
+        const { error } = await supabase.from('area_version_unit_accessory_links').delete().eq('id', linkId);
+        if (error) raiseAreaEngineError('deleteAccessoryLink', error);
+        await recordStructureAudit({
+            versionId: before.area_version_id,
+            entityType: 'area_version_unit_accessory_link',
+            entityId: linkId,
+            action: 'delete',
+            oldValue: before as Record<string, unknown>,
+            reason: 'Vinculo acessorio removido pelo editor do app',
+        });
+        await invalidateVersionCalculation(before.area_version_id);
+    },
+
+    async createCommonAllocation(versionId: string, input: AreaCommonAllocationInput): Promise<AreaVersionCommonAllocation> {
+        const { data, error } = await supabase
+            .from('area_version_common_allocations')
+            .insert({
+                area_version_id: versionId,
+                common_space_id: input.commonSpaceId,
+                target_unit_id: input.targetUnitId,
+                allocation_method: input.allocationMethod,
+                allocated_real_area_m2_raw: input.allocationMethod === 'fixed_area' ? input.allocatedRealArea : null,
+                allocated_equivalent_area_m2_raw: null,
+                percentage: input.allocationMethod === 'percentage' ? input.percentage : null,
+                justification: input.justification?.trim() || null,
+            })
+            .select()
+            .single();
+
+        if (error) raiseAreaEngineError('createCommonAllocation', error);
+        const allocation = data as AreaVersionCommonAllocation;
+        await recordStructureAudit({
+            versionId,
+            entityType: 'area_version_common_allocation',
+            entityId: allocation.id,
+            action: 'create',
+            newValue: allocation as Record<string, unknown>,
+            reason: 'Alocacao comum nao proporcional criada pelo editor do app',
+        });
+        await invalidateVersionCalculation(versionId);
+        return allocation;
+    },
+
+    async deleteCommonAllocation(allocationId: string): Promise<void> {
+        const { data: before, error: beforeError } = await supabase
+            .from('area_version_common_allocations')
+            .select('*')
+            .eq('id', allocationId)
+            .single();
+        if (beforeError) raiseAreaEngineError('deleteCommonAllocation.before', beforeError);
+
+        const { error } = await supabase.from('area_version_common_allocations').delete().eq('id', allocationId);
+        if (error) raiseAreaEngineError('deleteCommonAllocation', error);
+        await recordStructureAudit({
+            versionId: before.area_version_id,
+            entityType: 'area_version_common_allocation',
+            entityId: allocationId,
+            action: 'delete',
+            oldValue: before as Record<string, unknown>,
+            reason: 'Alocacao comum nao proporcional removida pelo editor do app',
+        });
+        await invalidateVersionCalculation(before.area_version_id);
+    },
     async createMinimalStructure(versionId: string, input: AreaMinimalStructureInput): Promise<void> {
         const { count, error: countError } = await supabase
             .from('area_version_blocks')

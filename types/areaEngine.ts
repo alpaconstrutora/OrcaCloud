@@ -232,10 +232,49 @@ export interface AreaVersionSpace {
     [key: string]: unknown;
 }
 
+export interface AreaVersionCommonDistributionScope {
+    id: string;
+    area_version_id: string;
+    common_space_id: string;
+    distribution_scope: 'global' | 'block' | string;
+    block_id?: string | null;
+    notes?: string | null;
+    [key: string]: unknown;
+}
+
+export interface AreaVersionUnitAccessoryLink {
+    id: string;
+    area_version_id: string;
+    parent_unit_id: string;
+    accessory_space_id?: string | null;
+    accessory_unit_id?: string | null;
+    link_type: 'parking' | 'storage' | 'box' | 'exclusive_area' | 'other' | string;
+    affects_private_area: boolean;
+    affects_coefficient: boolean;
+    legal_note?: string | null;
+    [key: string]: unknown;
+}
+
+export interface AreaVersionCommonAllocation {
+    id: string;
+    area_version_id: string;
+    common_space_id: string;
+    target_unit_id: string;
+    allocation_method: 'fixed_area' | 'percentage' | string;
+    allocated_real_area_m2_raw?: number | null;
+    allocated_equivalent_area_m2_raw?: number | null;
+    percentage?: number | null;
+    justification?: string | null;
+    [key: string]: unknown;
+}
+
 export interface AreaVersionStructure {
     blocks: AreaVersionBlock[];
     floors: AreaVersionFloor[];
     units: AreaVersionUnit[];
     spaces: AreaVersionSpace[];
+    commonDistributionScopes: AreaVersionCommonDistributionScope[];
+    accessoryLinks: AreaVersionUnitAccessoryLink[];
+    commonAllocations: AreaVersionCommonAllocation[];
 }
 

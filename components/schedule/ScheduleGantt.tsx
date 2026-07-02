@@ -276,7 +276,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
             return (
                 <div
                     key={item.id}
-                    className={`group flex border-b border-gray-100 hover:bg-blue-50/30 transition-colors h-9 relative cursor-pointer ${node.inactive ? 'opacity-50' : ''}`}
+                    className={`group flex bg-white border-b border-gray-100 hover:bg-blue-50/30 transition-colors h-9 relative cursor-pointer ${node.inactive ? 'opacity-50' : ''}`}
                     onClick={() => setSelectedTaskId(item.id)}
                 >
                     <div
@@ -310,7 +310,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             )}
                         </div>
 
-                        <div data-gantt-col="gId" className={`shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium ${itemSchedule?.isCritical ? 'text-red-500 bg-red-50' : 'text-gray-400 bg-gray-50/50'}`} style={getGanttColStyle('gId')}>
+                        <div data-gantt-col="gId" className={`shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium ${itemSchedule?.isCritical ? 'text-red-500 bg-red-50' : 'text-gray-400 bg-white'}`} style={getGanttColStyle('gId')}>
                             {node.uid}
                         </div>
 
@@ -532,7 +532,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             <span>{formatDateDisplay(itemSchedule?.lateFinish)?.split('/')?.slice(0, 2)?.join('/') || '-'}</span>
                         </div>
 
-                        <div data-gantt-col="gFloat" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium text-indigo-600 bg-gray-50/30" style={getGanttColStyle('gFloat')}>
+                        <div data-gantt-col="gFloat" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium text-indigo-600 bg-white" style={getGanttColStyle('gFloat')}>
                             {itemSchedule?.totalFloat !== undefined ? `${itemSchedule.totalFloat}d` : '-'}
                         </div>
 
@@ -588,7 +588,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             </span>
                         </div>
                     </div>
-                    <div className="relative flex-1 h-full" style={{ width: `${totalWidth}px` }}>
+                    <div className="relative flex-1 h-full bg-white" style={{ width: `${totalWidth}px` }}>
                         {timelineColumns.map((column, index) => {
                             const dow = column.date.getDay();
                             const isWeekend = timeScale === 'day' && (dow === 0 || dow === 6);

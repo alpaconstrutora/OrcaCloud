@@ -734,11 +734,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
         return (
             <div key={node.id}>
                 <div
-                    className={`flex border-b border-gray-200 cursor-pointer group/row h-9 ${node.type === 'subphase' ? 'bg-gray-50' : 'bg-gray-100'}`}
+                    className="flex border-b border-gray-200 cursor-pointer group/row h-9 bg-white"
                     onClick={() => toggleNode(node.id)}
                 >
                     <div
-                        className={`shrink-0 flex sticky left-0 z-[35] shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)] border-r border-gray-200 ${node.type === 'subphase' ? 'bg-gray-50' : 'bg-gray-100'}`}
+                        className="shrink-0 flex sticky left-0 z-[35] shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)] border-r border-gray-200 bg-white"
                         style={{ width: `${getGanttSidebarTotal()}px` }}
                     >
                         <div
@@ -857,7 +857,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             </div>
                         </div>
                     </div>
-                    <div className="flex-1 bg-gray-50/40 group-hover/row:bg-blue-50/10 transition-colors relative h-full overflow-hidden" style={{ width: `${totalWidth}px` }}>
+                    <div className="flex-1 bg-white group-hover/row:bg-blue-50/10 transition-colors relative h-full overflow-hidden" style={{ width: `${totalWidth}px` }}>
                         {timelineColumns.map((column, index) => {
                             const dow = column.date.getDay();
                             const isWeekend = timeScale === 'day' && (dow === 0 || dow === 6);

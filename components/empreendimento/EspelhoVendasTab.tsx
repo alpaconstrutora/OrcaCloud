@@ -228,11 +228,21 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
 
   // Publica todas as unidades ainda não vinculadas
   const handlePublishAll = async () => {
-    const unpublished = units.filter(u => !u.commercial_property_id);
-    if (!unpublished.length) { alert('Todas as unidades já estão publicadas no Comercial.'); return; }
-    if (!window.confirm(`Publicar ${unpublished.length} unidades no Comercial?`)) return;
+    const localUnpublished = units.filter(u => !u.commercial_property_id);
+    if (!localUnpublished.length) { alert('Todas as unidades já estão publicadas no Comercial.'); return; }
+    if (!window.confirm(`Publicar ${localUnpublished.length} unidades no Comercial?`)) return;
     setPublishingAll(true);
     try {
+      // Revalida no banco antes de criar — o estado local (units) pode estar obsoleto,
+      // o que criaria properties duplicadas para unidades já publicadas.
+      const freshUnits = await empreendimentoService.listAllUnitsForEmpreendimento(e.id);
+      const unpublished = freshUnits.filter(u => !u.commercial_property_id);
+      if (!unpublished.length) {
+        await load();
+        alert('Todas as unidades já estão publicadas no Comercial — a lista foi atualizada.');
+        return;
+      }
+
       const buildingId = await empreendimentoService.ensureCommercialBuilding(e, organizationId);
       for (const unit of unpublished) {
         const prop = await commercialService.saveProperty({

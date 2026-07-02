@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Plus, Search, FileText, Loader2, RefreshCw,
     Building2, Calendar, AlertTriangle, ChevronDown,
@@ -52,6 +52,181 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'vencimento', label: 'Vencimento', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
 ];
+
+interface BoletoItemBaseProps {
+    boleto: Boleto;
+    idx: number;
+    selected: boolean;
+    isHighlighted: boolean;
+    atrasado: boolean;
+    supplierMap: Record<string, string>;
+    onOpen: (b: Boleto) => void;
+    onCheckboxMouseDown: (e: React.MouseEvent) => void;
+    onCheckboxChange: (checked: boolean, id: string, idx: number) => void;
+}
+
+// Memoizado para que uma seleção (shift+click em intervalo grande) não force o
+// React a re-renderizar todos os cards/linhas — só os que realmente mudaram de
+// estado (selected/atrasado/isHighlighted) são atualizados.
+const BoletoCardItem = React.memo(function BoletoCardItem({
+    boleto: b, idx, selected, isHighlighted, atrasado, supplierMap,
+    onOpen, onCheckboxMouseDown, onCheckboxChange,
+}: BoletoItemBaseProps) {
+    return (
+        <div className={`relative group transition-all ${isHighlighted ? 'ring-4 ring-blue-400 ring-offset-2 rounded-3xl animate-pulse' : ''}`}>
+            {/* Checkbox overlay */}
+            <label
+                className="absolute top-3 left-3 z-10 cursor-pointer"
+                onClick={e => e.stopPropagation()}
+            >
+                <input
+                    type="checkbox"
+                    checked={selected}
+                    onMouseDown={onCheckboxMouseDown}
+                    onChange={e => onCheckboxChange(e.target.checked, b.id, idx)}
+                    className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                />
+            </label>
+            <button
+                onClick={() => onOpen(b)}
+                className={`w-full text-left bg-white rounded-2xl border p-5 pl-9 hover:shadow-lg transition-all ${
+                    selected ? 'border-blue-400 ring-2 ring-blue-200' :
+                    atrasado ? 'border-red-200 bg-red-50/30' : 'border-gray-100 hover:border-gray-200'
+                }`}
+            >
+                <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <span className="text-sm font-bold text-gray-900 truncate">
+                            {b.supplier_id
+                                ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
+                                : (b.beneficiario_nome ?? b.documento_nome ?? 'Beneficiário desconhecido')}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {b.numero != null && (
+                            <span className="text-xs font-black text-gray-400 tracking-widest">
+                                #{String(b.numero).padStart(4, '0')}
+                            </span>
+                        )}
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
+                            {STATUS_LABELS[b.status]}
+                        </span>
+                    </div>
+                </div>
+
+                <p className="text-xs text-gray-500 mb-3 truncate">
+                    {b.banco_nome ?? 'Banco desconhecido'}
+                </p>
+
+                <div className="flex items-end justify-between">
+                    <div>
+                        <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-0.5">Valor</p>
+                        <p className="text-lg font-black text-gray-900">{formatBRL(b.valor)}</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-0.5 flex items-center gap-1 justify-end">
+                            <Calendar className="w-3 h-3" /> Vencimento
+                        </p>
+                        <p className={`text-sm font-bold ${atrasado ? 'text-red-600' : 'text-gray-700'}`}>
+                            {b.vencimento ? new Date(b.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                        </p>
+                    </div>
+                </div>
+
+                {b.confidence_score !== undefined && b.confidence_score < 80 && (
+                    <div className="mt-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-700">
+                        <AlertTriangle className="w-3 h-3" />
+                        Baixa confiança ({b.confidence_score}%)
+                    </div>
+                )}
+            </button>
+        </div>
+    );
+});
+
+interface BoletoRowItemProps extends BoletoItemBaseProps {
+    isHighlighted: boolean;
+    visibleColumns: string[];
+    projectMap: Record<string, string>;
+    ccMap: Record<string, string>;
+}
+
+const BoletoRowItem = React.memo(function BoletoRowItem({
+    boleto: b, idx, selected, isHighlighted, atrasado, supplierMap, visibleColumns, projectMap, ccMap,
+    onOpen, onCheckboxMouseDown, onCheckboxChange,
+}: BoletoRowItemProps) {
+    return (
+        <tr
+            onClick={() => onOpen(b)}
+            className={`cursor-pointer hover:bg-gray-50 transition-colors ${
+                isHighlighted ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : selected ? 'bg-blue-50/60' : atrasado ? 'bg-red-50/40' : ''
+            }`}
+        >
+            <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                <input
+                    type="checkbox"
+                    checked={selected}
+                    onMouseDown={onCheckboxMouseDown}
+                    onChange={e => onCheckboxChange(e.target.checked, b.id, idx)}
+                    className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                />
+            </td>
+            {visibleColumns.includes('numero') && (
+                <td className="px-4 py-3 whitespace-nowrap">
+                    <span className="text-xs font-black text-gray-500 tracking-widest">
+                        {b.numero != null ? `#${String(b.numero).padStart(4, '0')}` : '—'}
+                    </span>
+                </td>
+            )}
+            {visibleColumns.includes('beneficiario') && (
+                <td className="px-4 py-3 text-gray-700 max-w-[200px]">
+                    <p className="font-medium truncate">
+                        {b.supplier_id
+                            ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
+                            : (b.beneficiario_nome ?? b.documento_nome)}
+                    </p>
+                    {b.beneficiario_cnpj && !b.supplier_id && (
+                        <p className="text-xs text-gray-400 font-mono truncate">{b.beneficiario_cnpj}</p>
+                    )}
+                </td>
+            )}
+            {visibleColumns.includes('obra') && (
+                <td className="px-4 py-3 text-table-body text-gray-500 max-w-[160px]">
+                    <p className="truncate">{b.project_id ? (projectMap[b.project_id] ?? '—') : '—'}</p>
+                </td>
+            )}
+            {visibleColumns.includes('centro_custo') && (
+                <td className="px-4 py-3 text-table-body text-gray-500 max-w-[140px]">
+                    <p className="truncate">{b.cost_center_id ? (ccMap[b.cost_center_id] ?? '—') : '—'}</p>
+                </td>
+            )}
+            {visibleColumns.includes('valor') && (
+                <td className="px-4 py-3 text-right font-bold text-gray-900 whitespace-nowrap">
+                    {formatBRL(b.valor)}
+                </td>
+            )}
+            {visibleColumns.includes('vencimento') && (
+                <td className={`px-4 py-3 text-center text-sm font-semibold whitespace-nowrap ${atrasado ? 'text-red-600' : 'text-gray-700'}`}>
+                    {b.vencimento ? new Date(b.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                    {atrasado && <div className="text-xs text-red-400 font-bold">ATRASADO</div>}
+                </td>
+            )}
+            {visibleColumns.includes('status') && (
+                <td className="px-4 py-3 text-center">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
+                        {STATUS_LABELS[b.status]}
+                    </span>
+                    {b.confidence_score !== undefined && b.confidence_score < 80 && (
+                        <div className="mt-0.5 flex items-center justify-center gap-0.5 text-[9px] font-bold text-amber-600">
+                            <AlertTriangle className="w-2.5 h-2.5" /> {b.confidence_score}%
+                        </div>
+                    )}
+                </td>
+            )}
+        </tr>
+    );
+});
 
 const BoletoManager: React.FC<BoletoManagerProps> = ({
     organizationId, userEmail, projectId, organizations = [], onOrgChange,
@@ -125,29 +300,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const lastSelectedIndexRef = useRef<number | null>(null);
     const shiftHeldRef = useRef(false);
 
-    function handleCheckboxMouseDown(e: React.MouseEvent) {
+    const handleCheckboxMouseDown = useCallback((e: React.MouseEvent) => {
         shiftHeldRef.current = e.shiftKey;
-    }
-
-    function handleCheckboxChange(checked: boolean, id: string, index: number) {
-        if (shiftHeldRef.current && lastSelectedIndexRef.current !== null) {
-            const start = Math.min(lastSelectedIndexRef.current, index);
-            const end = Math.max(lastSelectedIndexRef.current, index);
-            const rangeIds = filtered.slice(start, end + 1).map(b => b.id);
-            setSelectedIds(prev => {
-                const next = new Set(prev);
-                rangeIds.forEach(rid => checked ? next.add(rid) : next.delete(rid));
-                return next;
-            });
-        } else {
-            setSelectedIds(prev => {
-                const next = new Set(prev);
-                if (checked) next.add(id); else next.delete(id);
-                return next;
-            });
-        }
-        lastSelectedIndexRef.current = index;
-    }
+    }, []);
 
     function selectAllFiltered() {
         setSelectedIds(new Set(filtered.map(b => b.id)));
@@ -257,6 +412,28 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         return list;
     }, [boletos, buscaDebounced, vencDe, vencAte, valorMin, valorMax, ordenarPor, ordenarDir, supplierMap, tableColumns.sortColumn, tableColumns.sortDirection]);
 
+    // Mantido estável enquanto `filtered` não muda, para que as linhas memoizadas
+    // (BoletoCardItem/BoletoRowItem) não re-renderizem a cada seleção.
+    const handleCheckboxChange = useCallback((checked: boolean, id: string, index: number) => {
+        if (shiftHeldRef.current && lastSelectedIndexRef.current !== null) {
+            const start = Math.min(lastSelectedIndexRef.current, index);
+            const end = Math.max(lastSelectedIndexRef.current, index);
+            const rangeIds = filtered.slice(start, end + 1).map(b => b.id);
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                rangeIds.forEach(rid => checked ? next.add(rid) : next.delete(rid));
+                return next;
+            });
+        } else {
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                if (checked) next.add(id); else next.delete(id);
+                return next;
+            });
+        }
+        lastSelectedIndexRef.current = index;
+    }, [filtered]);
+
     const counts = useMemo(() => {
         const c: Record<string, number> = { todos: boletos.length };
         for (const s of Object.keys(STATUS_LABELS)) c[s] = 0;
@@ -300,10 +477,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         setIsModalOpen(true);
     }
 
-    function abrirEdicao(b: Boleto) {
+    const abrirEdicao = useCallback((b: Boleto) => {
         setEditing(b);
         setIsModalOpen(true);
-    }
+    }, []);
 
     function handleSaved(_updated: Boleto) {
         carregar(effectiveOrgId);
@@ -676,79 +853,21 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filtered.map((b, idx) => {
-                        const atrasado = b.vencimento && !['pago','cancelado'].includes(b.status)
-                            && new Date(b.vencimento + 'T00:00:00') < new Date();
-                        const selected = selectedIds.has(b.id);
+                        const atrasado = !!(b.vencimento && !['pago','cancelado'].includes(b.status)
+                            && new Date(b.vencimento + 'T00:00:00') < new Date());
                         return (
-                            <div key={b.id} className={`relative group transition-all ${highlightId === b.id ? 'ring-4 ring-blue-400 ring-offset-2 rounded-3xl animate-pulse' : ''}`}>
-                                {/* Checkbox overlay */}
-                                <label
-                                    className="absolute top-3 left-3 z-10 cursor-pointer"
-                                    onClick={e => e.stopPropagation()}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={selected}
-                                        onMouseDown={handleCheckboxMouseDown}
-                                        onChange={e => handleCheckboxChange(e.target.checked, b.id, idx)}
-                                        className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
-                                    />
-                                </label>
-                                <button
-                                    onClick={() => abrirEdicao(b)}
-                                    className={`w-full text-left bg-white rounded-2xl border p-5 pl-9 hover:shadow-lg transition-all ${
-                                        selected ? 'border-blue-400 ring-2 ring-blue-200' :
-                                        atrasado ? 'border-red-200 bg-red-50/30' : 'border-gray-100 hover:border-gray-200'
-                                    }`}
-                                >
-                                    <div className="flex items-start justify-between mb-3">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                            <span className="text-sm font-bold text-gray-900 truncate">
-                                                {b.supplier_id
-                                                    ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
-                                                    : (b.beneficiario_nome ?? b.documento_nome ?? 'Beneficiário desconhecido')}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                                            {b.numero != null && (
-                                                <span className="text-xs font-black text-gray-400 tracking-widest">
-                                                    #{String(b.numero).padStart(4, '0')}
-                                                </span>
-                                            )}
-                                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
-                                                {STATUS_LABELS[b.status]}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <p className="text-xs text-gray-500 mb-3 truncate">
-                                        {b.banco_nome ?? 'Banco desconhecido'}
-                                    </p>
-
-                                    <div className="flex items-end justify-between">
-                                        <div>
-                                            <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-0.5">Valor</p>
-                                            <p className="text-lg font-black text-gray-900">{formatBRL(b.valor)}</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-xs text-gray-400 uppercase tracking-widest font-bold mb-0.5 flex items-center gap-1 justify-end">
-                                                <Calendar className="w-3 h-3" /> Vencimento
-                                            </p>
-                                            <p className={`text-sm font-bold ${atrasado ? 'text-red-600' : 'text-gray-700'}`}>
-                                                {b.vencimento ? new Date(b.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {b.confidence_score !== undefined && b.confidence_score < 80 && (
-                                        <div className="mt-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-amber-700">
-                                            <AlertTriangle className="w-3 h-3" />
-                                            Baixa confiança ({b.confidence_score}%)
-                                        </div>
-                                    )}
-                                </button>
-                            </div>
+                            <BoletoCardItem
+                                key={b.id}
+                                boleto={b}
+                                idx={idx}
+                                selected={selectedIds.has(b.id)}
+                                isHighlighted={highlightId === b.id}
+                                atrasado={atrasado}
+                                supplierMap={supplierMap}
+                                onOpen={abrirEdicao}
+                                onCheckboxMouseDown={handleCheckboxMouseDown}
+                                onCheckboxChange={handleCheckboxChange}
+                            />
                         );
                     })}
                 </div>
@@ -848,79 +967,24 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </thead>
                         <tbody className="divide-y divide-gray-50">
                             {filtered.map((b, idx) => {
-                                const atrasado = b.vencimento && !['pago','cancelado'].includes(b.status)
-                                    && new Date(b.vencimento + 'T00:00:00') < new Date();
-                                const selected = selectedIds.has(b.id);
+                                const atrasado = !!(b.vencimento && !['pago','cancelado'].includes(b.status)
+                                    && new Date(b.vencimento + 'T00:00:00') < new Date());
                                 return (
-                                    <tr
+                                    <BoletoRowItem
                                         key={b.id}
-                                        onClick={() => abrirEdicao(b)}
-                                        className={`cursor-pointer hover:bg-gray-50 transition-colors ${
-                                            highlightId === b.id ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : selected ? 'bg-blue-50/60' : atrasado ? 'bg-red-50/40' : ''
-                                        }`}
-                                    >
-                                        <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                                            <input
-                                                type="checkbox"
-                                                checked={selected}
-                                                onMouseDown={handleCheckboxMouseDown}
-                                                onChange={e => handleCheckboxChange(e.target.checked, b.id, idx)}
-                                                className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
-                                            />
-                                        </td>
-                                        {tableColumns.visibleColumns.includes('numero') && (
-                                            <td className="px-4 py-3 whitespace-nowrap">
-                                                <span className="text-xs font-black text-gray-500 tracking-widest">
-                                                    {b.numero != null ? `#${String(b.numero).padStart(4, '0')}` : '—'}
-                                                </span>
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('beneficiario') && (
-                                            <td className="px-4 py-3 text-gray-700 max-w-[200px]">
-                                                <p className="font-medium truncate">
-                                                    {b.supplier_id
-                                                        ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
-                                                        : (b.beneficiario_nome ?? b.documento_nome)}
-                                                </p>
-                                                {b.beneficiario_cnpj && !b.supplier_id && (
-                                                    <p className="text-xs text-gray-400 font-mono truncate">{b.beneficiario_cnpj}</p>
-                                                )}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('obra') && (
-                                            <td className="px-4 py-3 text-table-body text-gray-500 max-w-[160px]">
-                                                <p className="truncate">{b.project_id ? (projectMap[b.project_id] ?? '—') : '—'}</p>
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('centro_custo') && (
-                                            <td className="px-4 py-3 text-table-body text-gray-500 max-w-[140px]">
-                                                <p className="truncate">{b.cost_center_id ? (ccMap[b.cost_center_id] ?? '—') : '—'}</p>
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('valor') && (
-                                            <td className="px-4 py-3 text-right font-bold text-gray-900 whitespace-nowrap">
-                                                {formatBRL(b.valor)}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('vencimento') && (
-                                            <td className={`px-4 py-3 text-center text-sm font-semibold whitespace-nowrap ${atrasado ? 'text-red-600' : 'text-gray-700'}`}>
-                                                {b.vencimento ? new Date(b.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
-                                                {atrasado && <div className="text-xs text-red-400 font-bold">ATRASADO</div>}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('status') && (
-                                            <td className="px-4 py-3 text-center">
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
-                                                    {STATUS_LABELS[b.status]}
-                                                </span>
-                                                {b.confidence_score !== undefined && b.confidence_score < 80 && (
-                                                    <div className="mt-0.5 flex items-center justify-center gap-0.5 text-[9px] font-bold text-amber-600">
-                                                        <AlertTriangle className="w-2.5 h-2.5" /> {b.confidence_score}%
-                                                    </div>
-                                                )}
-                                            </td>
-                                        )}
-                                    </tr>
+                                        boleto={b}
+                                        idx={idx}
+                                        selected={selectedIds.has(b.id)}
+                                        isHighlighted={highlightId === b.id}
+                                        atrasado={atrasado}
+                                        supplierMap={supplierMap}
+                                        projectMap={projectMap}
+                                        ccMap={ccMap}
+                                        visibleColumns={tableColumns.visibleColumns}
+                                        onOpen={abrirEdicao}
+                                        onCheckboxMouseDown={handleCheckboxMouseDown}
+                                        onCheckboxChange={handleCheckboxChange}
+                                    />
                                 );
                             })}
                         </tbody>

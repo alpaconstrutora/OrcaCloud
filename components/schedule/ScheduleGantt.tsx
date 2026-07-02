@@ -276,7 +276,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
             return (
                 <div
                     key={item.id}
-                    className={`group flex border-b border-gray-50 hover:bg-blue-50/30 transition-colors h-9 relative cursor-pointer ${node.inactive ? 'opacity-50' : ''}`}
+                    className={`group flex border-b border-gray-200 hover:bg-blue-50/30 transition-colors h-9 relative cursor-pointer ${node.inactive ? 'opacity-50' : ''}`}
                     onClick={() => setSelectedTaskId(item.id)}
                 >
                     <div
@@ -310,12 +310,12 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             )}
                         </div>
 
-                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gWbs')}>
-                            {node.wbsCode || ''}
-                        </div>
-
                         <div data-gantt-col="gId" className={`shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium ${itemSchedule?.isCritical ? 'text-red-500 bg-red-50' : 'text-gray-400 bg-gray-50/50'}`} style={getGanttColStyle('gId')}>
                             {node.uid}
+                        </div>
+
+                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gWbs')}>
+                            {node.wbsCode || ''}
                         </div>
 
                         <div data-gantt-col="gPred" className="shrink-0 border-r border-gray-100 flex items-center gap-0.5 px-0.5 relative group/pred" style={getGanttColStyle('gPred')}>
@@ -589,16 +589,20 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         </div>
                     </div>
                     <div className="relative flex-1 h-full" style={{ width: `${totalWidth}px` }}>
-                        {timelineColumns.map((column, index) => (
-                            <div
-                                key={`grid-${index}`}
-                                className={`absolute top-0 bottom-0 border-l border-gray-100 h-full ${index % 2 === 0 ? 'bg-gray-50/30' : ''}`}
-                                style={{
-                                    left: `${(Math.max(minDate.getTime(), column.date.getTime()) - minDate.getTime()) / (1000 * 60 * 60 * 24) * pxPerDay}px`,
-                                    width: `${column.width}px`
-                                }}
-                            />
-                        ))}
+                        {timelineColumns.map((column, index) => {
+                            const dow = column.date.getDay();
+                            const isWeekend = timeScale === 'day' && (dow === 0 || dow === 6);
+                            return (
+                                <div
+                                    key={`grid-${index}`}
+                                    className={`absolute top-0 bottom-0 border-l border-gray-200 h-full ${isWeekend ? 'bg-gray-200/40' : index % 2 === 0 ? 'bg-gray-50/30' : ''}`}
+                                    style={{
+                                        left: `${(Math.max(minDate.getTime(), column.date.getTime()) - minDate.getTime()) / (1000 * 60 * 60 * 24) * pxPerDay}px`,
+                                        width: `${column.width}px`
+                                    }}
+                                />
+                            );
+                        })}
 
                         {itemSchedule?.startDate && (itemSchedule?.duration !== undefined) ? (() => {
                             const itemStart = new Date(itemSchedule.startDate).getTime();
@@ -760,8 +764,8 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 </div>
                             )}
                         </div>
-                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gWbs')}>{node.wbsCode || ''}</div>
                         <div data-gantt-col="gId" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gId')}>{node.uid}</div>
+                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gWbs')}>{node.wbsCode || ''}</div>
                         <div data-gantt-col="gPred" className="shrink-0 border-r border-gray-200 flex items-center px-0.5" style={getGanttColStyle('gPred')}>
                             {(() => {
                                 const ns = schedule.itemSchedules?.find(s => s.id === node.id);
@@ -854,16 +858,20 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         </div>
                     </div>
                     <div className="flex-1 bg-gray-100/50 group-hover/row:bg-blue-50/10 transition-colors relative h-full overflow-hidden" style={{ width: `${totalWidth}px` }}>
-                        {timelineColumns.map((column, index) => (
-                            <div
-                                key={`grid-parent-${index}`}
-                                className={`absolute top-0 bottom-0 border-l border-gray-200/50 h-full ${index % 2 === 0 ? 'bg-gray-50/10' : ''}`}
-                                style={{
-                                    left: `${(Math.max(minDate.getTime(), column.date.getTime()) - minDate.getTime()) / (1000 * 60 * 60 * 24) * pxPerDay}px`,
-                                    width: `${column.width}px`
-                                }}
-                            />
-                        ))}
+                        {timelineColumns.map((column, index) => {
+                            const dow = column.date.getDay();
+                            const isWeekend = timeScale === 'day' && (dow === 0 || dow === 6);
+                            return (
+                                <div
+                                    key={`grid-parent-${index}`}
+                                    className={`absolute top-0 bottom-0 border-l border-gray-300/70 h-full ${isWeekend ? 'bg-gray-300/30' : index % 2 === 0 ? 'bg-gray-50/10' : ''}`}
+                                    style={{
+                                        left: `${(Math.max(minDate.getTime(), column.date.getTime()) - minDate.getTime()) / (1000 * 60 * 60 * 24) * pxPerDay}px`,
+                                        width: `${column.width}px`
+                                    }}
+                                />
+                            );
+                        })}
 
                         {(visibleSummaryLevels.has(node.type)) && node.earlyStart && node.earlyFinish ? (() => {
                             const start = new Date(node.earlyStart).getTime();
@@ -1156,8 +1164,8 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 </div>
                             </div>
 
-                            <div data-gantt-col="gWbs" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gWbs')}>ITEM{GanttResizeHandle && <GanttResizeHandle colKey="gWbs" />}</div>
                             <div data-gantt-col="gId" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gId')}>ID{GanttResizeHandle && <GanttResizeHandle colKey="gId" />}</div>
+                            <div data-gantt-col="gWbs" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gWbs')}>ITEM{GanttResizeHandle && <GanttResizeHandle colKey="gWbs" />}</div>
                             <div data-gantt-col="gPred" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gPred')}>PRÉD.{GanttResizeHandle && <GanttResizeHandle colKey="gPred" />}</div>
                             <div data-gantt-col="gDur" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gDur')}>DUR.{GanttResizeHandle && <GanttResizeHandle colKey="gDur" />}</div>
                             <div data-gantt-col="gStart" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gStart')}>INÍCIO{GanttResizeHandle && <GanttResizeHandle colKey="gStart" />}</div>
@@ -1179,16 +1187,20 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             className="flex-1 flex overflow-hidden bg-gray-50"
                             style={{ width: `${totalWidth}px` }}
                         >
-                            {timelineColumns.map((column, index) => (
-                                <div
-                                    key={index}
-                                    className={`shrink-0 border-l border-gray-100 flex flex-col items-center justify-center px-1 py-1.5 ${column.isToday ? 'bg-orange-50/50' : ''}`}
-                                    style={{ width: `${column.width}px` }}
-                                >
-                                    <span className="text-xs font-medium text-gray-400 leading-none">{column.label}</span>
-                                    <span className={`text-xs font-medium leading-none mt-1 ${column.isToday ? 'text-orange-600' : 'text-gray-300'}`}>{column.subLabel}</span>
-                                </div>
-                            ))}
+                            {timelineColumns.map((column, index) => {
+                                const dow = column.date.getDay();
+                                const isWeekend = timeScale === 'day' && (dow === 0 || dow === 6);
+                                return (
+                                    <div
+                                        key={index}
+                                        className={`shrink-0 border-l border-gray-200 flex flex-col items-center justify-center px-1 py-1.5 ${column.isToday ? 'bg-orange-50/50' : isWeekend ? 'bg-gray-200/50' : ''}`}
+                                        style={{ width: `${column.width}px` }}
+                                    >
+                                        <span className="text-xs font-medium text-gray-400 leading-none">{column.label}</span>
+                                        <span className={`text-xs font-medium leading-none mt-1 ${column.isToday ? 'text-orange-600' : 'text-gray-300'}`}>{column.subLabel}</span>
+                                    </div>
+                                );
+                            })}
                         </div>
                         </div>
                     </div>

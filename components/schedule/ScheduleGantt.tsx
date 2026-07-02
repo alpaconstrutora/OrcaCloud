@@ -595,7 +595,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             return (
                                 <div
                                     key={`grid-${index}`}
-                                    className={`absolute top-0 bottom-0 border-l border-gray-200 h-full ${isWeekend ? 'bg-gray-200/40' : index % 2 === 0 ? 'bg-gray-50/30' : ''}`}
+                                    className={`absolute top-0 bottom-0 border-l border-gray-300 h-full ${isWeekend ? 'bg-gray-300/40' : index % 2 === 0 ? 'bg-gray-100/50' : ''}`}
                                     style={{
                                         left: `${(Math.max(minDate.getTime(), column.date.getTime()) - minDate.getTime()) / (1000 * 60 * 60 * 24) * pxPerDay}px`,
                                         width: `${column.width}px`
@@ -857,14 +857,14 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             </div>
                         </div>
                     </div>
-                    <div className="flex-1 bg-gray-100/50 group-hover/row:bg-blue-50/10 transition-colors relative h-full overflow-hidden" style={{ width: `${totalWidth}px` }}>
+                    <div className="flex-1 bg-gray-50/40 group-hover/row:bg-blue-50/10 transition-colors relative h-full overflow-hidden" style={{ width: `${totalWidth}px` }}>
                         {timelineColumns.map((column, index) => {
                             const dow = column.date.getDay();
                             const isWeekend = timeScale === 'day' && (dow === 0 || dow === 6);
                             return (
                                 <div
                                     key={`grid-parent-${index}`}
-                                    className={`absolute top-0 bottom-0 border-l border-gray-300/70 h-full ${isWeekend ? 'bg-gray-300/30' : index % 2 === 0 ? 'bg-gray-50/10' : ''}`}
+                                    className={`absolute top-0 bottom-0 border-l border-gray-300 h-full ${isWeekend ? 'bg-gray-300/40' : index % 2 === 0 ? 'bg-gray-200/40' : ''}`}
                                     style={{
                                         left: `${(Math.max(minDate.getTime(), column.date.getTime()) - minDate.getTime()) / (1000 * 60 * 60 * 24) * pxPerDay}px`,
                                         width: `${column.width}px`

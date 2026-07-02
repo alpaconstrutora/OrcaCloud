@@ -876,6 +876,17 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         localStorage.setItem('schedule-time-scale', scale);
     };
 
+    const [showGanttFloat, setShowGanttFloatState] = useState(() => {
+        try {
+            const saved = localStorage.getItem('gantt-show-float');
+            return saved !== null ? saved === 'true' : true;
+        } catch { return true; }
+    });
+    const setShowGanttFloat = (value: boolean) => {
+        setShowGanttFloatState(value);
+        try { localStorage.setItem('gantt-show-float', String(value)); } catch { /* noop */ }
+    };
+
     const [ganttExpandedNodes, setGanttExpandedNodes] = useState<Record<string, boolean>>({});
     const [tableExpandedNodes, setTableExpandedNodes] = useState<Record<string, boolean>>({});
     const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -4491,6 +4502,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 onAddRootGroup={() => setOutlineEditor({ mode: 'create', parentId: null, nodeType: 'group', name: '' })}
                                                 timelineColumns={timelineColumns}
                                                 timeScale={timeScale}
+                                                showFloat={showGanttFloat}
                                                 minDate={minDate}
                                                 totalWidth={totalWidth}
                                                 pxPerDay={pxPerDay}
@@ -4675,6 +4687,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     // Trigger recalculation if replan mode or working days changed
                     handleRecalculate(newSchedule.itemSchedules || []);
                 }}
+                showGanttFloat={showGanttFloat}
+                onToggleGanttFloat={setShowGanttFloat}
             />
 
             <CrewClassificationModal

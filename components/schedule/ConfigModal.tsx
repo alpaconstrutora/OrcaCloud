@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Clock } from 'lucide-react';
+import { X, Clock, Eye } from 'lucide-react';
 import { ProjectSchedule, ReplanMode } from '../../types';
 // ProjectSchedule is used for the workSchedule type helper below
 
@@ -8,6 +8,8 @@ interface ConfigModalProps {
     onClose: () => void;
     schedule: ProjectSchedule;
     onUpdate: (updates: Partial<ProjectSchedule>) => void;
+    showGanttFloat?: boolean;
+    onToggleGanttFloat?: (value: boolean) => void;
 }
 
 const WEEK_DAYS = [
@@ -27,7 +29,8 @@ function totalWeekHours(workDays: number[], hoursPerDay: number, dayHours?: Reco
     return workDays.reduce((sum, d) => sum + (dayHours?.[d] ?? hoursPerDay), 0);
 }
 
-export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, schedule, onUpdate }) => {
+export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, schedule, onUpdate, showGanttFloat = true, onToggleGanttFloat }) => {
+    const [activeTab, setActiveTab] = React.useState<'geral' | 'exibicao'>('geral');
     if (!isOpen) return null;
 
     const workDays = schedule.workSchedule?.workDays ?? DEFAULT_WORK_DAYS;
@@ -70,8 +73,50 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                     </button>
                 </div>
 
+                <div className="flex px-4 pt-3 gap-1 border-b bg-gray-50/50">
+                    {([
+                        { id: 'geral' as const, label: 'Geral' },
+                        { id: 'exibicao' as const, label: 'Exibição' },
+                    ]).map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`px-3 py-2 text-sm font-bold rounded-t-lg border-b-2 transition-colors ${activeTab === tab.id ? 'border-blue-600 text-blue-700 bg-white' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+
                 <div className="p-6 space-y-6 overflow-y-auto">
 
+                    {activeTab === 'exibicao' && (
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2">
+                                <Eye className="w-4 h-4 text-blue-500" />
+                                <span className="text-sm font-black text-gray-700 uppercase tracking-wide">Gantt</span>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <span className="text-sm font-bold text-gray-700">Folga (slack) nas barras</span>
+                                    <p className="text-xs text-gray-400">Mostra a caixa tracejada âmbar após o fim da barra, indicando quantos dias a tarefa pode atrasar sem virar caminho crítico</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only peer"
+                                        checked={showGanttFloat}
+                                        onChange={(e) => onToggleGanttFloat?.(e.target.checked)}
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none ring-4 ring-blue-500/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'geral' && (
+                    <>
                     {/* ── Jornada de Trabalho ── */}
                     <div className="space-y-4">
                         <div className="flex items-center gap-2">
@@ -233,6 +278,8 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                             </div>
                         </div>
                     </div>
+                    </>
+                    )}
                 </div>
             </div>
         </div>

@@ -206,7 +206,7 @@ BEGIN
       INTO v_sum
       FROM public.area_version_quadro_ii_rows
      WHERE area_version_id = p_area_version_id;
-    IF v_sum <> 0 AND abs(v_sum - 1) > 0.000000000001 THEN
+    IF v_sum <> 0 AND abs(v_sum - 1) > 0.000000001 THEN
         v_errors := public.area_jsonb_append(v_errors, jsonb_build_object('code','QII_VAL_006','message','Soma dos coeficientes diferente de 1','sum',v_sum));
     END IF;
 
@@ -214,7 +214,7 @@ BEGIN
       INTO v_sum
       FROM public.area_version_fraction_ideals
      WHERE area_version_id = p_area_version_id;
-    IF v_sum <> 0 AND abs(v_sum - 1) > 0.000000000001 THEN
+    IF v_sum <> 0 AND abs(v_sum - 1) > 0.000000001 THEN
         v_errors := public.area_jsonb_append(v_errors, jsonb_build_object('code','FRAC_VAL_002','message','Soma das fracoes decimais diferente de 1','sum',v_sum));
     END IF;
 

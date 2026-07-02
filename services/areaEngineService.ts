@@ -259,7 +259,7 @@ export const areaEngineService = {
             supabase.from('area_version_floors').select('*').eq('area_version_id', sourceVersionId).order('sort_order', { ascending: true }),
             supabase.from('area_version_units').select('*').eq('area_version_id', sourceVersionId).order('materialized_index', { ascending: true }),
             supabase.from('area_version_spaces').select('*').eq('area_version_id', sourceVersionId).order('materialized_index', { ascending: true }),
-            supabase.from('area_version_accessory_links').select('*').eq('area_version_id', sourceVersionId),
+            supabase.from('area_version_unit_accessory_links').select('*').eq('area_version_id', sourceVersionId),
             supabase.from('area_version_common_allocations').select('*').eq('area_version_id', sourceVersionId),
             supabase.from('area_version_common_distribution_scopes').select('*').eq('area_version_id', sourceVersionId),
         ]);
@@ -342,7 +342,7 @@ export const areaEngineService = {
         const sourceAccessoryLinks = (accessoryLinksRes.data || []) as Record<string, unknown>[];
         if (sourceAccessoryLinks.length > 0) {
             const { error } = await supabase
-                .from('area_version_accessory_links')
+                .from('area_version_unit_accessory_links')
                 .insert(sourceAccessoryLinks.map(link => ({
                     ...omitCloneFields(link),
                     area_version_id: revision.id,

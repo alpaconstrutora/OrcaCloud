@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import Button from './ui/Button';
 import { 
     Clock, Plus, Trash2, Pencil, Save, X, FileText, ShieldCheck, 
     ArrowUpRight, ArrowDownRight, Filter, CheckCircle2,
@@ -1321,7 +1322,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         <option value="Folha de Pagamento">Folha de Pagamento</option>
                     </select>
                     <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="bg-white border border-gray-200 p-2 rounded-xl text-sm"><option value="all">Todas as Categorias</option>{EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select>
-                    <button onClick={() => setIsAddingTransaction(true)} className="bg-red-600 text-white px-4 py-2 rounded-xl text-button font-normal flex items-center gap-1 shadow-md hover:bg-red-700 transition-all uppercase"><Plus className="w-4 h-4" /> NOVA DESPESA</button>
+                    <Button variant="danger" onClick={() => setIsAddingTransaction(true)} className="shadow-md"><Plus className="w-4 h-4" /> NOVA DESPESA</Button>
                 </div>
             </div>
             {isAddingTransaction && (
@@ -1334,7 +1335,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         {suppliersList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                     <input type="date" value={txForm.date} onChange={e => setTxForm({ ...txForm, date: e.target.value })} className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
-                    <div className="flex gap-1"><button onClick={handleSaveTransaction} className="p-2 bg-red-600 text-white rounded-lg"><Save className="w-4 h-4" /></button><button onClick={() => setIsAddingTransaction(false)} className="p-2 bg-white border border-gray-200 text-gray-400 rounded-lg"><X className="w-4 h-4" /></button></div>
+                    <div className="flex gap-1"><Button variant="danger" size="icon" onClick={handleSaveTransaction}><Save className="w-4 h-4" /></Button><Button variant="secondary" size="icon" onClick={() => setIsAddingTransaction(false)}><X className="w-4 h-4" /></Button></div>
                 </div>
             )}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

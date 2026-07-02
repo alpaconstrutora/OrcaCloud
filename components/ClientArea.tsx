@@ -46,7 +46,7 @@ import {
     ClipboardList,
     MoreHorizontal
 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, Line, ComposedChart } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Bar, LabelList, Legend } from 'recharts';
 import { buildPlanningView, type PlanningView, type PlanningScale } from '../utils/portalPlanningUtils';
 import type { PortalPlanning } from '../services/clientPortalService';
 import { fmtBRL } from '../utils/format';
@@ -2360,6 +2360,33 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                             <span className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-sm bg-indigo-200 border border-indigo-400" /> Planejado</span>
                             <span className="flex items-center gap-2 text-xs font-black text-gray-400 uppercase tracking-widest"><span className="w-3 h-3 rounded-full bg-emerald-500" /> Realizado (hoje)</span>
                         </div>
+                    </div>
+                )}
+
+                {fv.curve.length > 0 && (
+                    <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
+                        <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
+                                <h3 className="text-lg font-black text-gray-900 tracking-tight uppercase">Desembolso por Período</h3>
+                            </div>
+                            {renderPlanningScaleSelector()}
+                        </div>
+                        <ResponsiveContainer width="100%" height={300}>
+                            <ComposedChart data={fv.curve} margin={{ top: 24, right: 12, left: 8, bottom: 0 }} barGap={4}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                                <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} tickFormatter={(v) => fmtBRL(v)} width={80} />
+                                <RechartsTooltip formatter={(v) => fmtBRL(Number(v) || 0)} />
+                                <Legend wrapperStyle={{ fontSize: 11, fontWeight: 900, textTransform: 'uppercase' }} />
+                                <Bar dataKey="plannedPeriod" name="Planejado" fill="#818cf8" radius={[4, 4, 0, 0]}>
+                                    <LabelList dataKey="plannedPeriod" position="top" formatter={(v: any) => Number(v) > 0 ? fmtBRL(Number(v)) : ''} style={{ fontSize: 9, fontWeight: 700, fill: '#6366f1' }} />
+                                </Bar>
+                                <Bar dataKey="realizedPeriod" name="Realizado" fill="#10b981" radius={[4, 4, 0, 0]}>
+                                    <LabelList dataKey="realizedPeriod" position="top" formatter={(v: any) => Number(v) > 0 ? fmtBRL(Number(v)) : ''} style={{ fontSize: 9, fontWeight: 700, fill: '#059669' }} />
+                                </Bar>
+                            </ComposedChart>
+                        </ResponsiveContainer>
                     </div>
                 )}
 

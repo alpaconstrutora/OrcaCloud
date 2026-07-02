@@ -82,6 +82,8 @@ export interface SCurveMoneyPoint {
     label: string;       // 'MMM/AA'
     plannedValue: number;   // R$ acumulado planejado
     realizedValue?: number; // R$ acumulado realizado, só no ponto "hoje"
+    plannedPeriod: number;    // R$ previsto NO período (não acumulado) — p/ gráfico de colunas
+    realizedPeriod?: number;  // R$ estimado realizado NO período (só até hoje)
 }
 
 export interface FinancialView {
@@ -169,9 +171,11 @@ const buildFinancialCurve = (
 
     const periods = generatePeriods(start, end, scale);
     const todayClamped = new Date(Math.min(Math.max(now.getTime(), start.getTime()), end.getTime()));
-    const curve: SCurveMoneyPoint[] = periods.map(at => ({
+    const cumulative = periods.map(at => Math.round(plannedValueAt(items, at) * 100) / 100);
+    const curve: SCurveMoneyPoint[] = periods.map((at, i) => ({
         label: formatPeriodLabel(at, scale),
-        plannedValue: Math.round(plannedValueAt(items, at) * 100) / 100,
+        plannedValue: cumulative[i],
+        plannedPeriod: Math.round((cumulative[i] - (cumulative[i - 1] ?? 0)) * 100) / 100,
     }));
 
     const totalRealized = items.reduce((s, it) => s + realizedValue(it), 0);
@@ -179,6 +183,13 @@ const buildFinancialCurve = (
     const idx = closestPeriodIndex(periods, todayClamped);
     if (curve[idx]) {
         curve[idx] = { ...curve[idx], realizedValue: Math.round(totalRealized * 100) / 100 };
+    }
+
+    // Realizado por período: sem dado real por período, aproxima pela mesma forma do
+    // planejado até hoje, escalada pelo desempenho global (totalRealizado / previstoHoje).
+    const perfRatio = plannedTodayValue > 0 ? totalRealized / plannedTodayValue : 0;
+    for (let i = 0; i <= idx; i++) {
+        curve[i] = { ...curve[i], realizedPeriod: Math.round(curve[i].plannedPeriod * perfRatio * 100) / 100 };
     }
 
     return {

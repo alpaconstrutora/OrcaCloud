@@ -43,6 +43,32 @@ const translateStatus = (s?: string): UnitStatus => {
     }
 };
 
+// Endereço do empreendimento → campos estruturados do Comercial. Fonte única: o
+// PropertyModal edita/exibe street/number/neighborhood/city/state (não o texto `address`
+// direto) — publicar só a string concatenada deixa esses campos vazios no Comercial.
+export interface CommercialAddressFields {
+    address: string;
+    street?: string;
+    number?: string;
+    neighborhood?: string;
+    city?: string;
+    state?: string;
+    zip_code?: string;
+}
+
+export const buildCommercialAddressFields = (emp: Empreendimento): CommercialAddressFields => {
+    const hasEndereco = emp.endereco_street || emp.endereco_city;
+    const street = hasEndereco ? emp.endereco_street : emp.terreno_street;
+    const number = hasEndereco ? emp.endereco_number : emp.terreno_number;
+    const neighborhood = hasEndereco ? emp.endereco_neighborhood : emp.terreno_neighborhood;
+    const city = hasEndereco ? emp.endereco_city : emp.terreno_city;
+    const state = hasEndereco ? emp.endereco_state : emp.terreno_state;
+    const zip_code = hasEndereco ? emp.endereco_zip_code : emp.terreno_zip_code;
+
+    const address = [street, number, neighborhood, city, state].filter(Boolean).join(', ') || emp.name;
+    return { address, street, number, neighborhood, city, state, zip_code };
+};
+
 // Infere categoria de área comum a partir do nome da unidade não-vendável.
 const inferCommonAreaCategory = (name: string): CommonAreaCategory => {
     const n = (name || '').toLowerCase();
@@ -143,6 +169,36 @@ export const empreendimentoService = {
                 .from('commercial_properties')
                 .update({ name: updates.name })
                 .eq('id', data.commercial_building_id);
+        }
+
+        // Propaga mudança de endereço para o edifício-pai + todas as unidades já
+        // publicadas (best-effort — nunca bloqueia o save do empreendimento). Antes só
+        // existia via botão manual "Sync Endereço", que também não tocava o próprio
+        // edifício-pai, só as unidades.
+        const ADDRESS_FIELDS: (keyof EmpreendimentoUpdate)[] = [
+            'endereco_street', 'endereco_number', 'endereco_complement', 'endereco_neighborhood',
+            'endereco_city', 'endereco_state', 'endereco_zip_code',
+            'terreno_street', 'terreno_number', 'terreno_neighborhood', 'terreno_city', 'terreno_state', 'terreno_zip_code',
+        ];
+        if (data.commercial_building_id && ADDRESS_FIELDS.some(f => f in updates)) {
+            try {
+                const addressFields = buildCommercialAddressFields(data);
+                await supabase
+                    .from('commercial_properties')
+                    .update(addressFields)
+                    .eq('id', data.commercial_building_id);
+
+                const units = await this.listAllUnitsForEmpreendimento(id);
+                const linkedIds = units.map(u => u.commercial_property_id).filter(Boolean) as string[];
+                if (linkedIds.length) {
+                    await supabase
+                        .from('commercial_properties')
+                        .update(addressFields)
+                        .in('id', linkedIds);
+                }
+            } catch (err) {
+                console.error('[empreendimentoService] erro ao propagar endereço para o Comercial:', err);
+            }
         }
 
         return data;
@@ -288,17 +344,14 @@ export const empreendimentoService = {
             if (data?.id) return data.id;
         }
 
-        const address = [emp.endereco_street, emp.endereco_number, emp.endereco_neighborhood, emp.endereco_city, emp.endereco_state]
-            .filter(Boolean).join(', ')
-            || [emp.terreno_street, emp.terreno_number, emp.terreno_city, emp.terreno_state].filter(Boolean).join(', ')
-            || emp.name;
+        const addressFields = buildCommercialAddressFields(emp);
 
         const building = await commercialService.saveProperty({
             organization_id: organizationId,
             name: emp.name,
             type: 'BUILDING',
             purpose: 'SALE',
-            address,
+            ...addressFields,
             area: 0,
             price: 0,
             status: 'AVAILABLE' as any,
@@ -464,6 +517,7 @@ export const empreendimentoService = {
     ): Promise<void> {
         if (!unit.commercial_property_id) return;
         const propUpdate: Record<string, unknown> = {};
+        if ('name'          in changed) propUpdate.name          = unit.name;
         if ('price'         in changed) propUpdate.price         = unit.price ?? 0;
         if ('private_area'  in changed) propUpdate.private_area  = unit.private_area;
         if ('common_area'   in changed) propUpdate.common_area   = unit.common_area;
@@ -475,28 +529,22 @@ export const empreendimentoService = {
         if ('view_type'       in changed) propUpdate.view_type       = mapViewToCommercial(unit.view_type) ?? null;
         if ('sun_orientation' in changed) propUpdate.sun_orientation = mapSunToCommercial(unit.sun_orientation) ?? null;
 
-        // floor_tipo vive em specs (JSONB) — merge para não destruir os outros campos
-        if ('floor_tipo' in changed) {
+        // floor_tipo/parking_spaces/bedrooms/bathrooms vivem em specs (JSONB) — o
+        // PropertyModal lê specs.bedrooms/specs.bathrooms, não a coluna top-level.
+        // Merge para não destruir os outros campos já salvos em specs.
+        const specsChanged = ['floor_tipo', 'parking_spaces', 'bedrooms', 'bathrooms'].some(f => f in changed);
+        if (specsChanged) {
             const { data: prop } = await supabase
                 .from('commercial_properties')
                 .select('specs')
                 .eq('id', unit.commercial_property_id)
                 .single();
-            propUpdate.specs = { ...(prop?.specs ?? {}), floorTipo: unit.floor_tipo };
-        }
-
-        // parking_spaces vive em specs.parkingSpaces (sem coluna direta)
-        if ('parking_spaces' in changed) {
-            if (propUpdate.specs) {
-                (propUpdate.specs as Record<string, unknown>).parkingSpaces = unit.parking_spaces;
-            } else {
-                const { data: prop } = await supabase
-                    .from('commercial_properties')
-                    .select('specs')
-                    .eq('id', unit.commercial_property_id)
-                    .single();
-                propUpdate.specs = { ...(prop?.specs ?? {}), parkingSpaces: unit.parking_spaces };
-            }
+            const specs: Record<string, unknown> = { ...(prop?.specs ?? {}) };
+            if ('floor_tipo'      in changed) specs.floorTipo      = unit.floor_tipo;
+            if ('parking_spaces'  in changed) specs.parkingSpaces  = unit.parking_spaces;
+            if ('bedrooms'        in changed) specs.bedrooms       = unit.bedrooms;
+            if ('bathrooms'       in changed) specs.bathrooms      = unit.bathrooms;
+            propUpdate.specs = specs;
         }
 
         if (!Object.keys(propUpdate).length) return;

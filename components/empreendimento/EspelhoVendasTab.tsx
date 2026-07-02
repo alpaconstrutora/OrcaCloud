@@ -8,7 +8,7 @@ import {
   CheckCircle2, AlertCircle, Clock, ArrowRightLeft, Building2,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { empreendimentoService } from '../../services/empreendimentoService';
+import { empreendimentoService, buildCommercialAddressFields } from '../../services/empreendimentoService';
 import { commercialService } from '../../services/commercialService';
 import { Empreendimento, EmpreendimentoUnit, UnitStatus } from '../../types';
 import Button from '../ui/Button';
@@ -81,14 +81,6 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
 
   React.useEffect(() => { load(); }, [load]);
 
-  // Endereço do empreendimento para preencher a property
-  const buildAddress = () => {
-    const parts = [e.endereco_street, e.endereco_number, e.endereco_neighborhood, e.endereco_city, e.endereco_state]
-      .filter(Boolean);
-    if (parts.length) return parts.join(', ');
-    return [e.terreno_street, e.terreno_number, e.terreno_city, e.terreno_state].filter(Boolean).join(', ') || e.name;
-  };
-
   const handlePublish = async (unit: UnitWithTower) => {
     setBusyId(unit.id);
     try {
@@ -113,7 +105,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
         type: 'APARTMENT',
         purpose: 'SALE',
         parent_id: buildingId,
-        address: buildAddress(),
+        ...buildCommercialAddressFields(e),
         price: unit.price ?? 0,
         private_area: unit.private_area,
         common_area: unit.common_area,
@@ -121,7 +113,6 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
         status: mapEmprToCommercial(unit.status),
         floor: unit.floor,
         typology: unit.typology || undefined,
-        bedrooms: unit.bedrooms,
         block: unit._tower_name,
         project_id: unit._tower_project_id || undefined,
         position_type: mapPositionToCommercial(unit.position_type),
@@ -129,6 +120,8 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
         sun_orientation: mapSunToCommercial(unit.sun_orientation),
         specs: {
           parkingSpaces: unit.parking_spaces,
+          bedrooms: unit.bedrooms,
+          bathrooms: unit.bathrooms,
           ...(unit.floor_tipo ? { floorTipo: unit.floor_tipo } : {}),
         },
       } as any);
@@ -208,19 +201,23 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
     } finally { setSyncingAll(false); }
   };
 
-  // Propaga endereço atual do empreendimento para todas as properties vinculadas.
-  // Útil quando o endereço do empreendimento muda depois da publicação inicial.
+  // Propaga endereço atual do empreendimento (campos estruturados, não só a string
+  // concatenada) para o edifício-pai + todas as properties vinculadas. Útil quando o
+  // endereço do empreendimento muda depois da publicação inicial (normalmente isso já
+  // acontece automático via empreendimentoService.update — este botão é o fallback manual).
   const handleSyncAddress = async () => {
     const linked = units.filter(u => u.commercial_property_id && commSnaps[u.commercial_property_id!]);
-    if (!linked.length) { alert('Nenhuma unidade publicada no Comercial.'); return; }
-    const addr = buildAddress();
-    if (!window.confirm(`Atualizar endereço de ${linked.length} imóvel(eis) no Comercial para:\n"${addr}"`)) return;
+    const addressFields = buildCommercialAddressFields(e);
+    if (!linked.length && !e.commercial_building_id) { alert('Nenhuma unidade publicada no Comercial.'); return; }
+    if (!window.confirm(`Atualizar endereço de ${linked.length} imóvel(eis) + edifício-pai no Comercial para:\n"${addressFields.address}"`)) return;
     setSyncingAddress(true);
     try {
-      await Promise.all(linked.map(u =>
-        supabase.from('commercial_properties').update({ address: addr }).eq('id', u.commercial_property_id!)
-      ));
-      alert(`✓ Endereço atualizado em ${linked.length} imóvel(eis).`);
+      const ids = [
+        ...(e.commercial_building_id ? [e.commercial_building_id] : []),
+        ...linked.map(u => u.commercial_property_id!),
+      ];
+      await supabase.from('commercial_properties').update(addressFields).in('id', ids);
+      alert(`✓ Endereço atualizado em ${ids.length} imóvel(eis).`);
     } catch (err: any) {
       alert(`Erro ao atualizar endereço: ${err.message}`);
     } finally { setSyncingAddress(false); }
@@ -244,6 +241,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
       }
 
       const buildingId = await empreendimentoService.ensureCommercialBuilding(e, organizationId);
+      const addressFields = buildCommercialAddressFields(e);
       for (const unit of unpublished) {
         const prop = await commercialService.saveProperty({
           organization_id: organizationId,
@@ -251,7 +249,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
           type: 'APARTMENT',
           purpose: 'SALE',
           parent_id: buildingId,
-          address: buildAddress(),
+          ...addressFields,
           price: unit.price ?? 0,
           private_area: unit.private_area,
           common_area: unit.common_area,
@@ -266,6 +264,8 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
           sun_orientation: mapSunToCommercial(unit.sun_orientation),
           specs: {
             parkingSpaces: unit.parking_spaces,
+            bedrooms: unit.bedrooms,
+            bathrooms: unit.bathrooms,
             ...(unit.floor_tipo ? { floorTipo: unit.floor_tipo } : {}),
           },
         } as any);

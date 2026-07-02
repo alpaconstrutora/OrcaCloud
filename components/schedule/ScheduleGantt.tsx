@@ -28,6 +28,7 @@ interface ScheduleGanttProps {
     hierarchy: HierarchyNode[];
     schedule: ProjectSchedule;
     timelineColumns: any[];
+    timeScale?: 'day' | 'week' | 'month' | 'year';
     minDate: Date;
     totalWidth: number;
     pxPerDay: number;
@@ -76,6 +77,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     hierarchy,
     schedule,
     timelineColumns,
+    timeScale,
     minDate,
 
     totalWidth,
@@ -127,6 +129,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     };
 
     const headerRef = useRef<HTMLDivElement>(null);
+    const macroHeaderRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const colMenuRef = useRef<HTMLDivElement>(null);
     const levelsMenuRef = useRef<HTMLDivElement>(null);
@@ -197,10 +200,35 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
 
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-        if (headerRef.current) {
-            headerRef.current.scrollLeft = (e.currentTarget as HTMLDivElement).scrollLeft;
-        }
+        const scrollLeft = (e.currentTarget as HTMLDivElement).scrollLeft;
+        if (headerRef.current) headerRef.current.scrollLeft = scrollLeft;
+        if (macroHeaderRef.current) macroHeaderRef.current.scrollLeft = scrollLeft;
     };
+
+    // Cabeçalho de dois níveis (estilo MS Project): agrupa as colunas em períodos
+    // maiores (mês para escala dia/semana, ano para escala mês). Escala "year" já
+    // é o nível macro, então não recebe agrupamento adicional.
+    const timelineMacroColumns = React.useMemo(() => {
+        if (!timelineColumns.length || timeScale === 'year') return [];
+        const groupByYear = timeScale === 'month';
+        const monthLabel = (d: Date) => {
+            const name = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(d);
+            return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${d.getFullYear()}`;
+        };
+        const groups: { key: string; label: string; width: number }[] = [];
+        timelineColumns.forEach((col: any) => {
+            const d: Date = col.date;
+            const key = groupByYear ? `${d.getFullYear()}` : `${d.getFullYear()}-${d.getMonth()}`;
+            const label = groupByYear ? `${d.getFullYear()}` : monthLabel(d);
+            const last = groups[groups.length - 1];
+            if (last && last.key === key) {
+                last.width += col.width;
+            } else {
+                groups.push({ key, label, width: col.width });
+            }
+        });
+        return groups;
+    }, [timelineColumns, timeScale]);
 
     const renderGanttRow = (node: HierarchyNode, isParentVisible = true): React.ReactNode => {
         const isVisible = visibleSummaryLevels.has(node.type);
@@ -961,7 +989,32 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
             >
                 <div className="inline-block min-w-full">
                     {/* Gantt Header */}
-                    <div className="flex sticky top-0 z-50 bg-gray-50 border-b border-gray-200 shadow-sm">
+                    <div className="flex flex-col sticky top-0 z-50 bg-gray-50 border-b border-gray-200 shadow-sm">
+                        {/* Linha macro (mês/ano) — estilo MS Project: agrupa as colunas de dia/semana/mês */}
+                        {timelineMacroColumns.length > 0 && (
+                            <div className="flex border-b border-gray-200">
+                                <div
+                                    className="shrink-0 sticky left-0 z-60 bg-gray-50"
+                                    style={{ width: `${getGanttSidebarTotal()}px` }}
+                                />
+                                <div
+                                    ref={macroHeaderRef}
+                                    className="flex-1 flex overflow-hidden bg-gray-100/70"
+                                    style={{ width: `${totalWidth}px` }}
+                                >
+                                    {timelineMacroColumns.map((group, index) => (
+                                        <div
+                                            key={index}
+                                            className="shrink-0 border-l border-gray-200 flex items-center justify-center px-1 py-1"
+                                            style={{ width: `${group.width}px` }}
+                                        >
+                                            <span className="text-xs font-semibold text-gray-500 truncate">{group.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        <div className="flex">
                         <div
                             className="shrink-0 flex sticky left-0 z-60 bg-gray-50 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)] border-r border-gray-200"
                             style={{ width: `${getGanttSidebarTotal()}px` }}
@@ -1136,6 +1189,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     <span className={`text-xs font-medium leading-none mt-1 ${column.isToday ? 'text-orange-600' : 'text-gray-300'}`}>{column.subLabel}</span>
                                 </div>
                             ))}
+                        </div>
                         </div>
                     </div>
 

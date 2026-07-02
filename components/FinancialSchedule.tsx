@@ -4490,6 +4490,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                                 outlineActions={outlineActions}
                                                 onAddRootGroup={() => setOutlineEditor({ mode: 'create', parentId: null, nodeType: 'group', name: '' })}
                                                 timelineColumns={timelineColumns}
+                                                timeScale={timeScale}
                                                 minDate={minDate}
                                                 totalWidth={totalWidth}
                                                 pxPerDay={pxPerDay}

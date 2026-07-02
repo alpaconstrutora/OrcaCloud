@@ -4463,7 +4463,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
 
                         ) : (
-                            <div className="overflow-x-auto min-h-[400px] bg-gray-50 flex flex-col" ref={ganttSidebarRef}>
+                            <div className="overflow-x-auto min-h-[400px] bg-white flex flex-col" ref={ganttSidebarRef}>
                                 {(() => {
                                     try {
                                         const minDate = new Date(schedule.startDate);

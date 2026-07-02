@@ -134,6 +134,19 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     const colMenuRef = useRef<HTMLDivElement>(null);
     const levelsMenuRef = useRef<HTMLDivElement>(null);
     const [showLevelsDropdown, setShowLevelsDropdown] = useState(false);
+    const [showFloat, setShowFloat] = useState(() => {
+        try {
+            const saved = localStorage.getItem('gantt-show-float');
+            return saved !== null ? saved === 'true' : true;
+        } catch { return true; }
+    });
+    const toggleShowFloat = () => {
+        setShowFloat(prev => {
+            const next = !prev;
+            try { localStorage.setItem('gantt-show-float', String(next)); } catch { /* noop */ }
+            return next;
+        });
+    };
     const [showColsDropdown, setShowColsDropdown] = useState(false);
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
@@ -648,10 +661,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         zIndex: isDraggingTask === item.id ? 30 : undefined,
                                     }}
                                 >
-                                    {itemSchedule.totalFloat && itemSchedule.totalFloat > 0 && (
+                                    {showFloat && itemSchedule.totalFloat && itemSchedule.totalFloat > 0 && (
                                         <div
-                                            className="absolute top-0 h-6 bg-gray-200/40 border border-dashed border-gray-300 rounded-r z-[1]"
+                                            className="absolute top-0 h-6 bg-amber-100/60 border border-dashed border-amber-300 rounded-r z-[1]"
                                             style={{ left: `${width}px`, width: `${itemSchedule.totalFloat * pxPerDay}px` }}
+                                            title={`Folga total: ${itemSchedule.totalFloat} dia(s)`}
                                         />
                                     )}
 
@@ -1162,6 +1176,14 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         </>
                                     )}
                                 </div>
+                                <button
+                                    onClick={toggleShowFloat}
+                                    className={`px-2 py-1 flex items-center gap-1.5 rounded-lg border transition-all text-button font-medium ${showFloat ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100' : 'bg-white border-gray-200 text-gray-400 hover:border-amber-300 hover:text-amber-600 shadow-sm'}`}
+                                    title={showFloat ? 'Ocultar indicação de folga (slack) nas barras' : 'Mostrar indicação de folga (slack) nas barras'}
+                                >
+                                    <span className={`w-2.5 h-2.5 rounded-sm border border-dashed ${showFloat ? 'border-amber-500 bg-amber-200' : 'border-gray-300 bg-transparent'}`} />
+                                    <span>FOLGA</span>
+                                </button>
                             </div>
 
                             <div data-gantt-col="gId" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gId')}>ID{GanttResizeHandle && <GanttResizeHandle colKey="gId" />}</div>

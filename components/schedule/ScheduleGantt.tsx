@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { ChevronDown, ChevronRight, Camera, Filter, Check, Columns3, EyeOff, ArrowRightToLine, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Camera, Filter, Check, Columns3, EyeOff, ArrowRightToLine, Plus, Settings } from 'lucide-react';
 import Button from '../ui/Button';
 
 import { HierarchyNode, ProjectSchedule, BudgetEntry, ResourceAllocation, SinapiType } from '../../types';
@@ -133,7 +133,9 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     const containerRef = useRef<HTMLDivElement>(null);
     const colMenuRef = useRef<HTMLDivElement>(null);
     const levelsMenuRef = useRef<HTMLDivElement>(null);
+    const settingsMenuRef = useRef<HTMLDivElement>(null);
     const [showLevelsDropdown, setShowLevelsDropdown] = useState(false);
+    const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
     const [showFloat, setShowFloat] = useState(() => {
         try {
             const saved = localStorage.getItem('gantt-show-float');
@@ -173,6 +175,9 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
             }
             if (levelsMenuRef.current && !levelsMenuRef.current.contains(e.target as Node)) {
                 setShowLevelsDropdown(false);
+            }
+            if (settingsMenuRef.current && !settingsMenuRef.current.contains(e.target as Node)) {
+                setShowSettingsDropdown(false);
             }
         };
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -1176,14 +1181,34 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         </>
                                     )}
                                 </div>
-                                <button
-                                    onClick={toggleShowFloat}
-                                    className={`px-2 py-1 flex items-center gap-1.5 rounded-lg border transition-all text-button font-medium ${showFloat ? 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100' : 'bg-white border-gray-200 text-gray-400 hover:border-amber-300 hover:text-amber-600 shadow-sm'}`}
-                                    title={showFloat ? 'Ocultar indicação de folga (slack) nas barras' : 'Mostrar indicação de folga (slack) nas barras'}
-                                >
-                                    <span className={`w-2.5 h-2.5 rounded-sm border border-dashed ${showFloat ? 'border-amber-500 bg-amber-200' : 'border-gray-300 bg-transparent'}`} />
-                                    <span>FOLGA</span>
-                                </button>
+                                <div className="relative" ref={settingsMenuRef}>
+                                    <button
+                                        onClick={() => setShowSettingsDropdown(!showSettingsDropdown)}
+                                        className={`p-1.5 flex items-center justify-center rounded-lg border transition-all ${showSettingsDropdown ? 'bg-indigo-600 border-indigo-700 text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 shadow-sm'}`}
+                                        title="Configurações de exibição"
+                                    >
+                                        <Settings className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    {showSettingsDropdown && (
+                                        <>
+                                            <div className="fixed inset-0 z-40" onClick={() => setShowSettingsDropdown(false)} />
+                                            <div className="absolute top-full right-0 mt-1 w-56 bg-white border border-gray-100 rounded-xl shadow-2xl z-[70] p-2 animate-in fade-in slide-in-from-top-1 duration-200 normal-case tracking-normal">
+                                                <div className="text-xs font-medium text-gray-400 uppercase tracking-widest px-2 pb-2 border-b border-gray-50 mb-1">Configurações</div>
+                                                <button
+                                                    onClick={toggleShowFloat}
+                                                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-lg text-left transition-colors group/item"
+                                                >
+                                                    <span className="flex items-center gap-1.5">
+                                                        <span className="w-2.5 h-2.5 rounded-sm border border-dashed border-amber-400 bg-amber-100" />
+                                                        <span className="text-button font-medium text-gray-700">Folga (slack) nas barras</span>
+                                                    </span>
+                                                    {showFloat && <Check className="w-3 h-3 text-indigo-600" />}
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </div>
 
                             <div data-gantt-col="gId" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gId')}>ID{GanttResizeHandle && <GanttResizeHandle colKey="gId" />}</div>

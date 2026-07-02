@@ -185,11 +185,21 @@ const buildFinancialCurve = (
         curve[idx] = { ...curve[idx], realizedValue: Math.round(totalRealized * 100) / 100 };
     }
 
-    // Realizado por período: sem dado real por período, aproxima pela mesma forma do
-    // planejado até hoje, escalada pelo desempenho global (totalRealizado / previstoHoje).
-    const perfRatio = plannedTodayValue > 0 ? totalRealized / plannedTodayValue : 0;
-    for (let i = 0; i <= idx; i++) {
-        curve[i] = { ...curve[i], realizedPeriod: Math.round(curve[i].plannedPeriod * perfRatio * 100) / 100 };
+    // Realizado por período: sem dado real por período, distribui o total realizado
+    // proporcionalmente ao peso de cada período (0..hoje) no planejado. Se os pesos
+    // derem zero (ex.: "hoje" é anterior ao início do cronograma — plannedPeriod[0]=0,
+    // mas já há avanço lançado), joga tudo no período de "hoje" como valor único,
+    // igual ao que a curva acumulada já faz.
+    if (totalRealized > 0) {
+        const weightSum = curve.slice(0, idx + 1).reduce((s, p) => s + Math.max(p.plannedPeriod, 0), 0);
+        if (weightSum > 0) {
+            for (let i = 0; i <= idx; i++) {
+                const weight = Math.max(curve[i].plannedPeriod, 0);
+                curve[i] = { ...curve[i], realizedPeriod: Math.round(totalRealized * (weight / weightSum) * 100) / 100 };
+            }
+        } else if (curve[idx]) {
+            curve[idx] = { ...curve[idx], realizedPeriod: Math.round(totalRealized * 100) / 100 };
+        }
     }
 
     return {

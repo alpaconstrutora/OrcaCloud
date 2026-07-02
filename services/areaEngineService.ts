@@ -165,6 +165,14 @@ async function invalidateVersionCalculation(versionId: string): Promise<void> {
 }
 
 // ── Import de Empreendimento → projeto de áreas (Camada A do PLANO) ──────────
+export interface AreaResyncDrift {
+    blocksAdded: string[];
+    blocksRemoved: string[];
+    unitsAdded: string[];
+    unitsRemoved: string[];
+    unitsAreaChanged: { code: string; before: number; after: number }[];
+}
+
 export interface AreaImportReport {
     projectId: string;
     versionId: string;
@@ -175,6 +183,11 @@ export interface AreaImportReport {
     commonSpaces: number;
     skippedUnitsNoArea: number;
     skippedCommonsNoArea: number;
+    // F3 — re-sincronização
+    isNewProject: boolean;
+    versionNumber: number;
+    previousVersionId: string | null;
+    drift: AreaResyncDrift | null;
     warnings: string[];
 }
 
@@ -235,6 +248,21 @@ export const areaEngineService = {
             .maybeSingle();
 
         if (error) raiseAreaEngineError('getProject', error);
+        return data as AreaProject | null;
+    },
+
+    // F3: projeto de áreas já vinculado a um empreendimento (o mais antigo, se houver vários).
+    async getProjectByEmpreendimento(empreendimentoId: string, organizationId: string): Promise<AreaProject | null> {
+        const { data, error } = await supabase
+            .from('area_projects')
+            .select('*')
+            .eq('empreendimento_id', empreendimentoId)
+            .eq('organization_id', organizationId)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+        if (error) raiseAreaEngineError('getProjectByEmpreendimento', error);
         return data as AreaProject | null;
     },
 
@@ -1303,21 +1331,43 @@ export const areaEngineService = {
             emp.responsavel_tecnico ? `Resp. tecnico: ${emp.responsavel_tecnico}${emp.crea_cau ? ` (${emp.crea_cau})` : ''}.` : '',
         ].filter(Boolean);
 
-        const project = await this.createProject({
-            organization_id: organizationId,
-            empreendimento_id: emp.id,
-            name: emp.name,
-            normative_reference: 'ABNT NBR 12721:2006',
-            normative_valid_from: '2007-01-21',
-            project_type: mapEmpreendimentoTipo(emp.tipo),
-            status: 'active',
-            notes: notesParts.join(' '),
-        });
+        // F3: se já existe projeto de áreas para este empreendimento, cria uma NOVA versão
+        // (rebuild a partir do estado atual do empreendimento) em vez de duplicar o projeto.
+        // A versão anterior nunca é mutada — serve de baseline para o relatório de drift.
+        const existingProject = await this.getProjectByEmpreendimento(emp.id, organizationId);
+        let project: AreaProject;
+        let versionNumber: number;
+        let previousVersionId: string | null = null;
+        if (existingProject) {
+            project = existingProject;
+            const existingVersions = await this.listVersions(existingProject.id);
+            versionNumber = Math.max(0, ...existingVersions.map(v => v.version_number || 0)) + 1;
+            previousVersionId = existingVersions[0]?.id ?? null; // listVersions ordena desc por número
+            // Mantém dados-mestres do projeto alinhados com o empreendimento.
+            await this.updateProject(existingProject.id, {
+                name: emp.name,
+                project_type: mapEmpreendimentoTipo(emp.tipo),
+                notes: notesParts.join(' '),
+            });
+        } else {
+            project = await this.createProject({
+                organization_id: organizationId,
+                empreendimento_id: emp.id,
+                name: emp.name,
+                normative_reference: 'ABNT NBR 12721:2006',
+                normative_valid_from: '2007-01-21',
+                project_type: mapEmpreendimentoTipo(emp.tipo),
+                status: 'active',
+                notes: notesParts.join(' '),
+            });
+            versionNumber = 1;
+        }
 
         const version = await this.createVersion({
             area_project_id: project.id,
-            version_number: 1,
-            version_label: `Importado de ${emp.name}`,
+            version_number: versionNumber,
+            version_label: versionNumber === 1 ? `Importado de ${emp.name}` : `Re-sincronizado v${versionNumber}`,
+            source_version_id: previousVersionId,
         });
         const versionId = version.id;
 
@@ -1562,8 +1612,24 @@ export const areaEngineService = {
                 private_spaces: privateSpaceRows.length,
                 common_spaces: commonSpaceCount,
             },
-            reason: `Projeto de areas importado do empreendimento "${emp.name}"`,
+            reason: previousVersionId
+                ? `Versao re-sincronizada do empreendimento "${emp.name}" (v${versionNumber})`
+                : `Projeto de areas importado do empreendimento "${emp.name}"`,
         });
+
+        // F3: relatório de drift vs a versão anterior (quando houver).
+        let drift: AreaResyncDrift | null = null;
+        if (previousVersionId) {
+            try {
+                drift = await this.computeAreaDrift(previousVersionId, versionId);
+                const changes = drift.blocksAdded.length + drift.blocksRemoved.length + drift.unitsAdded.length + drift.unitsRemoved.length + drift.unitsAreaChanged.length;
+                warnings.unshift(changes === 0
+                    ? `Re-sincronizado como v${versionNumber} — nenhuma mudanca estrutural vs a versao anterior.`
+                    : `Re-sincronizado como v${versionNumber}: +${drift.unitsAdded.length}/-${drift.unitsRemoved.length} unidade(s), ${drift.unitsAreaChanged.length} area(s) alterada(s), +${drift.blocksAdded.length}/-${drift.blocksRemoved.length} bloco(s).`);
+            } catch (err) {
+                console.error('[areaEngineService] falha ao computar drift:', err);
+            }
+        }
 
         return {
             projectId: project.id,
@@ -1575,7 +1641,53 @@ export const areaEngineService = {
             commonSpaces: commonSpaceCount,
             skippedUnitsNoArea,
             skippedCommonsNoArea,
+            isNewProject: !existingProject,
+            versionNumber,
+            previousVersionId,
+            drift,
             warnings,
+        };
+    },
+
+    // F3: compara a estrutura de duas versões (baseline × nova) por código de unidade,
+    // área privativa e nome de bloco. Só leitura — não muta nenhuma das versões.
+    async computeAreaDrift(previousVersionId: string, newVersionId: string): Promise<AreaResyncDrift> {
+        const [prev, next] = await Promise.all([
+            this.getStructure(previousVersionId),
+            this.getStructure(newVersionId),
+        ]);
+        const privateAreaByUnitCode = (s: AreaVersionStructure) => {
+            const unitCodeById = new Map(s.units.map(u => [u.id, u.code]));
+            const areaByCode = new Map<string, number>();
+            for (const sp of s.spaces) {
+                if (sp.use_class !== 'private' || !sp.unit_id) continue;
+                const code = unitCodeById.get(sp.unit_id);
+                if (!code) continue;
+                areaByCode.set(code, (areaByCode.get(code) || 0) + Number(sp.real_area_m2_raw || 0));
+            }
+            return areaByCode;
+        };
+        const prevAreas = privateAreaByUnitCode(prev);
+        const nextAreas = privateAreaByUnitCode(next);
+        const prevCodes = new Set(prev.units.map(u => u.code));
+        const nextCodes = new Set(next.units.map(u => u.code));
+        const prevBlocks = new Set(prev.blocks.map(b => b.name));
+        const nextBlocks = new Set(next.blocks.map(b => b.name));
+
+        const unitsAreaChanged: { code: string; before: number; after: number }[] = [];
+        for (const code of nextCodes) {
+            if (!prevCodes.has(code)) continue;
+            const before = prevAreas.get(code) || 0;
+            const after = nextAreas.get(code) || 0;
+            if (Math.abs(before - after) > 0.005) unitsAreaChanged.push({ code, before, after });
+        }
+
+        return {
+            blocksAdded: [...nextBlocks].filter(b => !prevBlocks.has(b)),
+            blocksRemoved: [...prevBlocks].filter(b => !nextBlocks.has(b)),
+            unitsAdded: [...nextCodes].filter(c => !prevCodes.has(c)),
+            unitsRemoved: [...prevCodes].filter(c => !nextCodes.has(c)),
+            unitsAreaChanged,
         };
     },
     async listQuadroI(versionId: string): Promise<AreaQuadroIRow[]> {

@@ -492,7 +492,9 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                 status: 'success',
                 warnings: report.warnings.map((message, idx) => ({ code: `IMPORT_${idx + 1}`, message })),
                 blocking_errors: [],
-                message: `Importado: ${report.blocks} bloco(s), ${report.units} unidade(s), ${report.privateSpaces} area(s) privativa(s), ${report.commonSpaces} comum(ns).`,
+                message: report.isNewProject
+                    ? `Importado: ${report.blocks} bloco(s), ${report.units} unidade(s), ${report.privateSpaces} area(s) privativa(s), ${report.commonSpaces} comum(ns).`
+                    : `Re-sincronizado como versao v${report.versionNumber}.`,
             });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Erro ao importar do empreendimento.');
@@ -1018,7 +1020,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Importar de Empreendimento</h2>
-                            <p className="text-xs text-slate-500 mt-1">Gera projeto + versao inicial com torres, pavimentos, unidades e areas privativas/comuns. Coeficientes, coberturas e vagas sao revisados no editor antes de calcular.</p>
+                            <p className="text-xs text-slate-500 mt-1">Gera projeto + versao inicial com torres, pavimentos, unidades e areas privativas/comuns. Se o empreendimento ja foi importado, cria uma NOVA versao (re-sincronizacao) com relatorio de mudancas — a versao anterior e preservada. Coeficientes, coberturas e vagas sao revisados no editor antes de calcular.</p>
                         </div>
                         <button type="button" onClick={() => setIsImportOpen(false)} className="text-sm font-bold text-slate-500 hover:text-slate-800">
                             Fechar
@@ -1050,7 +1052,9 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
 
             {importReport && (
                 <div className="border border-emerald-200 bg-emerald-50 text-emerald-800 rounded-lg px-4 py-3 text-sm">
-                    <p className="font-bold">Importacao concluida</p>
+                    <p className="font-bold">
+                        {importReport.isNewProject ? 'Importacao concluida' : `Re-sincronizacao concluida (versao v${importReport.versionNumber})`}
+                    </p>
                     <p className="mt-1 text-xs">
                         {importReport.blocks} bloco(s) · {importReport.floors} pavimento(s) · {importReport.units} unidade(s) · {importReport.privateSpaces} area(s) privativa(s) · {importReport.commonSpaces} area(s) comum(ns).
                     </p>
@@ -1058,6 +1062,27 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                         <p className="mt-1 text-xs text-amber-700">
                             Ignorados: {importReport.skippedUnitsNoArea} unidade(s) sem area, {importReport.skippedCommonsNoArea} comum(ns) sem metragem.
                         </p>
+                    )}
+                    {importReport.drift && (
+                        <div className="mt-2 rounded-lg border border-emerald-200 bg-white/70 p-2 text-xs">
+                            <p className="font-bold uppercase tracking-widest text-[10px] text-emerald-700">Mudancas vs versao anterior</p>
+                            {(importReport.drift.unitsAdded.length + importReport.drift.unitsRemoved.length + importReport.drift.unitsAreaChanged.length + importReport.drift.blocksAdded.length + importReport.drift.blocksRemoved.length) === 0 ? (
+                                <p className="mt-1">Nenhuma mudanca estrutural.</p>
+                            ) : (
+                                <ul className="mt-1 space-y-0.5">
+                                    {importReport.drift.blocksAdded.length > 0 && <li>Blocos novos: {importReport.drift.blocksAdded.join(', ')}</li>}
+                                    {importReport.drift.blocksRemoved.length > 0 && <li>Blocos removidos: {importReport.drift.blocksRemoved.join(', ')}</li>}
+                                    {importReport.drift.unitsAdded.length > 0 && <li>Unidades novas ({importReport.drift.unitsAdded.length}): {importReport.drift.unitsAdded.slice(0, 12).join(', ')}{importReport.drift.unitsAdded.length > 12 ? '…' : ''}</li>}
+                                    {importReport.drift.unitsRemoved.length > 0 && <li>Unidades removidas ({importReport.drift.unitsRemoved.length}): {importReport.drift.unitsRemoved.slice(0, 12).join(', ')}{importReport.drift.unitsRemoved.length > 12 ? '…' : ''}</li>}
+                                    {importReport.drift.unitsAreaChanged.length > 0 && (
+                                        <li>
+                                            Areas privativas alteradas ({importReport.drift.unitsAreaChanged.length}):{' '}
+                                            {importReport.drift.unitsAreaChanged.slice(0, 8).map(c => `${c.code} ${formatNumber(c.before)}→${formatNumber(c.after)}`).join('; ')}{importReport.drift.unitsAreaChanged.length > 8 ? '…' : ''}
+                                        </li>
+                                    )}
+                                </ul>
+                            )}
+                        </div>
                     )}
                 </div>
             )}

@@ -47,7 +47,8 @@ import {
     MoreHorizontal
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, Line, ComposedChart } from 'recharts';
-import { buildPlanningView, type PlanningView } from '../utils/portalPlanningUtils';
+import { buildPlanningView, type PlanningView, type PlanningScale } from '../utils/portalPlanningUtils';
+import type { PortalPlanning } from '../services/clientPortalService';
 import { fmtBRL } from '../utils/format';
 import { ProjectSettings, BudgetEntry, DiaryEntry, UserProfile, Client, PaymentInstallment, Contract } from '../types';
 import { calculateProjectProgress, calculateUpcomingPhases, getPhaseSchedule, calculateRealizedFinancialProgress, calculatePlannedFinancialProgress } from '../utils/projectUtils';
@@ -125,6 +126,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [clientContracts, setClientContracts] = React.useState<Contract[]>([]);
     const [viewingContract, setViewingContract] = React.useState<Contract | null>(null);
     const [planningView, setPlanningView] = React.useState<PlanningView | null>(null);
+    const [planningRaw, setPlanningRaw] = React.useState<PortalPlanning | null>(null);
+    const [planningScale, setPlanningScale] = React.useState<PlanningScale>('month');
     const [planningLoadedKey, setPlanningLoadedKey] = React.useState<string | null>(null);
     const [clientRequests, setClientRequests] = React.useState<ClientRequest[]>([]);
     const [requestsLoading, setRequestsLoading] = React.useState(false);
@@ -187,14 +190,23 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         if ((activeTab === 'obra' || activeTab === 'cronograma-ff') && planningKey && planningLoadedKey !== planningKey) {
             setPlanningLoadedKey(planningKey);
             setPlanningView(null);
+            setPlanningRaw(null);
             const loadPlanning = portalToken
                 ? clientPortalService.getPlanningByToken(portalToken)
                 : clientPortalService.getPlanningForClient(clientProfile!.id);
             loadPlanning
-                .then(p => setPlanningView(p ? buildPlanningView(p) : null))
+                .then(p => {
+                    setPlanningRaw(p || null);
+                    setPlanningView(p ? buildPlanningView(p, planningScale) : null);
+                })
                 .catch(console.error);
         }
     }, [clientProfile, activeTab, settings, organizationId]);
+
+    // Recalcula as curvas (client-side, sem novo fetch) quando o usuário troca Dia/Sem/Mês.
+    React.useEffect(() => {
+        if (planningRaw) setPlanningView(buildPlanningView(planningRaw, planningScale));
+    }, [planningScale, planningRaw]);
 
     React.useEffect(() => {
         const fetchOrders = async () => {
@@ -2116,6 +2128,22 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         );
     };
 
+    // Mesmo seletor Dia/Sem/Mês do Planejamento interno (ScheduleHeader.tsx), aplicado
+    // à granularidade das curvas do Portal (Curva de Avanço + Curva de Desembolso).
+    const renderPlanningScaleSelector = () => (
+        <div className="flex bg-gray-100/80 p-0.5 rounded-lg border border-gray-200/60 shrink-0">
+            {(['day', 'week', 'month'] as const).map((scale) => (
+                <button
+                    key={scale}
+                    onClick={() => setPlanningScale(scale)}
+                    className={`px-2.5 py-1.5 rounded-md text-xs font-black uppercase tracking-wide transition-all ${planningScale === scale ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    {{ day: 'Dia', week: 'Sem', month: 'Mês' }[scale]}
+                </button>
+            ))}
+        </div>
+    );
+
     const renderObra = () => {
         const pv = planningView;
         const fmt = (d: Date | null) => d ? d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -2188,9 +2216,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* Curva S */}
                 {pv.sCurve.length > 0 && (
                     <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
-                            <h3 className="text-lg font-black text-gray-900 tracking-tight uppercase">Curva de Avanço</h3>
+                        <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
+                                <h3 className="text-lg font-black text-gray-900 tracking-tight uppercase">Curva de Avanço</h3>
+                            </div>
+                            {renderPlanningScaleSelector()}
                         </div>
                         <ResponsiveContainer width="100%" height={260}>
                             <ComposedChart data={pv.sCurve} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
@@ -2308,9 +2339,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
 
                 {fv.curve.length > 0 && (
                     <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
-                            <h3 className="text-lg font-black text-gray-900 tracking-tight uppercase">Curva de Desembolso</h3>
+                        <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-1.5 h-6 bg-indigo-600 rounded-full" />
+                                <h3 className="text-lg font-black text-gray-900 tracking-tight uppercase">Curva de Desembolso</h3>
+                            </div>
+                            {renderPlanningScaleSelector()}
                         </div>
                         <ResponsiveContainer width="100%" height={260}>
                             <ComposedChart data={fv.curve} margin={{ top: 8, right: 12, left: 8, bottom: 0 }}>

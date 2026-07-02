@@ -17,6 +17,49 @@ const parseDate = (s?: string | null): Date | null => {
 
 const dayMs = 86400000;
 
+// Mesma granularidade do seletor Dia/Sem/Mês do Planejamento interno (ScheduleHeader.tsx).
+export type PlanningScale = 'day' | 'week' | 'month';
+
+// Gera os pontos de amostragem da curva alinhados ao calendário (não mais um
+// número fixo de amostras), igual ao timelineColumns do Gantt interno.
+const MAX_CURVE_POINTS = 120;
+const generatePeriods = (start: Date, end: Date, scale: PlanningScale): Date[] => {
+    const points: Date[] = [];
+    const cur = new Date(start);
+    if (scale === 'week') {
+        const day = cur.getDay();
+        cur.setDate(cur.getDate() - day + (day === 0 ? -6 : 1));
+    } else if (scale === 'month') {
+        cur.setDate(1);
+    }
+    let count = 0;
+    while (cur.getTime() <= end.getTime() && count++ < MAX_CURVE_POINTS) {
+        points.push(new Date(cur));
+        if (scale === 'day') cur.setDate(cur.getDate() + 1);
+        else if (scale === 'week') cur.setDate(cur.getDate() + 7);
+        else cur.setMonth(cur.getMonth() + 1);
+    }
+    if (points.length === 0 || points[points.length - 1].getTime() < end.getTime()) {
+        points.push(new Date(end));
+    }
+    return points;
+};
+
+const formatPeriodLabel = (d: Date, scale: PlanningScale): string =>
+    scale === 'month'
+        ? d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+        : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+// Índice do período mais próximo de "hoje" (substitui o cálculo por fração fixa).
+const closestPeriodIndex = (periods: Date[], at: Date): number => {
+    let idx = 0, best = Infinity;
+    periods.forEach((p, i) => {
+        const diff = Math.abs(p.getTime() - at.getTime());
+        if (diff < best) { best = diff; idx = i; }
+    });
+    return idx;
+};
+
 export type PhaseStatus = 'concluida' | 'andamento' | 'futura';
 
 export interface PlanningPhase {
@@ -119,27 +162,21 @@ const realizedValue = (it: PortalPlanningItem): number => {
 };
 
 const buildFinancialCurve = (
-    items: PortalPlanningItem[], start: Date, end: Date, now: Date,
+    items: PortalPlanningItem[], start: Date, end: Date, now: Date, scale: PlanningScale,
 ): FinancialView | null => {
     const totalPlanned = items.reduce((s, it) => s + (it.plannedValue ?? 0), 0);
     if (totalPlanned <= 0 || end <= start) return null;
 
-    const total = end.getTime() - start.getTime();
-    const steps = 14;
+    const periods = generatePeriods(start, end, scale);
     const todayClamped = new Date(Math.min(Math.max(now.getTime(), start.getTime()), end.getTime()));
-    const curve: SCurveMoneyPoint[] = [];
-    for (let i = 0; i <= steps; i++) {
-        const at = new Date(start.getTime() + (total * i) / steps);
-        curve.push({
-            label: at.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
-            plannedValue: Math.round(plannedValueAt(items, at) * 100) / 100,
-        });
-    }
+    const curve: SCurveMoneyPoint[] = periods.map(at => ({
+        label: formatPeriodLabel(at, scale),
+        plannedValue: Math.round(plannedValueAt(items, at) * 100) / 100,
+    }));
 
     const totalRealized = items.reduce((s, it) => s + realizedValue(it), 0);
     const plannedTodayValue = plannedValueAt(items, todayClamped);
-    const todayFrac = (todayClamped.getTime() - start.getTime()) / total;
-    const idx = Math.round(todayFrac * steps);
+    const idx = closestPeriodIndex(periods, todayClamped);
     if (curve[idx]) {
         curve[idx] = { ...curve[idx], realizedValue: Math.round(totalRealized * 100) / 100 };
     }
@@ -223,7 +260,7 @@ const buildPhases = (planning: PortalPlanning, map: Map<string, PortalPlanningIt
     return phases.sort((a, b) => a.start.getTime() - b.start.getTime());
 };
 
-export const buildPlanningView = (planning: PortalPlanning): PlanningView => {
+export const buildPlanningView = (planning: PortalPlanning, scale: PlanningScale = 'month'): PlanningView => {
     const items = planning.itemSchedules || [];
     const map = itemMap(items);
     const phases = buildPhases(planning, map);
@@ -260,24 +297,21 @@ export const buildPlanningView = (planning: PortalPlanning): PlanningView => {
         : Math.max(0, Math.min(100, Math.round(planning.progress ?? 0)));
     const now = new Date();
 
-    // Curva S planejada: ~14 amostras entre start e end.
+    // Curva S planejada: amostrada na mesma granularidade do seletor (dia/semana/mês).
     const sCurve: SCurvePoint[] = [];
     let plannedToday = 0;
     if (start && end && end > start) {
-        const total = end.getTime() - start.getTime();
-        const steps = 14;
+        const periods = generatePeriods(start, end, scale);
         const todayClamped = new Date(Math.min(Math.max(now.getTime(), start.getTime()), end.getTime()));
         plannedToday = Math.round(plannedAt(items, todayClamped));
-        for (let i = 0; i <= steps; i++) {
-            const at = new Date(start.getTime() + (total * i) / steps);
+        periods.forEach(at => {
             sCurve.push({
-                label: at.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+                label: formatPeriodLabel(at, scale),
                 planned: Math.round(plannedAt(items, at)),
             });
-        }
+        });
         // Injeta o ponto "hoje" com o realizado (progresso geral).
-        const todayFrac = (todayClamped.getTime() - start.getTime()) / total;
-        const idx = Math.round(todayFrac * steps);
+        const idx = closestPeriodIndex(periods, todayClamped);
         if (sCurve[idx]) {
             sCurve[idx] = { ...sCurve[idx], realized: progress };
         }
@@ -288,7 +322,7 @@ export const buildPlanningView = (planning: PortalPlanning): PlanningView => {
 
     // Curva financeira: só quando o servidor liberou valores (cliente Serviços).
     const financial = (planning.financialEnabled && start && end)
-        ? buildFinancialCurve(items, start, end, now) ?? undefined
+        ? buildFinancialCurve(items, start, end, now, scale) ?? undefined
         : undefined;
 
     return { progress, start, end, daysRemaining, onSchedule, plannedToday, phases, sCurve, financial };

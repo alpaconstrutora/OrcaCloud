@@ -269,7 +269,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [valorMax, setValorMax] = useState('');
     const [ordenarPor, setOrdenarPor] = useState<'vencimento' | 'valor' | 'created_at' | 'numero' | 'project_id' | 'cost_center_id' | 'beneficiario_nome' | 'status'>('created_at');
     const [ordenarDir, setOrdenarDir] = useState<'asc' | 'desc'>('desc');
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
 
     // Lookup maps para exibição nos cards/linhas
     const [ccMap, setCcMap] = useState<Record<string, string>>({});

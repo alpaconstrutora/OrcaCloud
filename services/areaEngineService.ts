@@ -1338,30 +1338,71 @@ export const areaEngineService = {
         const firstBlockId = blockIdByCode.get('B1');
         if (!firstBlockId) throw new Error('Falha ao materializar blocos do empreendimento.');
 
-        // 3. Pavimentos: andares distintos das unidades de cada torre.
+        // 3. Pavimentos (F2): preferir os templates de empreendimento_floors, expandindo
+        //    repeat_count — inclui andares SEM unidade (garagem/tecnico), que o Quadro I
+        //    (por pavimento) precisa. Fallback: derivar dos andares distintos das unidades.
+        const floorsByTower = new Map<string, Awaited<ReturnType<typeof empreendimentoService.listFloors>>>();
+        await Promise.all(towers.map(async t => {
+            try { floorsByTower.set(t.id, await empreendimentoService.listFloors(t.id)); }
+            catch { floorsByTower.set(t.id, []); }
+        }));
+
         const floorRows: Record<string, unknown>[] = [];
         const floorCodeByKey = new Map<string, string>(); // `${towerId}:${floorNum}` -> floorCode
         let floorSeq = 0;
         for (const t of towers) {
-            const seen = new Set<number>();
-            for (const u of (t.units || [])) {
-                const fn = u.floor;
-                if (fn === undefined || fn === null || seen.has(fn)) continue;
-                seen.add(fn);
-                const code = `F${++floorSeq}`;
-                floorCodeByKey.set(`${t.id}:${fn}`, code);
-                floorRows.push({
-                    area_version_id: versionId,
-                    block_id: blockIdByTower.get(t.id),
-                    code,
-                    name: floorLabelFromNumber(fn),
-                    floor_type: mapFloorTipo(u.floor_tipo, fn),
-                    sort_order: fn,
-                    is_template: false,
-                    is_materialized: true,
-                    materialized_label: floorLabelFromNumber(fn),
-                    materialized_index: fn,
-                });
+            const blockId = blockIdByTower.get(t.id);
+            const templates = floorsByTower.get(t.id) || [];
+            if (templates.length > 0) {
+                for (const fl of templates) {
+                    const reps = Math.max(1, fl.repeat_count || 1);
+                    for (let rep = 0; rep < reps; rep++) {
+                        const floorNum = fl.floor_number + rep;
+                        const key = `${t.id}:${floorNum}`;
+                        if (floorCodeByKey.has(key)) continue; // andares de templates que se sobrepoem
+                        const code = `F${++floorSeq}`;
+                        floorCodeByKey.set(key, code);
+                        const base = fl.name?.trim() || floorLabelFromNumber(floorNum);
+                        const label = reps > 1 ? `${base} ${floorNum}` : base;
+                        floorRows.push({
+                            area_version_id: versionId,
+                            block_id: blockId,
+                            code,
+                            name: label,
+                            floor_type: mapFloorTipo(fl.tipo, floorNum),
+                            sort_order: floorNum,
+                            is_template: false,
+                            is_materialized: true,
+                            materialized_label: label,
+                            materialized_index: floorNum,
+                        });
+                    }
+                }
+            } else {
+                // Fallback: sem template de pavimentos, derivar dos andares das unidades.
+                const seen = new Set<number>();
+                for (const u of (t.units || [])) {
+                    const fn = u.floor;
+                    if (fn === undefined || fn === null || seen.has(fn)) continue;
+                    seen.add(fn);
+                    const code = `F${++floorSeq}`;
+                    floorCodeByKey.set(`${t.id}:${fn}`, code);
+                    floorRows.push({
+                        area_version_id: versionId,
+                        block_id: blockId,
+                        code,
+                        name: floorLabelFromNumber(fn),
+                        floor_type: mapFloorTipo(u.floor_tipo, fn),
+                        sort_order: fn,
+                        is_template: false,
+                        is_materialized: true,
+                        materialized_label: floorLabelFromNumber(fn),
+                        materialized_index: fn,
+                    });
+                }
+                if ((t.units || []).length > 0) {
+                    warnings.push(`Torre "${t.name}": pavimentos derivados das unidades (sem template) — andares sem unidade nao aparecem no Quadro I.`);
+                }
             }
         }
         const floorIdByCode = new Map<string, string>();
@@ -1460,12 +1501,16 @@ export const areaEngineService = {
             const towerBlockId = ca.tower_id ? blockIdByTower.get(ca.tower_id) : undefined;
             const blockId = towerBlockId || firstBlockId;
             const scope = towerBlockId ? 'block' : 'global';
+            // Atribui o pavimento quando a comum pertence a uma torre e tem andar identificavel.
+            const caFloorCode = (ca.tower_id && ca.floor !== undefined && ca.floor !== null)
+                ? floorCodeByKey.get(`${ca.tower_id}:${ca.floor}`) : undefined;
+            const caFloorId = caFloorCode ? floorIdByCode.get(caFloorCode) ?? null : null;
             const { data: commonSpace, error: commonError } = await supabase
                 .from('area_version_spaces')
                 .insert({
                     area_version_id: versionId,
                     block_id: blockId,
-                    floor_id: null,
+                    floor_id: caFloorId,
                     unit_id: null,
                     code: `COM-${i + 1}`,
                     name: ca.name || `Area comum ${i + 1}`,

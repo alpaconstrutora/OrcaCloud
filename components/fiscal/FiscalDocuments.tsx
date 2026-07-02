@@ -8,7 +8,7 @@ import { TaxValidationPanel } from './TaxValidationPanel';
 import { JournalEntryCard } from './JournalEntryCard';
 
 interface Props {
-  organizationId: string;
+  organizationId: string | null;
   onToast: (msg: string, type: 'ok' | 'err') => void;
 }
 
@@ -469,7 +469,7 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
     setLoading(true);
     Promise.all([
       listNfeInvoices(organizationId),
-      projectService.listProjects(undefined, organizationId),
+      projectService.listProjects(undefined, organizationId ?? undefined),
     ])
       .then(([invs, projs]) => {
         setInvoices(invs);
@@ -484,7 +484,7 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
       <DocumentDetail
         invoice={selected}
         projects={projects}
-        organizationId={organizationId}
+        organizationId={selected.organization_id}
         onBack={() => setSelected(null)}
         onToast={onToast}
       />

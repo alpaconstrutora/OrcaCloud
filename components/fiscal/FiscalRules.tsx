@@ -3,7 +3,8 @@ import { listClassificationRules, createClassificationRule, toggleClassification
 import type { ClassificationRule, RuleType } from '../../types/fiscal';
 
 interface Props {
-  organizationId: string;
+  organizationId: string | null;
+  writeOrganizationId: string | null;
   onToast: (msg: string, type: 'ok' | 'err') => void;
 }
 
@@ -29,7 +30,7 @@ const EMPTY_FORM: NewRuleForm = {
   priority: 50,
 };
 
-export function FiscalRules({ organizationId, onToast }: Props) {
+export function FiscalRules({ organizationId, writeOrganizationId, onToast }: Props) {
   const [rules, setRules] = useState<ClassificationRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -51,10 +52,14 @@ export function FiscalRules({ organizationId, onToast }: Props) {
       onToast('Informe o valor de correspondência', 'err');
       return;
     }
+    if (!writeOrganizationId) {
+      onToast('Selecione uma organização para criar a regra', 'err');
+      return;
+    }
     setSaving(true);
     try {
       await createClassificationRule({
-        organization_id: organizationId,
+        organization_id: writeOrganizationId,
         rule_type:       form.rule_type,
         match_value:     form.match_value.trim().toLowerCase(),
         category:        form.category,

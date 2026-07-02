@@ -3,7 +3,7 @@ import { listProcessingJobs, replayDeadLetter } from '../../services/nfeService'
 import type { ProcessingJobWithDoc } from '../../types/fiscal';
 
 interface Props {
-  organizationId: string;
+  organizationId: string | null;
   onToast: (msg: string, type: 'ok' | 'err') => void;
 }
 

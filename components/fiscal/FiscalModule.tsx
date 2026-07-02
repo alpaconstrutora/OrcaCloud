@@ -26,17 +26,23 @@ function FiscalToast({ msg, type, onClose }: ToastState & { onClose: () => void 
 }
 
 export function FiscalModule() {
-  const { activeOrganizationId, session } = useStore();
+  const { activeOrganizationId, organizations, session } = useStore();
   const [page, setPage] = useState<FiscalPage>('upload');
   const [toast, setToast] = useState<ToastState | null>(null);
   const [health, setHealth] = useState<PipelineHealth | null>(null);
+  // Seletor próprio do módulo Fiscal — independe do seletor global do app.
+  // '' representa "Todas as organizações".
+  const [moduleOrgId, setModuleOrgId] = useState(activeOrganizationId ?? '');
+
+  const orgId: string | null = moduleOrgId || null;
+  const isConsolidated = !orgId;
 
   const showToast = (msg: string, type: 'ok' | 'err' = 'ok') => setToast({ msg, type });
 
   useEffect(() => {
-    if (!activeOrganizationId) return;
-    getPipelineHealth(activeOrganizationId).then(setHealth).catch(() => null);
-  }, [activeOrganizationId, page]);
+    if (!orgId) { setHealth(null); return; }
+    getPipelineHealth(orgId).then(setHealth).catch(() => null);
+  }, [orgId, page]);
 
   const rate = health
     ? Math.round(health.success_rate_pct)
@@ -61,14 +67,6 @@ export function FiscalModule() {
     },
   ];
 
-  if (!activeOrganizationId) {
-    return (
-      <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-        Selecione uma organização para acessar o módulo fiscal.
-      </div>
-    );
-  }
-
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: FISCAL_CSS }} />
@@ -81,25 +79,46 @@ export function FiscalModule() {
                 <h1 className="f-module-title">Módulo Fiscal</h1>
                 <p className="f-module-sub">Pipeline de NF-e e classificação de documentos</p>
               </div>
-              {health && (
-                <div className="f-health-chips">
-                  <span className="f-health-chip">
-                    <span className="f-health-chip-dot" style={{ background: rate >= 80 ? 'var(--fgreen)' : rate >= 50 ? 'var(--famber)' : 'var(--fred)' }} />
-                    Sucesso {rate}%
-                  </span>
-                  {(health.dead_letter ?? 0) > 0 && (
-                    <span className="f-health-chip f-health-chip-warn">
-                      ⚠ {health.dead_letter} dead letter
-                    </span>
-                  )}
-                  {(health.queued ?? 0) > 0 && (
+              <div className="f-module-header-right">
+                <select
+                  value={moduleOrgId}
+                  onChange={e => setModuleOrgId(e.target.value)}
+                  className="f-org-select"
+                  title="Organização"
+                >
+                  <option value="">Todas as organizações</option>
+                  {organizations.map(org => (
+                    <option key={org.id} value={org.id}>{org.name}</option>
+                  ))}
+                </select>
+                {health && (
+                  <div className="f-health-chips">
                     <span className="f-health-chip">
-                      {health.queued} na fila
+                      <span className="f-health-chip-dot" style={{ background: rate >= 80 ? 'var(--fgreen)' : rate >= 50 ? 'var(--famber)' : 'var(--fred)' }} />
+                      Sucesso {rate}%
                     </span>
-                  )}
-                </div>
-              )}
+                    {(health.dead_letter ?? 0) > 0 && (
+                      <span className="f-health-chip f-health-chip-warn">
+                        ⚠ {health.dead_letter} dead letter
+                      </span>
+                    )}
+                    {(health.queued ?? 0) > 0 && (
+                      <span className="f-health-chip">
+                        {health.queued} na fila
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
+
+            {isConsolidated && (page === 'upload' || page === 'rules') && (
+              <div className="f-consolidated-banner">
+                <span>
+                  Visão consolidada — selecione uma organização específica acima para {page === 'upload' ? 'enviar NF-e' : 'criar regras'}.
+                </span>
+              </div>
+            )}
 
             {/* Tabs */}
             <div className="f-tabs">
@@ -118,28 +137,33 @@ export function FiscalModule() {
           {/* Content */}
           <div className="f-tab-content">
             {page === 'upload' && (
-              <FiscalUpload
-                organizationId={activeOrganizationId}
-                userId={session?.user?.id ?? ''}
-                onToast={showToast}
-                onNavigate={setPage}
-              />
+              orgId ? (
+                <FiscalUpload
+                  organizationId={orgId}
+                  userId={session?.user?.id ?? ''}
+                  onToast={showToast}
+                  onNavigate={setPage}
+                />
+              ) : (
+                <div className="f-tab-empty">Selecione uma organização acima para enviar NF-e.</div>
+              )
             )}
             {page === 'documents' && (
               <FiscalDocuments
-                organizationId={activeOrganizationId}
+                organizationId={orgId}
                 onToast={showToast}
               />
             )}
             {page === 'admin' && (
               <FiscalJobs
-                organizationId={activeOrganizationId}
+                organizationId={orgId}
                 onToast={showToast}
               />
             )}
             {page === 'rules' && (
               <FiscalRules
-                organizationId={activeOrganizationId}
+                organizationId={orgId}
+                writeOrganizationId={orgId}
                 onToast={showToast}
               />
             )}

@@ -50,11 +50,18 @@ export const FISCAL_CSS = `
   .f-module-title { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; color: var(--ftext); margin: 0; }
   .f-module-sub { font-size: 13px; color: var(--ftext2); margin: 2px 0 0; }
 
+  .f-module-header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+
   /* Pipeline health chips */
   .f-health-chips { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .f-health-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--fbg2); border: 1px solid var(--fborder); border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: var(--ftext2); }
   .f-health-chip-warn { background: var(--famber-bg); border-color: #fde68a; color: var(--famber); }
   .f-health-chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+  /* Visão consolidada — seletor de organização */
+  .f-consolidated-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--famber-bg, #fffbeb); border: 1px solid #fde68a; border-radius: var(--fradius); padding: 10px 14px; margin-bottom: 12px; font-size: 12px; font-weight: 600; color: var(--ftext2); }
+  .f-org-select { background: #fff; border: 1px solid var(--fborder2); border-radius: var(--fradius); color: var(--ftext); padding: 6px 10px; font-size: 12px; font-weight: 600; min-width: 240px; }
+  .f-tab-empty { padding: 60px 28px; text-align: center; color: var(--ftext3); font-size: 13px; }
 
   /* Tabs */
   .f-tabs { display: flex; gap: 2px; margin-top: 4px; }

@@ -119,13 +119,15 @@ export async function uploadNFe(
 
 const NFE_COLS = 'id, organization_id, raw_document_id, access_key, issuer_name, issuer_cnpj, recipient_name, recipient_cnpj, issue_date, total_value, document_status, payment_status, created_at, project_id, linked_transaction_id, approved_at, approved_by, purchase_order_id';
 
-export async function listNfeInvoices(organizationId: string): Promise<NfeInvoice[]> {
-  const { data, error } = await supabase
+export async function listNfeInvoices(organizationId?: string | null): Promise<NfeInvoice[]> {
+  let query = supabase
     .from('nfe_invoices')
     .select(NFE_COLS)
-    .eq('organization_id', organizationId)
     .order('issue_date', { ascending: false });
 
+  if (organizationId) query = query.eq('organization_id', organizationId);
+
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data ?? [];
 }
@@ -154,16 +156,18 @@ export async function getNfeInvoiceWithItems(invoiceId: string): Promise<NfeInvo
 // FILA DE JOBS
 // ============================================================
 
-export async function listProcessingJobs(organizationId: string): Promise<ProcessingJobWithDoc[]> {
-  const { data, error } = await supabase
+export async function listProcessingJobs(organizationId?: string | null): Promise<ProcessingJobWithDoc[]> {
+  let query = supabase
     .from('processing_jobs')
     .select(`
       *,
       raw_document:raw_documents(access_key, file_path, document_type)
     `)
-    .eq('organization_id', organizationId)
     .order('created_at', { ascending: false });
 
+  if (organizationId) query = query.eq('organization_id', organizationId);
+
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []) as ProcessingJobWithDoc[];
 }
@@ -197,15 +201,17 @@ export async function replayDeadLetter(jobId: string): Promise<string> {
 // ============================================================
 
 export async function listClassificationRules(
-  organizationId: string
+  organizationId?: string | null
 ): Promise<ClassificationRule[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from('classification_rules')
     .select('id, organization_id, rule_type, match_value, category, priority, is_active, created_at')
-    .or(`organization_id.eq.${organizationId},organization_id.is.null`)
     .eq('is_active', true)
     .order('priority', { ascending: true });
 
+  if (organizationId) query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []) as ClassificationRule[];
 }

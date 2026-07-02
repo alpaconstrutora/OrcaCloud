@@ -77,6 +77,14 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
 
     const [filtroStatus, setFiltroStatus] = useState<BoletoStatus | 'todos'>('todos');
     const [busca, setBusca] = useState('');
+    const [buscaDebounced, setBuscaDebounced] = useState('');
+
+    // Debounce da busca textual: evita refiltrar/reordenar a lista inteira
+    // (e re-renderizar todos os cards) a cada tecla digitada, o que travava o input.
+    useEffect(() => {
+        const timer = setTimeout(() => setBuscaDebounced(busca), 250);
+        return () => clearTimeout(timer);
+    }, [busca]);
 
     // Filtros avançados (client-side)
     const [showFiltros, setShowFiltros] = useState(false);
@@ -205,8 +213,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         let list = boletos;
 
         // Busca textual
-        if (busca) {
-            const b = busca.toLowerCase();
+        if (buscaDebounced) {
+            const b = buscaDebounced.toLowerCase();
             list = list.filter(item =>
                 (item.documento_nome ?? '').toLowerCase().includes(b) ||
                 (item.beneficiario_nome ?? '').toLowerCase().includes(b) ||
@@ -248,7 +256,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         });
 
         return list;
-    }, [boletos, busca, vencDe, vencAte, valorMin, valorMax, ordenarPor, ordenarDir, supplierMap, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [boletos, buscaDebounced, vencDe, vencAte, valorMin, valorMax, ordenarPor, ordenarDir, supplierMap, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const counts = useMemo(() => {
         const c: Record<string, number> = { todos: boletos.length };

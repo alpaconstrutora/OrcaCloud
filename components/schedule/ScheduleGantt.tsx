@@ -595,7 +595,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             return (
                                 <div
                                     key={`grid-${index}`}
-                                    className={`absolute top-0 bottom-0 border-l border-gray-300 h-full ${isWeekend ? 'bg-gray-300/40' : index % 2 === 0 ? 'bg-gray-100/50' : ''}`}
+                                    className={`absolute top-0 bottom-0 border-l border-gray-300 h-full ${isWeekend ? 'bg-gray-300/40' : timeScale !== 'day' && index % 2 === 0 ? 'bg-gray-100/50' : ''}`}
                                     style={{
                                         left: `${(Math.max(minDate.getTime(), column.date.getTime()) - minDate.getTime()) / (1000 * 60 * 60 * 24) * pxPerDay}px`,
                                         width: `${column.width}px`
@@ -864,7 +864,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             return (
                                 <div
                                     key={`grid-parent-${index}`}
-                                    className={`absolute top-0 bottom-0 border-l border-gray-300 h-full ${isWeekend ? 'bg-gray-300/40' : index % 2 === 0 ? 'bg-gray-200/40' : ''}`}
+                                    className={`absolute top-0 bottom-0 border-l border-gray-300 h-full ${isWeekend ? 'bg-gray-300/40' : timeScale !== 'day' && index % 2 === 0 ? 'bg-gray-200/40' : ''}`}
                                     style={{
                                         left: `${(Math.max(minDate.getTime(), column.date.getTime()) - minDate.getTime()) / (1000 * 60 * 60 * 24) * pxPerDay}px`,
                                         width: `${column.width}px`

@@ -28,4 +28,5 @@ export * from "./structural";
 export * from "./organizationGovernance";
 export * from "./assets";
 export * from "./partner";
+export * from "./crm";
 

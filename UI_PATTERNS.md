@@ -128,7 +128,60 @@ if (!ok) return;
 
 ---
 
-## 6. Migração do legado
+## 6. Conteúdo da janela
+
+O §1–5 dizem **onde** a interação acontece. Esta seção diz **como preenchê-la**.
+Vale para modal, drawer e página.
+
+### 6.1 Botão = verbo + objeto
+
+O botão primário nomeia a ação e o objeto, nunca o genérico. O impacto tem que estar
+legível **antes** do clique.
+
+- ❌ `OK` · `Sim` · `Confirmar` · `Enviar`
+- ✅ `Salvar fornecedor` · `Aprovar pagamento` · `Emitir boleto` · `Excluir obra`
+
+Posição: primário no canto inferior direito; secundário (`Cancelar` / `Voltar`) à
+esquerda dele. Vermelho **só** para ação destrutiva/crítica — não para todo primário.
+
+### 6.2 Ação crítica financeira/fiscal exige bloco de contexto
+
+Antes de aprovar/pagar/cancelar valor, a janela mostra os dados que sustentam a
+decisão. `Deseja aprovar?` é insuficiente num ERP.
+
+```
+Aprovar pagamento
+
+Fornecedor: ABC Materiais       Obra: Residencial Aurora
+Valor: R$ 18.420,00             Vencimento: 10/07/2026
+Conta: Banco Itaú              Documento: NF-e 000128
+
+[Voltar]  [Aprovar pagamento]
+```
+
+Para valores altos, considerar segunda confirmação ou permissão especial.
+
+### 6.3 Não excluir registro de negócio — inativar/estornar
+
+Em ERP, DELETE físico destrói auditoria. Preferir **arquivar / inativar / cancelar /
+estornar / marcar como substituído** e manter histórico. A janela deve explicar a
+consequência real ("mantém histórico, remove da fila de pagamento"), não só "tem
+certeza?". Coerente com o que já fazemos (status `superseded`, soft-delete).
+
+### 6.4 Validação inline + estados explícitos
+
+- **Validação por campo**, perto do campo, mantendo o que já foi preenchido e levando
+  o foco para o primeiro erro. Nada de alerta genérico no topo.
+- **Loading**: skeleton/spinner discreto, nunca janela congelada.
+- **Erro**: diz o que fazer ("CNPJ já cadastrado em outro fornecedor"), não "Erro ao
+  salvar".
+- **Sucesso**: ação simples → fecha + toast; ação complexa → resumo (nº do pedido,
+  canal, status).
+- Cabeçalho fixo · corpo scrollável · rodapé fixo (ações sempre visíveis).
+
+---
+
+## 7. Migração do legado
 
 Não é big-bang. Ao **tocar** numa tela:
 

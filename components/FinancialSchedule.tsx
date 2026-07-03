@@ -4550,10 +4550,12 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     <NetworkDiagramView hierarchy={hierarchy} />
                 )}
 
-                {/* Content Area - Only visible in Table or Gantt mode */}
+                {/* Content Area - Only visible in Table or Gantt mode.
+                    Both stay mounted (toggled via display) instead of unmount/remount on tab switch,
+                    which was forcing a full rebuild of the grid/Gantt DOM tree every time the user alternated tabs. */}
                 {(viewMode === 'table' || viewMode === 'gantt') && (
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                        {viewMode === 'table' ? (
+                        <div style={{ display: viewMode === 'table' ? undefined : 'none' }}>
                             <ScheduleGridView
                                 hierarchy={hierarchy}
                                 schedule={schedule}
@@ -4598,10 +4600,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                 visibleNatures={visibleNatures}
                                 onToggleNature={handleToggleNature}
                             />
+                        </div>
 
-
-
-                        ) : (
+                        <div style={{ display: viewMode === 'gantt' ? undefined : 'none' }}>
                             <div className="overflow-x-auto min-h-[400px] bg-white flex flex-col" ref={ganttSidebarRef}>
                                 {(() => {
                                     try {
@@ -4678,7 +4679,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                     }
                                 })()}
                             </div>
-                        )}
+                        </div>
                     </div>
                 )}
             </div>

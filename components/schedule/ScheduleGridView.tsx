@@ -1,4 +1,5 @@
 import React from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
     ChevronDown,
     ChevronRight,
@@ -17,6 +18,44 @@ import ModernDateInput from '../ModernDateInput';
 import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
 import { TASK_NATURE_META } from '../../utils/taskNature';
 import { Plus } from 'lucide-react';
+
+interface FlatScheduleRow {
+    node: HierarchyNode;
+    kind: 'item' | 'group';
+}
+
+// Achata a árvore hierárquica em uma lista linear de linhas visíveis (respeitando
+// expand/collapse e os filtros de nível/natureza), para permitir virtualização —
+// sem isso, o tbody teria que montar todos os nós de uma vez a cada troca de aba.
+function flattenScheduleHierarchy(
+    nodes: HierarchyNode[],
+    expandedNodes: Record<string, boolean>,
+    visibleSummaryLevels?: Set<string>,
+    visibleNatures?: Set<string>
+): FlatScheduleRow[] {
+    const rows: FlatScheduleRow[] = [];
+    const visit = (node: HierarchyNode) => {
+        const isItem = node.type === 'item';
+
+        if (visibleSummaryLevels && !visibleSummaryLevels.has(node.type)) {
+            node.children?.forEach(visit);
+            return;
+        }
+
+        if (isItem) {
+            if (visibleNatures && !visibleNatures.has(node.nature ?? '__none__')) return;
+            rows.push({ node, kind: 'item' });
+            return;
+        }
+
+        rows.push({ node, kind: 'group' });
+        if (expandedNodes[node.id] && node.children) {
+            node.children.forEach(visit);
+        }
+    };
+    nodes.forEach(visit);
+    return rows;
+}
 
 interface ScheduleGridViewProps {
     hierarchy: HierarchyNode[];
@@ -136,6 +175,23 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
         };
     }, [isColMenuOpen, showLevelsDropdown]);
 
+    const flatRows = React.useMemo(
+        () => flattenScheduleHierarchy(hierarchy, expandedNodes, visibleSummaryLevels, visibleNatures),
+        [hierarchy, expandedNodes, visibleSummaryLevels, visibleNatures]
+    );
+
+    const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+    const rowVirtualizer = useVirtualizer({
+        count: flatRows.length,
+        getScrollElement: () => scrollContainerRef.current,
+        estimateSize: (index) => (flatRows[index]?.kind === 'item' ? 96 : 52),
+        overscan: 12,
+    });
+    const virtualRows = rowVirtualizer.getVirtualItems();
+    const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+    const paddingBottom = virtualRows.length > 0 ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end : 0;
+    const totalCols = 20 + timelineColumns.length;
+
     const COL_LABELS: Record<string, string> = {
         uid: 'ID',
         pred: 'Predecessora',
@@ -159,6 +215,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
     return (
         <div className="overflow-x-auto">
             {collapsedColStyle && <style>{collapsedColStyle}</style>}
+            <div ref={scrollContainerRef} className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
             <table ref={tableRef} className="sched-tbl w-full text-xs" style={{ tableLayout: 'fixed' }}>
                 <colgroup>
                     <col data-col="item" style={{ width: getColWidth('item') }} />
@@ -185,7 +242,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                     ))}
                     <col data-col="totalPct" style={{ width: getColWidth('totalPct') }} />
                 </colgroup>
-                <thead className="bg-gray-50 text-gray-500 font-medium border-b border-gray-200 uppercase tracking-widest">
+                <thead className="sticky top-0 z-20 bg-gray-50 text-gray-500 font-medium border-b border-gray-200 uppercase tracking-widest">
                     <tr>
                         <th className="px-4 py-3 text-left relative">
                             <div className="flex items-center gap-2">
@@ -356,20 +413,15 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                    {hierarchy.map(node => {
-                        const renderNode = (node: HierarchyNode) => {
-                            const isExpanded = expandedNodes[node.id];
-                            const isItem = node.type === 'item';
-
-                            // Respect the levels filter for all node types including items
-                            if (visibleSummaryLevels && !visibleSummaryLevels.has(node.type)) {
-                                return <React.Fragment key={node.id}>{node.children?.map(child => renderNode(child))}</React.Fragment>;
-                            }
-
-                            // Nature filter — leaves only (itens/atividades). '__none__' = sem natureza.
-                            if (isItem && visibleNatures && !visibleNatures.has(node.nature ?? '__none__')) {
-                                return null;
-                            }
+                    {paddingTop > 0 && (
+                        <tr aria-hidden="true"><td colSpan={totalCols} style={{ height: paddingTop, padding: 0, border: 0 }} /></tr>
+                    )}
+                    {virtualRows.map(virtualRow => {
+                        const flatRow = flatRows[virtualRow.index];
+                        if (!flatRow) return null;
+                        const node = flatRow.node;
+                        const isExpanded = expandedNodes[node.id];
+                        const isItem = flatRow.kind === 'item';
 
                             if (isItem) {
                                 // Atividades sem custo (node.data ausente) renderizam no mesmo item-row.
@@ -387,7 +439,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                 const itemSchedule = schedule.itemSchedules?.find(s => s.id === item.id) || { id: item.id } as ItemScheduleDetails;
 
                                 return (
-                                    <tr key={item.id} className={`hover:bg-blue-50/10 transition-colors group ${node.inactive ? 'opacity-50 line-through decoration-gray-400' : ''}`}>
+                                    <tr key={item.id} data-index={virtualRow.index} ref={rowVirtualizer.measureElement} className={`hover:bg-blue-50/10 transition-colors group ${node.inactive ? 'opacity-50 line-through decoration-gray-400' : ''}`}>
                                         <td className="px-4 py-2" style={{ paddingLeft: `${(node.level * 20) + 16}px` }}>
                                             <div className="flex items-center gap-2">
                                                 <div className="font-medium text-gray-700 truncate max-w-[300px] text-xs" title={item.sinapiItem.description}>
@@ -651,8 +703,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                             const nodeSchedule = schedule.itemSchedules?.find(s => s.id === node.id);
 
                             return (
-                                <React.Fragment key={node.id}>
-                                    <tr className={`bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer ${node.type === 'subphase' ? 'bg-gray-50/20' : ''}`} onClick={() => toggleNode(node.id)}>
+                                    <tr key={node.id} data-index={virtualRow.index} ref={rowVirtualizer.measureElement} className={`bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer ${node.type === 'subphase' ? 'bg-gray-50/20' : ''}`} onClick={() => toggleNode(node.id)}>
                                         <td className="px-4 py-3 font-medium text-gray-800 flex items-center gap-2" style={{ paddingLeft: `${(node.level * 20) + 16}px` }}>
                                             {hasChildren && (isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />)}
                                             <span className={`${node.isCritical ? 'text-red-700' : ''}`}>{node.name}</span>
@@ -759,12 +810,11 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                         })}
                                         <td className="px-4 py-3 border-l border-gray-200"></td>
                                     </tr>
-                                    {isExpanded && node.children.map(child => renderNode(child))}
-                                </React.Fragment>
                             );
-                        };
-                        return renderNode(node);
                     })}
+                    {paddingBottom > 0 && (
+                        <tr aria-hidden="true"><td colSpan={totalCols} style={{ height: paddingBottom, padding: 0, border: 0 }} /></tr>
+                    )}
                     {onAddRootGroup && (
                         <tr>
                             <td colSpan={99} className="px-4 py-2">
@@ -828,6 +878,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                     </tr>
                 </tfoot>
             </table>
+            </div>
         </div>
     );
 };

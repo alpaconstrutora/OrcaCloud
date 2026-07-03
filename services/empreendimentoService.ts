@@ -87,7 +87,7 @@ const TOWER_COLS = 'id, empreendimento_id, project_id, imovib_block_id, name, fl
 
 const FLOOR_COLS = 'id, tower_id, name, tipo, floor_number, repeat_count, units_per_floor, prefix, sort_order, created_at, updated_at';
 
-const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_instance_id, name, floor, typology, private_area, common_area, total_area, bedrooms, bathrooms, parking_spaces, position_type, sun_orientation, view_type, price, status, is_vendavel, commercial_property_id, sort_order, created_at, updated_at';
+const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_instance_id, name, floor, typology, private_area, common_area, total_area, bedrooms, bathrooms, parking_spaces, position_type, sun_orientation, view_type, price, status, is_vendavel, commercial_property_id, sort_order, fracao_ideal_decimal, fracao_ideal_thousandths, area_real_total_m2, area_engine_version_id, area_engine_synced_at, created_at, updated_at';
 
 const COMMON_AREA_COLS = 'id, empreendimento_id, tower_id, name, category, area, floor, description, is_vendavel, sort_order, created_at, updated_at';
 

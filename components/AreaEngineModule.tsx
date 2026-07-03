@@ -1,6 +1,7 @@
 import React from 'react';
 import {
     AlertTriangle,
+    ArrowLeftRight,
     Building2,
     Calculator,
     CheckCircle2,
@@ -15,7 +16,7 @@ import {
 } from 'lucide-react';
 import Button from './ui/Button';
 import { areaEngineService } from '../services/areaEngineService';
-import type { AreaImportReport } from '../services/areaEngineService';
+import type { AreaImportReport, AreaWriteBackReport } from '../services/areaEngineService';
 import { areaEngineExportService } from '../services/areaEngineExportService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import type {
@@ -156,6 +157,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const [empreendimentos, setEmpreendimentos] = React.useState<{ id: string; name: string }[]>([]);
     const [selectedEmpreendimentoId, setSelectedEmpreendimentoId] = React.useState('');
     const [importReport, setImportReport] = React.useState<AreaImportReport | null>(null);
+    const [writeBackReport, setWriteBackReport] = React.useState<AreaWriteBackReport | null>(null);
     const [newProjectName, setNewProjectName] = React.useState('');
     const [newProjectType, setNewProjectType] = React.useState<'vertical' | 'mixed' | 'commercial' | 'residential' | 'horizontal' | 'other'>('vertical');
     const [newVersionLabel, setNewVersionLabel] = React.useState('Versao inicial');
@@ -207,6 +209,7 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const canApproveLegal = selectedVersion?.status === 'technically_approved';
     const canLockVersion = selectedVersion?.status === 'legally_approved';
     const structureIsEditable = isVersionStructureEditable(selectedVersion?.status);
+    const canWriteBack = !!selectedVersion && !['draft', 'superseded', 'cancelled'].includes(selectedVersion.status);
 
     const loadProjects = React.useCallback(async () => {
         if (!organizationId) return;
@@ -498,6 +501,28 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Erro ao importar do empreendimento.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
+    async function runWriteBack() {
+        if (!selectedVersionId) return;
+        setActionLoading('write-back');
+        setError(null);
+        setFeedback(null);
+        setWriteBackReport(null);
+        try {
+            const report = await areaEngineService.writeBackFractionsToEmpreendimento(selectedVersionId);
+            setWriteBackReport(report);
+            setFeedback({
+                status: 'success',
+                warnings: report.warnings.map((message, idx) => ({ code: `WRITEBACK_${idx + 1}`, message })),
+                blocking_errors: [],
+                message: `Fracao ideal escrita em ${report.unitsUpdated} unidade(s) do Empreendimento.`,
+            });
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao escrever fracao ideal no Empreendimento.');
         } finally {
             setActionLoading(null);
         }
@@ -951,6 +976,9 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                     <Button variant="secondary" onClick={() => void exportAreaPackage('pdf')} disabled={!selectedVersionId || !!exportLoading || (quadroI.length === 0 && quadroII.length === 0 && quadroIVB.length === 0)}>
                         <FileText className="w-4 h-4" /> PDF
                     </Button>
+                    <Button variant="secondary" onClick={runWriteBack} disabled={!canWriteBack || actionLoading === 'write-back'}>
+                        <ArrowLeftRight className="w-4 h-4" /> Fracao ideal → Empreendimento
+                    </Button>
                 </div>
             </header>
 
@@ -1084,6 +1112,16 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                             )}
                         </div>
                     )}
+                </div>
+            )}
+
+            {writeBackReport && (
+                <div className="border border-blue-200 bg-blue-50 text-blue-800 rounded-lg px-4 py-3 text-sm">
+                    <p className="font-bold">Fracao ideal escrita no Empreendimento</p>
+                    <p className="mt-1 text-xs">
+                        {writeBackReport.unitsUpdated} unidade(s) atualizada(s).
+                        {writeBackReport.unitsWithoutSource > 0 && ` ${writeBackReport.unitsWithoutSource} unidade(s) sem proveniencia do Empreendimento nao foram atualizadas.`}
+                    </p>
                 </div>
             )}
 

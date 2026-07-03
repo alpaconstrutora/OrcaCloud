@@ -191,6 +191,13 @@ export interface AreaImportReport {
     warnings: string[];
 }
 
+// F4 — escrita reversa: fração ideal calculada (Quadro IV-B) → cadastro do Empreendimento.
+export interface AreaWriteBackReport {
+    unitsUpdated: number;
+    unitsWithoutSource: number; // unidades da versão sem source_empreendimento_unit_id (criadas manualmente no editor)
+    warnings: string[];
+}
+
 function mapEmpreendimentoTipo(tipo?: EmpreendimentoTipo | null): AreaProject['project_type'] {
     switch (tipo) {
         case 'VERTICAL': return 'vertical';
@@ -1491,6 +1498,7 @@ export const areaEngineService = {
                     is_materialized: true,
                     materialized_label: code,
                     materialized_index: unitRows.length + 1,
+                    source_empreendimento_unit_id: u.id,
                 });
                 unitMeta.push({ empUnitId: u.id, code, towerId: t.id, floorNum: u.floor, privateArea: u.private_area });
             }
@@ -1690,6 +1698,81 @@ export const areaEngineService = {
             unitsAreaChanged,
         };
     },
+    // F4 — Camada de escrita reversa: leva a fração ideal + área real total (Quadro IV-B)
+    // calculadas pelo motor de volta ao cadastro do Empreendimento. So-leitura para o
+    // usuario do Comercial; NUNCA sobrescreve private_area/common_area (dados de origem).
+    // So atua sobre unidades com proveniencia do importador (source_empreendimento_unit_id);
+    // unidades criadas manualmente no editor (fora de um import) sao contadas e ignoradas.
+    async writeBackFractionsToEmpreendimento(versionId: string): Promise<AreaWriteBackReport> {
+        const version = await this.getVersion(versionId);
+        if (!version) throw new Error('Versao de areas nao encontrada.');
+        if (['draft', 'superseded', 'cancelled'].includes(version.status)) {
+            throw new Error('A versao precisa estar calculada (ou aprovada/travada) para escrever a fracao ideal no Empreendimento.');
+        }
+
+        const [structure, fractions, quadroIVB] = await Promise.all([
+            this.getStructure(versionId),
+            this.listFractions(versionId),
+            this.listQuadroIVB(versionId),
+        ]);
+
+        const fractionByUnitId = new Map(fractions.map(f => [f.unit_id, f]));
+        const realTotalByUnitId = new Map(quadroIVB.map(row => [row.unit_id, Number(row.qivb_f_real_total_area_raw ?? 0)]));
+
+        const warnings: string[] = [];
+        const updates: { sourceUnitId: string; fracaoDecimal: number; fracaoThousandths: number; areaRealTotal: number }[] = [];
+        let unitsWithoutSource = 0;
+
+        for (const unit of structure.units) {
+            const sourceUnitId = (unit as { source_empreendimento_unit_id?: string | null }).source_empreendimento_unit_id;
+            if (!sourceUnitId) { unitsWithoutSource++; continue; }
+            const fraction = fractionByUnitId.get(unit.id);
+            if (!fraction) continue; // versao ainda nao calculada para esta unidade
+            updates.push({
+                sourceUnitId,
+                fracaoDecimal: Number(fraction.fraction_decimal_raw ?? 0),
+                fracaoThousandths: Number(fraction.fraction_thousandths_raw ?? 0),
+                areaRealTotal: realTotalByUnitId.get(unit.id) ?? 0,
+            });
+        }
+
+        if (unitsWithoutSource > 0) {
+            warnings.push(`${unitsWithoutSource} unidade(s) desta versao nao tem proveniencia de um Empreendimento (criadas manualmente no editor) — nao foram atualizadas.`);
+        }
+        if (updates.length === 0) {
+            warnings.push('Nenhuma unidade elegivel para escrita reversa. Calcule a versao antes de escrever no Empreendimento.');
+        }
+
+        const now = new Date().toISOString();
+        const results = await Promise.all(updates.map(u =>
+            supabase
+                .from('empreendimento_units')
+                .update({
+                    fracao_ideal_decimal: u.fracaoDecimal,
+                    fracao_ideal_thousandths: u.fracaoThousandths,
+                    area_real_total_m2: u.areaRealTotal,
+                    area_engine_version_id: versionId,
+                    area_engine_synced_at: now,
+                })
+                .eq('id', u.sourceUnitId)
+        ));
+        const firstError = results.find(r => r.error)?.error;
+        if (firstError) raiseAreaEngineError('writeBackFractionsToEmpreendimento', firstError);
+
+        await supabase.from('area_version_audit_logs').insert({
+            area_version_id: versionId,
+            entity_type: 'empreendimento_write_back',
+            entity_id: versionId,
+            action: 'update',
+            field_name: 'fracao_ideal',
+            old_value: null,
+            new_value: { units_updated: updates.length, units_without_source: unitsWithoutSource },
+            reason: 'Escrita reversa da fracao ideal e area real total para o Empreendimento',
+        });
+
+        return { unitsUpdated: updates.length, unitsWithoutSource, warnings };
+    },
+
     async listQuadroI(versionId: string): Promise<AreaQuadroIRow[]> {
         const { data, error } = await supabase
             .from('area_version_quadro_i_rows')

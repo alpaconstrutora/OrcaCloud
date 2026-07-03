@@ -144,6 +144,13 @@ export interface EmpreendimentoUnit {
     is_vendavel?: boolean;
     commercial_property_id?: string | null;
     sort_order?: number;
+    // Escrita reversa do motor de Areas NBR 12721 (F4) — so-leitura no Comercial,
+    // alimentados exclusivamente pela versao calculada/aprovada/travada do motor.
+    fracao_ideal_decimal?: number | null;
+    fracao_ideal_thousandths?: number | null;
+    area_real_total_m2?: number | null;
+    area_engine_version_id?: string | null;
+    area_engine_synced_at?: string | null;
     created_at: string;
     updated_at: string;
 }

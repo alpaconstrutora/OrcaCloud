@@ -1,0 +1,407 @@
+import { supabase } from '../lib/supabase';
+import { fiscalService } from './fiscalService';
+import { payrollEngine } from './payrollEngine';
+import { documentService } from './documentService';
+import { calculateINSS, calculateIRRF } from '../lib/payrollCalc';
+import {
+    PartnerCompensationSettings, PartnerCompensationSettingsUpsert,
+    ProlaborePayroll, ProlaborePayrollItem,
+    ProfitDistributionBatch, ProfitDistributionItem,
+} from '../types';
+import { CompanyPartner } from '../types';
+
+export interface ProlaboreCalcResult {
+    partner_id: string;
+    gross_amount: number;
+    inss_amount: number;
+    irrf_amount: number;
+    net_amount: number;
+}
+
+export const remuneracaoSocietariaService = {
+    // ─── Regime de remuneração por sócio ───────────────────────
+
+    async listCompensationSettings(companyId: string): Promise<PartnerCompensationSettings[]> {
+        const { data, error } = await supabase
+            .from('partner_compensation_settings')
+            .select('*')
+            .eq('company_id', companyId);
+        if (error) throw error;
+        return (data || []) as PartnerCompensationSettings[];
+    },
+
+    async saveCompensationSettings(payload: PartnerCompensationSettingsUpsert & { id?: string }): Promise<PartnerCompensationSettings> {
+        if (payload.id) {
+            const { id, ...rest } = payload;
+            const { data, error } = await supabase
+                .from('partner_compensation_settings')
+                .update(rest)
+                .eq('id', id)
+                .select()
+                .single();
+            if (error) throw error;
+            return data as PartnerCompensationSettings;
+        }
+        const { data, error } = await supabase
+            .from('partner_compensation_settings')
+            .insert(payload)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as PartnerCompensationSettings;
+    },
+
+    // ─── Cálculo de pró-labore ──────────────────────────────────
+    // Sócio-administrador não tem FGTS nem rubricas de folha CLT — chama
+    // INSS/IRRF diretamente (lib/payrollCalc), sem passar pelo payrollEngine
+    // completo (orientado a Employee/rubricas). applyIRRFReducer (redutor
+    // 2026+) é reusado do payrollEngine para não duplicar a fórmula.
+
+    async calculateProlabore(grossAmount: number, competenceDate: string): Promise<ProlaboreCalcResult> {
+        const [inssBrackets, irrfBrackets] = await Promise.all([
+            fiscalService.getINSSBrackets(competenceDate),
+            fiscalService.getIRRFBrackets(competenceDate),
+        ]);
+
+        const inss = calculateINSS(grossAmount, inssBrackets);
+        const irrfBase = grossAmount - inss;
+        const rawIrrf = calculateIRRF(irrfBase, irrfBrackets);
+        const year = parseInt(competenceDate.slice(0, 4), 10);
+        const irrf = year >= 2026 ? payrollEngine.applyIRRFReducer(rawIrrf, irrfBase) : rawIrrf;
+
+        return {
+            partner_id: '',
+            gross_amount: grossAmount,
+            inss_amount: Math.round(inss * 100) / 100,
+            irrf_amount: Math.round(irrf * 100) / 100,
+            net_amount: Math.round((grossAmount - inss - irrf) * 100) / 100,
+        };
+    },
+
+    // ─── Folha de pró-labore mensal ─────────────────────────────
+
+    async getOrCreatePayroll(organizationId: string, companyId: string, competenceMonth: string): Promise<ProlaborePayroll> {
+        const { data: existing, error: findError } = await supabase
+            .from('prolabore_payrolls')
+            .select('*')
+            .eq('company_id', companyId)
+            .eq('competence_month', competenceMonth)
+            .maybeSingle();
+        if (findError) throw findError;
+        if (existing) return existing as ProlaborePayroll;
+
+        const { data, error } = await supabase
+            .from('prolabore_payrolls')
+            .insert({ organization_id: organizationId, company_id: companyId, competence_month: competenceMonth, status: 'rascunho' })
+            .select()
+            .single();
+        if (error) throw error;
+        return data as ProlaborePayroll;
+    },
+
+    async listPayrolls(companyId: string): Promise<ProlaborePayroll[]> {
+        const { data, error } = await supabase
+            .from('prolabore_payrolls')
+            .select('*')
+            .eq('company_id', companyId)
+            .order('competence_month', { ascending: false });
+        if (error) throw error;
+        return (data || []) as ProlaborePayroll[];
+    },
+
+    async listPayrollItems(payrollId: string): Promise<ProlaborePayrollItem[]> {
+        const { data, error } = await supabase
+            .from('prolabore_payroll_items')
+            .select('*, partner:company_partners(nome)')
+            .eq('payroll_id', payrollId);
+        if (error) throw error;
+        return (data || []).map((i: any) => ({ ...i, partner_nome: i.partner?.nome })) as ProlaborePayrollItem[];
+    },
+
+    /**
+     * Recalcula a folha inteira a partir dos sócios com has_prolabore=true.
+     * Substitui os itens existentes (folha ainda em rascunho/calculado).
+     */
+    async recalculatePayroll(payroll: ProlaborePayroll, settingsList: PartnerCompensationSettings[]): Promise<ProlaborePayrollItem[]> {
+        const active = settingsList.filter(s => s.has_prolabore && s.prolabore_amount && s.prolabore_amount > 0);
+
+        const items: Omit<ProlaborePayrollItem, 'id' | 'created_at' | 'updated_at'>[] = [];
+        for (const s of active) {
+            const calc = await this.calculateProlabore(s.prolabore_amount!, payroll.competence_month);
+            items.push({
+                payroll_id: payroll.id,
+                partner_id: s.partner_id,
+                gross_amount: calc.gross_amount,
+                inss_amount: calc.inss_amount,
+                irrf_amount: calc.irrf_amount,
+                net_amount: calc.net_amount,
+                cost_center_id: s.cost_center_id,
+                status: 'calculado',
+            });
+        }
+
+        await supabase.from('prolabore_payroll_items').delete().eq('payroll_id', payroll.id).in('status', ['calculado']);
+        if (items.length > 0) {
+            const { error } = await supabase.from('prolabore_payroll_items').insert(items);
+            if (error) throw error;
+        }
+
+        const totals = items.reduce((acc, i) => ({
+            gross: acc.gross + i.gross_amount,
+            inss: acc.inss + i.inss_amount,
+            irrf: acc.irrf + i.irrf_amount,
+            net: acc.net + i.net_amount,
+        }), { gross: 0, inss: 0, irrf: 0, net: 0 });
+
+        const { error: updError } = await supabase
+            .from('prolabore_payrolls')
+            .update({
+                status: items.length > 0 ? 'calculado' : 'rascunho',
+                gross_total: totals.gross,
+                inss_total: totals.inss,
+                irrf_total: totals.irrf,
+                net_total: totals.net,
+            })
+            .eq('id', payroll.id);
+        if (updError) throw updError;
+
+        return this.listPayrollItems(payroll.id);
+    },
+
+    async approvePayroll(payrollId: string, approvedByEmail: string): Promise<void> {
+        const { error } = await supabase
+            .from('prolabore_payrolls')
+            .update({ status: 'aprovado', approved_by_email: approvedByEmail, approved_at: new Date().toISOString() })
+            .eq('id', payrollId);
+        if (error) throw error;
+        await supabase.from('prolabore_payroll_items').update({ status: 'aprovado' }).eq('payroll_id', payrollId);
+    },
+
+    /**
+     * Envia ao financeiro: gera um internal_transactions (DEBIT) por item aprovado
+     * e marca o item como 'pago'. Reusa o padrão de financialSyncService.
+     */
+    async sendPayrollToFinancial(organizationId: string, payroll: ProlaborePayroll, items: ProlaborePayrollItem[]): Promise<void> {
+        for (const item of items) {
+            const { data: tx, error: txError } = await supabase
+                .from('internal_transactions')
+                .insert({
+                    organization_id: organizationId,
+                    source_system: 'PROLABORE',
+                    reference_id: item.id,
+                    transaction_date: payroll.competence_month,
+                    amount: item.net_amount,
+                    direction: 'DEBIT',
+                    description: `Pró-labore ${payroll.competence_month.slice(0, 7)}`,
+                    category: 'Pró-labore',
+                    status: 'PENDING',
+                })
+                .select()
+                .single();
+            if (txError) throw txError;
+
+            const { error: itemError } = await supabase
+                .from('prolabore_payroll_items')
+                .update({ financial_entry_id: tx.id, status: 'pago' })
+                .eq('id', item.id);
+            if (itemError) throw itemError;
+        }
+
+        const { error } = await supabase
+            .from('prolabore_payrolls')
+            .update({ status: 'enviado_financeiro' })
+            .eq('id', payroll.id);
+        if (error) throw error;
+    },
+
+    // ─── Distribuição de lucros e dividendos ────────────────────
+    // MVP: available_profit_amount é entrada manual + ata anexada (Controladoria
+    // Fase 3 — partida dobrada/balanço — ainda não existe). withholding_tax_amount
+    // de cada item é calculado pelo trigger fn_dividend_withholding_recalc no banco
+    // (agregador mensal por company+partner) — o service não recalcula isso no client.
+
+    async listProfitBatches(companyId: string): Promise<ProfitDistributionBatch[]> {
+        const { data, error } = await supabase
+            .from('profit_distribution_batches')
+            .select('*')
+            .eq('company_id', companyId)
+            .order('profit_period_end', { ascending: false });
+        if (error) throw error;
+        return (data || []) as ProfitDistributionBatch[];
+    },
+
+    async listBatchItems(batchId: string): Promise<ProfitDistributionItem[]> {
+        const { data, error } = await supabase
+            .from('profit_distribution_items')
+            .select('*, partner:company_partners(nome)')
+            .eq('batch_id', batchId);
+        if (error) throw error;
+        return (data || []).map((i: any) => ({ ...i, partner_nome: i.partner?.nome })) as ProfitDistributionItem[];
+    },
+
+    /**
+     * Cria o lote e distribui `proposedAmount` proporcionalmente entre os sócios
+     * elegíveis (regime_remuneracao IN dividendos/ambos), pela participacao_pct.
+     */
+    async createProfitBatch(params: {
+        organizationId: string;
+        companyId: string;
+        periodStart: string;
+        periodEnd: string;
+        accountingProfitAmount?: number;
+        availableProfitAmount: number;
+        proposedAmount: number;
+        createdByEmail: string;
+    }): Promise<{ batch: ProfitDistributionBatch; items: ProfitDistributionItem[] }> {
+        if (params.proposedAmount > params.availableProfitAmount) {
+            throw new Error('O valor proposto não pode ultrapassar o lucro disponível informado.');
+        }
+
+        const eligible = (await this.listEligiblePartners(params.companyId))
+            .filter(p => p.regime_remuneracao === 'dividendos' || p.regime_remuneracao === 'ambos');
+        if (eligible.length === 0) {
+            throw new Error('Nenhum sócio está configurado para receber dividendos (regime de remuneração).');
+        }
+        const totalPct = eligible.reduce((s, p) => s + p.participacao_pct, 0);
+        if (totalPct <= 0) {
+            throw new Error('Participação societária dos sócios elegíveis soma zero.');
+        }
+
+        const { data: batch, error: batchError } = await supabase
+            .from('profit_distribution_batches')
+            .insert({
+                organization_id: params.organizationId,
+                company_id: params.companyId,
+                profit_period_start: params.periodStart,
+                profit_period_end: params.periodEnd,
+                accounting_profit_amount: params.accountingProfitAmount,
+                available_profit_amount: params.availableProfitAmount,
+                proposed_amount: params.proposedAmount,
+                distribution_rule: 'proporcional',
+                status: 'rascunho',
+                created_by_email: params.createdByEmail,
+            })
+            .select()
+            .single();
+        if (batchError) throw batchError;
+
+        const itemsPayload = eligible.map(p => ({
+            batch_id: batch.id,
+            partner_id: p.id,
+            beneficiary_type: p.beneficiario_tipo || 'pf_residente',
+            ownership_percentage: p.participacao_pct,
+            gross_amount: Math.round(params.proposedAmount * (p.participacao_pct / totalPct) * 100) / 100,
+            status: 'proposto' as const,
+        }));
+
+        const { error: itemsError } = await supabase.from('profit_distribution_items').insert(itemsPayload);
+        if (itemsError) throw itemsError;
+
+        const items = await this.listBatchItems(batch.id);
+        return { batch: batch as ProfitDistributionBatch, items };
+    },
+
+    /**
+     * Anexa a ata/deliberação (documento obrigatório para aprovar o lote) —
+     * reusa documentService.uploadNewDocument (mesmo storage opura-docs).
+     */
+    async attachBatchDocument(batch: ProfitDistributionBatch, file: File, createdByEmail: string): Promise<string> {
+        const doc = await documentService.uploadNewDocument({
+            organization_id: batch.organization_id,
+            company_id: batch.company_id,
+            nome: `Ata de Deliberação — ${batch.profit_period_start.slice(0, 7)} a ${batch.profit_period_end.slice(0, 7)}`,
+            categoria: 'juridico',
+            tipo_documento: 'ata_deliberacao',
+            status: 'ativo',
+            alerta_dias_antecedencia: 30,
+            tags: ['remuneracao_societaria', 'dividendos'],
+        }, file);
+
+        const { error } = await supabase
+            .from('profit_distribution_batches')
+            .update({ document_id: doc.id })
+            .eq('id', batch.id);
+        if (error) throw error;
+        return doc.id;
+    },
+
+    async approveProfitBatch(batchId: string, approvedByEmail: string): Promise<void> {
+        const { data: batch, error: findError } = await supabase
+            .from('profit_distribution_batches')
+            .select('document_id')
+            .eq('id', batchId)
+            .single();
+        if (findError) throw findError;
+        if (!batch?.document_id) {
+            throw new Error('É obrigatório anexar a ata de deliberação antes de aprovar a distribuição.');
+        }
+
+        const { error } = await supabase
+            .from('profit_distribution_batches')
+            .update({
+                status: 'aprovado',
+                approved_by_email: approvedByEmail,
+                approval_date: new Date().toISOString().slice(0, 10),
+            })
+            .eq('id', batchId);
+        if (error) throw error;
+        await supabase.from('profit_distribution_items').update({ status: 'aprovado' }).eq('batch_id', batchId);
+    },
+
+    /**
+     * Envia ao financeiro: gera internal_transactions (DEBIT) por item aprovado,
+     * marca payment_date no lote (referência do agregador mensal de retenção).
+     */
+    async sendProfitBatchToFinancial(organizationId: string, batch: ProfitDistributionBatch, items: ProfitDistributionItem[]): Promise<void> {
+        const paymentDate = new Date().toISOString().slice(0, 10);
+
+        for (const item of items) {
+            const { data: tx, error: txError } = await supabase
+                .from('internal_transactions')
+                .insert({
+                    organization_id: organizationId,
+                    source_system: 'DIVIDENDOS',
+                    reference_id: item.id,
+                    transaction_date: paymentDate,
+                    amount: item.net_amount,
+                    direction: 'DEBIT',
+                    description: `Distribuição de lucros ${batch.profit_period_start.slice(0, 7)}-${batch.profit_period_end.slice(0, 7)}`,
+                    category: 'Dividendos',
+                    status: 'PENDING',
+                })
+                .select()
+                .single();
+            if (txError) throw txError;
+
+            const { error: itemError } = await supabase
+                .from('profit_distribution_items')
+                .update({ financial_entry_id: tx.id, status: 'pago' })
+                .eq('id', item.id);
+            if (itemError) throw itemError;
+        }
+
+        // payment_date no lote é a referência que o agregador mensal usa; ao
+        // gravá-la aqui, um UPDATE de gross_amount futuro reprocessaria a
+        // retenção com base nela (a trigger dispara em INSERT/UPDATE de item,
+        // não do lote — suficiente para o MVP: os itens já foram calculados
+        // na criação usando profit_period_end como referência).
+        const { error } = await supabase
+            .from('profit_distribution_batches')
+            .update({ status: 'pago_integral', payment_date: paymentDate })
+            .eq('id', batch.id);
+        if (error) throw error;
+    },
+
+    // ─── Sócios elegíveis (lê company_partners, não duplica) ────
+
+    async listEligiblePartners(companyId: string): Promise<CompanyPartner[]> {
+        const { data, error } = await supabase
+            .from('company_partners')
+            .select('id, company_id, tipo_pessoa, nome, documento, participacao_pct, is_administrador, is_assinante_legal, pj_company_id, data_entrada, data_saida, created_at, beneficiario_tipo, dependentes_ir, bank_account_id, pix_chave, regime_remuneracao')
+            .eq('company_id', companyId)
+            .is('data_saida', null)
+            .order('nome');
+        if (error) throw error;
+        return (data || []) as CompanyPartner[];
+    },
+};

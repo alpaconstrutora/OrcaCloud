@@ -850,6 +850,7 @@ const Layout: React.FC<LayoutProps> = ({
                   <DropdownItem id="labor-encargos" label="Encargos Sociais" icon={Percent} />
                   <DropdownItem id="labor-vale-refeicao" label="Vale Refeição" icon={UtensilsCrossed} />
                   <DropdownItem id="labor-esocial" label="eSocial" icon={FileText} />
+                  <DropdownItem id="labor-remuneracao-societaria" label="Remuneração Societária" icon={Banknote} />
 
                   <DropdownGroupLabel label="Operacional" />
                   <DropdownItem id="labor-timetracking" label="Ponto" icon={Clock} />

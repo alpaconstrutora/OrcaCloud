@@ -13,6 +13,7 @@ export * from "./imovib";
 export * from "./empreendimento";
 export * from "./common";
 export * from "./company";
+export * from "./remuneracaoSocietaria";
 export * from "./fiscal";
 export * from "./operational-control";
 export * from "./supplierBankAccount";

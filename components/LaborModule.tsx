@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
     Users, Clock, TrendingUp, DollarSign, BarChart3,
     UserPlus, Loader2, AlertCircle, Building2,
-    Shield, Calendar, Target, Check, FileText, Calculator, Settings, ChevronRight, Percent, HardHat, Umbrella, BookOpen, LayoutDashboard, UserMinus, ShieldAlert, Truck, ClipboardList, UserSearch, Smartphone, Award, MessageSquare, UtensilsCrossed, Gift, Briefcase
+    Shield, Calendar, Target, Check, FileText, Calculator, Settings, ChevronRight, Percent, HardHat, Umbrella, BookOpen, LayoutDashboard, UserMinus, ShieldAlert, Truck, ClipboardList, UserSearch, Smartphone, Award, MessageSquare, UtensilsCrossed, Gift, Briefcase, Banknote
 } from 'lucide-react';
 import { laborService, Employee, LaborTeam, TimeEntry, ProductivityLog, LaborCostSummary } from '../services/laborService';
 import LaborEmployeeList from './LaborEmployeeList';
@@ -36,12 +36,13 @@ import LaborEsocial from './LaborEsocial';
 import LaborValeRefeicao from './LaborValeRefeicao';
 import LaborIncentivos from './LaborIncentivos';
 import LaborCargos from './LaborCargos';
+import LaborRemuneracaoSocietaria from './LaborRemuneracaoSocietaria';
 import { useLaborModuleData } from '../hooks/useLaborQueries';
 import { buildPartialFailureMessage } from '../lib/collectSettled';
 import Button from './ui/Button';
 
 // ─── Types ──────────────────────────────────────────────────
-type LaborTab = 'dashboard' | 'employees' | 'teams' | 'allocations' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary' | 'ats' | 'portal' | 'evaluation' | 'comunicacao' | 'bi_analytics' | 'esocial' | 'vale_refeicao' | 'incentivos' | 'cargos';
+type LaborTab = 'dashboard' | 'employees' | 'teams' | 'allocations' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary' | 'ats' | 'portal' | 'evaluation' | 'comunicacao' | 'bi_analytics' | 'esocial' | 'vale_refeicao' | 'incentivos' | 'cargos' | 'remuneracao_societaria';
 
 const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-dashboard': 'dashboard',
@@ -75,6 +76,7 @@ const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-vale-refeicao':  'vale_refeicao',
     'labor-incentivos':     'incentivos',
     'labor-cargos':         'cargos',
+    'labor-remuneracao-societaria': 'remuneracao_societaria',
 };
 
 const TAB_TO_SECTION: Record<LaborTab, string> = Object.fromEntries(
@@ -144,6 +146,7 @@ const LaborDashboardTab: React.FC<{
                     { tab: 'timetracking' as LaborTab, icon: Clock, title: 'Registro de Ponto', desc: `${pendingEntries.length} pontos aguardando aprovação`, color: 'amber', badge: pendingEntries.length },
                     { tab: 'productivity' as LaborTab, icon: Target, title: 'Produtividade', desc: `Média: ${avgProductivity.toFixed(0)}% do planejado`, color: 'emerald' },
                     { tab: 'incentivos' as LaborTab, icon: Gift, title: 'Incentivos & Produtividade', desc: 'Gratificações, metas e guarda de habitualidade', color: 'indigo' },
+                    { tab: 'remuneracao_societaria' as LaborTab, icon: Banknote, title: 'Remuneração Societária', desc: 'Pró-labore de sócios-administradores', color: 'emerald' },
                     { tab: 'teams' as LaborTab, icon: Shield, title: 'Equipes', desc: `${teams.length} equipes configuradas`, color: 'blue' },
                     { tab: 'costs' as LaborTab, icon: DollarSign, title: 'Custos de MO', desc: 'Custo por colaborador e obra', color: 'rose' },
                     { tab: 'payroll' as LaborTab, icon: Calculator, title: 'Folha de Pagamento', desc: 'Cálculo de INSS, FGTS e IRRF', color: 'blue' },
@@ -490,6 +493,9 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                     )}
                     {activeTab === 'cargos' && (
                         <LaborCargos orgId={currentOrgId || activeOrganizationId || ''} />
+                    )}
+                    {activeTab === 'remuneracao_societaria' && (
+                        <LaborRemuneracaoSocietaria orgId={currentOrgId || activeOrganizationId || ''} />
                     )}
                     {activeTab === 'rubrics' && <LaborRubrics />}
                     {activeTab === 'fiscal' && <LaborFiscalSettings />}

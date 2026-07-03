@@ -144,6 +144,13 @@ export interface CompanyPartner {
   data_entrada?: string;
   data_saida?: string;
   created_at: string;
+
+  // Remuneração Societária — ver PLANO_MODULO_REMUNERACAO_SOCIETARIA.md
+  beneficiario_tipo?: 'pf_residente' | 'pj_residente' | 'exterior';
+  dependentes_ir?: number;
+  bank_account_id?: string;
+  pix_chave?: string;
+  regime_remuneracao?: 'prolabore' | 'dividendos' | 'ambos' | 'nenhum';
 }
 
 export type CompanyPartnerInsert = Omit<CompanyPartner, 'id' | 'created_at'>;

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RotateCcw, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize, Minimize, RotateCcw, Focus } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 
 interface Props {
@@ -14,6 +14,8 @@ interface Props {
   isRotated?: boolean;
   minRightSetback?: number;
   minRearSetback?: number;
+  onToggleFullscreen?: () => void;
+  isFullscreen?: boolean;
 }
 
 const COLORS = [
@@ -38,7 +40,9 @@ export default function FloorPlanCanvas2D({
   frontSetback = 0,
   minRightSetback = 0,
   minRearSetback = 0,
-  isRotated: initialRotated
+  isRotated: initialRotated,
+  onToggleFullscreen,
+  isFullscreen = false
 }: Props) {
   // Auto-rotate if terrain is much deeper than it is wide
   const [isRotated, setIsRotated] = useState(
@@ -72,11 +76,12 @@ export default function FloorPlanCanvas2D({
   const viewW = isRotated ? tH + padding * 2 : tW + padding * 2;
   const viewH = isRotated ? tW + padding * 2 : tH + padding * 2;
 
-  // Font sizes
+  // Font sizes calibrated to match ~14px (Tailwind text-sm) on a typical screen
   const minDim = Math.min(viewW, viewH);
-  const fSizeLg = Math.max(1.5, minDim * 0.05);
-  const fSizeMd = Math.max(1, minDim * 0.035);
-  const fSizeSm = Math.max(0.8, minDim * 0.025);
+  const baseFontSize = Math.max(1, minDim * 0.030); 
+  const fSizeLg = baseFontSize * 1.2; // Slightly larger for main dimensions
+  const fSizeMd = baseFontSize;       // 14px equivalent for areas
+  const fSizeSm = baseFontSize * 0.85; // 12px equivalent for U-1 and setbacks
 
   // Offset to center the rotated drawing in the viewBox
   const offX = viewW / 2;
@@ -130,7 +135,6 @@ export default function FloorPlanCanvas2D({
                 textAnchor="middle" 
                 dominantBaseline="middle" 
                 fontSize={fSizeMd} 
-                fontWeight="bold"
                 fill="#4b5563"
               >
                 {Math.round(privateAreaPerUnit)} m²
@@ -179,9 +183,18 @@ export default function FloorPlanCanvas2D({
                  <button onClick={() => zoomOut()} className="p-1.5 hover:bg-gray-100 rounded text-gray-600 transition-colors" title="Afastar">
                    <ZoomOut className="w-4 h-4" />
                  </button>
-                 <button onClick={() => resetTransform()} className="p-1.5 hover:bg-gray-100 rounded text-gray-600 transition-colors" title="Centralizar">
-                   <Maximize className="w-4 h-4" />
-                 </button>
+                  <button onClick={() => resetTransform()} className="p-1.5 hover:bg-gray-100 rounded text-gray-600 transition-colors" title="Centralizar Visualização">
+                    <Focus className="w-4 h-4" />
+                  </button>
+                  {onToggleFullscreen && (
+                    <button 
+                      onClick={onToggleFullscreen} 
+                      className="p-1.5 hover:bg-gray-100 rounded text-gray-600 transition-colors border-l border-gray-100 ml-1 pl-2" 
+                      title={isFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}
+                    >
+                      {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+                    </button>
+                  )}
                </div>
                
                <button 
@@ -322,7 +335,6 @@ export default function FloorPlanCanvas2D({
                         dominantBaseline="middle" 
                         fontSize={fSizeMd} 
                         fill="#6b7280"
-                        fontWeight="bold"
                       >
                         HALL
                       </text>
@@ -330,13 +342,13 @@ export default function FloorPlanCanvas2D({
                     
                     {/* Dimensions */}
                     <g transform={`translate(${w / 2}, ${h + fSizeLg})`}>
-                      <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeLg} fill="#4f46e5" fontWeight="bold" stroke="white" strokeWidth="0.8" paintOrder="stroke fill" strokeLinejoin="round">
+                      <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeLg} fill="#4f46e5" stroke="white" strokeWidth="0.8" paintOrder="stroke fill" strokeLinejoin="round">
                         {buildingWidth.toFixed(1)}m
                       </text>
                     </g>
                     
                     <g transform={`translate(${w + fSizeLg}, ${h / 2})`}>
-                      <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeLg} fill="#4f46e5" fontWeight="bold" stroke="white" strokeWidth="0.8" paintOrder="stroke fill" strokeLinejoin="round">
+                      <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeLg} fill="#4f46e5" stroke="white" strokeWidth="0.8" paintOrder="stroke fill" strokeLinejoin="round">
                         {buildingDepth.toFixed(1)}m
                       </text>
                     </g>

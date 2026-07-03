@@ -68,7 +68,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   projects,
   currentProfile,
 }) => {
-  const { companies = [] } = useStore();
+  const { companies: rawCompanies } = useStore();
+  const companies = Array.isArray(rawCompanies) ? rawCompanies : [];
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>('all');
   const [activeTab, setActiveTab] = React.useState<OpuraDocumentCategoria>('engenharia');
   const [documents, setDocuments] = React.useState<OpuraDocument[]>([]);

@@ -201,6 +201,19 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const [allocationValue, setAllocationValue] = React.useState('');
     const [allocationJustification, setAllocationJustification] = React.useState('');
     const [editingStructure, setEditingStructure] = React.useState<{ kind: StructureEditKind; id: string } | null>(null);
+    // Edicao em lote de espacos privativos (Camada B)
+    const [selectedSpaceIds, setSelectedSpaceIds] = React.useState<Set<string>>(new Set());
+    const [bulkCoverageClass, setBulkCoverageClass] = React.useState('covered_different');
+    const [bulkCoefficientValue, setBulkCoefficientValue] = React.useState('0.75');
+    // Assistente de vaga/deposito (Camada B)
+    const [isVagaWizardOpen, setIsVagaWizardOpen] = React.useState(false);
+    const [vagaParentUnitId, setVagaParentUnitId] = React.useState('');
+    const [vagaQuantity, setVagaQuantity] = React.useState('1');
+    const [vagaCodePrefix, setVagaCodePrefix] = React.useState('VG');
+    const [vagaArea, setVagaArea] = React.useState('12');
+    const [vagaLinkType, setVagaLinkType] = React.useState<'parking' | 'storage' | 'box' | 'exclusive_area' | 'other'>('parking');
+    const [vagaAffectsPrivateArea, setVagaAffectsPrivateArea] = React.useState(true);
+    const [vagaAffectsCoefficient, setVagaAffectsCoefficient] = React.useState(true);
 
     const selectedVersion = versions.find(v => v.id === selectedVersionId) || null;
     const technicalApproval = approvals.find(approval => approval.approval_type === 'technical');
@@ -927,6 +940,108 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
             setActionLoading(null);
         }
     }
+    // ── Edicao em lote de espacos privativos (Camada B) ──────────────────────
+    const privateSpacesList = structure.spaces.filter(space => space.use_class === 'private');
+
+    function toggleSpaceSelection(id: string) {
+        setSelectedSpaceIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    }
+
+    function toggleSelectAllPrivateSpaces() {
+        setSelectedSpaceIds(prev => prev.size === privateSpacesList.length
+            ? new Set()
+            : new Set(privateSpacesList.map(space => space.id)));
+    }
+
+    async function applyBulkSpaceEdit() {
+        if (!versionIsEditable() || selectedSpaceIds.size === 0) return;
+        const coefficient = Number(bulkCoefficientValue.replace(',', '.'));
+        if (!Number.isFinite(coefficient) || coefficient <= 0) { setError('Informe um coeficiente maior que zero.'); return; }
+        setActionLoading('bulk-edit-spaces');
+        setError(null);
+        try {
+            const targets = structure.spaces.filter(space => selectedSpaceIds.has(space.id));
+            await Promise.all(targets.map(space => areaEngineService.updateSpace(space.id, {
+                blockId: space.block_id,
+                floorId: space.floor_id || null,
+                unitId: space.unit_id || null,
+                code: space.code || undefined,
+                name: space.name,
+                useClass: space.use_class as 'private' | 'common',
+                realArea: Number(space.real_area_m2_raw),
+                coverageClass: bulkCoverageClass,
+                commonDivisionClass: space.common_division_class === 'non_proportional' ? 'non_proportional' : 'proportional',
+                coefficientValue: coefficient,
+                materializedIndex: Number(space.materialized_index ?? 0),
+                distributionScope: structure.commonDistributionScopes.find(item => item.common_space_id === space.id)?.distribution_scope === 'block' ? 'block' : 'global',
+            })));
+            await loadResults(selectedVersionId);
+            if (selectedProjectId) await loadVersions(selectedProjectId);
+            setSelectedSpaceIds(new Set());
+            setFeedback({ status: 'success', warnings: [], blocking_errors: [], message: `${targets.length} espaco(s) atualizado(s) em lote.` });
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao aplicar edicao em lote.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
+    // ── Assistente de vaga/deposito (Camada B) ───────────────────────────────
+    async function createVagasWizard(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!versionIsEditable()) return;
+        const blockId = structure.units.find(unit => unit.id === vagaParentUnitId)?.block_id || structure.blocks[0]?.id;
+        if (!vagaParentUnitId) { setError('Selecione a unidade principal.'); return; }
+        if (!blockId) { setError('Cadastre um bloco antes de criar vagas.'); return; }
+        const qty = Math.max(1, Math.round(Number(vagaQuantity) || 1));
+        const area = parsePositiveArea(vagaArea, 'area da vaga/deposito');
+        if (area === null) return;
+        setActionLoading('create-vaga');
+        setError(null);
+        setFeedback(null);
+        try {
+            for (let i = 0; i < qty; i++) {
+                const code = qty > 1 ? `${vagaCodePrefix}-${i + 1}` : vagaCodePrefix;
+                const unit = await areaEngineService.createUnit(selectedVersionId, {
+                    blockId,
+                    code,
+                    unitType: vagaLinkType === 'storage' ? 'storage' : 'parking',
+                    materializedIndex: structure.units.length + i + 1,
+                });
+                await areaEngineService.createSpace(selectedVersionId, {
+                    blockId,
+                    unitId: unit.id,
+                    code: `${code}-PRIV`,
+                    name: `Area privativa ${code}`,
+                    useClass: 'private',
+                    realArea: area,
+                    coverageClass: 'covered_standard',
+                    coefficientValue: 1,
+                    materializedIndex: structure.spaces.length + i + 1,
+                });
+                await areaEngineService.createAccessoryUnitLink(selectedVersionId, {
+                    parentUnitId: vagaParentUnitId,
+                    accessoryUnitId: unit.id,
+                    linkType: vagaLinkType,
+                    affectsPrivateArea: vagaAffectsPrivateArea,
+                    affectsCoefficient: vagaAffectsCoefficient,
+                });
+            }
+            await loadResults(selectedVersionId);
+            if (selectedProjectId) await loadVersions(selectedProjectId);
+            setIsVagaWizardOpen(false);
+            setFeedback({ status: 'success', warnings: [], blocking_errors: [], message: `${qty} vaga(s)/deposito(s) criado(s) e vinculado(s).` });
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erro ao criar vaga/deposito.');
+        } finally {
+            setActionLoading(null);
+        }
+    }
+
     const commonNonProportionalSpaces = structure.spaces.filter(space => space.use_class === 'common' && space.common_division_class === 'non_proportional');
     const accessoryCandidateUnits = structure.units.filter(unit => ['parking', 'storage', 'technical', 'other'].includes(unit.unit_type));
     const privateAreaTotal = structure.spaces.filter(space => space.use_class === 'private').reduce((sum, space) => sum + Number(space.real_area_m2_raw || 0), 0);
@@ -935,6 +1050,37 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const coefficientSum = quadroII.reduce((sum, row) => sum + Number(row.qii_31_proportionality_coefficient_raw || 0), 0);
     const realTotal = quadroII.reduce((sum, row) => sum + Number(row.qii_37_unit_real_total_raw || 0), 0);
     const equivalentTotal = quadroII.reduce((sum, row) => sum + Number(row.qii_38_unit_equivalent_total_raw || 0), 0);
+
+    // ── Checklist de pendencias (Camada B) — espelha as regras bloqueantes do
+    // motor client-side, para dar atalho direto de edicao por item. Sem chamada
+    // de RPC: recalcula a cada mudanca da estrutura ja carregada.
+    const structureChecklist = React.useMemo(() => {
+        const items: { id: string; kind: 'space' | 'unit'; severity: 'error' | 'warning'; message: string }[] = [];
+        for (const space of structure.spaces) {
+            const label = space.code || space.name;
+            if (space.coverage_class !== 'covered_standard' && (space.coefficient_value === null || space.coefficient_value === undefined)) {
+                items.push({ id: space.id, kind: 'space', severity: 'error', message: `Espaco "${label}": area nao padrao sem coeficiente (MOTOR_007).` });
+            } else if (space.coverage_class !== 'covered_standard' && Number(space.coefficient_value) === 1) {
+                items.push({ id: space.id, kind: 'space', severity: 'warning', message: `Espaco "${label}": coeficiente ainda no padrao (1) para area nao padrao — revisar equivalencia real.` });
+            }
+            if (space.use_class === 'common' && space.common_division_class === 'not_applicable') {
+                items.push({ id: space.id, kind: 'space', severity: 'error', message: `Area comum "${label}": sem tipo de divisao (MOTOR_012).` });
+            }
+            if (space.use_class === 'common' && space.common_division_class === 'proportional') {
+                const hasScope = structure.commonDistributionScopes.some(scope => scope.common_space_id === space.id);
+                if (!hasScope) items.push({ id: space.id, kind: 'space', severity: 'error', message: `Area comum "${label}": proporcional sem escopo de distribuicao (COM_PROP_VAL_001).` });
+            }
+        }
+        for (const unit of structure.units) {
+            if (!['parking', 'storage'].includes(unit.unit_type)) continue;
+            const hasOwnSpace = structure.spaces.some(space => space.unit_id === unit.id);
+            const isAccessoryTarget = structure.accessoryLinks.some(link => link.accessory_unit_id === unit.id);
+            if (!hasOwnSpace && !isAccessoryTarget) {
+                items.push({ id: unit.id, kind: 'unit', severity: 'warning', message: `Unidade "${unit.code}" (${unit.unit_type}): sem area propria nem vinculo acessorio.` });
+            }
+        }
+        return items;
+    }, [structure]);
 
     if (!organizationId) {
         return <EmptyState message="Selecione uma organizacao para acessar o motor de areas." />;
@@ -1125,6 +1271,63 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                 </div>
             )}
 
+            {isVagaWizardOpen && (
+                <form onSubmit={createVagasWizard} className="bg-white border border-slate-200 rounded-lg p-4 space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Assistente de vaga/deposito</h2>
+                            <p className="text-xs text-slate-500 mt-1">Cria N unidades acessorias (vaga/deposito), 1 espaco privativo cada e o vinculo com a unidade principal, em um unico passo.</p>
+                        </div>
+                        <button type="button" onClick={() => setIsVagaWizardOpen(false)} className="text-sm font-bold text-slate-500 hover:text-slate-800">
+                            Fechar
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <label className="space-y-1 md:col-span-2">
+                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Unidade principal</span>
+                            <select value={vagaParentUnitId} onChange={event => setVagaParentUnitId(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100">
+                                <option value="">Selecione</option>
+                                {structure.units.map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}
+                            </select>
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Quantidade</span>
+                            <input value={vagaQuantity} onChange={event => setVagaQuantity(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Prefixo do codigo</span>
+                            <input value={vagaCodePrefix} onChange={event => setVagaCodePrefix(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Area cada (m2)</span>
+                            <input value={vagaArea} onChange={event => setVagaArea(event.target.value)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                        </label>
+                        <label className="space-y-1">
+                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Tipo</span>
+                            <select value={vagaLinkType} onChange={event => setVagaLinkType(event.target.value as typeof vagaLinkType)} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100">
+                                <option value="parking">Vaga</option>
+                                <option value="storage">Deposito</option>
+                                <option value="box">Box</option>
+                                <option value="exclusive_area">Area exclusiva</option>
+                                <option value="other">Outro</option>
+                            </select>
+                        </label>
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-600 md:col-span-1">
+                            <input type="checkbox" checked={vagaAffectsPrivateArea} onChange={event => setVagaAffectsPrivateArea(event.target.checked)} /> Afeta area privativa
+                        </label>
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-600 md:col-span-1">
+                            <input type="checkbox" checked={vagaAffectsCoefficient} onChange={event => setVagaAffectsCoefficient(event.target.checked)} /> Afeta coeficiente
+                        </label>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <Button type="button" variant="secondary" onClick={() => setIsVagaWizardOpen(false)}>Cancelar</Button>
+                        <Button type="submit" disabled={!selectedVersionId || !vagaParentUnitId || actionLoading === 'create-vaga'}>
+                            <Plus className="w-4 h-4" /> Criar
+                        </Button>
+                    </div>
+                </form>
+            )}
+
             {isStructureOpen && (
                 <form onSubmit={createMinimalStructure} className="bg-white border border-slate-200 rounded-lg p-4 space-y-4">
                     <div className="flex items-center justify-between gap-3">
@@ -1237,6 +1440,29 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                             <p className="text-2xl font-black text-slate-900 mt-1">{formatNumber(equivalentTotal)} m2</p>
                         </div>
                     </div>
+
+                    {structureChecklist.length > 0 && (
+                        <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">Checklist de pendencias</h2>
+                                <span className="text-xs text-slate-400">{structureChecklist.length} item(ns)</span>
+                            </div>
+                            <div className="space-y-1">
+                                {structureChecklist.map((item, idx) => (
+                                    <div key={`${item.kind}-${item.id}-${idx}`} className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs font-semibold ${item.severity === 'error' ? 'border-red-200 bg-red-50 text-red-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                                        <span>{item.message}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setActiveTable('estrutura'); beginStructureEdit(item.kind, item.id); }}
+                                            className="shrink-0 font-black uppercase tracking-widest underline hover:no-underline"
+                                        >
+                                            Editar
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <AreaQaPanel
                         quadroI={quadroI}
@@ -1403,9 +1629,50 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
                                         })} onEdit={id => beginStructureEdit('space', id)} onDelete={id => deleteStructureRecord('space', id)} disabled={!!actionLoading || !structureIsEditable} />
                                     </div>
 
+                                    {privateSpacesList.length > 0 && (
+                                        <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Edicao em lote — espacos privativos</h4>
+                                                <button type="button" onClick={toggleSelectAllPrivateSpaces} className="text-xs font-bold text-blue-600 hover:underline" disabled={!structureIsEditable}>
+                                                    {selectedSpaceIds.size === privateSpacesList.length ? 'Limpar selecao' : 'Selecionar todos'}
+                                                </button>
+                                            </div>
+                                            <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-100 divide-y divide-slate-100">
+                                                {privateSpacesList.map(space => (
+                                                    <label key={space.id} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+                                                        <input type="checkbox" checked={selectedSpaceIds.has(space.id)} onChange={() => toggleSpaceSelection(space.id)} disabled={!structureIsEditable} />
+                                                        <span className="truncate">{space.code || space.name} — {formatNumber(space.real_area_m2_raw)} m2, coef {formatNumber(space.coefficient_value ?? 1, 4)}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                                                <label className="space-y-1">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cobertura</span>
+                                                    <select value={bulkCoverageClass} onChange={event => setBulkCoverageClass(event.target.value)} className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm">
+                                                        <option value="covered_standard">Coberta padrao</option>
+                                                        <option value="covered_different">Coberta diferente</option>
+                                                        <option value="uncovered">Descoberta</option>
+                                                    </select>
+                                                </label>
+                                                <label className="space-y-1">
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Coeficiente</span>
+                                                    <input value={bulkCoefficientValue} onChange={event => setBulkCoefficientValue(event.target.value)} placeholder="0,75" className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm" />
+                                                </label>
+                                                <Button type="button" size="sm" onClick={applyBulkSpaceEdit} disabled={selectedSpaceIds.size === 0 || !structureIsEditable || !!actionLoading}>
+                                                    Aplicar em {selectedSpaceIds.size || 0} espaco(s)
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                                         <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
-                                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Vinculos acessorios</h4>
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="text-xs font-black uppercase tracking-widest text-slate-600">Vinculos acessorios</h4>
+                                                <Button type="button" variant="secondary" size="sm" onClick={() => setIsVagaWizardOpen(true)} disabled={!structureIsEditable || !!actionLoading}>
+                                                    <Plus className="w-3 h-3" /> Assistente de vaga/deposito
+                                                </Button>
+                                            </div>
                                             <form onSubmit={addAccessoryLink} className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                                 <select value={accessoryParentUnitId} onChange={event => setAccessoryParentUnitId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Unidade principal</option>{structure.units.map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>
                                                 <select value={accessoryUnitId} onChange={event => setAccessoryUnitId(event.target.value)} className="h-9 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Unidade acessoria</option>{(accessoryCandidateUnits.length > 0 ? accessoryCandidateUnits : structure.units).map(unit => <option key={unit.id} value={unit.id}>{unit.code}</option>)}</select>

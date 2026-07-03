@@ -79,12 +79,11 @@ Permitir que um projeto de cálculo de áreas NBR 12721 seja **gerado a partir d
 6. Reexecução → **nova versão** (usa versionamento existente), nunca sobrescreve versão calculada/travada.
 7. Idempotência: se o empreendimento já tem `area_project` vinculado, oferecer "criar nova versão" em vez de novo projeto.
 
-### Camada B — Enriquecimento no editor de Áreas (já existe, sem código novo)
-- Marcar `coverage_class` + `coefficient_value` de varandas/descobertos (lacunas 1–2).
-- Reclassificar comuns proporcional × não-proporcional (lacuna 3).
-- Desdobrar `private_area` em ambientes (lacuna 4).
-- Gerar unidades acessórias + `accessory_links` a partir de `parking_spaces` (lacuna 5).
-- A validação do motor lista automaticamente o que ainda falta.
+### Camada B — Enriquecimento no editor de Áreas ✅ **IMPLEMENTADA (2026-07-03)**
+- **Checklist de pendências** (client-side, sem RPC): `structureChecklist` (useMemo) espelha as regras bloqueantes do motor (MOTOR_007 coef ausente, MOTOR_012 comum sem divisão, COM_PROP_VAL_001 comum proporcional sem escopo) + alerta de "coeficiente ainda no padrão (1) em área não padrão" + unidades tipo vaga/depósito sem área própria nem vínculo acessório. Cada item tem atalho "Editar" que abre o espaço/unidade direto no editor granular.
+- **Edição em lote de espaços privativos**: checkboxes na lista de espaços privativos + mini-toolbar (cobertura + coeficiente) que aplica via `Promise.all(updateSpace(...))` — resolve a lacuna 1–2 sem precisar editar unidade por unidade (ex.: marcar todas as varandas como `covered_different` + coef 0,75 de uma vez).
+- **Assistente de vaga/depósito** (`createVagasWizard`): cria N unidades acessórias (`createUnit`) + 1 espaço privativo cada (`createSpace`) + vínculo com a unidade principal (`createAccessoryUnitLink`) em um único fluxo guiado — resolve a lacuna 5 sem inferir automaticamente no import (decisão travada preservada: vagas continuam manuais).
+- Reclassificar comum proporcional × não-proporcional (lacuna 3) e desdobrar `private_area` em ambientes (lacuna 4) continuam via o editor granular existente (form de Espaço), sem necessidade de UI nova.
 
 ## 6. Fases de implementação
 

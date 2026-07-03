@@ -394,7 +394,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Função para criar uma pasta virtual
   const handleCreateFolderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOrganizationId || !newFolderName.trim()) return;
+    if (!activeOrganizationId) {
+      alert('Sessão expirada ou organização não selecionada.');
+      return;
+    }
+    if (!newFolderName.trim()) return;
     setCreatingFolder(true);
     try {
       const projFilter = selectedProjectId === 'all' ? undefined : selectedProjectId;
@@ -963,16 +967,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         ) : (
           <div>
             {/* Grid de Subpastas Virtuais (Onda 1) */}
-            {folders.filter(f => f.parent_id === (currentFolderId || undefined)).length > 0 && (
+            {folders.filter(f => (f.parent_id || null) === (currentFolderId || null)).length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-6 border-b border-slate-100 bg-slate-50/10">
                 {folders
-                  .filter(f => f.parent_id === (currentFolderId || undefined))
+                  .filter(f => (f.parent_id || null) === (currentFolderId || null))
                   .map((folder) => (
                     <div
                       key={folder.id}
                       onDoubleClick={() => setCurrentFolderId(folder.id)}
                       className="flex items-center justify-between p-3.5 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-blue-400 hover:shadow transition-all group cursor-pointer select-none"
-                    >
+                      >
                       <div
                         onClick={() => setCurrentFolderId(folder.id)}
                         className="flex items-center gap-2.5 min-w-0 flex-grow"
@@ -999,7 +1003,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             )}
 
             {/* Lista de Documentos */}
-            {filteredDocuments.length === 0 && folders.filter(f => f.parent_id === (currentFolderId || undefined)).length === 0 ? (
+            {filteredDocuments.length === 0 && folders.filter(f => (f.parent_id || null) === (currentFolderId || null)).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
                 <div className="p-4 bg-slate-50 text-slate-400 rounded-full">
                   <FolderOpen className="w-12 h-12" />

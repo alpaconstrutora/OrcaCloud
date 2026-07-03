@@ -157,8 +157,15 @@ export const remuneracaoSocietariaService = {
     /**
      * Recalcula a folha inteira a partir dos sócios com has_prolabore=true.
      * Substitui os itens existentes (folha ainda em rascunho/calculado).
+     * Só é permitido nesses dois status: uma vez aprovada/enviada, os itens
+     * mudam de status (aprovado/pago) e não são apagados pelo delete abaixo —
+     * recalcular por cima geraria conflito de chave única (payroll_id, partner_id).
      */
     async recalculatePayroll(payroll: ProlaborePayroll, settingsList: PartnerCompensationSettings[]): Promise<ProlaborePayrollItem[]> {
+        if (payroll.status !== 'rascunho' && payroll.status !== 'calculado') {
+            throw new Error('Esta folha já foi aprovada ou enviada ao financeiro e não pode ser recalculada. Escolha outra competência.');
+        }
+
         const active = settingsList.filter(s => s.has_prolabore && s.prolabore_amount && s.prolabore_amount > 0);
 
         const items: Omit<ProlaborePayrollItem, 'id' | 'created_at' | 'updated_at'>[] = [];

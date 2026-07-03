@@ -440,10 +440,12 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                             </span>
                         )}
                         <div className="flex items-center gap-2">
-                            <Button onClick={handleCalculate} disabled={calculating || loading} className="gap-1.5">
-                                {calculating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calculator className="w-3.5 h-3.5" />}
-                                Calcular Folha
-                            </Button>
+                            {(!payroll || payroll.status === 'rascunho' || payroll.status === 'calculado') && (
+                                <Button onClick={handleCalculate} disabled={calculating || loading} className="gap-1.5">
+                                    {calculating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calculator className="w-3.5 h-3.5" />}
+                                    Calcular Folha
+                                </Button>
+                            )}
                             {payroll?.status === 'calculado' && payrollItems.length > 0 && (
                                 <Button onClick={handleApprove} disabled={saving} className="gap-1.5">
                                     <Check className="w-3.5 h-3.5" /> Aprovar

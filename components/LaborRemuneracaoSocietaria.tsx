@@ -47,6 +47,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
     const [payroll, setPayroll] = useState<ProlaborePayroll | null>(null);
     const [payrollItems, setPayrollItems] = useState<ProlaborePayrollItem[]>([]);
     const [calculating, setCalculating] = useState(false);
+    const [calcInfo, setCalcInfo] = useState<string | null>(null);
 
     const [batches, setBatches] = useState<ProfitDistributionBatch[]>([]);
     const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
@@ -89,6 +90,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
         if (!companyId) return;
         setLoading(true);
         setError(null);
+        setCalcInfo(null);
         try {
             const p = await remuneracaoSocietariaService.getOrCreatePayroll(orgId, companyId, competenceMonth);
             setPayroll(p);
@@ -246,13 +248,19 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
     };
 
     const handleCalculate = async () => {
-        if (!payroll) return;
-        setCalculating(true);
         setError(null);
+        setCalcInfo(null);
+        if (!companyId) { setError('Selecione uma empresa antes de calcular a folha.'); return; }
+        if (!payroll) { setError('A folha da competência ainda não foi carregada. Aguarde o carregamento ou troque a competência para tentar novamente.'); return; }
+        setCalculating(true);
         try {
-            const settingsList = Object.values(settingsByPartner).length > 0
-                ? Object.values(settingsByPartner)
-                : await remuneracaoSocietariaService.listCompensationSettings(companyId);
+            const settingsList = await remuneracaoSocietariaService.listCompensationSettings(companyId);
+            const active = settingsList.filter(s => s.has_prolabore && s.prolabore_amount && s.prolabore_amount > 0);
+            if (active.length === 0) {
+                setCalcInfo('Nenhum sócio está configurado para receber pró-labore. Vá na aba "Sócios", clique em Configurar e marque "Recebe pró-labore" com um valor mensal.');
+                setCalculating(false);
+                return;
+            }
             const items = await remuneracaoSocietariaService.recalculatePayroll(payroll, settingsList);
             setPayrollItems(items);
             const refreshed = await supabase.from('prolabore_payrolls').select('*').eq('id', payroll.id).single();
@@ -265,7 +273,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
     };
 
     const handleApprove = async () => {
-        if (!payroll) return;
+        if (!payroll) { setError('A folha ainda não foi carregada.'); return; }
         if (!await confirm({ title: 'Aprovar folha de pró-labore?', message: `Competência ${competenceMonth.slice(0, 7)} — ${payrollItems.length} sócio(s).`, variant: 'default' })) return;
         setSaving(true);
         try {
@@ -280,7 +288,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
     };
 
     const handleSendToFinancial = async () => {
-        if (!payroll) return;
+        if (!payroll) { setError('A folha ainda não foi carregada.'); return; }
         if (!await confirm({ title: 'Enviar ao financeiro?', message: 'Gera um lançamento (contas a pagar) por sócio.', variant: 'default' })) return;
         setSaving(true);
         try {
@@ -334,6 +342,12 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
             {error && (
                 <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
+                </div>
+            )}
+
+            {calcInfo && subTab === 'prolabore' && (
+                <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" /> {calcInfo}
                 </div>
             )}
 
@@ -426,7 +440,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                             </span>
                         )}
                         <div className="flex items-center gap-2">
-                            <Button onClick={handleCalculate} disabled={calculating} className="gap-1.5">
+                            <Button onClick={handleCalculate} disabled={calculating || loading} className="gap-1.5">
                                 {calculating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calculator className="w-3.5 h-3.5" />}
                                 Calcular Folha
                             </Button>

@@ -119,39 +119,21 @@ export default function FloorViewerTab({ scenario, terrain, rules }: FloorViewer
               <span>Use o scroll (rodinha) para Zoom. Clique e arraste para Mover.</span>
             </div>
 
-            <TransformWrapper
-              initialScale={1}
-              minScale={0.1}
-              maxScale={8}
-              centerOnInit={true}
-              wheel={{ step: 0.1 }}
-            >
-              {({ zoomIn, zoomOut, resetTransform }) => (
-                <React.Fragment>
-                  <div className="absolute top-4 left-4 flex flex-col gap-1 z-10 shadow-sm rounded-lg overflow-hidden border border-gray-200 bg-white">
-                    <button onClick={() => zoomIn()} className="p-2 hover:bg-gray-50 text-gray-600 border-b border-gray-100" title="Zoom In">+</button>
-                    <button onClick={() => zoomOut()} className="p-2 hover:bg-gray-50 text-gray-600 border-b border-gray-100" title="Zoom Out">-</button>
-                    <button onClick={() => resetTransform()} className="p-2 hover:bg-gray-50 text-gray-600 text-xs font-bold" title="Resetar Visualização">⛶</button>
-                  </div>
-                  
-                  <TransformComponent wrapperStyle={{ width: '100%', height: '100%' }} contentStyle={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div className={isFullscreen ? 'w-full h-full' : 'w-full h-full'}>
-                      <FloorPlanCanvas2D 
-                        buildingWidth={geometry?.buildingWidth}
-                        buildingDepth={geometry?.buildingDepth}
-                        unitsPerFloor={scenario.units_per_floor}
-                        privateAreaPerUnit={(scenario.total_units || 0) > 0 ? (scenario.total_private_area || 0) / (scenario.total_units || 1) : 0}
-                        terrainWidth={geometry?.terrainWidth}
-                        terrainDepth={geometry?.terrainDepth}
-                        leftSetback={geometry?.leftSetback}
-                        frontSetback={geometry?.frontSetback}
-                        isRotated={true}
-                      />
-                    </div>
-                  </TransformComponent>
-                </React.Fragment>
-              )}
-            </TransformWrapper>
+            <div className="w-full h-full flex items-center justify-center">
+              <FloorPlanCanvas2D 
+                buildingWidth={geometry?.buildingWidth}
+                buildingDepth={geometry?.buildingDepth}
+                unitsPerFloor={scenario.units_per_floor}
+                privateAreaPerUnit={(scenario.total_units || 0) > 0 ? (scenario.total_private_area || 0) / (scenario.total_units || 1) : 0}
+                terrainWidth={geometry?.terrainWidth}
+                terrainDepth={geometry?.terrainDepth}
+                leftSetback={geometry?.leftSetback}
+                frontSetback={geometry?.frontSetback}
+                minRightSetback={rules?.right_setback || 1.5}
+                minRearSetback={rules?.rear_setback || 3}
+                isRotated={true}
+              />
+            </div>
           </div>
       </div>
     </div>

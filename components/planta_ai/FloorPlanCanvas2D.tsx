@@ -12,6 +12,8 @@ interface Props {
   leftSetback?: number;
   frontSetback?: number;
   isRotated?: boolean;
+  minRightSetback?: number;
+  minRearSetback?: number;
 }
 
 const COLORS = [
@@ -34,6 +36,8 @@ export default function FloorPlanCanvas2D({
   terrainDepth = 30,
   leftSetback = 0,
   frontSetback = 0,
+  minRightSetback = 0,
+  minRearSetback = 0,
   isRotated: initialRotated
 }: Props) {
   // Auto-rotate if terrain is much deeper than it is wide
@@ -193,7 +197,7 @@ export default function FloorPlanCanvas2D({
               wrapperStyle={{ width: "100%", height: "100%" }} 
               contentStyle={{ width: "100%", height: "100%", display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              <svg width="100%" height="100%" viewBox={`0 0 ${viewW} ${viewH}`} style={{ maxWidth: '85vw', maxHeight: '85vh' }}>
+              <svg width="100%" height="100%" viewBox={`0 0 ${viewW} ${viewH}`} style={{ maxWidth: '85vw', maxHeight: '85vh', fontFamily: 'inherit' }}>
                 <g transform={`translate(${offX}, ${offY}) rotate(${rotAngle}) translate(${-cx}, ${-cy})`}>
                   
                   {/* Terrain Footprint Outline */}
@@ -245,7 +249,7 @@ export default function FloorPlanCanvas2D({
                       <line x1={lS + w} y1={fS + h * 0.8} x2={tW} y2={fS + h * 0.8} stroke="#6b7280" strokeWidth="0.5" strokeDasharray="1 1" />
                       <g transform={`translate(${lS + w + rS / 2}, ${fS + h * 0.8})`}>
                         <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeSm} fill="#4b5563" fontWeight="bold" stroke="white" strokeWidth="0.5" paintOrder="stroke fill" strokeLinejoin="round">
-                          {rS.toFixed(1)}m
+                          {rS.toFixed(1)}m {rS > minRightSetback && `(Min: ${minRightSetback}m)`}
                         </text>
                       </g>
                     </g>
@@ -267,11 +271,23 @@ export default function FloorPlanCanvas2D({
                       <line x1={lS + w * 0.8} y1={fS + h} x2={lS + w * 0.8} y2={tH} stroke="#6b7280" strokeWidth="0.5" strokeDasharray="1 1" />
                       <g transform={`translate(${lS + w * 0.8}, ${fS + h + rearS / 2})`}>
                         <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeSm} fill="#4b5563" fontWeight="bold" stroke="white" strokeWidth="0.5" paintOrder="stroke fill" strokeLinejoin="round">
-                          {rearS.toFixed(1)}m
+                          {rearS.toFixed(1)}m {rearS > minRearSetback && `(Min: ${minRearSetback}m)`}
                         </text>
                       </g>
                     </g>
                   )}
+
+                  {/* Maximum Envelope (Área Edificável) */}
+                  <rect 
+                    x={leftSetback} 
+                    y={frontSetback} 
+                    width={tW - leftSetback - minRightSetback} 
+                    height={tH - frontSetback - minRearSetback} 
+                    fill="rgba(239, 68, 68, 0.05)" 
+                    stroke="#ef4444" 
+                    strokeWidth="0.5" 
+                    strokeDasharray="2 2" 
+                  />
 
                   {/* Building Group */}
                   <g transform={`translate(${lS}, ${fS})`}>

@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { fiscalService } from './fiscalService';
 import { payrollEngine } from './payrollEngine';
 import { documentService } from './documentService';
+import { supplierService } from './supplierService';
 import { calculateINSS, calculateIRRF } from '../lib/payrollCalc';
 import {
     PartnerCompensationSettings, PartnerCompensationSettingsUpsert,
@@ -9,6 +10,8 @@ import {
     ProfitDistributionBatch, ProfitDistributionItem,
 } from '../types';
 import { CompanyPartner } from '../types';
+
+const PARTNER_SUPPLIER_CATEGORY = 'Sócio';
 
 export interface ProlaboreCalcResult {
     partner_id: string;
@@ -112,10 +115,43 @@ export const remuneracaoSocietariaService = {
     async listPayrollItems(payrollId: string): Promise<ProlaborePayrollItem[]> {
         const { data, error } = await supabase
             .from('prolabore_payroll_items')
-            .select('*, partner:company_partners(nome)')
+            .select('*, partner:company_partners(nome, documento, tipo_pessoa)')
             .eq('payroll_id', payrollId);
         if (error) throw error;
-        return (data || []).map((i: any) => ({ ...i, partner_nome: i.partner?.nome })) as ProlaborePayrollItem[];
+        return (data || []).map((i: any) => ({
+            ...i,
+            partner_nome: i.partner?.nome,
+            partner_documento: i.partner?.documento,
+            partner_tipo_pessoa: i.partner?.tipo_pessoa,
+        })) as ProlaborePayrollItem[];
+    },
+
+    /**
+     * Localiza (ou cria) o fornecedor que representa o sócio no Financeiro —
+     * pró-labore/dividendos não têm "supplier_id" próprio, mas a tela de
+     * Contas a Pagar (ContasPagarManager) só lê a tabela `invoices`, que exige
+     * um supplier_id. Reusa por documento (ou nome, se PF sem documento
+     * cadastrado) para não duplicar a cada envio.
+     */
+    async getOrCreatePartnerSupplier(organizationId: string, partner: { nome: string; documento?: string; tipo_pessoa?: 'pf' | 'pj' }): Promise<string> {
+        let query = supabase
+            .from('suppliers')
+            .select('id')
+            .eq('organization_id', organizationId)
+            .eq('category', PARTNER_SUPPLIER_CATEGORY);
+        query = partner.documento ? query.eq('document', partner.documento) : query.eq('name', partner.nome);
+        const { data: existing, error: findError } = await query.maybeSingle();
+        if (findError) throw findError;
+        if (existing) return existing.id;
+
+        const created = await supplierService.addSupplier({
+            name: partner.nome,
+            document: partner.documento,
+            type: partner.tipo_pessoa === 'pj' ? 'PJ' : 'PF',
+            category: PARTNER_SUPPLIER_CATEGORY,
+            organization_id: organizationId,
+        });
+        return created.id;
     },
 
     /**
@@ -178,8 +214,9 @@ export const remuneracaoSocietariaService = {
     },
 
     /**
-     * Envia ao financeiro: gera um internal_transactions (DEBIT) por item aprovado
-     * e marca o item como 'pago'. Reusa o padrão de financialSyncService.
+     * Envia ao financeiro: gera um internal_transactions (DEBIT, ledger/DRE) +
+     * um título em `invoices` (o que a tela Contas a Pagar de fato lista) por
+     * item aprovado, e marca o item como 'pago'.
      */
     async sendPayrollToFinancial(organizationId: string, payroll: ProlaborePayroll, items: ProlaborePayrollItem[]): Promise<void> {
         for (const item of items) {
@@ -199,6 +236,24 @@ export const remuneracaoSocietariaService = {
                 .select()
                 .single();
             if (txError) throw txError;
+
+            const supplierId = await this.getOrCreatePartnerSupplier(organizationId, {
+                nome: (item as any).partner_nome || 'Sócio',
+                documento: (item as any).partner_documento,
+                tipo_pessoa: (item as any).partner_tipo_pessoa,
+            });
+            const { error: invError } = await supabase
+                .from('invoices')
+                .insert({
+                    supplier_id: supplierId,
+                    file_path: 'internal://remuneracao-societaria',
+                    file_name: `Pró-labore ${payroll.competence_month.slice(0, 7)}`,
+                    amount: item.net_amount,
+                    due_date: payroll.competence_month,
+                    status: 'approved',
+                    notes: `[prolabore_item:${item.id}]`,
+                });
+            if (invError) throw invError;
 
             const { error: itemError } = await supabase
                 .from('prolabore_payroll_items')
@@ -233,10 +288,15 @@ export const remuneracaoSocietariaService = {
     async listBatchItems(batchId: string): Promise<ProfitDistributionItem[]> {
         const { data, error } = await supabase
             .from('profit_distribution_items')
-            .select('*, partner:company_partners(nome)')
+            .select('*, partner:company_partners(nome, documento, tipo_pessoa)')
             .eq('batch_id', batchId);
         if (error) throw error;
-        return (data || []).map((i: any) => ({ ...i, partner_nome: i.partner?.nome })) as ProfitDistributionItem[];
+        return (data || []).map((i: any) => ({
+            ...i,
+            partner_nome: i.partner?.nome,
+            partner_documento: i.partner?.documento,
+            partner_tipo_pessoa: i.partner?.tipo_pessoa,
+        })) as ProfitDistributionItem[];
     },
 
     /**
@@ -349,8 +409,9 @@ export const remuneracaoSocietariaService = {
     },
 
     /**
-     * Envia ao financeiro: gera internal_transactions (DEBIT) por item aprovado,
-     * marca payment_date no lote (referência do agregador mensal de retenção).
+     * Envia ao financeiro: gera internal_transactions (DEBIT, ledger/DRE) + um
+     * título em `invoices` (Contas a Pagar) por item aprovado, marca payment_date
+     * no lote (referência do agregador mensal de retenção).
      */
     async sendProfitBatchToFinancial(organizationId: string, batch: ProfitDistributionBatch, items: ProfitDistributionItem[]): Promise<void> {
         const paymentDate = new Date().toISOString().slice(0, 10);
@@ -372,6 +433,24 @@ export const remuneracaoSocietariaService = {
                 .select()
                 .single();
             if (txError) throw txError;
+
+            const supplierId = await this.getOrCreatePartnerSupplier(organizationId, {
+                nome: (item as any).partner_nome || 'Sócio',
+                documento: (item as any).partner_documento,
+                tipo_pessoa: (item as any).partner_tipo_pessoa,
+            });
+            const { error: invError } = await supabase
+                .from('invoices')
+                .insert({
+                    supplier_id: supplierId,
+                    file_path: 'internal://remuneracao-societaria',
+                    file_name: `Dividendos ${batch.profit_period_start.slice(0, 7)}-${batch.profit_period_end.slice(0, 7)}`,
+                    amount: item.net_amount,
+                    due_date: paymentDate,
+                    status: 'approved',
+                    notes: `[dividendo_item:${item.id}]`,
+                });
+            if (invError) throw invError;
 
             const { error: itemError } = await supabase
                 .from('profit_distribution_items')

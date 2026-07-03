@@ -63,6 +63,8 @@ export interface ProlaborePayrollItem {
   updated_at: string;
   // join opcional
   partner_nome?: string;
+  partner_documento?: string;
+  partner_tipo_pessoa?: 'pf' | 'pj';
 }
 
 export const PROLABORE_STATUS_LABELS: Record<ProlaborePayrollStatus, string> = {
@@ -140,6 +142,8 @@ export interface ProfitDistributionItem {
   updated_at: string;
   // join opcional
   partner_nome?: string;
+  partner_documento?: string;
+  partner_tipo_pessoa?: 'pf' | 'pj';
 }
 
 export const PROFIT_BATCH_STATUS_LABELS: Record<ProfitDistributionBatchStatus, string> = {

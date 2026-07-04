@@ -34,7 +34,11 @@ export class PlantaAiIntegration {
         .eq('study_id', studyId)
         .single();
 
-      // 3. Verifica se já existe um estudo de viabilidade vinculado
+      // 3. Busca regras urbanísticas e briefing
+      const { data: ruleset } = await supabase.from('plant_urban_rulesets').select('*').eq('study_id', studyId).maybeSingle();
+      const { data: briefing } = await supabase.from('plant_briefings').select('*').eq('study_id', studyId).maybeSingle();
+
+      // 4. Verifica se já existe um estudo de viabilidade vinculado
       const { data: existingImovib } = await supabase
         .from('imovib_studies')
         .select('id')
@@ -45,14 +49,30 @@ export class PlantaAiIntegration {
       const salesPriceSqm = scenario.total_private_area > 0 ? scenario.estimated_vgv / scenario.total_private_area : 0;
       const costPriceSqm = scenario.total_built_area > 0 ? scenario.estimated_cost / scenario.total_built_area : 0;
 
+      const imovibSyncData = {
+        terreno_area: terrain?.area || 0,
+        terreno_frente: terrain?.frontage || 0,
+        terreno_fundos: terrain?.depth || 0,
+        land_frontage: terrain?.frontage || 0,
+        location_macro: study.city ? `${study.city} - ${study.state || ''}` : '',
+        location_micro: study.neighborhood || study.address || '',
+        ca_basic: ruleset?.floor_area_ratio_basic || 0,
+        ca_max: ruleset?.floor_area_ratio_max || 0,
+        occupancy_rate_max: ruleset?.occupancy_rate || 0,
+        occupancy_rate: ruleset?.occupancy_rate || 0,
+        zoning: ruleset?.zone_name || '',
+        zoning_info: ruleset?.allowed_use || '',
+        segment: briefing?.development_type || '',
+        sub_classification: briefing?.product_standard || '',
+        capex_simplified_area_sqm: scenario.total_built_area || 0,
+        capex_simplified_cost_sqm: costPriceSqm
+      };
+
       if (imovibStudyId) {
         // UPDATE (Iteração rápida)
         const { error: updateErr } = await supabase
           .from('imovib_studies')
-          .update({
-            capex_simplified_area_sqm: scenario.total_built_area,
-            capex_simplified_cost_sqm: costPriceSqm
-          })
+          .update(imovibSyncData)
           .eq('id', imovibStudyId);
         
         if (updateErr) throw new Error(`Erro ao atualizar viabilidade: ${updateErr.message}`);
@@ -68,11 +88,9 @@ export class PlantaAiIntegration {
             name: `${study.name} - Viabilidade`,
             planta_ai_study_id: studyId,
             version: '1.0.0',
-            terreno_area: terrain ? terrain.area : null,
             phase: 'Estudo Preliminar',
             capex_mode: 'simplified',
-            capex_simplified_area_sqm: scenario.total_built_area,
-            capex_simplified_cost_sqm: costPriceSqm
+            ...imovibSyncData
           })
           .select()
           .single();
@@ -245,20 +263,76 @@ export class PlantaAiIntegration {
    */
   static async createPlantaAiFromImovib(imovibStudyId: string, orgId: string, studyName: string): Promise<{ success: boolean; plantaAiStudyId?: string; error?: string }> {
     try {
-      // 1. Cria o estudo no Planta AI
+      // 1. Busca os dados completos do IMOVIB
+      const { data: imovib, error: imovibErr } = await supabase
+        .from('imovib_studies')
+        .select('*')
+        .eq('id', imovibStudyId)
+        .single();
+        
+      if (imovibErr || !imovib) throw new Error(`Estudo Imovib não encontrado: ${imovibErr?.message}`);
+
+      // Busca a zona urbanística se existir
+      const { data: zone } = await supabase
+        .from('imovib_regulatory_zones')
+        .select('*')
+        .eq('study_id', imovibStudyId)
+        .maybeSingle();
+
+      // 2. Cria o estudo no Planta AI mapeando cidade e endereço
       const { data: newPlantStudy, error: insertErr } = await supabase
         .from('plant_studies')
         .insert({
           organization_id: orgId,
           name: `${studyName} (Arquitetura)`,
-          status: 'Rascunho'
+          status: 'Rascunho',
+          city: imovib.location_macro,
+          state: imovib.location_macro, // Simplificação se o macro tiver a cidade/estado
+          neighborhood: imovib.location_micro,
+          address: imovib.location_micro
         })
         .select()
         .single();
         
       if (insertErr || !newPlantStudy) throw new Error(`Erro ao criar estudo Planta AI: ${insertErr?.message}`);
 
-      // 2. Vincula no IMOVIB
+      // 3. Cria o Terreno
+      await supabase.from('plant_terrains').insert({
+        study_id: newPlantStudy.id,
+        terrain_type: 'Plano',
+        area: imovib.terreno_area || 0,
+        frontage: imovib.terreno_frente || imovib.land_frontage || 0,
+        depth: imovib.terreno_fundos || 0,
+        is_corner: false,
+        slope_type: 'Plano'
+      });
+
+      // 4. Cria as Regras Urbanísticas
+      await supabase.from('plant_urban_rulesets').insert({
+        study_id: newPlantStudy.id,
+        allowed_use: imovib.zoning_info || 'Residencial',
+        zone_name: imovib.zoning,
+        occupancy_rate: imovib.occupancy_rate_max || imovib.occupancy_rate || 0,
+        floor_area_ratio_basic: imovib.ca_basic || 0,
+        floor_area_ratio_max: imovib.ca_max || 0,
+        permeability_rate: zone?.taxa_permeabilidade_minima ? parseFloat(zone.taxa_permeabilidade_minima) : 0,
+        max_height: zone?.gabarito_altura_maxima ? parseFloat(zone.gabarito_altura_maxima) : 0,
+        confidence_level: 'Baixo'
+      });
+
+      // 5. Cria o Briefing
+      await supabase.from('plant_briefings').insert({
+        study_id: newPlantStudy.id,
+        development_type: imovib.segment || 'Residencial',
+        product_standard: imovib.sub_classification || 'Médio',
+        main_objective: 'Maximizar VGV',
+        has_elevator: 'Sim',
+        has_balcony: 'Sim',
+        has_suite: 'Sim',
+        notes: imovib.committee_notes || ''
+      });
+
+      // 6. Vincula no IMOVIB
       const { error: updateErr } = await supabase
         .from('imovib_studies')
         .update({ planta_ai_study_id: newPlantStudy.id })

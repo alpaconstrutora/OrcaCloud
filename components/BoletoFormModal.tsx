@@ -11,6 +11,7 @@ import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
 import { extractFromPdfFile } from '../utils/boletoParser';
 import { onlyDigits } from '../utils/febrabanRules';
+import { formatMoney } from './ui/Format';
 import type { Boleto, BoletoExtractionResult, Supplier, CostCenter } from '../types';
 
 interface BoletoFormModalProps {
@@ -24,10 +25,9 @@ interface BoletoFormModalProps {
     onSaved: (boleto: Boleto) => void;
 }
 
-const formatBRL = (v?: number) =>
-    typeof v === 'number'
-        ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-        : '—';
+// Delegado à primitiva compartilhada (ver components/ui/Format.tsx / PLANO_MODULO_TABELAS.md).
+// Mantido o nome exportado para não tocar os call sites existentes (BoletoManager etc.).
+const formatBRL = (v?: number) => formatMoney(v);
 
 const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     organizationId: initialOrgId, organizations = [], onOrgChange,

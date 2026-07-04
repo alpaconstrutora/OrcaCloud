@@ -15,6 +15,7 @@ import BoletoLoteModal from './BoletoLoteModal';
 import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { formatDateBR } from './ui/Format';
 import Button from './ui/Button';
 
 interface BoletoManagerProps {
@@ -129,7 +130,7 @@ const BoletoCardItem = React.memo(function BoletoCardItem({
                             <Calendar className="w-3 h-3" /> Vencimento
                         </p>
                         <p className={`text-sm font-bold ${atrasado ? 'text-red-600' : 'text-gray-700'}`}>
-                            {b.vencimento ? new Date(b.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                            {formatDateBR(b.vencimento)}
                         </p>
                     </div>
                 </div>
@@ -208,7 +209,7 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
             )}
             {visibleColumns.includes('vencimento') && (
                 <td className={`px-4 py-3 text-center text-sm font-semibold whitespace-nowrap ${atrasado ? 'text-red-600' : 'text-gray-700'}`}>
-                    {b.vencimento ? new Date(b.vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                    {formatDateBR(b.vencimento)}
                     {atrasado && <div className="text-xs text-red-400 font-bold">ATRASADO</div>}
                 </td>
             )}

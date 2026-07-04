@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     Banknote, Building2, Loader2, AlertCircle, Users, Calculator,
     Check, Send, Save, X, Crown, TrendingUp, Paperclip, Plus, FileText,
-    Lock, Unlock,
+    Lock, Unlock, RefreshCw,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { companyService } from '../services/companyService';
@@ -55,6 +55,8 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
     const [payrollItems, setPayrollItems] = useState<ProlaborePayrollItem[]>([]);
     const [calculating, setCalculating] = useState(false);
     const [calcInfo, setCalcInfo] = useState<string | null>(null);
+    const [syncing, setSyncing] = useState(false);
+    const [syncInfo, setSyncInfo] = useState<string | null>(null);
 
     const [batches, setBatches] = useState<ProfitDistributionBatch[]>([]);
     const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
@@ -272,6 +274,46 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
         }
     };
 
+    /**
+     * Backfill: itens enviados ao financeiro ANTES da integração com `invoices`
+     * (versões antigas do código só gravavam internal_transactions) ficam sem
+     * título em Contas a Pagar. Este botão gera o título retroativamente —
+     * idempotente, não duplica se o título já existir.
+     */
+    const handleSyncPayrollInvoices = async () => {
+        if (!payroll) return;
+        setSyncing(true);
+        setError(null);
+        setSyncInfo(null);
+        try {
+            const created = await remuneracaoSocietariaService.syncPayrollInvoices(orgId, payroll, payrollItems);
+            setSyncInfo(created > 0
+                ? `${created} título(s) criado(s) em Contas a Pagar.`
+                : 'Todos os itens já têm título em Contas a Pagar.');
+        } catch (e: unknown) {
+            setError((e as Error).message);
+        } finally {
+            setSyncing(false);
+        }
+    };
+
+    const handleSyncBatchInvoices = async () => {
+        if (!selectedBatch) return;
+        setSyncing(true);
+        setError(null);
+        setSyncInfo(null);
+        try {
+            const created = await remuneracaoSocietariaService.syncProfitBatchInvoices(orgId, selectedBatch, batchItems);
+            setSyncInfo(created > 0
+                ? `${created} título(s) criado(s) em Contas a Pagar.`
+                : 'Todos os itens já têm título em Contas a Pagar.');
+        } catch (e: unknown) {
+            setError((e as Error).message);
+        } finally {
+            setSyncing(false);
+        }
+    };
+
     const openEditRegime = (p: CompanyPartner) => {
         const s = settingsByPartner[p.id];
         setEditingPartnerId(p.id);
@@ -409,6 +451,12 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                 </div>
             )}
 
+            {syncInfo && (
+                <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-sm">
+                    <Check className="w-4 h-4 flex-shrink-0" /> {syncInfo}
+                </div>
+            )}
+
             {loading ? (
                 <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
             ) : subTab === 'socios' ? (
@@ -522,6 +570,13 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                             {payroll?.status === 'aprovado' && (
                                 <Button onClick={handleSendToFinancial} disabled={saving} className="gap-1.5">
                                     <Send className="w-3.5 h-3.5" /> Enviar ao Financeiro
+                                </Button>
+                            )}
+                            {payroll && !['rascunho', 'calculado', 'aprovado'].includes(payroll.status) && (
+                                <Button onClick={handleSyncPayrollInvoices} disabled={syncing} className="gap-1.5"
+                                    title="Gera o título em Contas a Pagar para itens já pagos que ficaram sem título (ex.: enviados antes desta integração)">
+                                    {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                    Sincronizar Contas a Pagar
                                 </Button>
                             )}
                         </div>
@@ -692,6 +747,13 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                         {selectedBatch.status === 'aprovado' && (
                                             <Button onClick={handleSendBatchToFinancial} disabled={saving} className="gap-1.5">
                                                 <Send className="w-3.5 h-3.5" /> Enviar ao Financeiro
+                                            </Button>
+                                        )}
+                                        {!['rascunho', 'em_validacao_contabil', 'aguardando_aprovacao', 'aprovado'].includes(selectedBatch.status) && (
+                                            <Button onClick={handleSyncBatchInvoices} disabled={syncing} className="gap-1.5"
+                                                title="Gera o título em Contas a Pagar para itens já pagos que ficaram sem título (ex.: enviados antes desta integração)">
+                                                {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                                                Sincronizar Contas a Pagar
                                             </Button>
                                         )}
                                     </div>

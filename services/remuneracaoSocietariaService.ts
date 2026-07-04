@@ -154,6 +154,103 @@ export const remuneracaoSocietariaService = {
         return created.id;
     },
 
+    /** Marcador único gravado em invoices.notes para não duplicar o título num reenvio/sincronização. */
+    invoiceMarker(kind: 'prolabore' | 'dividendo', itemId: string): string {
+        return `[${kind}_item:${itemId}]`;
+    },
+
+    async invoiceExistsForItem(kind: 'prolabore' | 'dividendo', itemId: string): Promise<boolean> {
+        const { data, error } = await supabase
+            .from('invoices')
+            .select('id')
+            .ilike('notes', `%${this.invoiceMarker(kind, itemId)}%`)
+            .maybeSingle();
+        if (error) throw error;
+        return !!data;
+    },
+
+    /**
+     * Cria o título em `invoices` para um item já pago (mesma lógica de
+     * sendPayrollToFinancial/sendProfitBatchToFinancial), sem tocar em
+     * internal_transactions nem no status do item — usado tanto no envio
+     * normal quanto na sincronização retroativa (§ backfill abaixo).
+     */
+    async createInvoiceForItem(organizationId: string, params: {
+        kind: 'prolabore' | 'dividendo';
+        itemId: string;
+        partnerNome: string;
+        partnerDocumento?: string;
+        partnerTipoPessoa?: 'pf' | 'pj';
+        amount: number;
+        dueDate: string;
+        fileName: string;
+    }): Promise<void> {
+        const supplierId = await this.getOrCreatePartnerSupplier(organizationId, {
+            nome: params.partnerNome || 'Sócio',
+            documento: params.partnerDocumento,
+            tipo_pessoa: params.partnerTipoPessoa,
+        });
+        const { error } = await supabase
+            .from('invoices')
+            .insert({
+                supplier_id: supplierId,
+                file_path: 'internal://remuneracao-societaria',
+                file_name: params.fileName,
+                amount: params.amount,
+                due_date: params.dueDate,
+                status: 'approved',
+                notes: this.invoiceMarker(params.kind, params.itemId),
+            });
+        if (error) throw error;
+    },
+
+    /**
+     * Backfill: gera o título em Contas a Pagar para itens que já foram
+     * enviados ao financeiro ANTES da integração com `invoices` existir
+     * (ficaram com status 'pago'/'contabilizado' mas sem título). Idempotente
+     * — pula itens que já têm invoice pelo marcador único.
+     */
+    async syncPayrollInvoices(organizationId: string, payroll: ProlaborePayroll, items: ProlaborePayrollItem[]): Promise<number> {
+        let created = 0;
+        for (const item of items) {
+            if (item.status !== 'pago' && item.status !== 'contabilizado') continue;
+            if (await this.invoiceExistsForItem('prolabore', item.id)) continue;
+            await this.createInvoiceForItem(organizationId, {
+                kind: 'prolabore',
+                itemId: item.id,
+                partnerNome: item.partner_nome || 'Sócio',
+                partnerDocumento: item.partner_documento,
+                partnerTipoPessoa: item.partner_tipo_pessoa,
+                amount: item.net_amount,
+                dueDate: payroll.competence_month,
+                fileName: `Pró-labore ${payroll.competence_month.slice(0, 7)}`,
+            });
+            created++;
+        }
+        return created;
+    },
+
+    async syncProfitBatchInvoices(organizationId: string, batch: ProfitDistributionBatch, items: ProfitDistributionItem[]): Promise<number> {
+        const dueDate = batch.payment_date || new Date().toISOString().slice(0, 10);
+        let created = 0;
+        for (const item of items) {
+            if (item.status !== 'pago' && item.status !== 'contabilizado') continue;
+            if (await this.invoiceExistsForItem('dividendo', item.id)) continue;
+            await this.createInvoiceForItem(organizationId, {
+                kind: 'dividendo',
+                itemId: item.id,
+                partnerNome: item.partner_nome || 'Sócio',
+                partnerDocumento: item.partner_documento,
+                partnerTipoPessoa: item.partner_tipo_pessoa,
+                amount: item.net_amount,
+                dueDate,
+                fileName: `Dividendos ${batch.profit_period_start.slice(0, 7)}-${batch.profit_period_end.slice(0, 7)}`,
+            });
+            created++;
+        }
+        return created;
+    },
+
     /**
      * Recalcula a folha inteira a partir dos sócios com has_prolabore=true.
      * Substitui os itens existentes (folha ainda em rascunho/calculado).
@@ -244,23 +341,16 @@ export const remuneracaoSocietariaService = {
                 .single();
             if (txError) throw txError;
 
-            const supplierId = await this.getOrCreatePartnerSupplier(organizationId, {
-                nome: (item as any).partner_nome || 'Sócio',
-                documento: (item as any).partner_documento,
-                tipo_pessoa: (item as any).partner_tipo_pessoa,
+            await this.createInvoiceForItem(organizationId, {
+                kind: 'prolabore',
+                itemId: item.id,
+                partnerNome: item.partner_nome || 'Sócio',
+                partnerDocumento: item.partner_documento,
+                partnerTipoPessoa: item.partner_tipo_pessoa,
+                amount: item.net_amount,
+                dueDate: payroll.competence_month,
+                fileName: `Pró-labore ${payroll.competence_month.slice(0, 7)}`,
             });
-            const { error: invError } = await supabase
-                .from('invoices')
-                .insert({
-                    supplier_id: supplierId,
-                    file_path: 'internal://remuneracao-societaria',
-                    file_name: `Pró-labore ${payroll.competence_month.slice(0, 7)}`,
-                    amount: item.net_amount,
-                    due_date: payroll.competence_month,
-                    status: 'approved',
-                    notes: `[prolabore_item:${item.id}]`,
-                });
-            if (invError) throw invError;
 
             const { error: itemError } = await supabase
                 .from('prolabore_payroll_items')
@@ -441,23 +531,16 @@ export const remuneracaoSocietariaService = {
                 .single();
             if (txError) throw txError;
 
-            const supplierId = await this.getOrCreatePartnerSupplier(organizationId, {
-                nome: (item as any).partner_nome || 'Sócio',
-                documento: (item as any).partner_documento,
-                tipo_pessoa: (item as any).partner_tipo_pessoa,
+            await this.createInvoiceForItem(organizationId, {
+                kind: 'dividendo',
+                itemId: item.id,
+                partnerNome: item.partner_nome || 'Sócio',
+                partnerDocumento: item.partner_documento,
+                partnerTipoPessoa: item.partner_tipo_pessoa,
+                amount: item.net_amount,
+                dueDate: paymentDate,
+                fileName: `Dividendos ${batch.profit_period_start.slice(0, 7)}-${batch.profit_period_end.slice(0, 7)}`,
             });
-            const { error: invError } = await supabase
-                .from('invoices')
-                .insert({
-                    supplier_id: supplierId,
-                    file_path: 'internal://remuneracao-societaria',
-                    file_name: `Dividendos ${batch.profit_period_start.slice(0, 7)}-${batch.profit_period_end.slice(0, 7)}`,
-                    amount: item.net_amount,
-                    due_date: paymentDate,
-                    status: 'approved',
-                    notes: `[dividendo_item:${item.id}]`,
-                });
-            if (invError) throw invError;
 
             const { error: itemError } = await supabase
                 .from('profit_distribution_items')

@@ -13,6 +13,7 @@ import OperacionalWorkLog from './OperacionalWorkLog'
 import OperacionalChecklist from './OperacionalChecklist'
 import OperacionalEvidence from './OperacionalEvidence'
 import OperacionalNC from './OperacionalNC'
+import { formatDateBR as fmtDate } from './ui/Format'
 
 type Tab = 'geral' | 'apontamentos' | 'checklist' | 'evidencias' | 'ncs' | 'historico'
 
@@ -58,10 +59,6 @@ const TRANSITION_LABELS: Partial<Record<WorkOrderStatus, string>> = {
 function fmtCurrency(v: number | null | undefined) {
   if (!v) return 'R$ —'
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
-}
-function fmtDate(d: string | null) {
-  if (!d) return '—'
-  return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
 }
 function fmtDateTime(d: string | null) {
   if (!d) return '—'
@@ -540,7 +537,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
                           <div>
                             <p className="text-xs font-black text-violet-400 uppercase tracking-wide">Valor Orçado (Crono)</p>
                             <p className="text-sm font-black text-violet-800">
-                              {p.budgetedValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                              {fmtCurrency(p.budgetedValue)}
                             </p>
                           </div>
                         )}

@@ -347,4 +347,61 @@ export class PlantaAiIntegration {
       return { success: false, error: error.message };
     }
   }
+
+  /**
+   * Sincroniza dados atualizados do Imovib para o Planta AI existente.
+   */
+  static async updatePlantaAiFromImovib(imovibStudyId: string, plantaAiStudyId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { data: imovib, error: imovibErr } = await supabase
+        .from('imovib_studies')
+        .select('*')
+        .eq('id', imovibStudyId)
+        .single();
+        
+      if (imovibErr || !imovib) throw new Error(`Estudo Imovib não encontrado: ${imovibErr?.message}`);
+
+      const { data: zone } = await supabase
+        .from('imovib_regulatory_zones')
+        .select('*')
+        .eq('study_id', imovibStudyId)
+        .maybeSingle();
+
+      // Atualiza Terreno
+      await supabase.from('plant_terrains')
+        .update({
+          area: imovib.terreno_area || 0,
+          frontage: imovib.terreno_frente || imovib.land_frontage || 0,
+          depth: imovib.terreno_fundos || 0,
+        })
+        .eq('study_id', plantaAiStudyId);
+
+      // Atualiza Regras Urbanísticas
+      await supabase.from('plant_urban_rulesets')
+        .update({
+          allowed_use: imovib.zoning_info || 'Residencial',
+          zone_name: imovib.zoning,
+          occupancy_rate: imovib.occupancy_rate_max || imovib.occupancy_rate || 0,
+          floor_area_ratio_basic: imovib.ca_basic || 0,
+          floor_area_ratio_max: imovib.ca_max || 0,
+          permeability_rate: zone?.taxa_permeabilidade_minima ? parseFloat(zone.taxa_permeabilidade_minima) : 0,
+          max_height: zone?.gabarito_altura_maxima ? parseFloat(zone.gabarito_altura_maxima) : 0,
+        })
+        .eq('study_id', plantaAiStudyId);
+
+      // Atualiza Briefing
+      await supabase.from('plant_briefings')
+        .update({
+          development_type: imovib.segment || 'Residencial',
+          product_standard: imovib.sub_classification || 'Médio',
+          notes: imovib.committee_notes || ''
+        })
+        .eq('study_id', plantaAiStudyId);
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Erro ao atualizar Planta AI a partir do Imovib:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }

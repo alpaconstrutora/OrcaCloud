@@ -83,7 +83,13 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         </p>
                         {study.planta_ai_study_id ? (
                             <button
-                                onClick={() => window.location.hash = `#/planta-ai?studyId=${study.planta_ai_study_id}`}
+                                onClick={async () => {
+                                    const res = await PlantaAiIntegration.updatePlantaAiFromImovib(study.id, study.planta_ai_study_id!);
+                                    if (!res.success) {
+                                        alert("Erro ao atualizar o Planta AI: " + res.error);
+                                    }
+                                    window.location.hash = `#/planta-ai?studyId=${study.planta_ai_study_id}`;
+                                }}
                                 className="mt-3 flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors rounded-xl border border-indigo-200 text-xs font-black uppercase tracking-widest"
                             >
                                 <Layers className="w-4 h-4" />

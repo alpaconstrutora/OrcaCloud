@@ -9,15 +9,7 @@ import { useToast } from '../hooks/useToast';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
 import GroupMatchPanel from './GroupMatchPanel';
 import Button from './ui/Button';
-
-function formatBRL(v?: number): string {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-}
-function formatDate(d?: string | null): string {
-    if (!d) return '—';
-    const [y, m, day] = d.split('T')[0].split('-');
-    return `${day}/${m}/${y}`;
-}
+import { formatMoney as formatBRL, formatDateBR as formatDate } from './ui/Format';
 
 interface CandidateTx {
     id: string;

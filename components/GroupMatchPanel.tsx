@@ -3,15 +3,7 @@ import { Layers, Split, Check, RefreshCw, Landmark, FileText, Building2 } from '
 import { reconciliationGroupService } from '../services/reconciliationGroupService';
 import type { GroupSuggestions } from '../services/reconciliationGroupService';
 import { useToast } from '../hooks/useToast';
-
-function formatBRL(v?: number): string {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-}
-function formatDate(d?: string | null): string {
-    if (!d) return '—';
-    const [y, m, day] = d.split('T')[0].split('-');
-    return `${day}/${m}/${y}`;
-}
+import { formatMoney as formatBRL, formatDateBR as formatDate } from './ui/Format';
 function partyOf(t: { entity_name?: string; party_name?: string; direction?: string }): { label: string; name: string } | null {
     const name = t.entity_name || t.party_name;
     if (!name) return null;

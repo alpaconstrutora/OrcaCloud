@@ -18,7 +18,7 @@
 | Drawer lateral / confirmação | `Sheet` + `useConfirm` (ver `UI_PATTERNS.md`) | #3, #10, #36 |
 
 Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager, ContasPagarManager.
-Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda), PriceTableManager (só moeda), ContractMeasurementModal (moeda + data de aditivo — corrigiu bug de sinal negativo).
+Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda), PriceTableManager (só moeda), ContractMeasurementModal (moeda + data de aditivo — corrigiu bug de sinal negativo), BalanceteReport (só moeda), WIPReport (moeda + % — corrigiu separador decimal do percentual), SmartReconciliationCenter + GroupMatchPanel (moeda/data).
 Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote), ClientChargesModule (cancelar cobrança em lote), SupplyChainOrderList (excluir pedidos em lote, só na visão em lista).
 
 **Exceção conhecida:** ContasReceberManager tem ordenação própria (`handleSort`/`SortIcon`), não usa `SortableHeader`/`useTableColumns` para sort — decisão já registrada (refatoração considerada complexa, custo/benefício baixo). F1/F3 foram aplicados por cima sem tocar nisso.
@@ -93,6 +93,14 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   errada); `formatMoney`/Intl produz **"-R$ 500,25"** (padrão correto). Confirmado via
   teste de codepoint (espaço comum vs ` ` do Intl, más o bug real é o sinal).
   `new_end_date` (DATE puro de aditivo) também migrado para `formatDateBR`.
+- **WIPReport — bug real de separador decimal corrigido:** `fmtPct` usava `v.toFixed(1)`,
+  que sempre usa ponto como separador ("20.6%"), nunca vírgula, mesmo em pt-BR — testado
+  e confirmado. `formatPercent(v, {asPoints:true, decimals:1})` corrige para "20,6%".
+  BalanceteReport só teve `fmt` (moeda) migrado.
+- **SmartReconciliationCenter/GroupMatchPanel:** `formatBRL`/`formatDate` locais
+  idênticos nos dois arquivos, migrados. Nuance: valor ausente agora mostra "—" em vez
+  de "R$ 0,00" (o `formatBRL` antigo tratava `undefined` como zero) — mais consistente
+  com os demais campos do mesmo card que já usam "—" quando ausentes.
 
 ### F2 — Memória completa da tabela (#34)
 - `useTableColumns` passa a persistir também **ordenação, filtros e página**
@@ -145,8 +153,16 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
 - **Avaliado e descartado:** ContractMeasurementModal — mesmo formato de
   StockConsumptionModal: formulário de composição de itens de UMA medição, enviados
   juntos; não há lista de registros persistidos para bulk-agir.
-- Próximo candidato a avaliar: BalanceteReport, WIPReport ou fila de conciliação
-  bancária (SmartReconciliationCenter/GroupMatchPanel).
+- **Avaliado e descartado:** BalanceteReport e WIPReport — relatórios read-only tipo
+  "Analítica" (comparar, não agir); sem ação por linha.
+- **Já existia (pré-existente, madura):** SmartReconciliationCenter — "Conciliar alta
+  confiança (N)" por threshold de score, sem checkbox (mais adequado ao domínio: a
+  seleção é por confiança do motor de match, não escolha arbitrária do usuário).
+  GroupMatchPanel — "Conciliar grupo" por unidade atômica de agrupamento (cada grupo já
+  é o item de ação, não faz sentido dividir em checkboxes individuais). Nada a adicionar
+  em nenhum dos dois, só F1.
+- Próximo candidato a avaliar: BankReconciliation/ReconciliationDashboard ou
+  ContractsDashboard.
 
 ### F4 — Totalizadores padronizados (#21)
 - Rodapé de resumo reutilizável (respeita filtro) — generalizar o que já existe

@@ -660,14 +660,20 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         docId,
         currentProfile?.email || undefined
       );
-      // Abre em nova aba ou força download
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', fileName);
-      link.setAttribute('target', '_blank');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const ext = fileName.split('.').pop()?.toLowerCase() || '';
+      const isBrowserViewable = ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'txt'].includes(ext);
+
+      if (isBrowserViewable) {
+        window.open(url, '_blank');
+      } else {
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', fileName);
+        link.setAttribute('target', '_blank');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     } catch (err: any) {
       alert('Erro ao gerar link de download seguro: ' + err.message);
     }

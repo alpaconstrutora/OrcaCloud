@@ -39,6 +39,30 @@ export function formatPercent(value: number | null | undefined, opts?: { asPoint
     return `${pct.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: opts?.decimals ?? 2 })}%`;
 }
 
+const MONTHS_LONG = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const MONTHS_SHORT = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
+
+/**
+ * Rótulo de mês/ano tipo "julho de 2026" ou "jul. de 26", a partir de uma string
+ * "YYYY-MM" ou "YYYY-MM-DD". Extrai ano/mês por split, NUNCA via `new Date(...)`
+ * — o mesmo bug de fuso do `formatDateBR` (dia 1º vira UTC meia-noite e retrocede
+ * pro mês anterior em UTC-3). Ver [[project_cronograma_timezone_bug]].
+ */
+export function formatMonthLabel(
+    value: string | null | undefined,
+    opts?: { month?: 'long' | 'short'; year?: 'numeric' | '2-digit' },
+): string {
+    if (!value) return EMPTY;
+    const m = value.match(/^(\d{4})-(\d{2})/);
+    if (!m) return value;
+    const monthIdx = parseInt(m[2], 10) - 1;
+    if (monthIdx < 0 || monthIdx > 11) return value;
+    const monthName = opts?.month === 'short' ? MONTHS_SHORT[monthIdx] : MONTHS_LONG[monthIdx];
+    if (!opts?.year) return monthName;
+    const year = opts.year === '2-digit' ? m[1].slice(2) : m[1];
+    return `${monthName} de ${year}`;
+}
+
 interface MoneyProps {
     value: number | null | undefined;
     className?: string;

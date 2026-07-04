@@ -21,6 +21,7 @@ import {
     MonthlyBreakdown,
 } from '../types/procurement';
 import Button from './ui/Button';
+import { formatMoney as fmtBrl, formatDateBR as fmtDate, formatMonthLabel } from './ui/Format';
 
 interface Props {
     activeOrganizationId: string | null;
@@ -45,13 +46,7 @@ const STATUS_COLORS: Record<ProcurementStatus, string> = {
     cancelled: 'bg-gray-100 text-gray-500',
 };
 
-const fmtBrl  = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtQty  = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-const fmtDate = (iso?: string) => {
-    if (!iso) return '—';
-    const [y, m, d] = iso.slice(0, 10).split('-');
-    return `${d}/${m}/${y}`;
-};
 
 interface Supplier { id: string; name: string; }
 
@@ -649,8 +644,7 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
                             const monthItems = byMonth[month];
                             const monthTotal = monthItems.reduce((s, i) => s + i.estimatedTotal, 0);
                             const isOpen = expandedMonths.has(month);
-                            const [y, m] = month.split('-');
-                            const monthLabel = new Date(`${y}-${m}-01`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                            const monthLabel = formatMonthLabel(month, { month: 'long', year: 'numeric' });
                             const monthIds = monthItems.map(i => i.id);
                             const allMonthSelected = monthIds.every(id => selected.has(id));
                             const consolidGroups = groupByConsolidation(monthItems);
@@ -826,8 +820,7 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
                                     </thead>
                                     <tbody>
                                         {monthlyBreakdown.map(row => {
-                                            const [y, m] = row.month.split('-');
-                                            const label = new Date(`${y}-${m}-01`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+                                            const label = formatMonthLabel(row.month, { month: 'short', year: '2-digit' });
                                             return (
                                                 <tr key={row.month} className="border-t hover:bg-gray-50">
                                                     <td className="px-3 py-2 font-medium capitalize">{label}</td>
@@ -1082,12 +1075,7 @@ function OpportunityCard({
         finally { setLoading(false); }
     };
 
-    const monthLabel = (() => {
-        try {
-            const [y, m] = opportunity.periodMonth.slice(0, 7).split('-');
-            return new Date(`${y}-${m}-01`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-        } catch { return opportunity.periodMonth; }
-    })();
+    const monthLabel = formatMonthLabel(opportunity.periodMonth, { month: 'long', year: 'numeric' });
 
     return (
         <div className="bg-white border rounded-lg p-4 flex flex-col md:flex-row md:items-center gap-4">
@@ -1132,12 +1120,7 @@ function ConsolidationCard({
     const [expanded, setExpanded] = useState(false);
     const [modal, setModal]       = useState<'quotation' | 'order' | null>(null);
 
-    const monthLabel = (() => {
-        try {
-            const [y, m] = consolidation.periodMonth.slice(0, 7).split('-');
-            return new Date(`${y}-${m}-01`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-        } catch { return consolidation.periodMonth; }
-    })();
+    const monthLabel = formatMonthLabel(consolidation.periodMonth, { month: 'long', year: 'numeric' });
 
     // pick any project that has items in this consolidation for the PO
     const representativeProjectId = consolidation.items?.[0]?.projectId
@@ -1237,7 +1220,7 @@ function QuotationModalConsolidation({
     consolidation: Consolidation; projectId: string; organizationId: string;
     onClose: () => void; onSuccess: (num: string) => void;
 }) {
-    const monthLabel = new Date(consolidation.periodMonth).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const monthLabel = formatMonthLabel(consolidation.periodMonth, { month: 'long', year: 'numeric' });
     const [title, setTitle] = useState(`Consolidação ${consolidation.inputDescription} — ${monthLabel}`);
     const [deadline, setDeadline] = useState(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
     const [loading, setLoading] = useState(false);
@@ -1397,8 +1380,7 @@ function CurvaSChart4({ data }: { data: MonthlyBreakdown[] }) {
                         const c = mode === 'acumulado' ? row.comprometidoAcc : row.comprometido;
                         const o = mode === 'acumulado' ? row.pedidoAcc       : row.pedido;
                         const r = mode === 'acumulado' ? row.realizadoAcc    : row.realizado;
-                        const [y, m] = row.month.split('-');
-                        const label  = new Date(`${y}-${m}-01`).toLocaleDateString('pt-BR', { month: 'short' });
+                        const label  = formatMonthLabel(row.month, { month: 'short' });
                         return (
                             <div key={row.month} className="flex flex-col items-center gap-0.5 flex-1 min-w-[48px]">
                                 <div className="w-full flex gap-0.5 items-end" style={{ height: BAR_H }}>

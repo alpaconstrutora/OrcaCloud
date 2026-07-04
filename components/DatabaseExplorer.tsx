@@ -42,6 +42,17 @@ import DatabaseExcelImportModal from './DatabaseExcelImportModal';
 import SinapiImportModal from './SinapiImportModal';
 import { CustomDatabase } from '../types';
 import ExcelJS from 'exceljs';
+import { formatMoney } from './ui/Format';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+
+const EXPLORER_COLUMNS: ColumnConfig[] = [
+    { key: 'code', label: 'Item', sortable: true },
+    { key: 'nature', label: 'Tipo', sortable: true },
+    { key: 'description', label: 'Descrição', sortable: true },
+    { key: 'unit', label: 'Unid', sortable: false },
+    { key: 'price', label: 'Preço Unitário', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
 
 interface DatabaseExplorerProps {
     budget?: BudgetEntry[];
@@ -51,27 +62,28 @@ interface DatabaseExplorerProps {
 }
 
 const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, onToggleFavorite, onUpdateBudget }) => {
-    // Estados de Busca
-    const [searchTerm, setSearchTerm] = React.useState('');
-    const [searchCode, setSearchCode] = React.useState('');
-    const [searchType, setSearchType] = React.useState('');
-    const [searchGroup, setSearchGroup] = React.useState('');
-    const [searchDatabase, setSearchDatabase] = React.useState('SINAPI');
-    const [searchLocation, setSearchLocation] = React.useState('MG');
-    const [searchCharges, setSearchCharges] = React.useState('SEM_DESONERACAO');
-    const [searchReference, setSearchReference] = React.useState('');
+    // Estados de Busca — F2: sobrevivem a navegação/reload.
+    const [searchTerm, setSearchTerm] = usePersistedState('databaseExplorerFilters:term', '');
+    const [searchCode, setSearchCode] = usePersistedState('databaseExplorerFilters:code', '');
+    const [searchType, setSearchType] = usePersistedState('databaseExplorerFilters:type', '');
+    const [searchGroup, setSearchGroup] = usePersistedState('databaseExplorerFilters:group', '');
+    const [searchDatabase, setSearchDatabase] = usePersistedState('databaseExplorerFilters:database', 'SINAPI');
+    const [searchLocation, setSearchLocation] = usePersistedState('databaseExplorerFilters:location', 'MG');
+    const [searchCharges, setSearchCharges] = usePersistedState('databaseExplorerFilters:charges', 'SEM_DESONERACAO');
+    const [searchReference, setSearchReference] = usePersistedState('databaseExplorerFilters:reference', '');
     const [references, setReferences] = React.useState<SinapiReference[]>([]);
-    const [searchNature, setSearchNature] = React.useState('');
-    const [searchScope, setSearchScope] = React.useState<'description' | 'category' | 'both'>('description');
-    const [searchMode, setSearchMode] = React.useState<'exact' | 'all-words'>('all-words');
+    const [searchNature, setSearchNature] = usePersistedState('databaseExplorerFilters:nature', '');
+    const [searchScope, setSearchScope] = usePersistedState<'description' | 'category' | 'both'>('databaseExplorerFilters:scope', 'description');
+    const [searchMode, setSearchMode] = usePersistedState<'exact' | 'all-words'>('databaseExplorerFilters:mode', 'all-words');
     const [searchResults, setSearchResults] = React.useState<SinapiItem[]>([]);
     const [isSearching, setIsSearching] = React.useState(false);
     const [dbSize, setDbSize] = React.useState(0);
     const [categories, setCategories] = React.useState<string[]>([]);
     const [customCategories, setCustomCategories] = React.useState<Set<string>>(new Set());
     const [isGroupManagerOpen, setIsGroupManagerOpen] = React.useState(false);
-    const [showOnlyFavorites, setShowOnlyFavorites] = React.useState(false);
-    const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
+    const [showOnlyFavorites, setShowOnlyFavorites] = usePersistedState('databaseExplorerFilters:onlyFavorites', false);
+    const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('databaseExplorerFilters:viewMode', 'list');
+    const tableColumns = useTableColumns(EXPLORER_COLUMNS, 'databaseExplorerColumns');
 
     // Notificações inline (substitui alert() nativo)
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -708,6 +720,20 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
         }
     };
 
+    // F1/F2: ordenação client-side (mesma lista alimenta grid e lista).
+    const sortedResults = React.useMemo(() => {
+        if (!tableColumns.sortColumn) return searchResults;
+        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+        const col = tableColumns.sortColumn;
+        return [...searchResults].sort((a, b) => {
+            if (col === 'code') return a.code.localeCompare(b.code) * dir;
+            if (col === 'nature') return (a.nature || '').localeCompare(b.nature || '') * dir;
+            if (col === 'description') return a.description.localeCompare(b.description) * dir;
+            if (col === 'price') return ((a.price || 0) - (b.price || 0)) * dir;
+            return 0;
+        });
+    }, [searchResults, tableColumns.sortColumn, tableColumns.sortDirection]);
+
     return (
         <div className="h-full flex flex-col space-y-4 relative">
             {/* Cabeçalho */}
@@ -964,6 +990,17 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
 
                         <div className="h-4 w-[1px] bg-gray-200" />
 
+                        {viewMode === 'list' && (
+                            <ColumnConfigButton
+                                columns={EXPLORER_COLUMNS}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                        )}
+
                         <div className="h-4 w-[1px] bg-gray-200" />
 
                         <div className="flex items-center gap-2">
@@ -1013,7 +1050,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                     {searchResults.length > 0 ? (
                         viewMode === 'grid' ? (
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                {searchResults
+                                {sortedResults
                                     .map(result => (
                                         <div
                                             key={result.code}
@@ -1032,7 +1069,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                     <span className="font-mono font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded text-sm">{result.code}</span>
                                                     {getTypeBadge(result.type)}
                                                 </div>
-                                                <span className="text-emerald-600 font-bold text-lg">R$ {result.price.toFixed(2)}</span>
+                                                <span className="text-emerald-600 font-bold text-lg">{formatMoney(result.price)}</span>
                                             </div>
                                             <p className="text-sm text-gray-700 font-medium leading-tight group-hover:text-blue-700 transition-colors uppercase">{result.description}</p>
                                             <div className="mt-2 flex items-center gap-2 flex-wrap">
@@ -1072,65 +1109,89 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-gray-50/50 border-b border-gray-200">
                                         <tr className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-none">
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Item</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center">Tipo</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Descrição</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center">Unid</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap">Preço Unitário</th>
-                                            <th className="px-6 py-2 text-right">Ações</th>
+                                            {tableColumns.visibleColumns.includes('code') && (
+                                                <SortableHeader label="Item" colKey="code" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('nature') && (
+                                                <SortableHeader label="Tipo" colKey="nature" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('description') && (
+                                                <SortableHeader label="Descrição" colKey="description" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('unit') && (
+                                                <SortableHeader label="Unid" colKey="unit" sortable={false} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('price') && (
+                                                <SortableHeader label="Preço Unitário" colKey="price" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('actions') && (
+                                                <SortableHeader label="Ações" colKey="actions" sortable={false} className="px-6 py-2 text-right" />
+                                            )}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
-                                        {searchResults.map(result => (
+                                        {sortedResults.map(result => (
                                             <tr
                                                 key={result.code}
                                                 className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
                                                 onClick={() => handleSelectItem(result)}
                                             >
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <div className="flex items-center gap-2">
-                                                        <button
-                                                            onClick={(e) => onToggleFavorite(e, result.code)}
-                                                            className="p-1 rounded-lg hover:bg-white shadow-sm transition-all z-10"
-                                                        >
-                                                            <Star className={`w-3 h-3 ${favorites.includes(result.code) ? 'fill-amber-500 text-amber-500' : 'text-gray-300'}`} />
-                                                        </button>
-                                                        <span className="font-mono text-sm font-bold text-gray-600">{result.code}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                                    <span className={`
-                                                        px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest inline-block
-                                                        ${result.nature === 'Mão de Obra' ? 'bg-orange-50 text-orange-600' :
-                                                            result.nature === 'Material' ? 'bg-blue-50 text-blue-600' :
-                                                                'bg-purple-50 text-purple-600'}
-                                                    `}>
-                                                        {result.nature}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <span className="text-sm font-medium text-gray-800 group-hover:text-blue-600 transition-colors leading-tight">{result.description}</span>
-                                                </td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                                    <span className="text-sm font-bold text-gray-600 uppercase">{result.unit}</span>
-                                                </td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
-                                                    <span className="text-sm font-black text-gray-900">R$ {result.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                                                </td>
-                                                <td className="px-6 py-2.5 text-right">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        {(searchDatabase === 'GENERAL' || result.isOverride) && (
+                                                {tableColumns.visibleColumns.includes('code') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                        <div className="flex items-center gap-2">
                                                             <button
-                                                                onClick={(e) => handleDeleteItem(e, result)}
-                                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                                title={result.isOverride ? "Restaurar item SINAPI" : "Excluir item"}
+                                                                onClick={(e) => onToggleFavorite(e, result.code)}
+                                                                className="p-1 rounded-lg hover:bg-white shadow-sm transition-all z-10"
                                                             >
-                                                                <Trash className="w-4 h-4" />
+                                                                <Star className={`w-3 h-3 ${favorites.includes(result.code) ? 'fill-amber-500 text-amber-500' : 'text-gray-300'}`} />
                                                             </button>
-                                                        )}
-                                                        <ChevronRight className="w-4 h-4 text-blue-500" />
-                                                    </div>
-                                                </td>
+                                                            <span className="font-mono text-sm font-bold text-gray-600">{result.code}</span>
+                                                        </div>
+                                                    </td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('nature') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
+                                                        <span className={`
+                                                            px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest inline-block
+                                                            ${result.nature === 'Mão de Obra' ? 'bg-orange-50 text-orange-600' :
+                                                                result.nature === 'Material' ? 'bg-blue-50 text-blue-600' :
+                                                                    'bg-purple-50 text-purple-600'}
+                                                        `}>
+                                                            {result.nature}
+                                                        </span>
+                                                    </td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('description') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                        <span className="text-sm font-medium text-gray-800 group-hover:text-blue-600 transition-colors leading-tight">{result.description}</span>
+                                                    </td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('unit') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
+                                                        <span className="text-sm font-bold text-gray-600 uppercase">{result.unit}</span>
+                                                    </td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('price') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
+                                                        <span className="text-sm font-black text-gray-900">{formatMoney(result.price)}</span>
+                                                    </td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('actions') && (
+                                                    <td className="px-6 py-2.5 text-right">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            {(searchDatabase === 'GENERAL' || result.isOverride) && (
+                                                                <button
+                                                                    onClick={(e) => handleDeleteItem(e, result)}
+                                                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                                    title={result.isOverride ? "Restaurar item SINAPI" : "Excluir item"}
+                                                                >
+                                                                    <Trash className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                            <ChevronRight className="w-4 h-4 text-blue-500" />
+                                                        </div>
+                                                    </td>
+                                                )}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -1453,7 +1514,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                                 </div>
                                                             </div>
                                                             <div className="col-span-1 text-right font-black text-gray-900">
-                                                                R$ {(comp.quantity * resolvedPrice).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                                {formatMoney(comp.quantity * resolvedPrice)}
                                                             </div>
                                                         </div>
                                                     );

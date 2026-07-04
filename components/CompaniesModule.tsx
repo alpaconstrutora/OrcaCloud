@@ -13,6 +13,7 @@ import { companyService } from '../services/companyService';
 import CompanyDetailPage from './CompanyDetailPage';
 import CompanyGroupDashboard from './CompanyGroupDashboard';
 import Button from './ui/Button';
+import { formatMoney } from './ui/Format';
 
 interface CompaniesModuleProps {
     orgId: string;
@@ -645,7 +646,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                                         <div>
                                             <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">Capital Social</p>
                                             <p className="text-xs text-gray-700">
-                                                {c.capital_social.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                {formatMoney(c.capital_social)}
                                             </p>
                                         </div>
                                     )}

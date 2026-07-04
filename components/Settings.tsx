@@ -7,10 +7,11 @@ import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS }
 import { useConfirm } from './ui/confirm';
 import Button from './ui/Button';
 import ClientCategoriesSettings from './ClientCategoriesSettings';
+import SupplierCategoriesSettings from './SupplierCategoriesSettings';
 
 const Settings: React.FC = () => {
     const confirm = useConfirm();
-    const [activeTab, setActiveTab] = React.useState<'geral' | 'whatsapp' | 'email' | 'database'>('geral');
+    const [activeTab, setActiveTab] = React.useState<'geral' | 'crm' | 'whatsapp' | 'email' | 'database'>('geral');
     
     const [status, setStatus] = React.useState<'IDLE' | 'MIGRATING' | 'SUCCESS' | 'ERROR'>('IDLE');
     const [message, setMessage] = React.useState('');
@@ -123,6 +124,12 @@ const Settings: React.FC = () => {
                     className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'geral' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 >
                     Geral
+                </button>
+                <button
+                    onClick={() => setActiveTab('crm')}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'crm' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                >
+                    CRM & Categorias
                 </button>
                 <button
                     onClick={() => setActiveTab('whatsapp')}
@@ -425,6 +432,13 @@ const Settings: React.FC = () => {
                     </button>
                 </div>
             </div>
+                </div>
+            )}
+
+            {activeTab === 'crm' && (
+                <div className="space-y-6">
+                    <ClientCategoriesSettings />
+                    <SupplierCategoriesSettings />
                 </div>
             )}
         </div>

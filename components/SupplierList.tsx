@@ -3,8 +3,7 @@ import { Search, Plus, Edit2, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, 
 import { Supplier } from '../types';
 import { supplierService } from '../services/supplierService';
 import { SupplierModal } from './SupplierModal';
-import { SupplierCategoryModal } from './SupplierCategoryModal';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfigButton, SortableHeader, usePersistedState, ColumnConfig, useTableColumns } from './ui/TableUtils';
 
 const SUPPLIER_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Fornecedor', sortable: true },
@@ -25,7 +24,6 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     const [searchTerm, setSearchTerm] = usePersistedState('supplierListFilters:search', '');
     const [isIdInitialized, setIsIdInitialized] = React.useState(false);
     const [isModalOpen, setIsModalOpen] = React.useState(false);
-    const [isCategoryModalOpen, setIsCategoryModalOpen] = React.useState(false);
     const [editingSupplier, setEditingSupplier] = React.useState<Supplier | undefined>();
     const [sortBy, setSortBy] = usePersistedState<string>('supplierListFilters:sortBy', 'name-asc');
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('supplierListFilters:viewMode', 'list');
@@ -123,13 +121,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua rede de parceiros e fornecedores com agilidade premium.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button
-                        onClick={() => setIsCategoryModalOpen(true)}
-                        className="flex items-center gap-3 px-6 py-3 bg-white text-gray-700 border border-gray-200 rounded-[1.25rem] hover:bg-gray-50 font-black text-button uppercase tracking-widest transition-all shadow-sm active:scale-95"
-                    >
-                        <Tag className="w-5 h-5 text-blue-500" />
-                        Categorias
-                    </button>
+
                     <button
                         onClick={() => { setEditingSupplier(undefined); setIsModalOpen(true); }}
                         className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
@@ -421,11 +413,6 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 onClose={() => setIsModalOpen(false)}
                 onSubmit={editingSupplier ? handleEdit : handleAdd}
                 initialData={editingSupplier}
-            />
-            <SupplierCategoryModal
-                isOpen={isCategoryModalOpen}
-                onClose={() => setIsCategoryModalOpen(false)}
-                organizationId={organizationId}
             />
         </div>
     );

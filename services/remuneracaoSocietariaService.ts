@@ -3,7 +3,8 @@ import { fiscalService } from './fiscalService';
 import { payrollEngine } from './payrollEngine';
 import { documentService } from './documentService';
 import { supplierService } from './supplierService';
-import { calculateINSS, calculateIRRF } from '../lib/payrollCalc';
+import { companyService } from './companyService';
+import { calculateIRRF } from '../lib/payrollCalc';
 import {
     PartnerCompensationSettings, PartnerCompensationSettingsUpsert,
     ProlaborePayroll, ProlaborePayrollItem,
@@ -19,6 +20,13 @@ export interface ProlaboreCalcResult {
     inss_amount: number;
     irrf_amount: number;
     net_amount: number;
+    patronal_amount: number;
+}
+
+export interface ProlaboreInssRule {
+    rate: number;          // INSS do sócio (contribuinte individual) — alíquota fixa
+    teto: number;           // teto do salário de contribuição
+    patronal_rate: number;  // Cota Patronal — só incide se empresa não for Simples Nacional
 }
 
 export const remuneracaoSocietariaService = {
@@ -55,22 +63,43 @@ export const remuneracaoSocietariaService = {
     },
 
     // ─── Cálculo de pró-labore ──────────────────────────────────
-    // Sócio-administrador não tem FGTS nem rubricas de folha CLT — chama
-    // INSS/IRRF diretamente (lib/payrollCalc), sem passar pelo payrollEngine
-    // completo (orientado a Employee/rubricas). applyIRRFReducer (redutor
-    // 2026+) é reusado do payrollEngine para não duplicar a fórmula.
+    // Sócio-administrador é CONTRIBUINTE INDIVIDUAL perante o INSS — alíquota
+    // FIXA (não a tabela progressiva de empregado CLT), limitada ao teto do
+    // salário de contribuição, sem parcela a deduzir. FGTS nunca incide.
+    // IRRF usa a mesma tabela progressiva de qualquer remuneração (reaproveitada
+    // de lib/payrollCalc; applyIRRFReducer do payrollEngine cobre o redutor 2026+).
+    // Cota Patronal (20%) é despesa da empresa — não desconta do líquido do
+    // sócio — e só incide se a empresa NÃO for optante do Simples Nacional.
 
-    async calculateProlabore(grossAmount: number, competenceDate: string): Promise<ProlaboreCalcResult> {
-        const [inssBrackets, irrfBrackets] = await Promise.all([
-            fiscalService.getINSSBrackets(competenceDate),
+    async getProlaboreInssRule(competenceDate: string): Promise<ProlaboreInssRule> {
+        const { data, error } = await supabase
+            .from('prolabore_inss_rules')
+            .select('rate, teto, patronal_rate')
+            .lte('valid_from', competenceDate)
+            .or(`valid_to.is.null,valid_to.gte.${competenceDate.slice(0, 10)}`)
+            .order('valid_from', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (error) throw error;
+        if (!data) throw new Error('Regra de INSS do pró-labore não configurada para esta competência (prolabore_inss_rules).');
+        return data as ProlaboreInssRule;
+    },
+
+    async calculateProlabore(grossAmount: number, competenceDate: string, regimeTributario?: string): Promise<ProlaboreCalcResult> {
+        const [rule, irrfBrackets] = await Promise.all([
+            this.getProlaboreInssRule(competenceDate),
             fiscalService.getIRRFBrackets(competenceDate),
         ]);
 
-        const inss = calculateINSS(grossAmount, inssBrackets);
+        const baseInss = Math.min(grossAmount, rule.teto);
+        const inss = baseInss * rule.rate;
+
         const irrfBase = grossAmount - inss;
         const rawIrrf = calculateIRRF(irrfBase, irrfBrackets);
         const year = parseInt(competenceDate.slice(0, 4), 10);
         const irrf = year >= 2026 ? payrollEngine.applyIRRFReducer(rawIrrf, irrfBase) : rawIrrf;
+
+        const patronal = regimeTributario === 'simples' ? 0 : baseInss * rule.patronal_rate;
 
         return {
             partner_id: '',
@@ -78,6 +107,7 @@ export const remuneracaoSocietariaService = {
             inss_amount: Math.round(inss * 100) / 100,
             irrf_amount: Math.round(irrf * 100) / 100,
             net_amount: Math.round((grossAmount - inss - irrf) * 100) / 100,
+            patronal_amount: Math.round(patronal * 100) / 100,
         };
     },
 
@@ -264,10 +294,11 @@ export const remuneracaoSocietariaService = {
         }
 
         const active = settingsList.filter(s => s.has_prolabore && s.prolabore_amount && s.prolabore_amount > 0);
+        const company = await companyService.get(payroll.company_id);
 
         const items: Omit<ProlaborePayrollItem, 'id' | 'created_at' | 'updated_at'>[] = [];
         for (const s of active) {
-            const calc = await this.calculateProlabore(s.prolabore_amount!, payroll.competence_month);
+            const calc = await this.calculateProlabore(s.prolabore_amount!, payroll.competence_month, company.regime_tributario);
             items.push({
                 payroll_id: payroll.id,
                 partner_id: s.partner_id,
@@ -275,6 +306,7 @@ export const remuneracaoSocietariaService = {
                 inss_amount: calc.inss_amount,
                 irrf_amount: calc.irrf_amount,
                 net_amount: calc.net_amount,
+                patronal_amount: calc.patronal_amount,
                 cost_center_id: s.cost_center_id,
                 status: 'calculado',
             });
@@ -291,7 +323,8 @@ export const remuneracaoSocietariaService = {
             inss: acc.inss + i.inss_amount,
             irrf: acc.irrf + i.irrf_amount,
             net: acc.net + i.net_amount,
-        }), { gross: 0, inss: 0, irrf: 0, net: 0 });
+            patronal: acc.patronal + i.patronal_amount,
+        }), { gross: 0, inss: 0, irrf: 0, net: 0, patronal: 0 });
 
         const { error: updError } = await supabase
             .from('prolabore_payrolls')
@@ -301,6 +334,7 @@ export const remuneracaoSocietariaService = {
                 inss_total: totals.inss,
                 irrf_total: totals.irrf,
                 net_total: totals.net,
+                patronal_total: totals.patronal,
             })
             .eq('id', payroll.id);
         if (updError) throw updError;
@@ -357,6 +391,26 @@ export const remuneracaoSocietariaService = {
                 .update({ financial_entry_id: tx.id, status: 'pago' })
                 .eq('id', item.id);
             if (itemError) throw itemError;
+        }
+
+        // Cota Patronal: despesa da empresa perante o INSS (guia única, não é
+        // pagamento a um "fornecedor" — não gera invoice, só o lançamento
+        // contábil/DRE). Uma linha por folha, cobrindo todos os sócios.
+        if (payroll.patronal_total > 0) {
+            const { error: patronalError } = await supabase
+                .from('internal_transactions')
+                .insert({
+                    organization_id: organizationId,
+                    source_system: 'PROLABORE',
+                    reference_id: payroll.id,
+                    transaction_date: payroll.competence_month,
+                    amount: payroll.patronal_total,
+                    direction: 'DEBIT',
+                    description: `INSS Patronal s/ Pró-labore ${payroll.competence_month.slice(0, 7)}`,
+                    category: 'INSS Patronal (Pró-labore)',
+                    status: 'PENDING',
+                });
+            if (patronalError) throw patronalError;
         }
 
         const { error } = await supabase

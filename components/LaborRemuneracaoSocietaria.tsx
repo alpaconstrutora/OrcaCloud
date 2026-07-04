@@ -594,9 +594,10 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                     <tr className="text-left text-xs font-black uppercase tracking-widest text-gray-400 border-b border-gray-100">
                                         <th className="py-2">Sócio</th>
                                         <th className="py-2 text-right">Bruto</th>
-                                        <th className="py-2 text-right">INSS</th>
+                                        <th className="py-2 text-right">INSS (11%)</th>
                                         <th className="py-2 text-right">IRRF</th>
                                         <th className="py-2 text-right">Líquido</th>
+                                        <th className="py-2 text-right">Cota Patronal</th>
                                         <th className="py-2 text-right">Status</th>
                                     </tr>
                                 </thead>
@@ -608,6 +609,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                             <td className="py-2 text-right text-red-500">-{BRL(i.inss_amount)}</td>
                                             <td className="py-2 text-right text-red-500">-{BRL(i.irrf_amount)}</td>
                                             <td className="py-2 text-right font-black text-emerald-600">{BRL(i.net_amount)}</td>
+                                            <td className="py-2 text-right text-gray-400">{i.patronal_amount > 0 ? BRL(i.patronal_amount) : '—'}</td>
                                             <td className="py-2 text-right text-xs text-gray-400">{i.status}</td>
                                         </tr>
                                     ))}
@@ -620,11 +622,15 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                             <td className="py-2 text-right text-red-500">-{BRL(payroll.inss_total)}</td>
                                             <td className="py-2 text-right text-red-500">-{BRL(payroll.irrf_total)}</td>
                                             <td className="py-2 text-right text-emerald-600">{BRL(payroll.net_total)}</td>
+                                            <td className="py-2 text-right text-gray-500">{payroll.patronal_total > 0 ? BRL(payroll.patronal_total) : '—'}</td>
                                             <td />
                                         </tr>
                                     </tfoot>
                                 )}
                             </table>
+                            <p className="text-[10px] text-gray-400 mt-2">
+                                Cota Patronal (20%) é despesa da empresa — não reduz o líquido do sócio. Não incide se a empresa for optante do Simples Nacional.
+                            </p>
                         </div>
                     )}
                 </div>

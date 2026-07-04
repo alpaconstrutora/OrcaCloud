@@ -18,7 +18,7 @@
 | Drawer lateral / confirmação | `Sheet` + `useConfirm` (ver `UI_PATTERNS.md`) | #3, #10, #36 |
 
 Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager, ContasPagarManager.
-Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda).
+Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real).
 Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote), ClientChargesModule (cancelar cobrança em lote).
 
 **Exceção conhecida:** ContasReceberManager tem ordenação própria (`handleSort`/`SortIcon`), não usa `SortableHeader`/`useTableColumns` para sort — decisão já registrada (refatoração considerada complexa, custo/benefício baixo). F1/F3 foram aplicados por cima sem tocar nisso.
@@ -60,8 +60,24 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   mesma lógica seguindo split de string** e é reusado em 16 arquivos — dedup com
   `formatDateBR` teria valor mas é refactor grande de baixo risco/benefício marginal;
   não vale o blast radius sem necessidade concreta. Registrado aqui, não feito.
+- **Nova primitiva `formatMonthLabel`** (2026-07-04): rótulo "julho de 2026"/"jul. de 26"
+  a partir de "YYYY-MM", extraído por split (nunca `new Date`). Corrigiu **bug de fuso
+  real e confirmado** em ProcurementModule: 6 ocorrências de
+  `new Date(\`${y}-${m}-01\`).toLocaleDateString(...)` faziam o dia 1º retroceder pro mês
+  anterior em UTC-3 (mesma classe do bug já documentado em
+  [[project_cronograma_timezone_bug]], testado e confirmado via Intl antes do fix).
+- **LaborBIAnalytics avaliado, nada migrado:** `fmt.brl` usa `maximumFractionDigits: 0`
+  (sem centavos) — convenção deliberada de dashboards/KPI, confirmada em **42 arquivos**
+  do projeto; forçar `formatMoney` (2 casas) quebraria essa convenção só neste arquivo.
+  `fmt.date`/`fmt.mes` já evitam o bug de fuso por outra técnica (`iso + 'T12:00:00'`,
+  meio-dia local) e `fmt.mes` remove o ponto da abreviação — formato diferente da
+  primitiva nova, sem ganho real em forçar a troca.
 - Pendente: util de alinhamento genérico (#6) e marcador visual de origem
   manual×importado×calculado (#25) — ainda não extraídos como primitiva.
+- **Descoberta a considerar no futuro:** convenção de moeda "sem centavos" para
+  dashboards (`maximumFractionDigits: 0`) está duplicada em ~42 arquivos — se um dia
+  fizer sentido extrair, seria uma segunda primitiva (`formatMoneyCompact` ou parâmetro
+  `decimals` em `formatMoney`), não uma migração para a primitiva de detalhe atual.
 
 ### F2 — Memória completa da tabela (#34)
 - `useTableColumns` passa a persistir também **ordenação, filtros e página**
@@ -94,8 +110,15 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
 - **Avaliado e descartado:** PayrollRunList — únicas ações por linha são
   duplicar/excluir; bulk-delete de folhas de pagamento já calculadas é uma ação
   perigosa e sem caso de uso concreto pedido — não forçar F3 aqui.
-- Próximo candidato a avaliar: ProcurementModule (pedidos de compra) ou
-  LaborBIAnalytics.
+- **Já existia (pré-existente, madura):** ProcurementModule — seleção de itens por
+  mês/grupo + barra "N selecionado(s) — Gerar Cotação" (linhas ~220-360). Nada a
+  adicionar; só F1 (moeda/data/mês) foi aplicado ali.
+- **Avaliado e descartado:** LaborBIAnalytics — única ação por linha é excluir uma
+  movimentação de RH (admissão/demissão/transferência); dado sensível, ação rara e
+  perigosa o suficiente pra não valer bulk-delete sem pedido explícito (doc §44: RH
+  precisa proteção extra).
+- Próximo candidato a avaliar: SupplyChainOrderList ou StockConsumptionModal
+  (Almoxarifado).
 
 ### F4 — Totalizadores padronizados (#21)
 - Rodapé de resumo reutilizável (respeita filtro) — generalizar o que já existe

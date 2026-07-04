@@ -132,7 +132,13 @@ BEGIN
     v.version_number,
     v.created_at,
     v.storage_path,
-    d.status
+    CASE 
+      WHEN d.status = 'arquivado' THEN 'arquivado'
+      WHEN d.status = 'pendente_aprovacao' THEN 'pendente_aprovacao'
+      WHEN d.data_validade IS NOT NULL AND d.data_validade < CURRENT_DATE THEN 'vencido'
+      WHEN d.data_validade IS NOT NULL AND (d.data_validade - COALESCE(d.alerta_dias_antecedencia, 30)) <= CURRENT_DATE THEN 'alerta'
+      ELSE d.status
+    END as status
   FROM public.opura_documents d
   LEFT JOIN public.opura_document_versions v ON d.active_version_id = v.id
   WHERE d.id = doc_id;

@@ -93,6 +93,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [editDocValidade, setEditDocValidade] = React.useState('');
   const [editDocAlertaDias, setEditDocAlertaDias] = React.useState(30);
   const [editDocTagsInput, setEditDocTagsInput] = React.useState('');
+  const [editDocStatus, setEditDocStatus] = React.useState<OpuraDocumentStatus>('ativo');
   const [folderNamingMask, setFolderNamingMask] = React.useState('');
   const [editingFolder, setEditingFolder] = React.useState<OpuraFolder | null>(null);
   const [editFolderName, setEditFolderName] = React.useState('');
@@ -750,6 +751,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setEditDocValidade(doc.data_validade ? doc.data_validade.split('T')[0] : '');
     setEditDocAlertaDias(doc.alerta_dias_antecedencia || 30);
     setEditDocTagsInput(doc.tags ? doc.tags.join(', ') : '');
+    setEditDocStatus(doc.status as any || 'ativo');
   };
 
   // Submeter Edição do Documento
@@ -783,6 +785,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         data_validade: editDocValidade || undefined,
         alerta_dias_antecedencia: editDocAlertaDias,
         tags,
+        status: editDocStatus as any,
       });
 
       if (activeOrganizationId && currentProfile?.email) {
@@ -2459,6 +2462,21 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   onChange={(e) => setEditDocTagsInput(e.target.value)}
                   className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                 />
+              </div>
+
+              {/* Status do Documento */}
+              <div className="space-y-1.5">
+                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Status do Documento</label>
+                <select
+                  value={editDocStatus}
+                  onChange={(e) => setEditDocStatus(e.target.value as any)}
+                  className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                >
+                  <option value="ativo">✅ Ativo</option>
+                  <option value="arquivado">📁 Arquivado</option>
+                  <option value="vencido">⚠️ Vencido (Forçar)</option>
+                  <option value="alerta">🔔 Alerta (Forçar)</option>
+                </select>
               </div>
 
               {/* Ações */}

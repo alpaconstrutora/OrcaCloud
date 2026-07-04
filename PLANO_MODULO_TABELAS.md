@@ -18,8 +18,8 @@
 | Drawer lateral / confirmação | `Sheet` + `useConfirm` (ver `UI_PATTERNS.md`) | #3, #10, #36 |
 
 Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager, ContasPagarManager.
-Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda), PriceTableManager (só moeda), ContractMeasurementModal (moeda + data de aditivo — corrigiu bug de sinal negativo), BalanceteReport (só moeda), WIPReport (moeda + % — corrigiu separador decimal do percentual), SmartReconciliationCenter + GroupMatchPanel (moeda/data), BankReconciliation (moeda em 8 pontos + formatDateBR local unificado com a primitiva), ReconciliationDashboard (só moeda), ContractsDashboard (só data).
-Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote), ClientChargesModule (cancelar cobrança em lote), SupplyChainOrderList (excluir pedidos em lote, só na visão em lista).
+Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda), PriceTableManager (só moeda), ContractMeasurementModal (moeda + data de aditivo — corrigiu bug de sinal negativo), BalanceteReport (só moeda), WIPReport (moeda + % — corrigiu separador decimal do percentual), SmartReconciliationCenter + GroupMatchPanel (moeda/data), BankReconciliation (moeda em 8 pontos + formatDateBR local unificado com a primitiva), ReconciliationDashboard (só moeda), ContractsDashboard (só data), InventoryModule (moeda/data/% — corrigiu bug de fuso real em 3 datas + separador decimal), PayrollEventModal (só moeda).
+Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote), ClientChargesModule (cancelar cobrança em lote), SupplyChainOrderList (excluir pedidos em lote, só na visão em lista), InventoryModule (cancelar requisições de material em lote).
 
 **Exceção conhecida:** ContasReceberManager tem ordenação própria (`handleSort`/`SortIcon`), não usa `SortableHeader`/`useTableColumns` para sort — decisão já registrada (refatoração considerada complexa, custo/benefício baixo). F1/F3 foram aplicados por cima sem tocar nisso.
 
@@ -101,6 +101,23 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   idênticos nos dois arquivos, migrados. Nuance: valor ausente agora mostra "—" em vez
   de "R$ 0,00" (o `formatBRL` antigo tratava `undefined` como zero) — mais consistente
   com os demais campos do mesmo card que já usam "—" quando ausentes.
+- **BankReconciliation:** `formatDateBR` local (definida dentro do componente, mesma
+  lógica de split) unificada com a primitiva compartilhada mantendo o nome — zero-diff
+  nos 7 call sites. 8 pontos de moeda inline unificados. `toLocaleTimeString` de log de
+  auditoria mantido (fora de escopo).
+- **InventoryModule — bug real de fuso corrigido:** `moved_at`/`last_movement_date`/
+  `requested_at` são DATE puro (confirmado nas migrations `almoxarifado_phase1/2/3` e
+  `material_requests`), mas eram formatados via `new Date(iso).toLocaleDateString(...)`
+  — retrocede 1 dia em UTC-3. Migrados para `formatDateBR`. `t.created_at` (stock
+  transfers) mantido — TIMESTAMPTZ real, confirmado na migration. **Também corrigido
+  bug de separador decimal:** `turnoverRate` usava `(v*100).toFixed(1)` (sempre ponto);
+  `formatPercent` corrige.
+- **PayrollEventModal:** 2 ocorrências do padrão `"R$ " + toLocaleString` manual
+  migradas para `formatMoney` (mesma família do bug do ContractMeasurementModal, mas
+  aqui o valor nunca é negativo — sinal controlado à parte pela lógica provento/
+  desconto). Timestamp de auditoria (`toLocaleString` com hora) mantido.
+- **LaborPayroll** é só orquestrador (delega para PayrollRunList, já migrado); não tem
+  tabela própria além de um `alert()` nativo com `toFixed`, fora do escopo de UI.
 
 ### F2 — Memória completa da tabela (#34)
 - `useTableColumns` passa a persistir também **ordenação, filtros e página**
@@ -170,8 +187,15 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   inicial), não lista de registros para bulk-agir.
 - **Avaliado e descartado:** ContractsDashboard — feed de alertas/portfólio, sem ação
   por linha além de navegar ao detalhe do contrato.
-- Próximo candidato a avaliar: fila de Suprimentos (ThreeWayMatchPanel já feito) —
-  considerar InventoryModule ou LaborPayroll/PayrollEventModal.
+- ✅ InventoryModule — cancelar requisições de material em lote (checkbox por card,
+  não `<table>` — lista é card-based); critério espelha `handleCancel` por item
+  (pending/approved/separated). "Entregar" ficou fora do bulk — é confirmação física
+  de recebimento, mais sensível a ser feita item a item.
+- **Avaliado e descartado:** PayrollEventModal — lista pequena de lançamentos manuais
+  por colaborador dentro de UMA folha; cada exclusão recalcula a folha individualmente,
+  sem caso de uso concreto para bulk. LaborPayroll é só orquestrador, sem tabela própria.
+- Próximo candidato a avaliar: LaborEmployeeList/LaborEmployeeForm ou
+  OperacionalList/OperacionalDetail.
 
 ### F4 — Totalizadores padronizados (#21)
 - Rodapé de resumo reutilizável (respeita filtro) — generalizar o que já existe

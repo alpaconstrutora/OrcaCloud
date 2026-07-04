@@ -18,8 +18,8 @@
 | Drawer lateral / confirmação | `Sheet` + `useConfirm` (ver `UI_PATTERNS.md`) | #3, #10, #36 |
 
 Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager, ContasPagarManager.
-Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real).
-Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote), ClientChargesModule (cancelar cobrança em lote).
+Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda).
+Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote), ClientChargesModule (cancelar cobrança em lote), SupplyChainOrderList (excluir pedidos em lote, só na visão em lista).
 
 **Exceção conhecida:** ContasReceberManager tem ordenação própria (`handleSort`/`SortIcon`), não usa `SortableHeader`/`useTableColumns` para sort — decisão já registrada (refatoração considerada complexa, custo/benefício baixo). F1/F3 foram aplicados por cima sem tocar nisso.
 
@@ -78,6 +78,13 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   dashboards (`maximumFractionDigits: 0`) está duplicada em ~42 arquivos — se um dia
   fizer sentido extrair, seria uma segunda primitiva (`formatMoneyCompact` ou parâmetro
   `decimals` em `formatMoney`), não uma migração para a primitiva de detalhe atual.
+- SupplyChainOrderList: migrada a moeda de detalhe (linha/card, 2 casas) e
+  `deliveryDate` (DATE puro, mesmo output de `new Date(v+'T12:00:00').toLocaleDateString`).
+  KPI "Valor Total" (sem centavos) e `created_at` (timestamptz real) ficaram intocados,
+  mesmo raciocínio dos casos anteriores.
+- StockConsumptionModal: só `fmtBrl` (moeda) migrou. `fmt` (quantidade) tem precisão
+  diferente (2-4 casas) do `fmtQty` visto em ThreeWayMatchPanel (0-3 casas) — não são
+  o mesmo formatador duplicado, não extraído.
 
 ### F2 — Memória completa da tabela (#34)
 - `useTableColumns` passa a persistir também **ordenação, filtros e página**
@@ -117,8 +124,13 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   movimentação de RH (admissão/demissão/transferência); dado sensível, ação rara e
   perigosa o suficiente pra não valer bulk-delete sem pedido explícito (doc §44: RH
   precisa proteção extra).
-- Próximo candidato a avaliar: SupplyChainOrderList ou StockConsumptionModal
-  (Almoxarifado).
+- ✅ SupplyChainOrderList — excluir pedidos em lote, só na visão em lista (grid mantém
+  exclusão individual); critério de seleção espelha `canDeleteOrder` (não
+  Entregue/Recebido/Divergência), mesma guarda já usada no menu por linha.
+- **Avaliado e descartado:** StockConsumptionModal — não é lista de registros
+  persistidos, é formulário de composição de linhas enviadas juntas num único submit;
+  não há "ação em massa" a aplicar sobre nada já salvo.
+- Próximo candidato a avaliar: PriceTableManager ou fila de medições/aprovação de obra.
 
 ### F4 — Totalizadores padronizados (#21)
 - Rodapé de resumo reutilizável (respeita filtro) — generalizar o que já existe

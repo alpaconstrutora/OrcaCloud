@@ -3,6 +3,7 @@ import { financialReportService } from '../services/financialReportService'
 import type { BalanceteLine, DREGroup, RegimeContabil } from '../types/financial'
 import { useToast } from '../hooks/useToast'
 import Button from './ui/Button'
+import { formatMoney } from './ui/Format'
 
 // ── Labels ────────────────────────────────────────────────────────────────────
 
@@ -27,8 +28,7 @@ const GROUP_ORDER: DREGroup[] = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const fmt = (v: number) =>
-    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const fmt = formatMoney
 
 function colorSaldo(v: number) {
     if (v > 0) return 'text-emerald-700 font-semibold'

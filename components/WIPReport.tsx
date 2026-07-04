@@ -4,9 +4,10 @@ import type { WIPLine } from '../types/financial'
 import { useToast } from '../hooks/useToast'
 import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
 import Button from './ui/Button'
+import { formatMoney, formatPercent } from './ui/Format'
 
-const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-const fmtPct = (v: number | null) => v === null ? '—' : `${v.toFixed(1)}%`
+const fmt = formatMoney
+const fmtPct = (v: number | null) => formatPercent(v, { asPoints: true, decimals: 1 })
 
 function KPI({ label, value, sub, variant = 'neutral' }: {
     label: string

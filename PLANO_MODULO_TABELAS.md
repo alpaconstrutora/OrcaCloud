@@ -18,7 +18,7 @@
 | Drawer lateral / confirmação | `Sheet` + `useConfirm` (ver `UI_PATTERNS.md`) | #3, #10, #36 |
 
 Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager, ContasPagarManager.
-Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda).
+Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda), PriceTableManager (só moeda), ContractMeasurementModal (moeda + data de aditivo — corrigiu bug de sinal negativo).
 Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote), ClientChargesModule (cancelar cobrança em lote), SupplyChainOrderList (excluir pedidos em lote, só na visão em lista).
 
 **Exceção conhecida:** ContasReceberManager tem ordenação própria (`handleSort`/`SortIcon`), não usa `SortableHeader`/`useTableColumns` para sort — decisão já registrada (refatoração considerada complexa, custo/benefício baixo). F1/F3 foram aplicados por cima sem tocar nisso.
@@ -85,6 +85,14 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
 - StockConsumptionModal: só `fmtBrl` (moeda) migrou. `fmt` (quantidade) tem precisão
   diferente (2-4 casas) do `fmtQty` visto em ThreeWayMatchPanel (0-3 casas) — não são
   o mesmo formatador duplicado, não extraído.
+- PriceTableManager: só `fmtBRL` migrou. `fmtDate` intocado — `created_at` é TIMESTAMPTZ
+  confirmado na migration `20261231000007_commercial_price_tables.sql`, não DATE puro.
+- **ContractMeasurementModal — bug cosmético real corrigido:** 5 ocorrências escreviam
+  `` `R$ ${v.toLocaleString('pt-BR', {minimumFractionDigits:2})}` `` (prefixo manual, sem
+  `style:'currency'`). Para valores negativos isso produzia **"R$ -500,25"** (ordem
+  errada); `formatMoney`/Intl produz **"-R$ 500,25"** (padrão correto). Confirmado via
+  teste de codepoint (espaço comum vs ` ` do Intl, más o bug real é o sinal).
+  `new_end_date` (DATE puro de aditivo) também migrado para `formatDateBR`.
 
 ### F2 — Memória completa da tabela (#34)
 - `useTableColumns` passa a persistir também **ordenação, filtros e página**
@@ -130,7 +138,15 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
 - **Avaliado e descartado:** StockConsumptionModal — não é lista de registros
   persistidos, é formulário de composição de linhas enviadas juntas num único submit;
   não há "ação em massa" a aplicar sobre nada já salvo.
-- Próximo candidato a avaliar: PriceTableManager ou fila de medições/aprovação de obra.
+- **Avaliado e descartado:** PriceTableManager — já tem ação em massa madura e
+  intencional ("Aplicar reajuste em massa" por %/índice) aplicada a TODA a versão
+  rascunho de uma vez; não é seleção de subconjunto, é por design sobre a versão
+  inteira. Não precisa de checkbox.
+- **Avaliado e descartado:** ContractMeasurementModal — mesmo formato de
+  StockConsumptionModal: formulário de composição de itens de UMA medição, enviados
+  juntos; não há lista de registros persistidos para bulk-agir.
+- Próximo candidato a avaliar: BalanceteReport, WIPReport ou fila de conciliação
+  bancária (SmartReconciliationCenter/GroupMatchPanel).
 
 ### F4 — Totalizadores padronizados (#21)
 - Rodapé de resumo reutilizável (respeita filtro) — generalizar o que já existe

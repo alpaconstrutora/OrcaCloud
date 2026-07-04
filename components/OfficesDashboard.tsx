@@ -19,6 +19,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import Button from './ui/Button';
+import { formatPercent } from './ui/Format';
 
 interface OfficesDashboardProps {
   userId: string;
@@ -287,7 +288,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
               >
                 {kpi.up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                 {kpi.up ? '+' : '-'}
-                {kpi.delta.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%
+                {formatPercent(kpi.delta, { asPoints: true, decimals: 2 })}
               </span>
               <span className="text-[9px] text-slate-400 font-bold truncate">{kpi.hint}</span>
             </div>

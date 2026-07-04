@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { DollarSign, TrendingUp, AlertTriangle, CheckCircle2, MoreHorizontal, Filter } from 'lucide-react';
+import { formatDateBR } from './ui/Format';
 
 interface Installment {
   id: string;
@@ -203,7 +204,7 @@ export const OfficesFinanceiro: React.FC = () => {
                       <span className="text-xs font-black text-slate-800">{BRL(inst.valor)}</span>
                     </td>
                     <td className="px-3 py-3.5 hidden sm:table-cell">
-                      <span className="text-xs font-medium text-slate-500">{new Date(inst.vencimento).toLocaleDateString('pt-BR')}</span>
+                      <span className="text-xs font-medium text-slate-500">{formatDateBR(inst.vencimento)}</span>
                     </td>
                     <td className="px-5 py-3.5">
                       <span className={`inline-flex items-center gap-1 text-[8.5px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${STATUS_STYLE[inst.status]}`}>

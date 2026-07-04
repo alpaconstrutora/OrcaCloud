@@ -7,7 +7,7 @@ import {
 import { invoiceService } from '../services/invoiceService';
 import { Invoice } from '../types/financial';
 import type { Organization } from '../types';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { Money, formatMoney, formatDateBR } from './ui/Format';
 import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
 
@@ -80,10 +80,11 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     const [bulkLoading, setBulkLoading] = useState(false);
 
     const [selectedOrgId, setSelectedOrgId] = useState<string>('ALL');
-    const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-    const [vencDe, setVencDe] = useState('');
-    const [vencAte, setVencAte] = useState('');
+    // F2: filtros sobrevivem a navegação/reload (mesmo padrão de useTableColumns).
+    const [search, setSearch] = usePersistedState('contasPagarManagerFilters:search', '');
+    const [statusFilter, setStatusFilter] = usePersistedState<StatusFilter>('contasPagarManagerFilters:status', 'all');
+    const [vencDe, setVencDe] = usePersistedState('contasPagarManagerFilters:vencDe', '');
+    const [vencAte, setVencAte] = usePersistedState('contasPagarManagerFilters:vencAte', '');
     const [showFilters, setShowFilters] = useState(false);
     const tableColumns = useTableColumns(CONTAS_COLUMNS, 'contasPagarManagerColumns');
 

@@ -7,35 +7,56 @@ export type ColumnConfig = {
   sortable?: boolean;
 };
 
+interface PersistedTableState {
+  visibleColumns: string[];
+  sortColumn: string | null;
+  sortDirection: 'asc' | 'desc';
+}
+
+/**
+ * Lê o estado persistido. Aceita o formato legado (array puro de
+ * visibleColumns) além do formato novo (objeto com sort), para não quebrar
+ * preferências já salvas no localStorage dos usuários.
+ */
+function loadPersistedTableState(storageKey: string, defaultVisibleColumns: string[]): PersistedTableState {
+  const fallback: PersistedTableState = { visibleColumns: defaultVisibleColumns, sortColumn: null, sortDirection: 'asc' };
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const stored = localStorage.getItem(storageKey);
+    if (!stored) return fallback;
+    const parsed = JSON.parse(stored);
+    if (Array.isArray(parsed)) {
+      // Formato legado: só as colunas visíveis.
+      return { ...fallback, visibleColumns: parsed };
+    }
+    return {
+      visibleColumns: parsed.visibleColumns ?? defaultVisibleColumns,
+      sortColumn: parsed.sortColumn ?? null,
+      sortDirection: parsed.sortDirection ?? 'asc',
+    };
+  } catch (e) {
+    console.warn(`Failed to load table preferences from localStorage (${storageKey}):`, e);
+    return fallback;
+  }
+}
+
 export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: string = 'tableColumns') => {
   const defaultVisibleColumns = defaultColumns.map(col => col.key);
 
-  // Carregar do localStorage na inicialização
-  const [visibleColumns, setVisibleColumns] = React.useState<string[]>(() => {
-    if (typeof window === 'undefined') return defaultVisibleColumns;
-    try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (e) {
-      console.warn(`Failed to load column preferences from localStorage (${storageKey}):`, e);
-    }
-    return defaultVisibleColumns;
-  });
-
-  const [sortColumn, setSortColumn] = React.useState<string | null>(null);
-  const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('asc');
+  const [initial] = React.useState(() => loadPersistedTableState(storageKey, defaultVisibleColumns));
+  const [visibleColumns, setVisibleColumns] = React.useState<string[]>(initial.visibleColumns);
+  const [sortColumn, setSortColumn] = React.useState<string | null>(initial.sortColumn);
+  const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>(initial.sortDirection);
   const [showColumnConfig, setShowColumnConfig] = React.useState(false);
 
-  // Persistir quando visibleColumns muda
+  // Persistir colunas + ordenação juntas (F2: a ordenação sobrevive a navegação/reload).
   React.useEffect(() => {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(visibleColumns));
+      localStorage.setItem(storageKey, JSON.stringify({ visibleColumns, sortColumn, sortDirection }));
     } catch (e) {
-      console.warn(`Failed to save column preferences to localStorage (${storageKey}):`, e);
+      console.warn(`Failed to save table preferences to localStorage (${storageKey}):`, e);
     }
-  }, [visibleColumns, storageKey]);
+  }, [visibleColumns, sortColumn, sortDirection, storageKey]);
 
   const handleColumnSort = (colKey: string) => {
     if (sortColumn === colKey) {
@@ -72,6 +93,35 @@ export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: stri
     resetColumns,
   };
 };
+
+/**
+ * Estado (filtros, página, o que for) persistido em localStorage por `key`.
+ * F2: complementa useTableColumns (colunas+ordenação) para telas que também
+ * querem lembrar filtros aplicados. Uso: mesma forma de useState, só que
+ * sobrevive a navegação/reload.
+ */
+export function usePersistedState<T>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const [value, setValue] = React.useState<T>(() => {
+    if (typeof window === 'undefined') return defaultValue;
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored) return JSON.parse(stored) as T;
+    } catch (e) {
+      console.warn(`Failed to load persisted state (${key}):`, e);
+    }
+    return defaultValue;
+  });
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      console.warn(`Failed to save persisted state (${key}):`, e);
+    }
+  }, [key, value]);
+
+  return [value, setValue];
+}
 
 interface ColumnConfigButtonProps {
   columns: ColumnConfig[];

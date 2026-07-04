@@ -5,18 +5,7 @@ import {
 } from 'lucide-react';
 import { clientChargeService } from '../services/clientChargeService';
 import type { ClientCharge } from '../services/clientChargeService';
-
-// ─── helpers ────────────────────────────────────────────────
-
-function fmt(v: number | undefined | null) {
-    if (v == null) return '—';
-    return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-function fmtDate(d: string | undefined | null) {
-    if (!d) return '—';
-    const [y, m, day] = d.slice(0, 10).split('-');
-    return `${day}/${m}/${y}`;
-}
+import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 
 // Asaas status → rótulo + cor
 const STATUS_META: Record<string, { label: string; cls: string }> = {
@@ -66,6 +55,8 @@ export default function ClientChargesModule({ organizationId }: Props) {
     const [cancelling, setCancelling]   = useState<string | null>(null);
     const [resending, setResending]     = useState<string | null>(null);
     const [resentId, setResentId]       = useState<string | null>(null);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [bulkLoading, setBulkLoading] = useState(false);
 
     const load = useCallback(async () => {
         if (!organizationId) return;
@@ -74,6 +65,7 @@ export default function ClientChargesModule({ organizationId }: Props) {
         try {
             const data = await clientChargeService.list(organizationId, { limit: 500 });
             setRows(data);
+            setSelectedIds(new Set());
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao carregar cobranças');
         } finally {
@@ -97,6 +89,60 @@ export default function ClientChargesModule({ organizationId }: Props) {
         }
         return r;
     }, [rows, filter, search]);
+
+    /** Mesmo critério do handleCancel: precisa estar ativa e vinculada a um recebível. */
+    const isSelectable = (c: ClientCharge) => c.status !== 'CANCELLED' && !PAID.includes(c.status) && !!c.transaction_id;
+    const selectableVisible = useMemo(() => filtered.filter(isSelectable), [filtered]);
+    const selectedVisible = useMemo(
+        () => selectableVisible.filter(c => selectedIds.has(c.id)),
+        [selectableVisible, selectedIds],
+    );
+    const allVisibleSelected = selectableVisible.length > 0 && selectedVisible.length === selectableVisible.length;
+    const selectedTotal = selectedVisible.reduce((s, c) => s + (c.value ?? 0), 0);
+
+    function toggleRow(id: string) {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    }
+    function toggleAllVisible() {
+        setSelectedIds(prev => {
+            if (allVisibleSelected) {
+                const next = new Set(prev);
+                selectableVisible.forEach(c => next.delete(c.id));
+                return next;
+            }
+            const next = new Set(prev);
+            selectableVisible.forEach(c => next.add(c.id));
+            return next;
+        });
+    }
+    const clearSelection = () => setSelectedIds(new Set());
+
+    async function handleBulkCancel() {
+        const alvos = selectedVisible;
+        if (alvos.length === 0) return;
+        if (!confirm(`Cancelar ${alvos.length} cobrança${alvos.length !== 1 ? 's' : ''} (${fmt(selectedTotal)})? O boleto/PIX será invalidado no Asaas.`)) return;
+        setBulkLoading(true);
+        const falhas: string[] = [];
+        let okCount = 0;
+        for (const c of alvos) {
+            try {
+                await clientChargeService.cancel(organizationId, c.transaction_id!);
+                okCount++;
+            } catch {
+                falhas.push(c.party_name ?? c.id);
+            }
+        }
+        setBulkLoading(false);
+        setSelectedIds(new Set());
+        await load();
+        if (falhas.length) {
+            alert(`${okCount} cancelada(s). Falha em ${falhas.length}: ${falhas.join(', ')}`);
+        }
+    }
 
     const kpis = useMemo(() => {
         let emitido = 0, recebido = 0, pendente = 0, vencido = 0;
@@ -212,6 +258,31 @@ export default function ClientChargesModule({ organizationId }: Props) {
                 </div>
             </div>
 
+            {/* Barra de ação em massa (F3) */}
+            {selectedVisible.length > 0 && (
+                <div className="flex items-center gap-4 bg-red-600 text-white px-6 py-3 flex-shrink-0">
+                    <span className="text-sm font-semibold">
+                        {selectedVisible.length} selecionada{selectedVisible.length !== 1 ? 's' : ''}
+                        <span className="ml-2 font-normal text-red-100">{fmt(selectedTotal)}</span>
+                    </span>
+                    <div className="flex-1" />
+                    <button
+                        onClick={handleBulkCancel}
+                        disabled={bulkLoading}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-red-700 text-sm font-semibold hover:bg-red-50 disabled:opacity-60 transition-colors"
+                    >
+                        {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Slash className="w-3.5 h-3.5" />}
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={clearSelection}
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium text-red-100 hover:text-white hover:bg-red-500 transition-colors"
+                    >
+                        Limpar
+                    </button>
+                </div>
+            )}
+
             {/* Table */}
             <div className="flex-1 overflow-auto">
                 {error && (
@@ -229,6 +300,16 @@ export default function ClientChargesModule({ organizationId }: Props) {
                     <table className="w-full text-sm">
                         <thead className="bg-gray-50 border-b border-gray-100 sticky top-0 z-10">
                             <tr>
+                                <th className="w-10 px-4 py-3 text-center">
+                                    <input
+                                        type="checkbox"
+                                        className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer disabled:opacity-40"
+                                        checked={allVisibleSelected}
+                                        disabled={selectableVisible.length === 0}
+                                        onChange={toggleAllVisible}
+                                        title="Selecionar todas (canceláveis)"
+                                    />
+                                </th>
                                 {['Cliente', 'Descrição', 'Tipo', 'Vencimento', 'Valor', 'Status', 'Ações'].map(h => (
                                     <th key={h} className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-gray-500 whitespace-nowrap">{h}</th>
                                 ))}
@@ -241,7 +322,17 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                 const active = !isCancelled && !PAID.includes(c.status);
                                 return (
                                     <React.Fragment key={c.id}>
-                                        <tr className={`hover:bg-gray-50 transition-colors ${isOverdue ? 'bg-red-50/30' : ''} ${isCancelled ? 'opacity-50' : ''}`}>
+                                        <tr className={`hover:bg-gray-50 transition-colors ${selectedIds.has(c.id) ? 'bg-red-50/60' : isOverdue ? 'bg-red-50/30' : ''} ${isCancelled ? 'opacity-50' : ''}`}>
+                                            <td className="w-10 px-4 py-3 text-center">
+                                                {isSelectable(c) ? (
+                                                    <input
+                                                        type="checkbox"
+                                                        className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                                        checked={selectedIds.has(c.id)}
+                                                        onChange={() => toggleRow(c.id)}
+                                                    />
+                                                ) : null}
+                                            </td>
                                             <td className="px-4 py-3 font-semibold text-gray-900 max-w-[160px] truncate">{c.party_name ?? '—'}</td>
                                             <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">{c.description ?? '—'}</td>
                                             <td className="px-4 py-3 text-gray-500 text-table-body">{c.billing_type === 'PIX' ? 'PIX' : c.billing_type === 'UNDEFINED' ? 'Boleto+PIX' : 'Boleto'}</td>
@@ -267,7 +358,7 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                         </tr>
                                         {expanded === c.id && (
                                             <tr className="bg-gray-50/60">
-                                                <td colSpan={7} className="px-4 py-3">
+                                                <td colSpan={8} className="px-4 py-3">
                                                     <div className="flex flex-wrap gap-2">
                                                         {c.bank_slip_url && (
                                                             <a href={c.bank_slip_url} target="_blank" rel="noreferrer"

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { dunningService, DunningRule, DunningEvent, DUNNING_VARS } from '../services/dunningService';
 import Button from './ui/Button';
+import { formatMoney, formatDateBR } from './ui/Format';
 
 // ── helpers ──────────────────────────────────────────────────
 
@@ -505,15 +506,8 @@ function HistoricoTab({ organizationId }: { organizationId: string }) {
 
     useEffect(() => { load(); }, [load]);
 
-    const fmtBRL = (n?: number) => n != null
-        ? n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-        : '—';
-
-    const fmtDue = (s?: string) => {
-        if (!s) return '—';
-        const [y, m, d] = s.split('-');
-        return `${d}/${m}/${y}`;
-    };
+    const fmtBRL = formatMoney;
+    const fmtDue = formatDateBR;
 
     return (
         <div className="space-y-4">

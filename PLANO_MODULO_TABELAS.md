@@ -139,22 +139,30 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   `formatPercent` por consistência. `BRL`/`COMPACT` (moeda sem centavos + notação
   compacta) mantidos — convenção de dashboard.
 
-### F2 — Memória completa da tabela (#34) — ✅ INFRAESTRUTURA PRONTA, 1/N telas piloto
+### F2 — Memória completa da tabela (#34) — ✅ CONCLUÍDA (15/15 telas)
 - `useTableColumns` (`components/ui/TableUtils.tsx`) passa a persistir **ordenação**
   junto com colunas visíveis, no mesmo `storageKey`. Formato legado (array puro) ainda
   é lido corretamente — sem quebrar preferências já salvas.
 - Novo `usePersistedState<T>(key, defaultValue)` — hook genérico (mesma assinatura de
   `useState`) para qualquer tela persistir filtros/página em localStorage, sem
   reimplementar load/save a cada vez.
-- **Piloto:** ContasPagarManager — `search`/`statusFilter`/`vencDe`/`vencAte` via
-  `usePersistedState` (chaves `contasPagarManagerFilters:*`).
-- **Testado e confirmado** com harness Playwright isolado: reload completo de página
+- **Piloto:** ContasPagarManager — `search`/`statusFilter`/`vencDe`/`vencAte`.
+  **Testado e confirmado** com harness Playwright isolado: reload completo de página
   restaura busca + filtro de status + ordenação, lidos direto do localStorage (não só
   visualmente). Zero erros de console.
-- **Pendente:** rollout do `usePersistedState` para as demais ~15 telas com
-  `useTableColumns` (ContasReceberManager, BoletoManager, ProjectList, ClientList,
-  SupplyChainOrderList, InventoryModule etc.) — cada uma tem filtros com nomes/tipos
-  próprios, então é aplicar tela a tela, não uma migração automática.
+- **Rollout completo** para as 14 telas restantes com `useTableColumns`: BoletoManager,
+  BrokerList, ClientList, ContasReceberManager, FinancialRegistryManager, InvestorList,
+  LaborEmployeeList, OperacionalList, OrganizationList, PlanningList, ProjectList,
+  SupplierList, SupplyChainOrderList, SupplyChainQuotationList, TasksList. Cada tela
+  persiste seus próprios filtros (busca/status/período/viewMode/ordenação própria)
+  em chaves `<tela>Filters:<campo>`, sem alterar o `storageKey` de colunas.
+- **Bug corrigido de passagem:** ContasReceberManager chamava `useTableColumns` sem
+  `storageKey` (caía no default `'tableColumns'`, colidindo com qualquer outro
+  componente que também esquecesse de passar a chave) — agora usa
+  `'contasReceberManagerColumns'`.
+- **Não persistido de propósito:** `ProjectList.activeTab` (deriva de prop externa,
+  persistir criaria inconsistência); InvoiceManager/ContractIndexManager/
+  ContractTemplateManager (sem filtro de lista, só CRUD/config).
 - Avaliar persistência por-usuário no servidor (hoje só localStorage/por-browser) —
   não feito, fica pra decisão futura se localStorage não for suficiente.
 

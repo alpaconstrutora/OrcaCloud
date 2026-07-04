@@ -571,7 +571,8 @@ export const documentService = {
   // ─── UPLOAD DE DOCUMENTO (NOVO REGISTRO + V1 DO ARQUIVO) ──────
   async uploadNewDocument(
     docData: OpuraDocumentInsert,
-    file: File
+    file: File,
+    uploadedByEmail?: string
   ): Promise<OpuraDocument> {
     // 1. Criar o registro do documento na base (sem active_version_id inicialmente)
     const { data: newDoc, error: docError } = await supabase
@@ -579,6 +580,7 @@ export const documentService = {
       .insert({
         organization_id: docData.organization_id,
         nome: docData.nome,
+        criado_por: uploadedByEmail || 'sistema',
         descricao: docData.descricao,
         categoria: docData.categoria,
         tipo_documento: docData.tipo_documento,
@@ -629,6 +631,7 @@ export const documentService = {
           storage_path: storagePath,
           tamanho: file.size,
           mime_type: file.type || 'application/octet-stream',
+          criado_por: uploadedByEmail || 'sistema',
         })
         .select()
         .single();
@@ -699,6 +702,7 @@ export const documentService = {
           storage_path: storagePath,
           tamanho: file.size,
           mime_type: file.type || 'application/octet-stream',
+          criado_por: uploadedByEmail,
         })
         .select()
         .single();

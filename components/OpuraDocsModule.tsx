@@ -590,7 +590,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           investor_id: newDocInvestorId || undefined,
           folder_id: currentFolderId || undefined,
         },
-        newDocFile
+        newDocFile,
+        currentProfile?.email || 'sistema'
       );
 
       // Reset form

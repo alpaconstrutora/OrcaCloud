@@ -18,7 +18,7 @@
 | Drawer lateral / confirmação | `Sheet` + `useConfirm` (ver `UI_PATTERNS.md`) | #3, #10, #36 |
 
 Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager, ContasPagarManager.
-Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda), PriceTableManager (só moeda), ContractMeasurementModal (moeda + data de aditivo — corrigiu bug de sinal negativo), BalanceteReport (só moeda), WIPReport (moeda + % — corrigiu separador decimal do percentual), SmartReconciliationCenter + GroupMatchPanel (moeda/data).
+Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda), PriceTableManager (só moeda), ContractMeasurementModal (moeda + data de aditivo — corrigiu bug de sinal negativo), BalanceteReport (só moeda), WIPReport (moeda + % — corrigiu separador decimal do percentual), SmartReconciliationCenter + GroupMatchPanel (moeda/data), BankReconciliation (moeda em 8 pontos + formatDateBR local unificado com a primitiva), ReconciliationDashboard (só moeda), ContractsDashboard (só data).
 Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote), ClientChargesModule (cancelar cobrança em lote), SupplyChainOrderList (excluir pedidos em lote, só na visão em lista).
 
 **Exceção conhecida:** ContasReceberManager tem ordenação própria (`handleSort`/`SortIcon`), não usa `SortableHeader`/`useTableColumns` para sort — decisão já registrada (refatoração considerada complexa, custo/benefício baixo). F1/F3 foram aplicados por cima sem tocar nisso.
@@ -161,8 +161,17 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   GroupMatchPanel — "Conciliar grupo" por unidade atômica de agrupamento (cada grupo já
   é o item de ação, não faz sentido dividir em checkboxes individuais). Nada a adicionar
   em nenhum dos dois, só F1.
-- Próximo candidato a avaliar: BankReconciliation/ReconciliationDashboard ou
-  ContractsDashboard.
+- **Já existia (pré-existente, madura e extensa):** BankReconciliation (tela principal,
+  4348 linhas) — checkboxes + "N selecionados" + exclusão em lote já espalhados por toda
+  a tela. Só F1 foi aplicado (8 pontos de moeda + `formatDateBR` local duplicado, mesma
+  lógica, unificado com a primitiva compartilhada mantendo o nome p/ zero-diff nos
+  7 call sites).
+- **Avaliado e descartado:** ReconciliationDashboard — edição inline por conta (saldo
+  inicial), não lista de registros para bulk-agir.
+- **Avaliado e descartado:** ContractsDashboard — feed de alertas/portfólio, sem ação
+  por linha além de navegar ao detalhe do contrato.
+- Próximo candidato a avaliar: fila de Suprimentos (ThreeWayMatchPanel já feito) —
+  considerar InventoryModule ou LaborPayroll/PayrollEventModal.
 
 ### F4 — Totalizadores padronizados (#21)
 - Rodapé de resumo reutilizável (respeita filtro) — generalizar o que já existe

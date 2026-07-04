@@ -83,21 +83,43 @@ export function PublicPlantChecker() {
     );
   }
 
-  // Determinar se a versão física da folha está ativa/atualizada
-  const isUpToDate = physicalVersion === null || physicalVersion === docStatus.active_version_number;
+  // Determinar estados de validação
+  const isObsolete = physicalVersion !== null && physicalVersion !== docStatus.active_version_number;
+  const isVencido = docStatus.status === 'vencido';
+  const isAlerta = docStatus.status === 'alerta';
+  const isReady = !isObsolete && !isVencido && !isAlerta;
+
+  // Escolha dinâmica de estilo visual do banner
+  let bannerBgClass = 'bg-emerald-600';
+  let cardBgClass = 'bg-emerald-50/60';
+  let bannerTitle = 'Planta Liberada';
+  let bannerSubtitle = 'Pronto para Execução no Canteiro';
+  
+  if (isObsolete) {
+    bannerBgClass = 'bg-rose-600';
+    cardBgClass = 'bg-rose-50/60';
+    bannerTitle = 'Planta Obsoleta';
+    bannerSubtitle = 'NÃO EXECUTE ESTE PROJETO';
+  } else if (isVencido) {
+    bannerBgClass = 'bg-red-600';
+    cardBgClass = 'bg-red-50/60';
+    bannerTitle = 'Documento Vencido';
+    bannerSubtitle = 'NÃO EXECUTE ESTE PROJETO';
+  } else if (isAlerta) {
+    bannerBgClass = 'bg-amber-500';
+    cardBgClass = 'bg-amber-50/60';
+    bannerTitle = 'Execução sob Alerta';
+    bannerSubtitle = 'Validade Próxima do Vencimento';
+  }
 
   return (
-    <div className={`min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-300 ${
-      isUpToDate ? 'bg-emerald-50/60' : 'bg-rose-50/60'
-    }`}>
+    <div className={`min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-300 ${cardBgClass}`}>
       <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 max-w-md w-full animate-in zoom-in-95 duration-200">
         
         {/* Banner de Status Principal */}
-        <div className={`p-6 text-center text-white flex flex-col items-center space-y-3 ${
-          isUpToDate ? 'bg-emerald-600' : 'bg-rose-600'
-        }`}>
+        <div className={`p-6 text-center text-white flex flex-col items-center space-y-3 ${bannerBgClass}`}>
           <div className="p-2 bg-white/20 rounded-full animate-bounce">
-            {isUpToDate ? (
+            {isReady ? (
               <CheckCircle2 className="w-10 h-10 text-white" />
             ) : (
               <AlertTriangle className="w-10 h-10 text-white" />
@@ -105,10 +127,10 @@ export function PublicPlantChecker() {
           </div>
           <div className="space-y-1">
             <h2 className="text-xl font-black uppercase tracking-wider leading-none">
-              {isUpToDate ? 'Planta Liberada' : 'PLANTA OBSOLETA'}
+              {bannerTitle}
             </h2>
             <p className="text-xs text-white/80 font-bold uppercase tracking-widest">
-              {isUpToDate ? 'Pronto para Execução no Canteiro' : 'NÃO EXECUTE ESTE PROJETO'}
+              {bannerSubtitle}
             </p>
           </div>
         </div>
@@ -141,13 +163,38 @@ export function PublicPlantChecker() {
               </div>
             </div>
 
-            {!isUpToDate && (
+            {/* Quadro de avisos críticos de acordo com o status */}
+            {isObsolete && (
               <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3 text-rose-800">
                 <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                 <div className="space-y-1 text-xs font-semibold">
-                  <p className="font-black uppercase tracking-wider text-rose-700">Atenção!</p>
+                  <p className="font-black uppercase tracking-wider text-rose-700">Atenção: Planta Desatualizada!</p>
                   <p className="leading-relaxed">
-                    Você está consultando a versão <strong>V{physicalVersion}</strong> física, porém a construtora enviou uma nova revisão (<strong>V{docStatus.active_version_number}</strong>) que está ativa no ÓPURA Docs. Descarte esta folha impressa antiga imediatamente para evitar erros no canteiro.
+                    Você está com a versão <strong>V{physicalVersion}</strong> física, porém a construtora enviou uma nova revisão (<strong>V{docStatus.active_version_number}</strong>) que está ativa no ÓPURA Docs. Descarte esta folha impressa antiga imediatamente para evitar erros no canteiro.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {isVencido && (
+              <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 text-red-800">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1 text-xs font-semibold">
+                  <p className="font-black uppercase tracking-wider text-red-700">Atenção: Validade Expirada!</p>
+                  <p className="leading-relaxed">
+                    Esta planta física está na versão correta do sistema, mas o prazo de validade deste documento no ÓPURA Docs está <strong>expirado (Vencido)</strong>. Solicite aprovação ou renovação ao gestor de projetos antes de executar.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {isAlerta && (
+              <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl flex items-start gap-3 text-amber-800">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1 text-xs font-semibold">
+                  <p className="font-black uppercase tracking-wider text-amber-700">Aviso: Vencimento Próximo</p>
+                  <p className="leading-relaxed">
+                    O documento está com status de <strong>Alerta</strong>. Fique ciente de que a data limite de validade está próxima do fim.
                   </p>
                 </div>
               </div>
@@ -161,6 +208,27 @@ export function PublicPlantChecker() {
                   <p className="text-xs font-bold text-slate-700">
                     {new Date(docStatus.active_version_created_at).toLocaleString()}
                   </p>
+                </div>
+              </div>
+
+              {/* Exibição detalhada do Status do Documento no banco */}
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center bg-slate-100 text-slate-500 font-bold text-[10px]">
+                  ⚡
+                </div>
+                <div>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Status do Documento no Acervo</p>
+                  <span className={`inline-block mt-0.5 px-2.5 py-0.5 text-[9px] font-black uppercase rounded tracking-wider ${
+                    docStatus.status === 'ativo'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : docStatus.status === 'vencido'
+                      ? 'bg-red-100 text-red-700'
+                      : docStatus.status === 'alerta'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {docStatus.status}
+                  </span>
                 </div>
               </div>
 

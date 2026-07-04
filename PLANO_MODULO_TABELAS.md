@@ -265,10 +265,15 @@ Varredura focada nos 12 itens do dropdown "Engenharia" (Layout.tsx). Só 6 têm 
   breakdown por natureza (mão de obra/material/equipamento) mostram os MESMOS dados sem "R$"
   (colunas estreitas/densas). Pode ser design intencional de compactação — **não corrigido
   sem confirmação do usuário**, registrado aqui pra decisão futura.
-- **DatabaseExplorer** (Composições) — avaliado, NADA migrado ainda: zero `useTableColumns`
-  (sem ordenação clicável, sem config de colunas), filtros numerosos (busca/código/grupo/tipo/
-  banco/localização/encargos/competência/favoritos) não persistem, 2 ocorrências do padrão
-  manual `"R$ "+toLocaleString`. Candidato real pra próxima rodada de F1/F2.
+- **DatabaseExplorer (Composições) — ✅ F1/F2 CONCLUÍDOS (2026-07-04):** adicionado
+  `useTableColumns`+`SortableHeader`+`ColumnConfigButton` na tabela em lista (não tinha nada
+  disso); os ~13 filtros (busca/código/tipo/grupo/banco/localização/encargos/competência/
+  natureza/escopo/modo/favoritos/viewMode) agora persistem via `usePersistedState` (não
+  persistia nenhum antes). **3 bugs de moeda corrigidos**, um deles o pior da varredura toda:
+  `result.price.toFixed(2)` na visão em grade — `toFixed` sempre usa ponto E não agrupa
+  milhares (ex.: "R$ 1234.56" em vez de "R$ 1.234,56"). `sortedResults` (memo) unifica
+  ordenação entre grid e lista. Sem F3 — exclusão só em itens da base própria/override
+  (dado de referência de custo, mesma cautela de CompaniesModule).
 - **StructuralModule** (Ferragem & Aço) — só 1 ocorrência de moeda, baixa prioridade.
 - **AreaEngineModule** (Áreas NBR 12721) — já tem F3 próprio e maduro (seleção de espaços +
   edição em lote de cobertura/coeficiente, "Camada B"). Quase nada a fazer em F1.

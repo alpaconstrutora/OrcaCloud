@@ -3,6 +3,7 @@ import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clo
 import { supabase } from '../lib/supabase';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 import Button from './ui/Button';
+import { formatMoney, formatDateBR } from './ui/Format';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
@@ -41,6 +42,8 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
     const [linkedNfeOrderIds, setLinkedNfeOrderIds] = React.useState<Set<string>>(new Set());
     const [nfFilter, setNfFilter] = React.useState<'all' | 'sem-nf'>('all');
+    const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+    const [bulkLoading, setBulkLoading] = React.useState(false);
 
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
         setNotification({ message, type });
@@ -85,6 +88,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             setLoading(true);
             const data = await orderService.listOrders();
             setOrders(data);
+            setSelectedIds(new Set());
         } catch (error) {
             console.error("Erro ao carregar pedidos:", error);
         } finally {
@@ -184,6 +188,63 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             return 0;
         });
     }, [orders, searchTerm, sortBy, tableColumns.sortColumn, tableColumns.sortDirection, nfFilter, linkedNfeOrderIds]);
+
+    const selectableVisible = React.useMemo(
+        () => filteredOrders.filter(o => canDeleteOrder(o.status)),
+        [filteredOrders],
+    );
+    const selectedVisible = React.useMemo(
+        () => selectableVisible.filter(o => selectedIds.has(o.id)),
+        [selectableVisible, selectedIds],
+    );
+    const allVisibleSelected = selectableVisible.length > 0 && selectedVisible.length === selectableVisible.length;
+
+    function toggleRow(id: string) {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    }
+    function toggleAllVisible() {
+        setSelectedIds(prev => {
+            if (allVisibleSelected) {
+                const next = new Set(prev);
+                selectableVisible.forEach(o => next.delete(o.id));
+                return next;
+            }
+            const next = new Set(prev);
+            selectableVisible.forEach(o => next.add(o.id));
+            return next;
+        });
+    }
+    const clearSelection = () => setSelectedIds(new Set());
+
+    function handleBulkDelete() {
+        const alvos = selectedVisible;
+        if (alvos.length === 0) return;
+        askConfirm(`Deseja realmente excluir ${alvos.length} pedido${alvos.length !== 1 ? 's' : ''}? Esta ação não pode ser desfeita.`, async () => {
+            setBulkLoading(true);
+            const falhas: string[] = [];
+            let okCount = 0;
+            for (const o of alvos) {
+                try {
+                    await orderService.deleteOrder(o.id);
+                    okCount++;
+                } catch {
+                    falhas.push(o.number || o.id);
+                }
+            }
+            setSelectedIds(new Set());
+            await loadOrders();
+            setBulkLoading(false);
+            if (falhas.length) {
+                notify(`${okCount} excluído(s). Falha em ${falhas.length}: ${falhas.join(', ')}`, 'error');
+            } else {
+                notify(`${okCount} pedido(s) excluído(s) com sucesso.`);
+            }
+        });
+    }
 
     return (
         <>
@@ -416,6 +477,30 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                 </button>
             </div>
 
+            {/* Barra de ação em massa (F3, só na visão em lista) */}
+            {viewMode === 'list' && selectedVisible.length > 0 && (
+                <div className="flex items-center gap-4 bg-red-600 text-white px-6 py-3 rounded-[1.5rem] shadow-sm">
+                    <span className="text-sm font-semibold">
+                        {selectedVisible.length} selecionado{selectedVisible.length !== 1 ? 's' : ''}
+                    </span>
+                    <div className="flex-1" />
+                    <button
+                        onClick={handleBulkDelete}
+                        disabled={bulkLoading}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-red-700 text-sm font-semibold hover:bg-red-50 disabled:opacity-60 transition-colors"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Excluir
+                    </button>
+                    <button
+                        onClick={clearSelection}
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium text-red-100 hover:text-white hover:bg-red-500 transition-colors"
+                    >
+                        Limpar
+                    </button>
+                </div>
+            )}
+
             {/* List */}
             {loading ? (
                 <div className="text-center py-12">
@@ -428,6 +513,16 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs tracking-widest border-b border-gray-200">
                                 <tr>
+                                    <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                        <input
+                                            type="checkbox"
+                                            className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer disabled:opacity-40"
+                                            checked={allVisibleSelected}
+                                            disabled={selectableVisible.length === 0}
+                                            onChange={toggleAllVisible}
+                                            title="Selecionar todos (excluíveis)"
+                                        />
+                                    </th>
                                     {tableColumns.visibleColumns.includes('number') && (
                                         <SortableHeader colKey="number" label="Número" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
@@ -461,9 +556,19 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                 {filteredOrders.map(order => (
                                     <tr
                                         key={order.id}
-                                        className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                                        className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedIds.has(order.id) ? 'bg-red-50/60' : ''}`}
                                         onClick={() => onViewDetails(order.id)}
                                     >
+                                        <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center" onClick={e => e.stopPropagation()}>
+                                            {canDeleteOrder(order.status) ? (
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                                    checked={selectedIds.has(order.id)}
+                                                    onChange={() => toggleRow(order.id)}
+                                                />
+                                            ) : null}
+                                        </td>
                                         {tableColumns.visibleColumns.includes('number') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-mono text-sm font-bold text-gray-700">
                                                 {order.number || order.id.slice(0, 8)}
@@ -505,9 +610,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                         )}
                                         {tableColumns.visibleColumns.includes('value') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-black text-gray-900">
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                                                    order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0
-                                                )}
+                                                {formatMoney(order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0)}
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('items') && (
@@ -606,7 +709,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                         <p className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Entrega</p>
                                         <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
                                             <Clock className="w-3.5 h-3.5 text-blue-500" />
-                                            {order.deliveryDate ? new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}
+                                            {order.deliveryDate ? formatDateBR(order.deliveryDate) : '-'}
                                         </div>
                                     </div>
                                     <div>
@@ -622,9 +725,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                     <div className="flex flex-col">
                                         <p className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Total</p>
                                         <span className="text-base font-black text-gray-900">
-                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                                                order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0
-                                            )}
+                                            {formatMoney(order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0)}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>

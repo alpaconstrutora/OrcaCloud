@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { PlantStudy } from '../../types/plantaAi';
 import PlantaAiStudyDetail from './PlantaAiStudyDetail';
-import { Plus, Eye } from 'lucide-react';
+import { Plus, Eye, Trash2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 
 export default function PlantaAiDashboard() {
@@ -74,6 +74,17 @@ export default function PlantaAiDashboard() {
     }
   }
 
+  async function deleteStudy(id: string) {
+    if (!confirm('Tem certeza que deseja excluir este estudo? Isso o desvinculará da Viabilidade e do Comercial (se existir).')) return;
+    
+    const { error } = await supabase.from('plant_studies').delete().eq('id', id);
+    if (error) {
+      alert('Erro ao excluir: ' + error.message);
+    } else {
+      setStudies(studies.filter(s => s.id !== id));
+    }
+  }
+
   if (selectedStudyId) {
     return (
       <PlantaAiStudyDetail 
@@ -121,9 +132,20 @@ export default function PlantaAiDashboard() {
                   </span>
                   <button 
                     onClick={() => setSelectedStudyId(study.id)}
-                    className="text-gray-400 hover:text-gray-500"
+                    className="text-gray-400 hover:text-indigo-600"
+                    title="Ver Estudo"
                   >
                     <Eye className="h-5 w-5" />
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteStudy(study.id);
+                    }}
+                    className="text-gray-400 hover:text-red-600 ml-2"
+                    title="Excluir Estudo"
+                  >
+                    <Trash2 className="h-5 w-5" />
                   </button>
                 </div>
               </div>

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { PayrollRun } from '../services/payrollService';
 import { formatDate } from '../lib/payrollUIHelpers';
+import { formatMoney as fmtBRL } from './ui/Format';
 
 interface PayrollRunListProps {
     runs: PayrollRun[];
@@ -26,9 +27,6 @@ interface PayrollRunListProps {
     onNewRun: () => void;
     onRefresh: () => void;
 }
-
-const fmtBRL = (v: number) =>
-    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const TYPE_LABELS: Record<string, string> = {
     mensal: 'Mensal',

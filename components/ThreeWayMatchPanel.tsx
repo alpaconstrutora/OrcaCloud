@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, CheckCircle2, AlertTriangle, XCircle, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { matchService, ThreeWayMatchData, MatchStatus } from '../services/matchService';
+import { formatMoney as fmt } from './ui/Format';
 
 interface Props {
   orderId: string;
 }
-
-const fmt = (v: number) =>
-  v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const fmtQty = (v: number) =>
   v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 });

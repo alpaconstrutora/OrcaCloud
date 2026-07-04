@@ -93,7 +93,7 @@ const ClientCategoriesSettings: React.FC = () => {
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-4">
                     <div className="p-3 bg-blue-50 rounded-lg">

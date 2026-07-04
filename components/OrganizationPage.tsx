@@ -4,6 +4,7 @@ import { PaymentAccount } from '../types/financial';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { Building2, Save, Upload, Trash2, Globe, Mail, Phone, MapPin, Landmark, Plus, X } from 'lucide-react';
 import Button from './ui/Button';
+import ClientCategoriesSettings from './ClientCategoriesSettings';
 
 interface OrganizationPageProps {
     organization: Organization | null;
@@ -462,6 +463,11 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                                     </div>
                                 )}
                             </div>
+                        )}
+                        
+                        {/* Client Categories */}
+                        {organization?.id && (
+                            <ClientCategoriesSettings />
                         )}
                     </div>
                 </div>

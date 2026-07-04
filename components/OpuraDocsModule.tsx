@@ -1282,10 +1282,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             </button>
                           )}
                           <button
-                            onClick={async () => {
-                              const fullDoc = await documentService.getDocumentById(doc.id);
-                              setSelectedDocForVersions(fullDoc);
-                              if (fullDoc) {
+                            onClick={async (e) => {
+                              const btn = e.currentTarget;
+                              btn.style.pointerEvents = 'none';
+                              btn.style.opacity = '0.7';
+                              try {
+                                const fullDoc = await documentService.getDocumentById(doc.id);
+                                if (!fullDoc) {
+                                  alert('Documento não encontrado.');
+                                  return;
+                                }
+                                setSelectedDocForVersions(fullDoc);
                                 loadApprovalsForDoc(fullDoc.id);
                                 loadAuditLogsForDoc(fullDoc.id);
                                 // Registrar visualização (Onda 4)
@@ -1297,6 +1304,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                     'visualizado'
                                   ).catch(err => console.error('[OpuraDocsModule] Erro ao registrar log de visualização:', err));
                                 }
+                              } catch (err) {
+                                console.error('[OpuraDocsModule] Erro ao carregar histórico:', err);
+                                alert('Erro ao carregar o histórico do documento.');
+                              } finally {
+                                btn.style.pointerEvents = 'auto';
+                                btn.style.opacity = '1';
                               }
                             }}
                             title="Histórico de versões"

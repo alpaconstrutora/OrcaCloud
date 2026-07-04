@@ -551,7 +551,7 @@ export const documentService = {
   async getDocumentById(id: string): Promise<OpuraDocument | null> {
     const { data, error } = await supabase
       .from('opura_documents')
-      .select('*, active_version:opura_document_versions!fk_active_version(*), versions:opura_document_versions(*)')
+      .select('*, active_version:opura_document_versions!fk_active_version(*), versions:opura_document_versions!opura_document_versions_document_id_fkey(*)')
       .eq('id', id)
       .maybeSingle();
 

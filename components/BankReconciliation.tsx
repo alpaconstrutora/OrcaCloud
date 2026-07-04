@@ -22,6 +22,7 @@ import { commercialFinanceService } from '../services/commercialFinanceService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { useStore } from '../store/useStore';
 import { useConfirm } from './ui/confirm';
+import { formatMoney, formatDateBR } from './ui/Format';
 import ReconciliationDashboardView from './ReconciliationDashboard';
 import DivergencesPanel from './DivergencesPanel';
 import FinancialClosePanel from './FinancialClosePanel';
@@ -385,16 +386,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
     const costCenterName = (id?: string | null) =>
         id ? (masterCostCenters.find(c => c.id === id)?.name ?? null) : null;
-
-    const formatDateBR = (dateStr: string) => {
-        if (!dateStr) return '';
-        // Se a data vier no formato ISO (YYYY-MM-DD)
-        const parts = dateStr.split('T')[0].split('-');
-        if (parts.length === 3) {
-            return `${parts[2]}/${parts[1]}/${parts[0]}`;
-        }
-        return dateStr;
-    };
 
     // Listas separadas de parceiros para sugestão nas regras
     const uniqueClients = useMemo(() => {
@@ -3198,7 +3189,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     </div>
                                                     <div className="text-right">
                                                         <p className={`text-xs font-black ${bTx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bTx.amount)}
+                                                            {formatMoney(bTx.amount)}
                                                         </p>
                                                         <span className="text-[8px] font-black text-gray-400">{formatDateBR(bTx.transaction_date)}</span>
                                                     </div>
@@ -3238,7 +3229,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     <div className="flex flex-col items-end gap-2">
                                                         <div className="text-right">
                                                             <p className="text-xs font-black text-gray-900">
-                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(iTx.amount)}
+                                                                {formatMoney(iTx.amount)}
                                                             </p>
                                                             <span className="text-[8px] font-black text-emerald-600">{iTx.source_system}</span>
                                                         </div>
@@ -3294,7 +3285,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                             {/* Bank Amount */}
                                             <div className="text-right">
                                                 <p className={`text-sm font-black ${bTx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(bTx.amount)}
+                                                    {formatMoney(bTx.amount)}
                                                 </p>
                                             </div>
 
@@ -3347,7 +3338,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                             {/* Internal Amount */}
                                             <div className="text-right">
                                                 <p className="text-sm font-black text-gray-900">
-                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(iTx.amount)}
+                                                    {formatMoney(iTx.amount)}
                                                 </p>
                                                 <span className="text-[9px] font-black text-emerald-600 uppercase">Vinculado</span>
                                             </div>
@@ -3563,7 +3554,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         </div>
                                                         <div className="text-right">
                                                             <p className={`text-sm font-black ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                                {tx.direction === 'DEBIT' ? '-' : '+'} {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tx.amount)}
+                                                                {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
                                                             </p>
                                                             <span className="text-[8px] font-black text-gray-400">{formatDateBR(tx.transaction_date)}</span>
                                                         </div>
@@ -3780,7 +3771,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
                                                         <div className="flex flex-col items-end gap-1">
                                                             <p className={`text-sm font-black ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                                {tx.direction === 'DEBIT' ? '-' : '+'} {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tx.amount)}
+                                                                {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
                                                             </p>
                                                             {tx.status === 'RULE_APPLIED' ? (
                                                                 <div className="flex gap-1.5">
@@ -4070,7 +4061,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="text-sm font-black text-gray-900 leading-none">
-                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tx.amount)}
+                                                            {formatMoney(tx.amount)}
                                                         </p>
                                                         {(() => {
                                                             const m = getSourceMeta(tx.source_system);
@@ -4260,7 +4251,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
                                                     <div className="flex flex-col items-end gap-1">
                                                         <p className="text-sm font-black text-gray-900 leading-none">
-                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(tx.amount)}
+                                                            {formatMoney(tx.amount)}
                                                         </p>
                                                         <div className="flex items-center gap-1.5">
                                                             {tx.source_system === 'MANUAL' && (

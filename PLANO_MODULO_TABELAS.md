@@ -18,7 +18,7 @@
 | Drawer lateral / confirmação | `Sheet` + `useConfirm` (ver `UI_PATTERNS.md`) | #3, #10, #36 |
 
 Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager, ContasPagarManager.
-Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab).
+Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda).
 Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote), ClientChargesModule (cancelar cobrança em lote).
 
 **Exceção conhecida:** ContasReceberManager tem ordenação própria (`handleSort`/`SortIcon`), não usa `SortableHeader`/`useTableColumns` para sort — decisão já registrada (refatoração considerada complexa, custo/benefício baixo). F1/F3 foram aplicados por cima sem tocar nisso.
@@ -50,6 +50,16 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   timestamp completo com hora, usado no `sent_at` de eventos) ficou intocado — é
   timestamptz de verdade, não DATE; já `fmtBRL`/`fmtDue` do `HistoricoTab` migraram
   para as primitivas (mesmo padrão DATE-only de vencimento).
+- ThreeWayMatchPanel: só `fmt` (moeda) migrou. `fmtDate` intocado — `approvedAt` é
+  timestamptz de aprovação da NF-e (audit, confirmado na migration
+  `nfe_link_financeiro.sql`), não DATE puro; mesmo raciocínio do bug inverso.
+  `fmtQty` (quantidade) é formatador distinto, fora do escopo Money/Date/Percent e
+  sem duplicação em outro arquivo — não extraído.
+- PayrollRunList: só `fmtBRL` (moeda) migrou. As datas do período (`start_date`/
+  `end_date`) usam `formatDate` de `lib/payrollUIHelpers.ts`, que **já implementa a
+  mesma lógica seguindo split de string** e é reusado em 16 arquivos — dedup com
+  `formatDateBR` teria valor mas é refactor grande de baixo risco/benefício marginal;
+  não vale o blast radius sem necessidade concreta. Registrado aqui, não feito.
 - Pendente: util de alinhamento genérico (#6) e marcador visual de origem
   manual×importado×calculado (#25) — ainda não extraídos como primitiva.
 
@@ -79,8 +89,13 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
 - **Avaliado e descartado:** DunningModule — `ReguaTab` é config de regras (não
   transacional); `HistoricoTab` é log de auditoria de disparos, sem ação por item
   (doc §12: auditoria é para rastrear, não para agir em lote).
-- Próximo candidato a avaliar: PayrollRunList / LaborBIAnalytics ou fila de Suprimentos
-  (ProcurementModule/ThreeWayMatchPanel).
+- **Avaliado e descartado:** ThreeWayMatchPanel — painel de comparação read-only
+  (Pedido × Recebimento × NF-e), sem nenhuma ação por linha para agrupar.
+- **Avaliado e descartado:** PayrollRunList — únicas ações por linha são
+  duplicar/excluir; bulk-delete de folhas de pagamento já calculadas é uma ação
+  perigosa e sem caso de uso concreto pedido — não forçar F3 aqui.
+- Próximo candidato a avaliar: ProcurementModule (pedidos de compra) ou
+  LaborBIAnalytics.
 
 ### F4 — Totalizadores padronizados (#21)
 - Rodapé de resumo reutilizável (respeita filtro) — generalizar o que já existe

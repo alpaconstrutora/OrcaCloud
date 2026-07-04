@@ -11,6 +11,7 @@ import {
 } from '../types';
 import { contractService } from '../services/contractService';
 import { sanitizeFileName } from '../utils/storageUtils';
+import { formatMoney, formatDateBR } from './ui/Format';
 
 interface ContractMeasurementModalProps {
     isOpen: boolean;
@@ -230,7 +231,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
             }
 
             if (saldoAFaturar < -0.01) {
-                setModalError(`O valor total da medição excede o saldo disponível do contrato em R$ ${Math.abs(saldoAFaturar).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`);
+                setModalError(`O valor total da medição excede o saldo disponível do contrato em ${formatMoney(Math.abs(saldoAFaturar))}.`);
                 setLoading(false);
                 return;
             }
@@ -331,12 +332,12 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                         <div className="text-right flex flex-col justify-center border-l border-white/10 pl-4">
                             <p className="text-xs font-medium text-emerald-400 uppercase tracking-widest mb-1">Saldo a Faturar</p>
                             <p className={`text-2xl font-medium tracking-tighter ${saldoAFaturar < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                R$ {saldoAFaturar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                {formatMoney(saldoAFaturar)}
                             </p>
                         </div>
                         <div className="text-right flex flex-col justify-center border-l border-white/10 pl-4">
                             <p className="text-xs font-medium text-blue-400 uppercase tracking-widest mb-1">Total do Período</p>
-                            <p className="text-3xl font-medium tracking-tighter">R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                            <p className="text-3xl font-medium tracking-tighter">{formatMoney(totalValue)}</p>
                         </div>
                     </div>
 
@@ -398,13 +399,13 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                         {a.new_end_date && (
                                             <span className="text-blue-400 flex items-center gap-1">
                                                 <Calendar className="w-3 h-3" />
-                                                Novo término: {new Date(a.new_end_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                Novo término: {formatDateBR(a.new_end_date)}
                                             </span>
                                         )}
                                     </div>
                                     {a.value_impact !== 0 && (
                                         <span className={`font-medium ${a.value_impact > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                            {a.value_impact > 0 ? '+' : ''}R$ {a.value_impact.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            {a.value_impact > 0 ? '+' : ''}{formatMoney(a.value_impact)}
                                         </span>
                                     )}
                                 </div>
@@ -585,7 +586,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                             </td>
 
                                             <td className="px-8 py-5 text-right font-medium text-sm text-gray-900">
-                                                R$ {itemValue(item).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                {formatMoney(itemValue(item))}
                                             </td>
                                         </tr>
                                     );

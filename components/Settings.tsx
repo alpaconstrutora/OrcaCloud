@@ -6,6 +6,7 @@ import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
 import { useConfirm } from './ui/confirm';
 import Button from './ui/Button';
+import ClientCategoriesSettings from './ClientCategoriesSettings';
 
 const Settings: React.FC = () => {
     const confirm = useConfirm();
@@ -151,6 +152,10 @@ const Settings: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            {/* Tipos de Clientes */}
+            <ClientCategoriesSettings />
+
             {/* Numeração de Pedidos */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-6">
                 <div className="flex items-start justify-between gap-4">

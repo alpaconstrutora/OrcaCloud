@@ -23,7 +23,7 @@ export interface Client {
     zip_code?: string;
     city?: string;
     state?: string;
-    category?: 'Vendas' | 'Locação' | 'Serviços';
+    category?: string;
     organization_name?: string;
     organization_id?: string;
     created_at?: string;
@@ -82,6 +82,13 @@ export interface Supplier {
 }
 
 export interface SupplierCategory {
+    id: string;
+    name: string;
+    organization_id?: string;
+    created_at?: string;
+}
+
+export interface ClientCategory {
     id: string;
     name: string;
     organization_id?: string;

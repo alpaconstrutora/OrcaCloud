@@ -4,6 +4,9 @@ import { Client } from '../types';
 import CityStateSelect from './CityStateSelect';
 import Button from './ui/Button';
 import { Sheet, SheetHeader, SheetTitle, SheetPanel, SheetFooter } from './ui/sheet';
+import { useStore } from '../store/useStore';
+import { clientCategoryService } from '../services/clientCategoryService';
+import { ClientCategory } from '../types';
 
 interface ClientModalProps {
     isOpen: boolean;
@@ -13,6 +16,8 @@ interface ClientModalProps {
 }
 
 const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, initialData }) => {
+    const activeOrganizationId = useStore(state => state.activeOrganizationId);
+    const [categories, setCategories] = React.useState<ClientCategory[]>([]);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [dirty, setDirty] = React.useState(false);
     const [formData, setFormData] = React.useState<Partial<Client>>({
@@ -55,6 +60,18 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
             });
         }
     }, [initialData, isOpen]);
+
+    React.useEffect(() => {
+        if (!isOpen || !activeOrganizationId) return;
+        clientCategoryService.list(activeOrganizationId)
+            .then(data => {
+                setCategories(data);
+                if (!initialData && data.length > 0 && !formData.category) {
+                    setFormData(prev => ({ ...prev, category: prev.category || data[0].name }));
+                }
+            })
+            .catch(console.error);
+    }, [isOpen, activeOrganizationId, initialData]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -113,9 +130,9 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                                 value={formData.category}
                                 onChange={(e) => update({ category: e.target.value as any })}
                             >
-                                <option value="Vendas">Vendas</option>
-                                <option value="Locação">Locação</option>
-                                <option value="Serviços">Serviços</option>
+                                {categories.map(c => (
+                                    <option key={c.id} value={c.name}>{c.name}</option>
+                                ))}
                             </select>
                         </div>
                         <div>

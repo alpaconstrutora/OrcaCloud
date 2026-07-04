@@ -14,13 +14,29 @@ ALTER TABLE public.opura_folders
 
 CREATE TABLE IF NOT EXISTS public.opura_document_markups (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  document_id     UUID NOT NULL REFERENCES public.opura_documents(id) ON DELETE CASCADE,
-  version_id      UUID NOT NULL REFERENCES public.opura_document_versions(id) ON DELETE CASCADE,
+  document_id     UUID NOT NULL,
+  version_id      UUID NOT NULL,
   user_email      TEXT NOT NULL,
   markup_data     JSONB NOT NULL,
   created_at      TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at      TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE public.opura_document_markups
+  DROP CONSTRAINT IF EXISTS fk_markup_document;
+ALTER TABLE public.opura_document_markups
+  ADD CONSTRAINT fk_markup_document
+  FOREIGN KEY (document_id) REFERENCES public.opura_documents(id) ON DELETE CASCADE NOT VALID;
+ALTER TABLE public.opura_document_markups
+  VALIDATE CONSTRAINT fk_markup_document;
+
+ALTER TABLE public.opura_document_markups
+  DROP CONSTRAINT IF EXISTS fk_markup_version;
+ALTER TABLE public.opura_document_markups
+  ADD CONSTRAINT fk_markup_version
+  FOREIGN KEY (version_id) REFERENCES public.opura_document_versions(id) ON DELETE CASCADE NOT VALID;
+ALTER TABLE public.opura_document_markups
+  VALIDATE CONSTRAINT fk_markup_version;
 
 -- Indexação para busca rápida por documento e versão
 CREATE INDEX IF NOT EXISTS idx_opura_doc_markups_doc ON public.opura_document_markups(document_id);

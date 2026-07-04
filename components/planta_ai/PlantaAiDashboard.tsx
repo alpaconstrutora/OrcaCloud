@@ -13,6 +13,17 @@ export default function PlantaAiDashboard() {
 
   useEffect(() => {
     fetchStudies();
+    
+    // Check URL for deep link
+    const hash = window.location.hash;
+    if (hash.includes('?')) {
+      const queryString = hash.split('?')[1];
+      const params = new URLSearchParams(queryString);
+      const studyIdParam = params.get('studyId');
+      if (studyIdParam) {
+        setSelectedStudyId(studyIdParam);
+      }
+    }
   }, []);
 
   async function fetchStudies() {

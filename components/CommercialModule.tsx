@@ -485,7 +485,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                         <div 
                             onClick={(e) => {
                                 e.stopPropagation();
-                                window.location.hash = `#/documentos/planta-ai/${property.planta_ai_study_id}`;
+                                window.location.hash = `#/planta-ai?studyId=${property.planta_ai_study_id}`;
                             }}
                             className="px-4 py-2 bg-indigo-600/90 hover:bg-indigo-600 backdrop-blur-md rounded-2xl border border-indigo-400 shadow-xl flex items-center gap-2 cursor-pointer transition-colors"
                             title="Empreendimento gerado a partir do Planta AI"

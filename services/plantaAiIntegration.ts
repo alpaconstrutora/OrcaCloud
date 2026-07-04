@@ -251,7 +251,7 @@ export class PlantaAiIntegration {
         .insert({
           organization_id: orgId,
           name: `${studyName} (Arquitetura)`,
-          status: 'Em andamento'
+          status: 'Rascunho'
         })
         .select()
         .single();

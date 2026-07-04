@@ -18,7 +18,7 @@
 | Drawer lateral / confirmação | `Sheet` + `useConfirm` (ver `UI_PATTERNS.md`) | #3, #10, #36 |
 
 Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager, ContasPagarManager.
-Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda), PriceTableManager (só moeda), ContractMeasurementModal (moeda + data de aditivo — corrigiu bug de sinal negativo), BalanceteReport (só moeda), WIPReport (moeda + % — corrigiu separador decimal do percentual), SmartReconciliationCenter + GroupMatchPanel (moeda/data), BankReconciliation (moeda em 8 pontos + formatDateBR local unificado com a primitiva), ReconciliationDashboard (só moeda), ContractsDashboard (só data), InventoryModule (moeda/data/% — corrigiu bug de fuso real em 3 datas + separador decimal), PayrollEventModal (só moeda), LaborEmployeeList (só moeda), OperacionalDetail (data + dedup interno de moeda), CompaniesModule (só moeda), OfficesDashboard (só %), OfficesFinanceiro (data — corrigiu bug de fuso real).
+Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda), PriceTableManager (só moeda), ContractMeasurementModal (moeda + data de aditivo — corrigiu bug de sinal negativo), BalanceteReport (só moeda), WIPReport (moeda + % — corrigiu separador decimal do percentual), SmartReconciliationCenter + GroupMatchPanel (moeda/data), BankReconciliation (moeda em 8 pontos + formatDateBR local unificado com a primitiva), ReconciliationDashboard (só moeda), ContractsDashboard (só data), InventoryModule (moeda/data/% — corrigiu bug de fuso real em 3 datas + separador decimal), PayrollEventModal (só moeda), LaborEmployeeList (só moeda), OperacionalDetail (data + dedup interno de moeda), CompaniesModule (só moeda), OfficesDashboard (só %), OfficesFinanceiro (data — corrigiu bug de fuso real), ReportViewer (7 ocorrências de moeda claras).
 Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote), ClientChargesModule (cancelar cobrança em lote), SupplyChainOrderList (excluir pedidos em lote, só na visão em lista), InventoryModule (cancelar requisições de material em lote).
 
 **Exceção conhecida:** ContasReceberManager tem ordenação própria (`handleSort`/`SortIcon`), não usa `SortableHeader`/`useTableColumns` para sort — decisão já registrada (refatoração considerada complexa, custo/benefício baixo). F1/F3 foram aplicados por cima sem tocar nisso.
@@ -255,6 +255,34 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
 
 ### F5 (reservado) — Volume alto
 - Virtualização + eventual server-side apenas nas 4 telas citadas em "Não fazer".
+
+## Auditoria por grupo de menu — "Engenharia" (2026-07-04)
+Varredura focada nos 12 itens do dropdown "Engenharia" (Layout.tsx). Só 6 têm `<table>`:
+- **ProjectList/PlanningList** (Obras+Orçamentos, Planejamento) — já cobertos no rollout geral.
+- **ReportViewer** (Relatórios) — ✅ F1 aplicado (7 ocorrências claras de moeda). **Achado**:
+  inconsistência pré-existente no próprio relatório — a tabela simples de Insumos mostra "R$"
+  nas colunas Unitário/Total, mas a árvore aninhada mais profunda (INPUTS_ANALYTIC) e o
+  breakdown por natureza (mão de obra/material/equipamento) mostram os MESMOS dados sem "R$"
+  (colunas estreitas/densas). Pode ser design intencional de compactação — **não corrigido
+  sem confirmação do usuário**, registrado aqui pra decisão futura.
+- **DatabaseExplorer** (Composições) — avaliado, NADA migrado ainda: zero `useTableColumns`
+  (sem ordenação clicável, sem config de colunas), filtros numerosos (busca/código/grupo/tipo/
+  banco/localização/encargos/competência/favoritos) não persistem, 2 ocorrências do padrão
+  manual `"R$ "+toLocaleString`. Candidato real pra próxima rodada de F1/F2.
+- **StructuralModule** (Ferragem & Aço) — só 1 ocorrência de moeda, baixa prioridade.
+- **AreaEngineModule** (Áreas NBR 12721) — já tem F3 próprio e maduro (seleção de espaços +
+  edição em lote de cobertura/coeficiente, "Camada B"). Quase nada a fazer em F1.
+
+**Achado de nomenclatura (não é bug de tabela, é UX de menu):** "Templates de Obra"
+(`ProjectTypeTemplateEditor` — monta EAP+docs+indicadores+checklist) e "Tipos de Obra"
+(`ObraTypesManager` — CRUD raso nome/cor/slug) são camadas diferentes mas o nome não deixa
+isso óbvio. Considerar renomear um dos dois se o usuário achar confuso na prática.
+
+**Achado estrutural:** "Obras" e "Orçamentos" no menu Engenharia renderizam **literalmente o
+mesmo componente** `<ProjectList classificationFilter="OBRA"|"ORCAMENTO">` — por isso
+compartilham `storageKey` de colunas (`'projectListColumns'`), fazendo preferências de coluna
+"vazarem" entre os dois contextos. Não é bug, é reuso deliberado, mas explica comportamento
+que pode confundir o usuário.
 
 ## Lacunas do documento (específicas do ÒPURA)
 - Escopo multi-tenant/org refletido na UI (RLS) — o doc ignora; recorrente aqui.

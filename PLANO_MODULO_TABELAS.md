@@ -18,7 +18,7 @@
 | Drawer lateral / confirmação | `Sheet` + `useConfirm` (ver `UI_PATTERNS.md`) | #3, #10, #36 |
 
 Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager, ContasPagarManager.
-Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager.
+Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule.
 Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote).
 
 **Exceção conhecida:** ContasReceberManager tem ordenação própria (`handleSort`/`SortIcon`), não usa `SortableHeader`/`useTableColumns` para sort — decisão já registrada (refatoração considerada complexa, custo/benefício baixo). F1/F3 foram aplicados por cima sem tocar nisso.
@@ -38,11 +38,14 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   `formatDateBR` nasceu com split de string, nunca `new Date('YYYY-MM-DD')` cru (bug de
   fuso já documentado na memória).
 - **Aplicado em:** ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` agora
-  delega), ContasReceberManager (import com alias `fmt`/`fmtDate` p/ menor diff).
+  delega), ContasReceberManager, FinancialApprovalModule (todos via import com alias
+  `fmt`/`fmtDate` p/ menor diff).
 - **Não aplicado propositalmente:** ProjectList/ClientList — datas lá são `created_at`/
   `updated_at`/`expires_at` (timestamptz com hora real), não `vencimento`/`dueDate` (DATE
   puro). Usar `formatDateBR` (que ignora timezone e só lê o prefixo `YYYY-MM-DD`) nesses
   campos **introduziria o bug inverso**. Não têm duplicação de formatação de moeda.
+  InvoiceManager (upload de NFe/recibos): também descartado — sem coluna de valor
+  monetário e a única data é `createdAt` (timestamp de upload, não DATE de negócio).
 - Pendente: util de alinhamento genérico (#6) e marcador visual de origem
   manual×importado×calculado (#25) — ainda não extraídos como primitiva.
 
@@ -60,7 +63,12 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   "Baixar" por linha (`effective_status !== 'RECEBIDO'`).
 - BoletoManager já tinha seleção em massa própria (pré-existente, não migrada para o
   padrão comum — avaliar unificação depois).
-- Próximos candidatos: InvoiceManager, aprovações financeiras (FinancialApprovalModule).
+- **Avaliado e descartado:** FinancialApprovalModule — fila mistura 3 entidades
+  (transaction/contract/purchase_order) com dispatch e nível de aprovação calculados
+  por item, e rejeição exige motivo obrigatório individual. Bulk sem modal por item
+  perderia esse contexto; precisaria de desenho próprio (ex.: bulk só para "aprovar
+  sem observação", nunca para rejeitar) — não faz sentido forçar o padrão genérico aqui.
+- Próximo candidato a avaliar: DunningModule / ClientChargesModule (cobrança em lote).
 
 ### F4 — Totalizadores padronizados (#21)
 - Rodapé de resumo reutilizável (respeita filtro) — generalizar o que já existe

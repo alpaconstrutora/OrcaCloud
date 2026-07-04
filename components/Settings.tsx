@@ -240,7 +240,6 @@ const Settings: React.FC = () => {
             )}
 
             {activeTab === 'email' && (
-            {/* Templates de E-mail */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
@@ -293,7 +292,6 @@ const Settings: React.FC = () => {
 
             {activeTab === 'whatsapp' && (
                 <div className="space-y-6">
-            {/* Z-API / WhatsApp */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-start gap-4">
                     <div className="p-3 bg-green-50 rounded-lg">

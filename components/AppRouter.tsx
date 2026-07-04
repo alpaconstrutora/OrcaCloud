@@ -102,6 +102,7 @@ const ProcurementModule     = React.lazy(() => import('./ProcurementModule').the
 const P2PFlowBoard          = React.lazy(() => import('./P2PFlowBoard').then(m => ({ default: m.P2PFlowBoard })));
 const PartnerPortal         = React.lazy(() => import('./partner/PartnerPortal').then(m => ({ default: m.PartnerPortal })));
 const PartnerWorkspaceManager = React.lazy(() => import('./partner/PartnerWorkspaceManager').then(m => ({ default: m.PartnerWorkspaceManager })));
+const PlantaAiDashboard     = React.lazy(() => import('./planta_ai/PlantaAiDashboard'));
 
 
 
@@ -434,6 +435,13 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             activeOrganizationId={activeOrganizationId}
             onChangeView={setActiveView}
           />
+        </React.Suspense>
+      );
+
+    case 'planta-ai':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <PlantaAiDashboard />
         </React.Suspense>
       );
 

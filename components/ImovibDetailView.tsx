@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Award } from 'lucide-react';
+import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Award, Layers } from 'lucide-react';
 import ImovibPremisesForm from './ImovibPremisesForm';
 import ImovibStaticViability from './ImovibStaticViability';
 import ImovibDynamicForm from './ImovibDynamicForm';
@@ -80,6 +80,15 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         <p className="text-gray-500 text-sm font-medium">
                             {study.segment} {study.sub_classification ? `• ${study.sub_classification}` : ''} {study.phase ? `• ${study.phase}` : ''}
                         </p>
+                        {study.planta_ai_study_id && (
+                            <button
+                                onClick={() => window.location.hash = `#/documentos/planta-ai/${study.planta_ai_study_id}`}
+                                className="mt-3 flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors rounded-xl border border-indigo-200 text-xs font-black uppercase tracking-widest"
+                            >
+                                <Layers className="w-4 h-4" />
+                                Modificar Arquitetura (Planta AI)
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

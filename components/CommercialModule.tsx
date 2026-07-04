@@ -373,6 +373,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
             case PropertyStatus.RENTED: return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
             case PropertyStatus.RESERVED: return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
             case PropertyStatus.EXCHANGED: return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
+            case PropertyStatus.STUDY: return 'bg-slate-500/10 text-slate-500 border-slate-500/20';
             default: return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
         }
     };
@@ -384,6 +385,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
             case PropertyStatus.RENTED: return 'Alugado';
             case PropertyStatus.RESERVED: return 'Reservado';
             case PropertyStatus.EXCHANGED: return 'Permutado';
+            case PropertyStatus.STUDY: return 'Em Estudo';
             default: return status;
         }
     };
@@ -477,6 +479,25 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                 {property.images?.[0] ? (
                     <img src={property.images[0]} alt={property.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
                 ) : <div className="w-full h-full flex items-center justify-center"><Home className="w-16 h-16 text-gray-200" /></div>}
+                
+                {property.planta_ai_study_id && (
+                    <div className="absolute top-24 right-6 z-10 animate-in fade-in zoom-in duration-500">
+                        <div 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                window.location.hash = `#/documentos/planta-ai/${property.planta_ai_study_id}`;
+                            }}
+                            className="px-4 py-2 bg-indigo-600/90 hover:bg-indigo-600 backdrop-blur-md rounded-2xl border border-indigo-400 shadow-xl flex items-center gap-2 cursor-pointer transition-colors"
+                            title="Empreendimento gerado a partir do Planta AI"
+                        >
+                            <Layers className="w-3.5 h-3.5 text-white" />
+                            <span className="text-[9px] font-black text-white uppercase tracking-widest leading-none">
+                                Ver Projeto Origem
+                            </span>
+                        </div>
+                    </div>
+                )}
+
                 <div className="absolute inset-x-0 bottom-0 p-8 bg-gradient-to-t from-black/80 via-black/40 to-transparent text-white">
                     <div className="flex items-center gap-2 mb-2">
                         <MapPin className="w-4 h-4 text-blue-400" />

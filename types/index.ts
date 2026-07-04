@@ -30,3 +30,4 @@ export * from "./organizationGovernance";
 export * from "./assets";
 export * from "./partner";
 
+export * from './plantaAi';

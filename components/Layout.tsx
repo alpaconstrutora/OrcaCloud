@@ -685,8 +685,8 @@ const Layout: React.FC<LayoutProps> = ({
 
               <NavGroup label="Inteligência de Negócios" />
               <NavDropdown
-                label="Inteligência de Negócios"
-                icon={BarChart3}
+                label="Análises e Dados"
+                icon={Search}
                 isOpen={isInteligenciaNegociosOpen}
                 onToggle={() => {
                   if (isCollapsed) { onChangeView('bi-executivo'); }
@@ -939,7 +939,7 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={TrendingUp}
                     isOpen={isVendasOpen}
                     onToggle={() => setIsVendasOpen(o => !o)}
-                    hasActiveChild={['gestao-vendas','sales','rentals','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations','imovib','empreendimentos'].includes(activeView)}
+                    hasActiveChild={['gestao-vendas','sales','rentals','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations','imovib','empreendimentos','planta-ai'].includes(activeView)}
                   >
                     {(mod.crm || isDev) && (
                       <>
@@ -953,6 +953,7 @@ const Layout: React.FC<LayoutProps> = ({
                       <>
                         <DropdownItem id="empreendimentos" label="Empreendimentos" icon={Building2} />
                         <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
+                        <DropdownItem id="planta-ai" label="ÒPURA Planta AI" icon={Brain} />
                       </>
                     )}
                   </NavDropdown>
@@ -1171,6 +1172,7 @@ const Layout: React.FC<LayoutProps> = ({
 
               <NavGroup label="Inteligência de Negócios" />
               <NavItem id="imovib" icon={TrendingUp} label="Estudos de Viabilidade" forceFull />
+              <NavItem id="planta-ai" icon={Brain} label="ÒPURA Planta AI" forceFull />
               <NavItem id="opura-market" icon={Search} label="ÒPURA Market" forceFull />
 
               <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" forceFull />

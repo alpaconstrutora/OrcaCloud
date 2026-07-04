@@ -132,6 +132,8 @@ export default function FloorViewerTab({ scenario, terrain, rules }: FloorViewer
                 minRightSetback={rules?.right_setback || 1.5}
                 minRearSetback={rules?.rear_setback || 3}
                 isRotated={true}
+                onToggleFullscreen={toggleFullscreen}
+                isFullscreen={isFullscreen}
               />
             </div>
           </div>

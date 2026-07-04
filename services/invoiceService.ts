@@ -147,7 +147,7 @@ export const invoiceService = {
      * Lista todos os invoices acessíveis ao usuário, com nome do fornecedor.
      * Faz duas queries separadas para evitar problemas de RLS no join.
      */
-    async listAll(organizationId?: string): Promise<(Invoice & { supplierName?: string })[]> {
+    async listAll(organizationId?: string): Promise<(Invoice & { supplierName?: string; supplierOrganizationId?: string })[]> {
         const { data: invoicesData, error: invErr } = await supabase
             .from('invoices')
             .select('id, supplier_id, order_id, file_path, file_name, amount, due_date, cost_center_id, chart_of_accounts_id, status, notes, created_at')
@@ -188,6 +188,7 @@ export const invoiceService = {
                 notes: row.notes,
                 createdAt: row.created_at,
                 supplierName: supplierMap[row.supplier_id]?.name,
+                supplierOrganizationId: supplierMap[row.supplier_id]?.organization_id,
             }));
     },
 

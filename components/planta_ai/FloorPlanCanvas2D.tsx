@@ -46,8 +46,11 @@ export default function FloorPlanCanvas2D({
 }: Props) {
   // Auto-rotate if terrain is much deeper than it is wide
   const [isRotated, setIsRotated] = useState(
-    initialRotated !== undefined ? initialRotated : terrainDepth > terrainWidth * 1.2
+    initialRotated ?? (terrainDepth > terrainWidth * 1.5)
   );
+
+  const [gridSize, setGridSize] = useState<number>(0);
+
   const rotAngle = isRotated ? -90 : 0;
   const counterRot = isRotated ? 90 : 0;
 
@@ -125,8 +128,8 @@ export default function FloorPlanCanvas2D({
             height={unitHeight} 
             fill={color} 
             fillOpacity={0.4}
-            stroke={color.replace('200', '400')}
-            strokeWidth={0.5}
+            stroke={color.replace('200', '500')}
+            strokeWidth={0.1}
           />
           {privateAreaPerUnit > 0 && (
             <g transform={`translate(${x + unitWidth / 2}, ${y + unitHeight / 2})`}>
@@ -204,6 +207,18 @@ export default function FloorPlanCanvas2D({
                >
                  <RotateCcw className="w-4 h-4" />
                </button>
+
+               <select 
+                 value={gridSize} 
+                 onChange={(e) => setGridSize(Number(e.target.value))}
+                 className="p-1.5 bg-white hover:bg-gray-100 rounded-lg text-gray-600 shadow-sm border border-gray-200 text-xs font-medium cursor-pointer outline-none transition-colors"
+                 title="Grade (Grid)"
+               >
+                 <option value={0}>Grid: Off</option>
+                 <option value={0.5}>Grid: 0.5m</option>
+                 <option value={1}>Grid: 1.0m</option>
+                 <option value={5}>Grid: 5.0m</option>
+               </select>
             </div>
 
             <TransformComponent 
@@ -213,15 +228,27 @@ export default function FloorPlanCanvas2D({
               <svg width="100%" height="100%" viewBox={`0 0 ${viewW} ${viewH}`} style={{ maxWidth: '85vw', maxHeight: '85vh', fontFamily: 'inherit' }}>
                 <g transform={`translate(${offX}, ${offY}) rotate(${rotAngle}) translate(${-cx}, ${-cy})`}>
                   
+                  {/* Grid Lines */}
+                  {gridSize > 0 && (
+                    <g pointerEvents="none">
+                      {Array.from({ length: Math.floor(tW / gridSize) + 1 }).map((_, i) => (
+                        <line key={`v-${i}`} x1={i * gridSize} y1={0} x2={i * gridSize} y2={tH} stroke="#d1d5db" strokeWidth={gridSize >= 1 ? 0.05 : 0.02} />
+                      ))}
+                      {Array.from({ length: Math.floor(tH / gridSize) + 1 }).map((_, i) => (
+                        <line key={`h-${i}`} x1={0} y1={i * gridSize} x2={tW} y2={i * gridSize} stroke="#d1d5db" strokeWidth={gridSize >= 1 ? 0.05 : 0.02} />
+                      ))}
+                    </g>
+                  )}
+
                   {/* Terrain Footprint Outline */}
                   <rect 
                     x={0} 
                     y={0} 
                     width={tW} 
                     height={tH} 
-                    fill="#f3f4f6" 
+                    fill="transparent" 
                     stroke="#9ca3af" 
-                    strokeWidth="0.5" 
+                    strokeWidth="0.15" 
                     strokeDasharray={`${minDim * 0.05} ${minDim * 0.05}`}
                   />
                   
@@ -248,9 +275,9 @@ export default function FloorPlanCanvas2D({
                   {lS > 0 && (
                     <g>
                       {/* Left setback line at 20% of building depth */}
-                      <line x1={0} y1={fS + h * 0.2} x2={lS} y2={fS + h * 0.2} stroke="#6b7280" strokeWidth="0.5" strokeDasharray="1 1" />
+                      <line x1={0} y1={fS + h * 0.2} x2={lS} y2={fS + h * 0.2} stroke="#6b7280" strokeWidth="0.1" strokeDasharray="1 1" />
                       <g transform={`translate(${lS / 2}, ${fS + h * 0.2})`}>
-                        <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeSm} fill="#4b5563" fontWeight="bold" stroke="white" strokeWidth="0.5" paintOrder="stroke fill" strokeLinejoin="round">
+                        <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeSm} fill="#4b5563" stroke="white" strokeWidth="0.5" paintOrder="stroke fill" strokeLinejoin="round">
                           {lS.toFixed(1)}m
                         </text>
                       </g>
@@ -259,9 +286,9 @@ export default function FloorPlanCanvas2D({
                   {rS > 0 && (
                     <g>
                       {/* Right setback line at 80% of building depth */}
-                      <line x1={lS + w} y1={fS + h * 0.8} x2={tW} y2={fS + h * 0.8} stroke="#6b7280" strokeWidth="0.5" strokeDasharray="1 1" />
+                      <line x1={lS + w} y1={fS + h * 0.8} x2={tW} y2={fS + h * 0.8} stroke="#6b7280" strokeWidth="0.1" strokeDasharray="1 1" />
                       <g transform={`translate(${lS + w + rS / 2}, ${fS + h * 0.8})`}>
-                        <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeSm} fill="#4b5563" fontWeight="bold" stroke="white" strokeWidth="0.5" paintOrder="stroke fill" strokeLinejoin="round">
+                        <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeSm} fill="#4b5563" stroke="white" strokeWidth="0.5" paintOrder="stroke fill" strokeLinejoin="round">
                           {rS.toFixed(1)}m {rS > minRightSetback && `(Min: ${minRightSetback}m)`}
                         </text>
                       </g>
@@ -270,9 +297,9 @@ export default function FloorPlanCanvas2D({
                   {fS > 0 && (
                     <g>
                       {/* Front setback line at 20% of building width */}
-                      <line x1={lS + w * 0.2} y1={0} x2={lS + w * 0.2} y2={fS} stroke="#6b7280" strokeWidth="0.5" strokeDasharray="1 1" />
+                      <line x1={lS + w * 0.2} y1={0} x2={lS + w * 0.2} y2={fS} stroke="#6b7280" strokeWidth="0.1" strokeDasharray="1 1" />
                       <g transform={`translate(${lS + w * 0.2}, ${fS / 2})`}>
-                        <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeSm} fill="#4b5563" fontWeight="bold" stroke="white" strokeWidth="0.5" paintOrder="stroke fill" strokeLinejoin="round">
+                        <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeSm} fill="#4b5563" stroke="white" strokeWidth="0.5" paintOrder="stroke fill" strokeLinejoin="round">
                           {fS.toFixed(1)}m
                         </text>
                       </g>
@@ -281,9 +308,9 @@ export default function FloorPlanCanvas2D({
                   {rearS > 0 && (
                     <g>
                       {/* Rear setback line at 80% of building width */}
-                      <line x1={lS + w * 0.8} y1={fS + h} x2={lS + w * 0.8} y2={tH} stroke="#6b7280" strokeWidth="0.5" strokeDasharray="1 1" />
+                      <line x1={lS + w * 0.8} y1={fS + h} x2={lS + w * 0.8} y2={tH} stroke="#6b7280" strokeWidth="0.1" strokeDasharray="1 1" />
                       <g transform={`translate(${lS + w * 0.8}, ${fS + h + rearS / 2})`}>
-                        <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeSm} fill="#4b5563" fontWeight="bold" stroke="white" strokeWidth="0.5" paintOrder="stroke fill" strokeLinejoin="round">
+                        <text transform={`rotate(${counterRot})`} textAnchor="middle" dominantBaseline="middle" fontSize={fSizeSm} fill="#4b5563" stroke="white" strokeWidth="0.5" paintOrder="stroke fill" strokeLinejoin="round">
                           {rearS.toFixed(1)}m {rearS > minRearSetback && `(Min: ${minRearSetback}m)`}
                         </text>
                       </g>
@@ -298,8 +325,8 @@ export default function FloorPlanCanvas2D({
                     height={tH - frontSetback - minRearSetback} 
                     fill="rgba(239, 68, 68, 0.05)" 
                     stroke="#ef4444" 
-                    strokeWidth="0.5" 
-                    strokeDasharray="2 2" 
+                    strokeWidth="0.1" 
+                    strokeDasharray="1 1" 
                   />
 
                   {/* Building Group */}
@@ -311,8 +338,8 @@ export default function FloorPlanCanvas2D({
                       width={w} 
                       height={h} 
                       fill="none" 
-                      stroke="#9ca3af" 
-                      strokeWidth="1" 
+                      stroke="#4b5563" 
+                      strokeWidth="0.15" 
                     />
                     
                     {/* Units */}
@@ -325,8 +352,8 @@ export default function FloorPlanCanvas2D({
                       width={coreWidth} 
                       height={coreHeight} 
                       fill="#e5e7eb" 
-                      stroke="#9ca3af" 
-                      strokeWidth="0.5"
+                      stroke="#6b7280" 
+                      strokeWidth="0.1"
                     />
                     <g transform={`translate(${w / 2}, ${h / 2})`}>
                       <text 

@@ -116,6 +116,20 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
     }
   }
 
+  async function publishToCommercial(scenarioId: string) {
+    if (!confirm("Isso criará o Empreendimento Final no Comercial com todas as unidades. Deseja continuar?")) return;
+    
+    const res = await PlantaAiIntegration.publishToCommercialInventory(studyId, scenarioId);
+    
+    if (res.success) {
+      alert("Empreendimento Lançado com Sucesso no Módulo Comercial!");
+      fetchStudy();
+      fetchScenarios();
+    } else {
+      alert("Erro ao lançar: " + res.error);
+    }
+  }
+
   if (!study) return <div>Carregando...</div>;
 
   return (
@@ -203,21 +217,31 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
                         )}
                       </div>
                       
-                      <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex justify-between mt-auto">
+                      <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex flex-col gap-2 mt-auto">
+                        <div className="flex justify-between w-full">
+                            <button 
+                              onClick={() => {
+                                setSelectedScenarioForView(sc);
+                                setActiveTab('Plantas');
+                              }}
+                              className="text-sm text-indigo-600 font-medium hover:underline"
+                            >
+                              Ver Plantas
+                            </button>
+                            <button 
+                              onClick={() => sendToViabilidade(sc.id)}
+                              className="text-sm text-blue-600 font-medium hover:underline"
+                              title="Atualizar dados no Módulo IMOVIB"
+                            >
+                              Testar Viabilidade
+                            </button>
+                        </div>
                         <button 
-                          onClick={() => {
-                            setSelectedScenarioForView(sc);
-                            setActiveTab('Plantas');
-                          }}
-                          className="text-sm text-indigo-600 font-medium"
+                          onClick={() => publishToCommercial(sc.id)}
+                          className="w-full mt-2 py-1.5 text-sm bg-green-600 text-white font-medium rounded hover:bg-green-700 transition-colors"
+                          title="Gerar Prédio e Unidades no Módulo Comercial"
                         >
-                          Ver Plantas
-                        </button>
-                        <button 
-                          onClick={() => sendToViabilidade(sc.id)}
-                          className="text-sm text-green-600 font-medium"
-                        >
-                          Aprovar Cenário
+                          Lançar Empreendimento
                         </button>
                       </div>
                     </div>

@@ -53,6 +53,11 @@ export interface Company {
   cnae_principal?: string;
   natureza_juridica?: string;
   regime_tributario?: RegimeTributario;
+  // Simples Nacional Anexo IV (advocacia, limpeza, segurança, construção civil,
+  // decoração etc.) recolhe a Cota Patronal (20%) à parte, na DARF Unificada —
+  // ao contrário dos demais anexos, onde já vem embutida no DAS. Ver
+  // remuneracaoSocietariaService.calculateProlabore.
+  simples_anexo_iv?: boolean;
   data_abertura?: string;
   capital_social?: number;
   status: CompanyStatus;

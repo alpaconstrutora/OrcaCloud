@@ -91,7 +91,7 @@ export const remuneracaoSocietariaService = {
         return data as ProlaboreInssRule;
     },
 
-    async calculateProlabore(grossAmount: number, competenceDate: string, regimeTributario?: string, organizationId?: string): Promise<ProlaboreCalcResult> {
+    async calculateProlabore(grossAmount: number, competenceDate: string, regimeTributario?: string, organizationId?: string, simplesAnexoIV?: boolean): Promise<ProlaboreCalcResult> {
         const [rule, irrfBrackets] = await Promise.all([
             this.getProlaboreInssRule(competenceDate),
             fiscalService.getIRRFBrackets(competenceDate),
@@ -105,7 +105,10 @@ export const remuneracaoSocietariaService = {
         const year = parseInt(competenceDate.slice(0, 4), 10);
         const irrf = year >= 2026 ? payrollEngine.applyIRRFReducer(rawIrrf, irrfBase) : rawIrrf;
 
-        const isento = regimeTributario === 'simples';
+        // Simples Nacional isenta a Cota Patronal via DAS — EXCETO o Anexo IV
+        // (advocacia, limpeza, segurança, construção civil, decoração), que
+        // recolhe a CPP à parte, igual Lucro Presumido/Real.
+        const isento = regimeTributario === 'simples' && !simplesAnexoIV;
         const patronal = isento ? 0 : baseInss * rule.patronal_rate;
         const terceiroTotalRate = organizationId
             ? getOrgTerceirosTaxes(organizationId).reduce((s, t) => s + t.rate, 0)
@@ -322,7 +325,7 @@ export const remuneracaoSocietariaService = {
 
         const items: Omit<ProlaborePayrollItem, 'id' | 'created_at' | 'updated_at'>[] = [];
         for (const s of active) {
-            const calc = await this.calculateProlabore(s.prolabore_amount!, payroll.competence_month, company.regime_tributario, payroll.organization_id);
+            const calc = await this.calculateProlabore(s.prolabore_amount!, payroll.competence_month, company.regime_tributario, payroll.organization_id, company.simples_anexo_iv);
             items.push({
                 payroll_id: payroll.id,
                 partner_id: s.partner_id,

@@ -59,3 +59,13 @@ ALTER TABLE public.prolabore_payroll_items
 ALTER TABLE public.prolabore_payrolls
   ADD COLUMN IF NOT EXISTS patronal_total   NUMERIC(15,2) NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS terceiros_total  NUMERIC(15,2) NOT NULL DEFAULT 0;
+
+-- ─── 3. Exceção: Simples Nacional Anexo IV ─────────────────────────────────
+-- Empresas do Simples Nacional recolhem a Cota Patronal (CPP) embutida na
+-- guia DAS — EXCETO as do Anexo IV (advocacia, limpeza, segurança, construção
+-- civil, decoração etc.), que pagam a CPP (20%) à parte, na DARF Unificada,
+-- igual a Lucro Presumido/Real. Sem esse flag, toda empresa regime_tributario
+-- = 'simples' seria isentada por engano, mesmo sendo Anexo IV.
+
+ALTER TABLE public.companies
+  ADD COLUMN IF NOT EXISTS simples_anexo_iv BOOLEAN NOT NULL DEFAULT false;

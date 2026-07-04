@@ -67,6 +67,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
     });
     const [creatingBatch, setCreatingBatch] = useState(false);
     const [uploadingAta, setUploadingAta] = useState(false);
+    const [savingAnexoIV, setSavingAnexoIV] = useState(false);
 
     // Trava de período (Fechamento Mensal) — atalho para reabrir/fechar o mês
     // específico sendo trabalhado neste módulo, sem sair para o Financeiro.
@@ -401,6 +402,22 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
         }
     };
 
+    const selectedCompany = companies.find(c => c.id === companyId) || null;
+
+    const handleToggleAnexoIV = async (checked: boolean) => {
+        if (!selectedCompany) return;
+        setSavingAnexoIV(true);
+        setError(null);
+        try {
+            await companyService.update(selectedCompany.id, { simples_anexo_iv: checked });
+            setCompanies(prev => prev.map(c => c.id === selectedCompany.id ? { ...c, simples_anexo_iv: checked } : c));
+        } catch (e: unknown) {
+            setError((e as Error).message);
+        } finally {
+            setSavingAnexoIV(false);
+        }
+    };
+
     const BRL = (v: number | null | undefined) => (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     return (
@@ -461,6 +478,13 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                 <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
             ) : subTab === 'socios' ? (
                 <div className="space-y-2">
+                    {selectedCompany?.regime_tributario === 'simples' && (
+                        <label className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 cursor-pointer">
+                            <input type="checkbox" checked={!!selectedCompany.simples_anexo_iv} disabled={savingAnexoIV}
+                                onChange={e => handleToggleAnexoIV(e.target.checked)} />
+                            Empresa é Simples Nacional <strong>Anexo IV</strong> (advocacia, limpeza, segurança, construção civil, decoração) — recolhe Cota Patronal (20%) à parte, não é isenta
+                        </label>
+                    )}
                     {partners.length === 0 && (
                         <div className="flex flex-col items-center py-12 text-gray-400 gap-2">
                             <Users className="w-8 h-8 opacity-30" />

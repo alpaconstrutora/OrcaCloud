@@ -301,6 +301,17 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                     <span className="text-[10px] font-bold text-blue-700">{emprOrigin.unitName}</span>
                                 </div>
                             )}
+                            {initialData?.planta_ai_study_id && (
+                                <div 
+                                    onClick={() => window.location.hash = `#/documentos/planta-ai/${initialData.planta_ai_study_id}`}
+                                    className="flex items-center gap-1.5 mt-1 px-2.5 py-1 bg-indigo-50 border border-indigo-200 rounded-lg w-fit cursor-pointer hover:bg-indigo-100 transition-colors"
+                                >
+                                    <Layers className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                                    <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest">
+                                        Gerado via Planta AI
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
                     <Button

@@ -8,9 +8,17 @@ declare const Deno: { env: { get(key: string): string | undefined } };
 const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-// Eventos do Asaas que confirmam recebimento
+// Eventos do Asaas que confirmam recebimento (cobrança ao cliente — client_charges)
 const PAID_EVENTS = ['PAYMENT_RECEIVED', 'PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED_IN_CASH'];
 const CANCEL_EVENTS = ['PAYMENT_DELETED', 'PAYMENT_REFUNDED', 'PAYMENT_CHARGEBACK_REQUESTED'];
+// Status (payment.status / client_charges.status) que indicam cobrança já paga
+const PAID_STATUSES = ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'];
+
+// Eventos de pagamento de título a fornecedor (Fase 1 — supplier_payments/boletos).
+// Payload usa a chave top-level "bill", não "payment".
+const BILL_DONE_EVENT   = 'BILL_PAID';
+const BILL_FAILED_EVENTS = ['BILL_FAILED', 'BILL_CANCELLED', 'BILL_REFUNDED'];
+const BILL_DONE_STATUSES = ['DONE', 'CANCELLED', 'FAILED']; // já processado — idempotência
 
 serve(async (req: Request) => {
     if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -37,9 +45,18 @@ serve(async (req: Request) => {
             value?: number;
             netValue?: number;
         };
+        bill?: {
+            id?: string;
+            status?: string;
+            value?: number;
+            fee?: number;
+            paymentDate?: string;
+            transactionReceiptUrl?: string;
+            failReasons?: unknown;
+        };
     } | null;
 
-    if (!payload?.event || !payload.payment?.id) {
+    if (!payload?.event) {
         return json({ error: 'Payload inválido' }, 400);
     }
 
@@ -47,7 +64,104 @@ serve(async (req: Request) => {
         auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const event     = payload.event;
+    const event = payload.event;
+
+    // ─── Ramo: pagamento de título a fornecedor (BILL_*) ───────────────────
+    if (event.startsWith('BILL_') && payload.bill?.id) {
+        const billId = payload.bill.id;
+        const billStatus = payload.bill.status ?? null;
+
+        const { data: sp } = await admin
+            .from('supplier_payments')
+            .select('id,boleto_id,organization_id,status')
+            .eq('asaas_bill_id', billId)
+            .maybeSingle();
+
+        if (!sp) return json({ ok: true, ignored: true });
+
+        // Idempotência: Asaas pode reenviar o mesmo evento.
+        if (BILL_DONE_STATUSES.includes(sp.status)) {
+            return json({ ok: true, ignored: 'already_processed' });
+        }
+
+        if (event === BILL_DONE_EVENT) {
+            const hoje = new Date().toISOString().slice(0, 10);
+            const fee = payload.bill.fee ?? 0;
+
+            await admin.from('supplier_payments').update({
+                status: 'DONE',
+                receipt_url: payload.bill.transactionReceiptUrl ?? null,
+                fee: fee || null,
+                updated_at: new Date().toISOString(),
+            }).eq('id', sp.id);
+
+            if (sp.boleto_id) {
+                const { data: boletoRow } = await admin
+                    .from('boletos')
+                    .select('invoice_id,project_id,cost_center_id')
+                    .eq('id', sp.boleto_id)
+                    .maybeSingle();
+                await admin.from('boletos').update({ status: 'pago' }).eq('id', sp.boleto_id);
+                if (boletoRow?.invoice_id) {
+                    await admin.from('invoices').update({ status: 'paid' }).eq('id', boletoRow.invoice_id);
+                }
+                await admin.from('internal_transactions').update({
+                    business_status: 'PAGO',
+                    status: 'CONCILIATED',
+                    payment_date: hoje,
+                    updated_at: new Date().toISOString(),
+                }).eq('organization_id', sp.organization_id)
+                  .eq('source_system', 'BOLETO')
+                  .eq('reference_id', sp.boleto_id);
+
+                // Taxa da Asaas pelo pagamento do boleto — registrada como despesa própria
+                // (mesmo padrão da taxa gateway de cobrança na Fase 6).
+                if (fee > 0) {
+                    await admin.from('internal_transactions').insert({
+                        organization_id: sp.organization_id,
+                        source_system:   'ASAAS_FEE',
+                        direction:       'DEBIT',
+                        amount:          fee,
+                        transaction_date: hoje,
+                        due_date:         hoje,
+                        description:     `Taxa Gateway Asaas (pagamento de boleto) — ${billId}`,
+                        category:        'Taxa Gateway',
+                        business_status: 'PAGO',
+                        status:          'CONCILIATED',
+                        project_id:      boletoRow?.project_id     ?? null,
+                        cost_center_id:  boletoRow?.cost_center_id ?? null,
+                        party_name:      'Asaas Tecnologia',
+                    });
+                }
+            }
+            return json({ ok: true, action: 'bill_paid' });
+        }
+
+        if (BILL_FAILED_EVENTS.includes(event)) {
+            const newStatus = event === 'BILL_CANCELLED' ? 'CANCELLED' : 'FAILED';
+            await admin.from('supplier_payments').update({
+                status: newStatus,
+                failure_reason: billStatus ?? event,
+                updated_at: new Date().toISOString(),
+            }).eq('id', sp.id);
+
+            // Reverte o boleto para 'aprovado' (libera nova tentativa de pagamento)
+            if (sp.boleto_id) {
+                await admin.from('boletos').update({ status: 'aprovado' }).eq('id', sp.boleto_id)
+                    .eq('status', 'programado');
+            }
+            return json({ ok: true, action: 'bill_failed' });
+        }
+
+        // Outros eventos (BILL_CREATED/PENDING/BANK_PROCESSING) — apenas ack, sem mudar status.
+        return json({ ok: true, action: 'bill_status_ack' });
+    }
+
+    // ─── Ramo: cobrança ao cliente (PAYMENT_*) — inalterado ────────────────
+    if (!payload.payment?.id) {
+        return json({ error: 'Payload inválido' }, 400);
+    }
+
     const paymentId = payload.payment.id;
     const asaasStatus = payload.payment.status ?? null;
 
@@ -64,6 +178,13 @@ serve(async (req: Request) => {
     }
 
     if (PAID_EVENTS.includes(event)) {
+        // Idempotência: o Asaas reenvia/duplica eventos (retry, CONFIRMED+RECEIVED
+        // para a mesma cobrança). Se a cobrança já está marcada como paga, não
+        // reprocessa — evita duplicar a despesa de taxa gateway.
+        if (PAID_STATUSES.includes(charge.status)) {
+            return json({ ok: true, ignored: 'already_paid' });
+        }
+
         const paidAt = payload.payment.paymentDate ?? payload.payment.clientPaymentDate ?? new Date().toISOString();
         const txDate = paidAt.split('T')[0]; // YYYY-MM-DD
 

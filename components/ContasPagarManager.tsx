@@ -1,15 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Building2, Check, ChevronDown, ChevronUp,
-    Clock, ExternalLink, FileText, Loader2, RefreshCw,
+    Clock, ExternalLink, FileText, Landmark, Loader2, RefreshCw,
     Search, TrendingDown, X,
 } from 'lucide-react';
 import { invoiceService } from '../services/invoiceService';
 import { Invoice } from '../types/financial';
 import type { Organization } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
 
-type InvoiceRow = Invoice & { supplierName?: string };
+type InvoiceRow = Invoice & { supplierName?: string; supplierOrganizationId?: string };
+
+/** Extrai o boleto_id da marcação `[boleto:{id}]` gravada em invoices.notes (ver boletoService.aprovarECriarInvoice). */
+function extractBoletoId(notes: string | undefined): string | null {
+    const m = (notes ?? '').match(/\[boleto:([0-9a-f-]{36})\]/i);
+    return m ? m[1] : null;
+}
 type StatusFilter = 'all' | 'pending' | 'approved' | 'paid' | 'rejected' | 'overdue';
 
 const STATUS_PT: Record<string, string> = {
@@ -77,6 +84,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [marcandoPago, setMarcandoPago] = useState<string | null>(null);
+    const [pagandoAsaas, setPagandoAsaas] = useState<InvoiceRow | null>(null);
 
     const [selectedOrgId, setSelectedOrgId] = useState<string>('ALL');
     const [search, setSearch] = useState('');
@@ -471,6 +479,18 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                             </a>
                                                         )}
 
+                                                        {/* Pagar via Asaas — só para invoices originados de boleto com linha digitável */}
+                                                        {!['paid', 'rejected'].includes(inv.status) && fromBoleto && inv.supplierOrganizationId && (
+                                                            <button
+                                                                onClick={() => setPagandoAsaas(inv)}
+                                                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-button font-semibold border border-emerald-200 transition-colors"
+                                                                title="Pagar via Asaas"
+                                                            >
+                                                                <Landmark className="w-3 h-3" />
+                                                                Pagar via Asaas
+                                                            </button>
+                                                        )}
+
                                                         {/* Marcar como pago */}
                                                         {!['paid', 'rejected'].includes(inv.status) && (
                                                             <button
@@ -515,6 +535,26 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
 
                 </div>
             </div>
+
+            {pagandoAsaas && (() => {
+                const boletoId = extractBoletoId(pagandoAsaas.notes);
+                if (!boletoId || !pagandoAsaas.supplierOrganizationId) return null;
+                return (
+                    <PagarBoletoAsaasModal
+                        organizationId={pagandoAsaas.supplierOrganizationId}
+                        boletoId={boletoId}
+                        supplierName={pagandoAsaas.supplierName}
+                        amount={pagandoAsaas.amount}
+                        dueDate={pagandoAsaas.dueDate}
+                        onClose={() => setPagandoAsaas(null)}
+                        onPaid={() => {
+                            setPagandoAsaas(null);
+                            alert('Pagamento enviado à Asaas. O status será atualizado automaticamente assim que o banco confirmar.');
+                            carregar(effectiveOrgId);
+                        }}
+                    />
+                );
+            })()}
         </div>
     );
 }

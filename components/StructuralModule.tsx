@@ -13,6 +13,7 @@ import StructuralCutTable from './structural/StructuralCutTable'
 import StructuralQuantitative from './structural/StructuralQuantitative'
 import StructuralDimension from './structural/StructuralDimension'
 import Button from './ui/Button'
+import { formatMoney } from './ui/Format'
 
 interface Props {
   activeOrganizationId?: string
@@ -290,7 +291,7 @@ const SteelCatalog: React.FC<{ orgId?: string }> = ({ orgId }) => {
                     <td className="px-4 py-3">{item.comprimento_barra_m}</td>
                     <td className="px-4 py-3">
                       {item.custo_kg != null
-                        ? item.custo_kg.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                        ? formatMoney(item.custo_kg)
                         : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-4 py-3">{item.perda_pct_padrao}%</td>

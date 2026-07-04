@@ -12,19 +12,9 @@ import type { ClientCharge, BillingType } from '../services/clientChargeService'
 import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
 import type { Organization } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 
 // ─── helpers ────────────────────────────────────────────────
-
-function fmt(v: number | undefined) {
-    if (v == null) return '—';
-    return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-function fmtDate(d: string | undefined | null) {
-    if (!d) return '—';
-    const [y, m, day] = d.split('-');
-    return `${day}/${m}/${y}`;
-}
 
 const STATUS_LABEL: Record<string, string> = {
     PREVISTO:    'Previsto',
@@ -640,6 +630,8 @@ export default function ContasReceberManager({ organizationId, organizations, on
     const [changingStatus, setChangingStatus] = useState<string | null>(null);
     const [charges, setCharges]           = useState<Record<string, ClientCharge>>({});
     const [emitindo, setEmitindo]         = useState<Receivable | null>(null);
+    const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
+    const [bulkLoading, setBulkLoading]   = useState(false);
 
     const effectiveOrgId = selectedOrgId === 'ALL'
         ? (organizationId || organizations?.[0]?.id || '')
@@ -658,6 +650,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
             setRows(data);
             setInad(inad.filter(f => f.count > 0));
             setCharges(chargeMap);
+            setSelectedIds(new Set());
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao carregar');
         } finally {
@@ -712,6 +705,59 @@ export default function ContasReceberManager({ organizationId, organizations, on
         });
         return copy;
     }, [rows, sort]);
+
+    /** Mesmo critério do botão "Baixar" por linha: só não-RECEBIDO pode ser baixado. */
+    const isSelectable = (r: Receivable) => r.effective_status !== 'RECEBIDO';
+    const selectableVisible = useMemo(() => sorted.filter(isSelectable), [sorted]);
+    const selectedVisible = useMemo(
+        () => selectableVisible.filter(r => selectedIds.has(r.id)),
+        [selectableVisible, selectedIds],
+    );
+    const allVisibleSelected = selectableVisible.length > 0 && selectedVisible.length === selectableVisible.length;
+    const selectedTotal = selectedVisible.reduce((s, r) => s + (r.amount ?? 0), 0);
+
+    function toggleRow(id: string) {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    }
+    function toggleAllVisible() {
+        setSelectedIds(prev => {
+            if (allVisibleSelected) {
+                const next = new Set(prev);
+                selectableVisible.forEach(r => next.delete(r.id));
+                return next;
+            }
+            const next = new Set(prev);
+            selectableVisible.forEach(r => next.add(r.id));
+            return next;
+        });
+    }
+    const clearSelection = () => setSelectedIds(new Set());
+
+    async function handleBulkBaixa() {
+        const alvos = selectedVisible;
+        if (alvos.length === 0) return;
+        setBulkLoading(true);
+        const okIds: string[] = [];
+        const falhas: string[] = [];
+        for (const r of alvos) {
+            try {
+                await receivableService.updateStatus(r.id, 'RECEBIDO');
+                okIds.push(r.id);
+            } catch {
+                falhas.push(r.party_name ?? r.description ?? r.id);
+            }
+        }
+        setSelectedIds(new Set());
+        setBulkLoading(false);
+        if (okIds.length) await load();
+        if (falhas.length) {
+            alert(`${okIds.length} baixado(s). Falha em ${falhas.length}: ${falhas.join(', ')}`);
+        }
+    }
 
     const summary = useMemo(() => {
         const todayStr = today();
@@ -883,6 +929,31 @@ export default function ContasReceberManager({ organizationId, organizations, on
                 )}
             </div>
 
+            {/* Barra de ação em massa (F3) */}
+            {selectedVisible.length > 0 && (
+                <div className="flex items-center gap-4 bg-green-600 text-white px-6 py-3 flex-shrink-0">
+                    <span className="text-sm font-semibold">
+                        {selectedVisible.length} selecionado{selectedVisible.length !== 1 ? 's' : ''}
+                        <span className="ml-2 font-normal text-green-100">{fmt(selectedTotal)}</span>
+                    </span>
+                    <div className="flex-1" />
+                    <button
+                        onClick={handleBulkBaixa}
+                        disabled={bulkLoading}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-green-700 text-sm font-semibold hover:bg-green-50 disabled:opacity-60 transition-colors"
+                    >
+                        {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        Baixar (Recebido)
+                    </button>
+                    <button
+                        onClick={clearSelection}
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium text-green-100 hover:text-white hover:bg-green-500 transition-colors"
+                    >
+                        <X className="w-3.5 h-3.5" /> Limpar
+                    </button>
+                </div>
+            )}
+
             {/* Table */}
             <div className="flex-1 overflow-auto">
                 {error && (
@@ -902,6 +973,16 @@ export default function ContasReceberManager({ organizationId, organizations, on
                     <table className="w-full text-sm">
                         <thead className="bg-gray-50 border-b border-gray-100 sticky top-0 z-10">
                             <tr>
+                                <th className="w-10 px-4 py-3 text-center">
+                                    <input
+                                        type="checkbox"
+                                        className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer disabled:opacity-40"
+                                        checked={allVisibleSelected}
+                                        disabled={selectableVisible.length === 0}
+                                        onChange={toggleAllVisible}
+                                        title="Selecionar todos (não recebidos)"
+                                    />
+                                </th>
                                 {[
                                     { label: 'Cliente / Parte',  key: 'party_name'       },
                                     { label: 'Descrição',        key: 'description'      },
@@ -929,7 +1010,17 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                 const isVencido = r.effective_status === 'VENCIDO';
                                 const isRecebido = r.effective_status === 'RECEBIDO';
                                 return (
-                                    <tr key={r.id} className={`hover:bg-gray-50 transition-colors ${isVencido ? 'bg-red-50/30' : ''}`}>
+                                    <tr key={r.id} className={`hover:bg-gray-50 transition-colors ${selectedIds.has(r.id) ? 'bg-green-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
+                                        <td className="w-10 px-4 py-3 text-center">
+                                            {isSelectable(r) ? (
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
+                                                    checked={selectedIds.has(r.id)}
+                                                    onChange={() => toggleRow(r.id)}
+                                                />
+                                            ) : null}
+                                        </td>
                                         <td className="px-4 py-3 font-semibold text-gray-900 max-w-[160px] truncate">
                                             {r.party_name ?? <span className="text-gray-400 italic">—</span>}
                                         </td>

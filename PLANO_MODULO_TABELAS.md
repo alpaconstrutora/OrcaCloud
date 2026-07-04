@@ -274,7 +274,14 @@ Varredura focada nos 12 itens do dropdown "Engenharia" (Layout.tsx). Só 6 têm 
   milhares (ex.: "R$ 1234.56" em vez de "R$ 1.234,56"). `sortedResults` (memo) unifica
   ordenação entre grid e lista. Sem F3 — exclusão só em itens da base própria/override
   (dado de referência de custo, mesma cautela de CompaniesModule).
-- **StructuralModule** (Ferragem & Aço) — só 1 ocorrência de moeda, baixa prioridade.
+- **StructuralModule (Ferragem & Aço) — ✅ F1 CONCLUÍDO (2026-07-04):** `item.custo_kg`
+  migrado para `formatMoney` (única ocorrência). Sem F2/F3: catálogo pequeno de bitolas
+  de aço (NBR 7480), sem busca/filtro, não justifica `useTableColumns`.
+
+**Auditoria do grupo Engenharia encerrada** — 12 itens do menu avaliados, 6 com `<table>`,
+todos com F1 aplicado onde fazia sentido; F2 completo em DatabaseExplorer (era o mais
+atrasado); F3 já maduro em AreaEngineModule, descartado nos demais por falta de ação
+em massa homogênea ou por serem dado de referência/catálogo pequeno.
 - **AreaEngineModule** (Áreas NBR 12721) — já tem F3 próprio e maduro (seleção de espaços +
   edição em lote de cobertura/coeficiente, "Camada B"). Quase nada a fazer em F1.
 

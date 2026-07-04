@@ -885,6 +885,22 @@ export const documentService = {
     return data as OpuraFolder;
   },
 
+  async updateFolder(id: string, updates: Partial<OpuraFolderInsert>): Promise<OpuraFolder> {
+    const { data, error } = await supabase
+      .from('opura_folders')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DocumentService] Erro ao atualizar pasta:', error);
+      throw new Error(`Erro ao atualizar pasta: ${error.message}`);
+    }
+
+    return data as OpuraFolder;
+  },
+
   async deleteFolder(id: string): Promise<void> {
     const { error } = await supabase
       .from('opura_folders')

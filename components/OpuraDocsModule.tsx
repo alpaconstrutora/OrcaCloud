@@ -17,13 +17,14 @@ import {
   CheckCircle2,
   X,
   ChevronDown,
+  ChevronRight,
+  Settings,
   Building2,
   Briefcase,
   ExternalLink,
   Shield,
   Loader2,
   FolderPlus,
-  ChevronRight,
   QrCode,
   CornerDownRight,
   Clock,
@@ -31,6 +32,7 @@ import {
   ThumbsDown,
   UserCheck,
   Eye,
+  Filter,
 } from 'lucide-react';
 import { documentService } from '../services/documentService';
 import { DocumentMarkupViewer } from './ui/DocumentMarkupViewer';
@@ -84,8 +86,22 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [selectedDocForQrCode, setSelectedDocForQrCode] = React.useState<OpuraDocument | null>(null);
   const [selectedDocForMarkup, setSelectedDocForMarkup] = React.useState<OpuraDocument | null>(null);
   const [showMetrics, setShowMetrics] = React.useState(false);
+  const [editingDoc, setEditingDoc] = React.useState<OpuraDocument | null>(null);
+  const [editDocName, setEditDocName] = React.useState('');
+  const [editDocDesc, setEditDocDesc] = React.useState('');
+  const [editDocEmissao, setEditDocEmissao] = React.useState('');
+  const [editDocValidade, setEditDocValidade] = React.useState('');
+  const [editDocAlertaDias, setEditDocAlertaDias] = React.useState(30);
+  const [editDocTagsInput, setEditDocTagsInput] = React.useState('');
   const [folderNamingMask, setFolderNamingMask] = React.useState('');
+  const [editingFolder, setEditingFolder] = React.useState<OpuraFolder | null>(null);
+  const [editFolderName, setEditFolderName] = React.useState('');
+  const [editFolderMask, setEditFolderMask] = React.useState('');
+  const [editFolderMaskPreset, setEditFolderMaskPreset] = React.useState('none');
   const [selectedMaskPreset, setSelectedMaskPreset] = React.useState('none');
+  const [showAdvancedFilters, setShowAdvancedFilters] = React.useState(false);
+  const [filterStatus, setFilterStatus] = React.useState<string>('all');
+  const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
 
   // Estados locais da Onda 1 (Pastas Virtuais e Movimentação)
   const [folders, setFolders] = React.useState<OpuraFolder[]>([]);
@@ -447,6 +463,45 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
+  // Iniciar Edição de Pasta
+  const handleStartEditFolder = (folder: OpuraFolder) => {
+    setEditingFolder(folder);
+    setEditFolderName(folder.name);
+    setEditFolderMask(folder.naming_mask || '');
+    if (!folder.naming_mask) {
+      setEditFolderMaskPreset('none');
+    } else if (folder.naming_mask === '[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]') {
+      setEditFolderMaskPreset('preset-alpa');
+    } else if (folder.naming_mask === '[DISCIPLINA]-[NUMERO]') {
+      setEditFolderMaskPreset('preset-simple');
+    } else {
+      setEditFolderMaskPreset('custom');
+    }
+  };
+
+  // Submeter Edição de Pasta
+  const handleEditFolderSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFolder) return;
+
+    try {
+      let finalMask = editFolderMask;
+      if (editFolderMaskPreset === 'none') finalMask = '';
+      else if (editFolderMaskPreset === 'preset-alpa') finalMask = '[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]';
+      else if (editFolderMaskPreset === 'preset-simple') finalMask = '[DISCIPLINA]-[NUMERO]';
+
+      await documentService.updateFolder(editingFolder.id, {
+        name: editFolderName,
+        naming_mask: finalMask || undefined,
+      });
+
+      setEditingFolder(null);
+      fetchFolders();
+    } catch (err: any) {
+      alert('Erro ao atualizar pasta: ' + err.message);
+    }
+  };
+
   // Função para mover um arquivo de pasta
   const handleMoveDocumentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -491,20 +546,54 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     );
   }, [projects]);
 
-  // Filtrar documentos localmente por busca simples
+  // Filtrar documentos localmente por busca simples e filtros avançados
   const filteredDocuments = React.useMemo(() => {
     if (!documents || !Array.isArray(documents)) return [];
-    if (!searchQuery) return documents;
-    const query = searchQuery.toLowerCase();
-    return documents.filter(doc => 
-      doc && (
-        (doc.nome?.toLowerCase() || '').includes(query) ||
-        (doc.descricao?.toLowerCase() || '').includes(query) ||
-        (doc.tipo_documento?.toLowerCase() || '').includes(query) ||
-        (doc.tags && Array.isArray(doc.tags) && doc.tags.some(tag => tag?.toLowerCase().includes(query)))
-      )
-    );
-  }, [documents, searchQuery]);
+    
+    let result = documents;
+
+    // 1. Filtrar por status de validade
+    if (filterStatus !== 'all') {
+      result = result.filter(doc => doc.status === filterStatus);
+    }
+
+    // 2. Filtrar por tags selecionadas
+    if (selectedTags.length > 0) {
+      result = result.filter(doc => 
+        doc.tags && Array.isArray(doc.tags) && 
+        selectedTags.every(tag => doc.tags.includes(tag))
+      );
+    }
+
+    // 3. Filtrar por busca textual simples
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(doc => 
+        doc && (
+          (doc.nome?.toLowerCase() || '').includes(query) ||
+          (doc.descricao?.toLowerCase() || '').includes(query) ||
+          (doc.tipo_documento?.toLowerCase() || '').includes(query) ||
+          (doc.tags && Array.isArray(doc.tags) && doc.tags.some(tag => tag?.toLowerCase().includes(query)))
+        )
+      );
+    }
+
+    return result;
+  }, [documents, searchQuery, filterStatus, selectedTags]);
+
+  // Coletar tags únicas dos documentos carregados para filtragem rápida
+  const allUniqueTags = React.useMemo(() => {
+    if (!documents || !Array.isArray(documents)) return [];
+    const tagsSet = new Set<string>();
+    documents.forEach(doc => {
+      if (doc.tags && Array.isArray(doc.tags)) {
+        doc.tags.forEach(tag => {
+          if (tag) tagsSet.add(tag);
+        });
+      }
+    });
+    return Array.from(tagsSet).sort();
+  }, [documents]);
 
   // Função para deletar documento
   const handleDeleteDoc = async (id: string) => {
@@ -649,6 +738,67 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       alert(err.message || 'Erro ao subir nova versão.');
     } finally {
       setUploadingVersion(false);
+    }
+  };
+
+  // Iniciar Edição do Documento
+  const handleStartEditDoc = (doc: OpuraDocument) => {
+    setEditingDoc(doc);
+    setEditDocName(doc.nome);
+    setEditDocDesc(doc.descricao || '');
+    setEditDocEmissao(doc.data_emissao ? doc.data_emissao.split('T')[0] : '');
+    setEditDocValidade(doc.data_validade ? doc.data_validade.split('T')[0] : '');
+    setEditDocAlertaDias(doc.alerta_dias_antecedencia || 30);
+    setEditDocTagsInput(doc.tags ? doc.tags.join(', ') : '');
+  };
+
+  // Submeter Edição do Documento
+  const handleEditDocSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDoc) return;
+
+    // Se houver uma máscara de nomenclatura configurada na pasta, validar contra o novo nome
+    if (editingDoc.folder_id) {
+      const targetFolder = folders.find(f => f.id === editingDoc.folder_id);
+      if (targetFolder?.naming_mask) {
+        const ext = editingDoc.active_version?.storage_path.split('.').pop() || 'pdf';
+        const dummyFileName = `${editDocName}.${ext}`;
+        if (!validateFileNameAgainstMask(dummyFileName, targetFolder.naming_mask)) {
+          alert(`O nome do documento ("${editDocName}") não atende ao padrão exigido nesta pasta:\n"${targetFolder.naming_mask}"\n\nPor favor, renomeie de acordo com a máscara.`);
+          return;
+        }
+      }
+    }
+
+    try {
+      const tags = editDocTagsInput
+        .split(',')
+        .map(t => t.trim())
+        .filter(t => t.length > 0);
+
+      await documentService.updateDocument(editingDoc.id, {
+        nome: editDocName,
+        descricao: editDocDesc || undefined,
+        data_emissao: editDocEmissao || undefined,
+        data_validade: editDocValidade || undefined,
+        alerta_dias_antecedencia: editDocAlertaDias,
+        tags,
+      });
+
+      if (activeOrganizationId && currentProfile?.email) {
+        await documentService.logDocumentAction(
+          activeOrganizationId,
+          editingDoc.id,
+          currentProfile.email,
+          'status_alterado',
+          `Metadados atualizados: nome="${editDocName}"`
+        ).catch(err => console.error('[OpuraDocsModule] Erro ao registrar log de alteração:', err));
+      }
+
+      setEditingDoc(null);
+      fetchDocs();
+    } catch (err: any) {
+      alert('Erro ao atualizar metadados: ' + err.message);
     }
   };
 
@@ -963,16 +1113,111 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         {/* Barra de Busca e Breadcrumb */}
         <div className="p-4 border-b border-slate-100 bg-slate-50/20 space-y-3">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Buscar documento por nome, tipo, tag ou código..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium text-slate-700 shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
-            />
-            <Search className="w-5 h-5 text-slate-400 absolute left-4.5 top-1/2 -translate-y-1/2" />
+          <div className="flex items-center gap-3">
+            <div className="relative flex-grow">
+              <input
+                type="text"
+                placeholder="Buscar documento por nome, tipo, tag ou código..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium text-slate-700 shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+              />
+              <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            </div>
+            
+            <button
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className={`flex items-center gap-2 px-5 py-3 border rounded-2xl font-black text-button uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${
+                showAdvancedFilters
+                  ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              <span>Filtros</span>
+              {(filterStatus !== 'all' || selectedTags.length > 0) && (
+                <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping" />
+              )}
+            </button>
           </div>
+
+          {/* Painel de Filtros Avançados */}
+          {showAdvancedFilters && (
+            <div className="p-5 bg-white border border-slate-200/80 rounded-2xl space-y-4 animate-in slide-in-from-top duration-200">
+              
+              {/* Filtro por Status da Validade */}
+              <div className="space-y-2">
+                <label className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Status de Validade</label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: 'all', label: 'Todos os Documentos' },
+                    { id: 'ativo', label: 'Ativos' },
+                    { id: 'alerta', label: 'Em Alerta' },
+                    { id: 'vencido', label: 'Vencidos' }
+                  ].map((st) => (
+                    <button
+                      key={st.id}
+                      onClick={() => setFilterStatus(st.id)}
+                      className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                        filterStatus === st.id
+                          ? st.id === 'ativo'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : st.id === 'vencido'
+                            ? 'bg-red-600 text-white shadow-sm'
+                            : st.id === 'alerta'
+                            ? 'bg-amber-500 text-white shadow-sm'
+                            : 'bg-blue-600 text-white shadow-sm'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Filtro por Tags Rápidas */}
+              {allUniqueTags.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label className="text-[10px] text-slate-400 font-black uppercase tracking-wider flex items-center justify-between">
+                    <span>Filtrar por Tags</span>
+                    {selectedTags.length > 0 && (
+                      <button
+                        onClick={() => setSelectedTags([])}
+                        className="text-[9px] text-blue-600 hover:underline font-bold"
+                      >
+                        Limpar Seleção
+                      </button>
+                    )}
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {allUniqueTags.map((tag) => {
+                      const isSelected = selectedTags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          onClick={() => {
+                            setSelectedTags(prev =>
+                              isSelected
+                                ? prev.filter(t => t !== tag)
+                                : [...prev, tag]
+                            );
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                            isSelected
+                              ? 'bg-blue-500 text-white shadow-sm'
+                              : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                          }`}
+                        >
+                          #{tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Breadcrumb da Onda 1 */}
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400 font-bold py-1">
@@ -1145,17 +1390,30 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         <span className="text-sm font-bold text-slate-700 truncate">{folder.name}</span>
                       </div>
                       {isOrgAdmin && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteFolder(folder.id);
-                          }}
-                          className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-50 transition-all opacity-0 group-hover:opacity-100"
-                          title="Excluir Pasta"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartEditFolder(folder);
+                            }}
+                            className="p-1 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-50 transition-all"
+                            title="Configurar Pasta"
+                          >
+                            <Settings className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteFolder(folder.id);
+                            }}
+                            className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-50 transition-all"
+                            title="Excluir Pasta"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   ))}
@@ -1288,6 +1546,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                               <Pencil className="w-4 h-4" />
                             </button>
                           )}
+                          <button
+                            onClick={() => handleStartEditDoc(doc)}
+                            title="Editar metadados do documento"
+                            className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
+                          >
+                            <Settings className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={async (e) => {
                               const btn = e.currentTarget;
@@ -2107,6 +2372,202 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           userEmail={currentProfile?.email || 'user@alpaconstrutora.com.br'}
           onClose={() => setSelectedDocForMarkup(null)}
         />
+      )}
+
+      {/* Modal de Edição de Metadados do Documento */}
+      {editingDoc && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl border border-slate-100 overflow-hidden my-8 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <Settings className="w-5 h-5 text-blue-600" />
+                <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider">Editar Metadados</h3>
+              </div>
+              <button
+                onClick={() => setEditingDoc(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditDocSubmit} className="p-6 space-y-5">
+              {/* Nome */}
+              <div className="space-y-1.5">
+                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Nome do Documento / Planta</label>
+                <input
+                  type="text"
+                  required
+                  value={editDocName}
+                  onChange={(e) => setEditDocName(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                />
+              </div>
+
+              {/* Descrição */}
+              <div className="space-y-1.5">
+                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Descrição / Notas complementares</label>
+                <textarea
+                  rows={3}
+                  value={editDocDesc}
+                  onChange={(e) => setEditDocDesc(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 resize-none"
+                />
+              </div>
+
+              {/* Datas e Alertas em Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Data de Emissão</label>
+                  <input
+                    type="date"
+                    value={editDocEmissao}
+                    onChange={(e) => setEditDocEmissao(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Data de Vencimento</label>
+                  <input
+                    type="date"
+                    value={editDocValidade}
+                    onChange={(e) => setEditDocValidade(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Alerta de Vencimento (Dias)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editDocAlertaDias}
+                    onChange={(e) => setEditDocAlertaDias(parseInt(e.target.value, 10) || 0)}
+                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="space-y-1.5">
+                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Tags / Palavras-chave (Separadas por vírgula)</label>
+                <input
+                  type="text"
+                  placeholder="Estrutural, Revisado, Medição, Alpa"
+                  value={editDocTagsInput}
+                  onChange={(e) => setEditDocTagsInput(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                />
+              </div>
+
+              {/* Ações */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingDoc(null)}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-500 font-black text-button uppercase tracking-widest rounded-xl transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-button uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Configuração/Edição de Pasta Virtual */}
+      {editingFolder && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <Settings className="w-5 h-5 text-blue-600" />
+                <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider">Configurar Pasta</h3>
+              </div>
+              <button
+                onClick={() => setEditingFolder(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditFolderSubmit} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Nome da Pasta</label>
+                <input
+                  type="text"
+                  required
+                  value={editFolderName}
+                  onChange={(e) => setEditFolderName(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                />
+              </div>
+
+              {/* Regra de Nomenclatura */}
+              <div className="space-y-2">
+                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Padrão de Nome (Nomenclatura)</label>
+                <select
+                  value={editFolderMaskPreset}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEditFolderMaskPreset(val);
+                    if (val === 'preset-alpa') {
+                      setEditFolderMask('[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]');
+                    } else if (val === 'preset-simple') {
+                      setEditFolderMask('[DISCIPLINA]-[NUMERO]');
+                    } else if (val === 'none') {
+                      setEditFolderMask('');
+                    }
+                  }}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-bold bg-white focus:outline-none"
+                >
+                  <option value="none">Sem validação (Livre)</option>
+                  <option value="preset-alpa">Padrão Obra (OBRA-DISC-NUM-RREV)</option>
+                  <option value="preset-simple">Padrão Simples (DISC-NUM)</option>
+                  <option value="custom">Fórmula Personalizada...</option>
+                </select>
+
+                {editFolderMaskPreset === 'custom' && (
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: [OBRA]-TXT-[NUMERO]"
+                    value={editFolderMask}
+                    onChange={(e) => setEditFolderMask(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25 mt-2"
+                  />
+                )}
+                <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                  Substitua os campos por: <strong>[OBRA]</strong>, <strong>[DISCIPLINA]</strong>, <strong>[NUMERO]</strong>, <strong>[REVISAO]</strong>.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingFolder(null)}
+                  className="px-4 py-2 border border-slate-200 text-slate-500 font-bold text-button uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 text-white font-black text-button uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md"
+                >
+                  Salvar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -302,7 +302,7 @@ export class PlantaAiIntegration {
         terrain_type: 'Plano',
         area: imovib.terreno_area || 0,
         frontage: imovib.terreno_frente || imovib.land_frontage || 0,
-        depth: imovib.terreno_fundos || 0,
+        depth: Math.max(imovib.terreno_lateral_direita || 0, imovib.terreno_lateral_esquerda || 0) || imovib.terreno_fundos || 0,
         is_corner: false,
         slope_type: 'Plano'
       });
@@ -372,7 +372,7 @@ export class PlantaAiIntegration {
         .update({
           area: imovib.terreno_area || 0,
           frontage: imovib.terreno_frente || imovib.land_frontage || 0,
-          depth: imovib.terreno_fundos || 0,
+          depth: Math.max(imovib.terreno_lateral_direita || 0, imovib.terreno_lateral_esquerda || 0) || imovib.terreno_fundos || 0,
         })
         .eq('study_id', plantaAiStudyId);
 

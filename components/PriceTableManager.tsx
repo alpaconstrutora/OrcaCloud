@@ -7,6 +7,7 @@ import {
 } from '../services/commercialPriceTableService';
 import { IndexName } from '../services/contractIndexService';
 import { useConfirm } from './ui/confirm';
+import { formatMoney } from './ui/Format';
 
 interface Props {
     organizationId: string;
@@ -22,7 +23,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 const INDEX_NAMES: IndexName[] = ['INCC-M', 'INCC', 'IPCA', 'IGP-M', 'CUB', 'OUTROS'];
 
-const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });
+const fmtBRL = formatMoney;
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
 const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 

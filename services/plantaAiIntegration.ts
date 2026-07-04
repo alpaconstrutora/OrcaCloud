@@ -238,4 +238,39 @@ export class PlantaAiIntegration {
       return { success: false, error: error.message };
     }
   }
+
+  /**
+   * Fase 3: Caminho Reverso (Imovib -> Planta AI)
+   * Cria um estudo de arquitetura a partir de um estudo de viabilidade puramente financeiro.
+   */
+  static async createPlantaAiFromImovib(imovibStudyId: string, orgId: string, studyName: string): Promise<{ success: boolean; plantaAiStudyId?: string; error?: string }> {
+    try {
+      // 1. Cria o estudo no Planta AI
+      const { data: newPlantStudy, error: insertErr } = await supabase
+        .from('plant_studies')
+        .insert({
+          organization_id: orgId,
+          name: `${studyName} (Arquitetura)`,
+          status: 'Em andamento'
+        })
+        .select()
+        .single();
+        
+      if (insertErr || !newPlantStudy) throw new Error(`Erro ao criar estudo Planta AI: ${insertErr?.message}`);
+
+      // 2. Vincula no IMOVIB
+      const { error: updateErr } = await supabase
+        .from('imovib_studies')
+        .update({ planta_ai_study_id: newPlantStudy.id })
+        .eq('id', imovibStudyId);
+        
+      if (updateErr) throw new Error(`Erro ao vincular Planta AI ao Imovib: ${updateErr.message}`);
+
+      return { success: true, plantaAiStudyId: newPlantStudy.id };
+
+    } catch (error: any) {
+      console.error('Erro ao criar Planta AI a partir do Imovib:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }

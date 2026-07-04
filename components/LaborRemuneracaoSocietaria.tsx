@@ -2,10 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     Banknote, Building2, Loader2, AlertCircle, Users, Calculator,
     Check, Send, Save, X, Crown, TrendingUp, Paperclip, Plus, FileText,
+    Lock, Unlock,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { companyService } from '../services/companyService';
 import { remuneracaoSocietariaService } from '../services/remuneracaoSocietariaService';
+import { financialCloseService } from '../services/financialCloseService';
 import { useConfirm } from './ui/confirm';
 import {
     Company, CompanyPartner,
@@ -25,6 +27,11 @@ const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ou
 function currentMonthISO(): string {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
+function parseYearMonth(dateStr: string): { year: number; month: number } {
+    const [y, m] = dateStr.split('-').map(Number);
+    return { year: y, month: m };
 }
 
 const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
@@ -58,6 +65,13 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
     });
     const [creatingBatch, setCreatingBatch] = useState(false);
     const [uploadingAta, setUploadingAta] = useState(false);
+
+    // Trava de período (Fechamento Mensal) — atalho para reabrir/fechar o mês
+    // específico sendo trabalhado neste módulo, sem sair para o Financeiro.
+    // O fechamento GERAL (com checklist de pendências) continua só no
+    // Financeiro > Conciliação Bancária > aba Fechamento.
+    const [periodLocked, setPeriodLocked] = useState<boolean | null>(null);
+    const [periodActing, setPeriodActing] = useState(false);
 
     useEffect(() => {
         companyService.list(orgId).then(list => {
@@ -129,14 +143,58 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
         else loadBatches();
     }, [subTab, loadSocios, loadPayroll, loadBatches]);
 
+    const refreshPeriodLock = useCallback(async (dateStr: string) => {
+        if (!orgId || !dateStr) { setPeriodLocked(null); return; }
+        try {
+            setPeriodLocked(await financialCloseService.isClosed(orgId, dateStr));
+        } catch {
+            setPeriodLocked(null);
+        }
+    }, [orgId]);
+
+    useEffect(() => {
+        if (subTab === 'prolabore') refreshPeriodLock(competenceMonth);
+    }, [subTab, competenceMonth, refreshPeriodLock]);
+
+    const selectedBatch = batches.find(b => b.id === selectedBatchId) || null;
+
+    const selectedBatchRefDate = selectedBatch
+        ? (selectedBatch.payment_date || selectedBatch.approval_date || selectedBatch.profit_period_end)
+        : null;
+
+    useEffect(() => {
+        if (subTab === 'dividendos' && selectedBatchRefDate) refreshPeriodLock(selectedBatchRefDate);
+        else if (subTab === 'dividendos' && !selectedBatchRefDate) setPeriodLocked(null);
+    }, [subTab, selectedBatchRefDate, refreshPeriodLock]);
+
+    const handleTogglePeriodLock = async (dateStr: string) => {
+        const { year, month } = parseYearMonth(dateStr);
+        const MONTHS_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        const label = `${MONTHS_FULL[month - 1]}/${year}`;
+        if (periodLocked) {
+            if (!await confirm({ title: `Reabrir ${label}?`, message: 'O período volta a aceitar lançamentos. A ação fica registrada no Fechamento Mensal.', variant: 'warning', confirmLabel: 'Reabrir' })) return;
+        } else {
+            if (!await confirm({ title: `Fechar ${label}?`, message: 'Lançamentos deste mês ficarão bloqueados para edição em todo o Financeiro (não só na Remuneração Societária).', variant: 'default', confirmLabel: 'Fechar período' })) return;
+        }
+        setPeriodActing(true);
+        setError(null);
+        try {
+            if (periodLocked) await financialCloseService.reopenPeriod(orgId, year, month);
+            else await financialCloseService.closePeriod(orgId, year, month);
+            await refreshPeriodLock(dateStr);
+        } catch (e: unknown) {
+            setError((e as Error).message);
+        } finally {
+            setPeriodActing(false);
+        }
+    };
+
     useEffect(() => {
         if (!selectedBatchId) return;
         remuneracaoSocietariaService.listBatchItems(selectedBatchId)
             .then(setBatchItems)
             .catch(e => setError(e.message));
     }, [selectedBatchId]);
-
-    const selectedBatch = batches.find(b => b.id === selectedBatchId) || null;
 
     const handleCreateBatch = async () => {
         setError(null);
@@ -439,6 +497,16 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                 {PROLABORE_STATUS_LABELS[payroll.status]}
                             </span>
                         )}
+                        {periodLocked !== null && (
+                            <button onClick={() => handleTogglePeriodLock(competenceMonth)} disabled={periodActing}
+                                title="Fecha/reabre o mês inteiro no Financeiro — afeta todos os lançamentos, não só a Remuneração Societária"
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-black uppercase tracking-wide border transition-all disabled:opacity-50 ${
+                                    periodLocked ? 'border-gray-800 bg-gray-900 text-white hover:bg-black' : 'border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                                }`}>
+                                {periodActing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : periodLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                                {periodLocked ? 'Mês Fechado — Reabrir' : 'Mês Aberto — Fechar'}
+                            </button>
+                        )}
                         <div className="flex items-center gap-2">
                             {(!payroll || payroll.status === 'rascunho' || payroll.status === 'calculado') && (
                                 <Button onClick={handleCalculate} disabled={calculating || loading} className="gap-1.5">
@@ -599,6 +667,16 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2">
+                                        {periodLocked !== null && selectedBatchRefDate && (
+                                            <button onClick={() => handleTogglePeriodLock(selectedBatchRefDate)} disabled={periodActing}
+                                                title="Fecha/reabre o mês inteiro no Financeiro — afeta todos os lançamentos, não só a Remuneração Societária"
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-black uppercase tracking-wide border transition-all disabled:opacity-50 ${
+                                                    periodLocked ? 'border-gray-800 bg-gray-900 text-white hover:bg-black' : 'border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                                                }`}>
+                                                {periodActing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : periodLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                                                {periodLocked ? 'Mês Fechado — Reabrir' : 'Mês Aberto — Fechar'}
+                                            </button>
+                                        )}
                                         <label className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-button font-black uppercase tracking-wide cursor-pointer border ${selectedBatch.document_id ? 'border-emerald-200 text-emerald-600 bg-emerald-50' : 'border-amber-200 text-amber-600 bg-amber-50'}`}>
                                             {uploadingAta ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : selectedBatch.document_id ? <FileText className="w-3.5 h-3.5" /> : <Paperclip className="w-3.5 h-3.5" />}
                                             {selectedBatch.document_id ? 'Ata Anexada' : 'Anexar Ata'}

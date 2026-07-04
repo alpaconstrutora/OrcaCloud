@@ -299,6 +299,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         });
     }, [matches, matchSortOrder, flowFilter]);
 
+    // Mapa de sugestão-topo por transação bancária, para evitar filter() O(n) dentro do render de cada linha
+    const topSuggestionByBankTxId = useMemo(() => {
+        const map = new Map<string, ReconciliationSuggestion>();
+        for (const s of suggestions) {
+            if (!map.has(s.bank_transaction_id)) map.set(s.bank_transaction_id, s);
+        }
+        return map;
+    }, [suggestions]);
+
     // Fonte de verdade: financial_categories. O useMemo abaixo é apenas um alias ordenado.
     const uniqueCategories = useMemo(() => [...managedCategories].sort(), [managedCategories]);
 
@@ -894,12 +903,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             if (effStart) bankQuery = bankQuery.gte('transaction_date', effStart);
             if (effEnd)   bankQuery = bankQuery.lte('transaction_date', effEnd);
 
-            const { data: bTxs, error: bError } = await bankQuery
-                .order('transaction_date', { ascending: false })
-                .limit(2000);
-            if (bError) throw bError;
-
-            setBankTransactions(bTxs || []);
+            const isPendingView = activeView === 'pending' || activeView === 'center';
 
             // Load Internal Transactions based on view
             let iTxQuery = supabase
@@ -911,7 +915,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 iTxQuery = iTxQuery.eq('organization_id', organizationId);
             }
 
-            if (activeView === 'pending' || activeView === 'center') {
+            if (isPendingView) {
                 iTxQuery = iTxQuery.eq('status', 'PENDING');
             } else {
                 iTxQuery = iTxQuery.eq('status', 'CONCILIATED');
@@ -920,22 +924,51 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             if (effStart) iTxQuery = iTxQuery.gte('transaction_date', effStart);
             if (effEnd)   iTxQuery = iTxQuery.lte('transaction_date', effEnd);
 
-            const { data: iTxs, error: iError } = await iTxQuery.limit(2000);
-            
+            iTxQuery = iTxQuery.limit(2000);
+
+            const orgForProj = effectiveOrgId || organizationId;
+
+            // Dispara em paralelo tudo que não depende uma da outra (supabase-js resolve com
+            // { error } em vez de rejeitar, então uma falha aqui não derruba o Promise.all).
+            const [bankResult, iTxResult, rescueResult, projResult] = await Promise.all([
+                bankQuery.order('transaction_date', { ascending: false }).limit(2000),
+                iTxQuery,
+                // --- BUSCA CIRÚRGICA LADO DIREITO (400k / WALDIR) --- só relevante na aba Pendentes
+                (isPendingView && organizationId)
+                    ? (() => {
+                        let rescueQuery = supabase
+                            .from('internal_transactions')
+                            .select('*')
+                            .eq('organization_id', organizationId)
+                            .eq('status', 'PENDING')
+                            .or(`description.ilike.%WALDIR%,amount.eq.400000`);
+                        if (effStart) rescueQuery = rescueQuery.gte('transaction_date', effStart);
+                        if (effEnd)   rescueQuery = rescueQuery.lte('transaction_date', effEnd);
+                        return rescueQuery;
+                    })().then(r => r, (err: unknown) => {
+                        console.error('Erro na busca cirúrgica (rescue):', err);
+                        return { data: [] as InternalTransaction[] };
+                    })
+                    : Promise.resolve({ data: [] as InternalTransaction[] }),
+                // --- PONTE COMERCIAL --- só relevante na aba Pendentes
+                (isPendingView && orgForProj)
+                    ? supabase.from('projects').select('id, name, settings').filter('settings->>organizationId', 'eq', orgForProj)
+                        .then(r => r, (err: unknown) => {
+                            console.error('Erro na varredura total de projetos:', err);
+                            return { data: [] as Array<{ id: string; name: string; settings: any }> };
+                        })
+                    : Promise.resolve({ data: [] as Array<{ id: string; name: string; settings: any }> })
+            ]);
+
+            const { data: bTxs, error: bError } = bankResult;
+            if (bError) throw bError;
+            setBankTransactions(bTxs || []);
+
+            const { data: iTxs, error: iError } = iTxResult;
             if (iError) throw iError;
-            
-            // --- BUSCA CIRÚRGICA LADO DIREITO (400k / WALDIR) ---
-            // Como pode haver milhares de lançamentos, buscamos especificamente pelo Waldir ou Valor
-            let rescueQuery = supabase
-                .from('internal_transactions')
-                .select('*')
-                .or(`description.ilike.%WALDIR%,amount.eq.400000`)
-                .eq('status', 'PENDING');
-            if (effStart) rescueQuery = rescueQuery.gte('transaction_date', effStart);
-            if (effEnd)   rescueQuery = rescueQuery.lte('transaction_date', effEnd);
-            const { data: rescueITxs } = await rescueQuery;
 
             let finalITxs = iTxs || [];
+            const rescueITxs = rescueResult.data;
             if (rescueITxs && rescueITxs.length > 0) {
                 const existingIds = new Set(finalITxs.map(t => t.id));
                 const missing = rescueITxs.filter(t => !existingIds.has(t.id));
@@ -944,77 +977,67 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 }
             }
 
-            // --- PONTE COMERCIAL (VARREDURA TOTAL DE PROJETOS) ---
-            try {
-                const orgForProj = effectiveOrgId || organizationId;
-                if (!orgForProj) throw new Error('organization_id ausente');
-                const { data: allProjData } = await supabase
-                    .from('projects')
-                    .select('id, name, settings')
-                    .filter('settings->>organizationId', 'eq', orgForProj);
+            const allProjData = projResult.data;
+            if (allProjData && allProjData.length > 0) {
+                let commercialMatches: CommercialMatch[] = [];
+                allProjData.forEach(proj => {
+                    const txs: Array<Record<string, unknown>> = proj.settings?.financialInfo?.transactions || [];
+                    const mappedCommercial = txs
+                        .filter((t) => (t['status'] === 'PENDING' || t['status'] === 'PENDENTE' || t['status'] === 'OPEN'))
+                        .filter((t) => {
+                            const txDate = String(t['date'] || t['transaction_date'] || '');
+                            if (!txDate) return true;
+                            if (effStart && txDate < effStart) return false;
+                            if (effEnd && txDate > effEnd) return false;
+                            return true;
+                        })
+                        .map((t): CommercialMatch => ({
+                            id: String(t['id'] || ''),
+                            description: String(t['description'] || `Venda: ${String(t['category'] || '')} (${proj.name})`),
+                            amount: parseFloat(String(t['value'] || t['amount'] || 0)),
+                            transaction_date: String(t['date'] || t['transaction_date'] || ''),
+                            status: 'PENDING',
+                            type: 'INCOME',
+                            category: String(t['category'] || ''),
+                            isCommercial: true,
+                            project_id: proj.id,
+                            original_id: String(t['id'] || ''),
+                            projectName: proj.name
+                        }));
 
-                if (allProjData && allProjData.length > 0) {
-                    let commercialMatches: CommercialMatch[] = [];
-                    allProjData.forEach(proj => {
-                        const txs: Array<Record<string, unknown>> = proj.settings?.financialInfo?.transactions || [];
-                        const mappedCommercial = txs
-                            .filter((t) => (t['status'] === 'PENDING' || t['status'] === 'PENDENTE' || t['status'] === 'OPEN'))
-                            .filter((t) => {
-                                const txDate = String(t['date'] || t['transaction_date'] || '');
-                                if (!txDate) return true;
-                                if (effStart && txDate < effStart) return false;
-                                if (effEnd && txDate > effEnd) return false;
-                                return true;
-                            })
-                            .map((t): CommercialMatch => ({
-                                id: String(t['id'] || ''),
-                                description: String(t['description'] || `Venda: ${String(t['category'] || '')} (${proj.name})`),
-                                amount: parseFloat(String(t['value'] || t['amount'] || 0)),
-                                transaction_date: String(t['date'] || t['transaction_date'] || ''),
-                                status: 'PENDING',
-                                type: 'INCOME',
-                                category: String(t['category'] || ''),
-                                isCommercial: true,
-                                project_id: proj.id,
-                                original_id: String(t['id'] || ''),
-                                projectName: proj.name
-                            }));
-                        
-                        commercialMatches = [...commercialMatches, ...mappedCommercial];
-                    });
+                    commercialMatches = [...commercialMatches, ...mappedCommercial];
+                });
 
-                    if (commercialMatches.length > 0) {
-                        // Mesclar sem duplicar IDs
-                        const existingIds = new Set(finalITxs.map(t => t.id));
-                        const uniqueNew = commercialMatches.filter(t => !existingIds.has(t.id));
-                        finalITxs = [...finalITxs, ...uniqueNew];
-                    }
+                if (commercialMatches.length > 0) {
+                    const existingIds = new Set(finalITxs.map(t => t.id));
+                    const uniqueNew = commercialMatches.filter(t => !existingIds.has(t.id));
+                    finalITxs = [...finalITxs, ...uniqueNew];
                 }
-            } catch (err) {
-                console.error('Erro na varredura total de projetos:', err);
             }
 
             setInternalTransactions(finalITxs);
             void loadOriginCodes(finalITxs);
 
             // Load Suggestions for pending transactions in batches to avoid URL length limits
-            if ((activeView === 'pending' || activeView === 'center') && bTxs && bTxs.length > 0) {
+            if (isPendingView && bTxs && bTxs.length > 0) {
                 const bTxIds = bTxs.map(t => t.id);
                 const batchSize = 100;
-                let allSuggestions: ReconciliationSuggestion[] = [];
-                
+                const batches: string[][] = [];
                 for (let i = 0; i < bTxIds.length; i += batchSize) {
-                    const batch = bTxIds.slice(i, i + batchSize);
-                    const { data: sugs, error: sError } = await supabase
+                    batches.push(bTxIds.slice(i, i + batchSize));
+                }
+
+                const batchResults = await Promise.all(batches.map(batch =>
+                    supabase
                         .from('reconciliation_suggestions')
                         .select('*, candidate_internal_transaction:candidate_internal_transaction_id(*)')
                         .in('bank_transaction_id', batch)
-                        .order('confidence', { ascending: false });
-                    
-                    if (!sError && sugs) {
-                        allSuggestions = [...allSuggestions, ...sugs];
-                    }
-                }
+                        .order('confidence', { ascending: false })
+                ));
+
+                const allSuggestions = batchResults
+                    .filter(r => !r.error && r.data)
+                    .flatMap(r => r.data as ReconciliationSuggestion[]);
                 setSuggestions(allSuggestions);
             }
 
@@ -3804,9 +3827,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                 </div>
                                             )}
                                             {/* AI Suggestions Panel */}
-                                            {suggestions.filter(s => s.bank_transaction_id === tx.id).slice(0, 1).map(suggestion => {
-                                                const cand = suggestion.candidate_internal_transaction;
-                                                if (!cand) return null;
+                                            {(() => {
+                                                const suggestion = topSuggestionByBankTxId.get(tx.id);
+                                                const cand = suggestion?.candidate_internal_transaction;
+                                                if (!suggestion || !cand) return null;
                                                 return (
                                                     <div key={suggestion.id} className="mx-4 mb-2 -mt-2 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100 rounded-b-xl flex items-center justify-between shadow-inner">
                                                         <div className="flex items-center gap-3">
@@ -3828,7 +3852,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                                 )}
                                                             </div>
                                                         </div>
-                                                            <button 
+                                                            <button
                                                                 onClick={() => handleConfirmMatch(tx.id, cand.id)}
                                                                 className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-purple-700 transition-colors shadow-sm"
                                                             >
@@ -3836,7 +3860,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                             </button>
                                                     </div>
                                                 );
-                                            })}
+                                            })()}
                                         </div>
                                     ))}
                                 </div>

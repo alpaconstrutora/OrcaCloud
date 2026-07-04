@@ -7,6 +7,7 @@ import { contractService } from '../services/contractService';
 import { supabase } from '../lib/supabase';
 import { Contract } from '../types';
 import Button from './ui/Button';
+import { formatDateBR as fmtDate } from './ui/Format';
 
 interface Props {
     organizationId: string;
@@ -18,8 +19,6 @@ interface Props {
 
 const fmt = (n: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n);
-
-const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR');
 
 const daysUntil = (dateStr: string) => {
     const diff = new Date(dateStr + 'T12:00:00').getTime() - Date.now();

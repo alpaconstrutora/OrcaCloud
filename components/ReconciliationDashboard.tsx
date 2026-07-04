@@ -9,10 +9,7 @@ import type {
     ReconciliationDashboard as DashboardData, ReconciliationAccountBalance,
     ReconciliationConsolidated,
 } from '../types/financial';
-
-function formatBRL(v: number): string {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
-}
+import { formatMoney as formatBRL } from './ui/Format';
 
 // Tolerância para considerar saldos "batendo" (centavos de arredondamento).
 const EPS = 0.01;

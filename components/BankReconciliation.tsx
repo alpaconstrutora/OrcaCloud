@@ -33,6 +33,50 @@ interface BankReconciliationProps {
     organizationId: string;
 }
 
+type LazyOption = { value: string; label: string };
+
+/**
+ * <select> que só materializa a lista completa de <option> ao ser aberto/focado.
+ * Enquanto fechado, renderiza apenas a opção do valor atual — evitando que centenas
+ * de cards × centenas de opções explodam o DOM e travem a thread principal
+ * ("página sem resposta"). O comportamento visual é idêntico a um <select> comum.
+ */
+const LazySelect: React.FC<{
+    value: string;
+    currentLabel?: string;
+    options: LazyOption[];
+    onChange: (value: string) => void;
+    className?: string;
+    placeholder?: string;
+    title?: string;
+}> = ({ value, currentLabel, options, onChange, className, placeholder = '', title }) => {
+    const [revealed, setRevealed] = React.useState(false);
+    const reveal = React.useCallback(() => setRevealed(true), []);
+    return (
+        <select
+            value={value}
+            title={title}
+            onChange={(e) => { e.stopPropagation(); onChange(e.target.value); }}
+            onClick={(e) => e.stopPropagation()}
+            onMouseEnter={reveal}
+            onMouseDown={reveal}
+            onFocus={reveal}
+            className={className}
+        >
+            <option value="">{placeholder}</option>
+            {!revealed && value !== '' && (
+                <option value={value}>{currentLabel || value}</option>
+            )}
+            {revealed && value !== '' && !options.some(o => o.value === value) && (
+                <option value={value}>{currentLabel || value}</option>
+            )}
+            {revealed && options.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+        </select>
+    );
+};
+
 const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId }) => {
     const confirm = useConfirm();
     const navigateToFocus = useStore(s => s.navigateToFocus);
@@ -446,6 +490,24 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         internalTransactions.forEach(tx => { if (tx.entity_name) ents.add(tx.entity_name); });
         return Array.from(ents).sort();
     }, [internalTransactions]);
+
+    // Opções pré-computadas para os <select> dentro dos cards (evita recriar arrays por linha)
+    const categoryOptions = useMemo<LazyOption[]>(
+        () => uniqueCategories.map(c => ({ value: c, label: c })),
+        [uniqueCategories]
+    );
+    const projectOptions = useMemo<LazyOption[]>(
+        () => masterProjects.map(p => ({ value: p.id, label: p.name })),
+        [masterProjects]
+    );
+    const credorOptions = useMemo<LazyOption[]>(
+        () => uniqueCredores.map(n => ({ value: n, label: n })),
+        [uniqueCredores]
+    );
+    const clienteOptions = useMemo<LazyOption[]>(
+        () => [...new Set([...uniqueClients, ...uniqueBankClients])].sort().map(n => ({ value: n, label: n })),
+        [uniqueClients, uniqueBankClients]
+    );
 
     const [showInternalTxModal, setShowInternalTxModal] = useState(false);
     // Modal de cadastro rápido de Cliente/Fornecedor a partir do extrato
@@ -3196,20 +3258,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         <div className="min-w-0 flex flex-col gap-1">
                                                             <p className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Extrato Bancário</p>
                                                             <p className="text-xs font-bold text-gray-900 truncate max-w-[150px] mb-1">{bTx.description_normalized || bTx.description_raw}</p>
-                                                            <select 
+                                                            <LazySelect
                                                                 value={bTx.category || ''}
-                                                                onChange={(e) => handleUpdateBankCategory(bTx.id, e.target.value)}
+                                                                currentLabel={bTx.category || ''}
+                                                                onChange={(v) => handleUpdateBankCategory(bTx.id, v)}
+                                                                options={categoryOptions}
+                                                                placeholder="Pendente"
                                                                 className={`text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer w-fit ${
-                                                                    bTx.category 
-                                                                        ? 'text-gray-900 bg-gray-50 border-gray-100' 
+                                                                    bTx.category
+                                                                        ? 'text-gray-900 bg-gray-50 border-gray-100'
                                                                         : 'text-gray-400 bg-white border-dashed border-gray-200'
                                                                 }`}
-                                                            >
-                                                                <option value="">Pendente</option>
-                                                                {uniqueCategories.map(cat => (
-                                                                    <option key={cat} value={cat}>{cat}</option>
-                                                                ))}
-                                                            </select>
+                                                            />
                                                         </div>
                                                     </div>
                                                     <div className="text-right">
@@ -3235,20 +3295,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         <div className="min-w-0 flex flex-col gap-1">
                                                             <p className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Sistema Interno</p>
                                                             <p className="text-xs font-bold text-gray-900 truncate max-w-[150px] mb-1">{iTx.description}</p>
-                                                            <select 
+                                                            <LazySelect
                                                                 value={iTx.category || ''}
-                                                                onChange={(e) => handleUpdateInternalCategory(iTx.id, e.target.value)}
+                                                                currentLabel={iTx.category || ''}
+                                                                onChange={(v) => handleUpdateInternalCategory(iTx.id, v)}
+                                                                options={categoryOptions}
+                                                                placeholder="Pendente"
                                                                 className={`text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer w-fit ${
-                                                                    iTx.category 
-                                                                        ? 'text-gray-900 bg-gray-50 border-gray-100' 
+                                                                    iTx.category
+                                                                        ? 'text-gray-900 bg-gray-50 border-gray-100'
                                                                         : 'text-gray-400 bg-white border-dashed border-gray-200'
                                                                 }`}
-                                                            >
-                                                                <option value="">Pendente</option>
-                                                                {uniqueCategories.map(cat => (
-                                                                    <option key={cat} value={cat}>{cat}</option>
-                                                                ))}
-                                                            </select>
+                                                            />
                                                         </div>
                                                     </div>
                                                     <div className="flex flex-col items-end gap-2">
@@ -3282,20 +3340,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     <p className="text-sm font-bold text-gray-900 uppercase break-words" title={bTx.description_normalized || bTx.description_raw}>
                                                         {bTx.description_normalized || bTx.description_raw}
                                                     </p>
-                                                    <select 
+                                                    <LazySelect
                                                         value={bTx.category || ''}
-                                                        onChange={(e) => handleUpdateBankCategory(bTx.id, e.target.value)}
+                                                        currentLabel={bTx.category || ''}
+                                                        onChange={(v) => handleUpdateBankCategory(bTx.id, v)}
+                                                        options={categoryOptions}
+                                                        placeholder="Pendente"
                                                         className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer w-fit ${
-                                                            bTx.category 
-                                                                ? 'text-gray-900 bg-gray-50 border-gray-100' 
+                                                            bTx.category
+                                                                ? 'text-gray-900 bg-gray-50 border-gray-100'
                                                                 : 'text-gray-400 bg-white border-dashed border-gray-200'
                                                         }`}
-                                                    >
-                                                        <option value="">Pendente</option>
-                                                        {uniqueCategories.map(cat => (
-                                                            <option key={cat} value={cat}>{cat}</option>
-                                                        ))}
-                                                    </select>
+                                                    />
                                                 </div>
                                             </div>
 
@@ -3334,20 +3390,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         <span className="text-[9px] font-black text-gray-400 uppercase bg-gray-100 px-2 py-0.5 rounded shrink-0">
                                                             {iTx.source_system}
                                                         </span>
-                                                        <select 
+                                                        <LazySelect
                                                             value={iTx.category || ''}
-                                                            onChange={(e) => handleUpdateInternalCategory(iTx.id, e.target.value)}
+                                                            currentLabel={iTx.category || ''}
+                                                            onChange={(v) => handleUpdateInternalCategory(iTx.id, v)}
+                                                            options={categoryOptions}
+                                                            placeholder="Pendente"
                                                             className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer w-fit ${
-                                                                iTx.category 
-                                                                    ? 'text-gray-900 bg-gray-50 border-gray-100' 
+                                                                iTx.category
+                                                                    ? 'text-gray-900 bg-gray-50 border-gray-100'
                                                                     : 'text-gray-400 bg-white border-dashed border-gray-200'
                                                             }`}
-                                                        >
-                                                            <option value="">Pendente</option>
-                                                            {uniqueCategories.map(cat => (
-                                                                <option key={cat} value={cat}>{cat}</option>
-                                                            ))}
-                                                        </select>
+                                                        />
                                                     </div>
                                                 </div>
                                             </div>
@@ -3591,42 +3645,30 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
                                                     <div className="flex flex-col gap-3 mt-auto pt-3 border-t border-gray-50">
                                                         <div className="flex gap-2">
-                                                            <select
+                                                            <LazySelect
                                                                 value={tx.category || ''}
-                                                                onChange={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleUpdateBankCategory(tx.id, e.target.value);
-                                                                }}
-                                                                onClick={(e) => e.stopPropagation()}
+                                                                currentLabel={tx.category || ''}
+                                                                onChange={(v) => handleUpdateBankCategory(tx.id, v)}
+                                                                options={categoryOptions}
+                                                                placeholder="Categoria"
                                                                 className={`flex-1 text-[8px] font-black px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
                                                                     tx.category
                                                                         ? 'text-gray-900 bg-gray-50 border-gray-100 hover:bg-gray-100'
                                                                         : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-300 hover:text-blue-500'
                                                                 }`}
-                                                            >
-                                                                <option value="">Categoria</option>
-                                                                {uniqueCategories.map(cat => (
-                                                                    <option key={cat} value={cat}>{cat}</option>
-                                                                ))}
-                                                            </select>
-                                                            <select
+                                                            />
+                                                            <LazySelect
                                                                 value={tx.project_id || ''}
-                                                                onChange={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleUpdateBankProject(tx.id, e.target.value);
-                                                                }}
-                                                                onClick={(e) => e.stopPropagation()}
+                                                                currentLabel={projectName(tx.project_id) || ''}
+                                                                onChange={(v) => handleUpdateBankProject(tx.id, v)}
+                                                                options={projectOptions}
+                                                                placeholder="Obra"
                                                                 className={`flex-1 text-[8px] font-black px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
                                                                     tx.project_id
                                                                         ? 'text-gray-900 bg-blue-50 border-blue-100 hover:bg-blue-100'
                                                                         : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-300 hover:text-blue-500'
                                                                 }`}
-                                                            >
-                                                                <option value="">Obra</option>
-                                                                {masterProjects.map(proj => (
-                                                                    <option key={proj.id} value={proj.id}>{proj.name}</option>
-                                                                ))}
-                                                            </select>
+                                                            />
                                                         </div>
 
                                                         <div className="flex items-center justify-between">
@@ -3706,24 +3748,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                             <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest mb-0.5">
                                                                 {tx.direction === 'DEBIT' ? 'Credor' : 'Cliente'}
                                                             </span>
-                                                            <select
+                                                            <LazySelect
                                                                 value={tx.counterparty_name || ''}
-                                                                onChange={(e) => { e.stopPropagation(); handleUpdateBankCounterparty(tx.id, e.target.value); }}
-                                                                onClick={(e) => e.stopPropagation()}
+                                                                currentLabel={tx.counterparty_name || ''}
+                                                                onChange={(v) => handleUpdateBankCounterparty(tx.id, v)}
+                                                                options={tx.direction === 'DEBIT' ? credorOptions : clienteOptions}
+                                                                placeholder="— selecionar"
                                                                 className={`text-xs font-black uppercase border-b border-dashed bg-transparent focus:outline-none cursor-pointer transition-colors max-w-[130px] ${
                                                                     tx.counterparty_name
                                                                         ? 'text-gray-700 border-gray-300'
                                                                         : 'text-gray-400 border-gray-200'
                                                                 }`}
-                                                            >
-                                                                <option value="" className="text-gray-900 bg-white">— selecionar</option>
-                                                                {tx.counterparty_name && ![...uniqueCredores, ...uniqueClients, ...uniqueBankClients].includes(tx.counterparty_name) && (
-                                                                    <option value={tx.counterparty_name} className="text-gray-900 bg-white">{tx.counterparty_name}</option>
-                                                                )}
-                                                                {(tx.direction === 'DEBIT' ? uniqueCredores : [...new Set([...uniqueClients, ...uniqueBankClients])].sort()).map(name => (
-                                                                    <option key={name} value={name} className="text-gray-900 bg-white">{name}</option>
-                                                                ))}
-                                                            </select>
+                                                            />
                                                         </div>
 
                                                         {/* Cadastro rápido quando o cliente/fornecedor do extrato ainda não existe */}
@@ -3746,45 +3782,33 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         })()}
 
                                                         <div onClick={(e) => e.stopPropagation()}>
-                                                            <select
+                                                            <LazySelect
                                                                 value={tx.category || ''}
-                                                                onChange={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleUpdateBankCategory(tx.id, e.target.value);
-                                                                }}
-                                                                onClick={(e) => e.stopPropagation()}
+                                                                currentLabel={tx.category || ''}
+                                                                onChange={(v) => handleUpdateBankCategory(tx.id, v)}
+                                                                options={categoryOptions}
+                                                                placeholder="Categoria"
                                                                 className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
                                                                     tx.category
                                                                         ? 'text-gray-900 bg-gray-100 border-gray-200/50 hover:bg-gray-200'
                                                                         : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
                                                                 }`}
-                                                            >
-                                                                <option value="">Categoria</option>
-                                                                {uniqueCategories.map(cat => (
-                                                                    <option key={cat} value={cat}>{cat}</option>
-                                                                ))}
-                                                            </select>
+                                                            />
                                                         </div>
 
                                                         <div onClick={(e) => e.stopPropagation()}>
-                                                            <select
+                                                            <LazySelect
                                                                 value={tx.project_id || ''}
-                                                                onChange={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleUpdateBankProject(tx.id, e.target.value);
-                                                                }}
-                                                                onClick={(e) => e.stopPropagation()}
+                                                                currentLabel={projectName(tx.project_id) || ''}
+                                                                onChange={(v) => handleUpdateBankProject(tx.id, v)}
+                                                                options={projectOptions}
+                                                                placeholder="Obra"
                                                                 className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
                                                                     tx.project_id
                                                                         ? 'text-gray-900 bg-blue-100 border-blue-200/50 hover:bg-blue-200'
                                                                         : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
                                                                 }`}
-                                                            >
-                                                                <option value="">Obra</option>
-                                                                {masterProjects.map(proj => (
-                                                                    <option key={proj.id} value={proj.id}>{proj.name}</option>
-                                                                ))}
-                                                            </select>
+                                                            />
                                                         </div>
 
                                                         <div className="flex items-center gap-1 ml-auto">
@@ -4153,24 +4177,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         <span className="text-[8px] font-black text-gray-400 uppercase">{formatDateBR(displayDate(tx))}</span>
                                                     </div>
                                                     
-                                                    <select 
+                                                    <LazySelect
                                                         value={tx.category || ''}
-                                                        onChange={(e) => {
-                                                            e.stopPropagation();
-                                                            handleUpdateInternalCategory(tx.id, e.target.value);
-                                                        }}
-                                                        onClick={(e) => e.stopPropagation()}
+                                                        currentLabel={tx.category || ''}
+                                                        onChange={(v) => handleUpdateInternalCategory(tx.id, v)}
+                                                        options={categoryOptions}
+                                                        placeholder="Pendente"
                                                         className={`text-[8px] font-black px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center min-w-[80px] ${
-                                                            tx.category 
-                                                                ? 'text-gray-900 bg-gray-50 border-gray-100 hover:bg-gray-100' 
+                                                            tx.category
+                                                                ? 'text-gray-900 bg-gray-50 border-gray-100 hover:bg-gray-100'
                                                                 : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-300 hover:text-blue-500'
                                                         }`}
-                                                    >
-                                                        <option value="">Pendente</option>
-                                                        {uniqueCategories.map(cat => (
-                                                            <option key={cat} value={cat}>{cat}</option>
-                                                        ))}
-                                                    </select>
+                                                    />
                                                 </div>
                                             </div>
                                         ) : (
@@ -4252,21 +4270,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         </div>
                                                     )}
 
-                                                    <select
+                                                    <LazySelect
                                                         value={tx.category || ''}
-                                                        onChange={(e) => { e.stopPropagation(); handleUpdateInternalCategory(tx.id, e.target.value); }}
-                                                        onClick={(e) => e.stopPropagation()}
+                                                        currentLabel={tx.category || ''}
+                                                        onChange={(v) => handleUpdateInternalCategory(tx.id, v)}
+                                                        options={categoryOptions}
+                                                        placeholder="Categoria"
                                                         className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
                                                             tx.category
                                                                 ? 'text-gray-900 bg-gray-100 border-gray-200/50 hover:bg-gray-200'
                                                                 : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
                                                         }`}
-                                                    >
-                                                        <option value="">Categoria</option>
-                                                        {uniqueCategories.map(cat => (
-                                                            <option key={cat} value={cat}>{cat}</option>
-                                                        ))}
-                                                    </select>
+                                                    />
 
                                                     <div className="flex items-center gap-1 ml-auto">
                                                         <Calendar className="w-3 h-3 text-gray-300 shrink-0" />

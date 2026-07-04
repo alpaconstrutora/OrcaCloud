@@ -42,10 +42,20 @@ INSERT INTO public.prolabore_inss_rules (valid_from, valid_to, rate, teto, patro
 SELECT '2025-01-01', NULL, 0.11, 8157.41, 0.20
 WHERE NOT EXISTS (SELECT 1 FROM public.prolabore_inss_rules WHERE valid_from = '2025-01-01');
 
--- ─── 2. Cota patronal por item/folha (despesa da empresa, não desconto do sócio) ───
+-- ─── 2. Cota Patronal + Contribuições de Terceiros por item/folha ──────────
+-- (despesas da empresa, não descontam do líquido do sócio)
+--
+-- Contribuições de Terceiros (Sistema S: Salário-Educação/INCRA/SENAC/SESC/
+-- SEBRAE etc., ~5,8%) incide sobre a MESMA base da Cota Patronal — inclusive
+-- sobre pró-labore — quando a empresa não é Simples Nacional. A alíquota já
+-- é configurável por organização em localStorage (payrollService.
+-- getOrgTerceirosTaxes/TERCEIROS_TAXES_DEFAULT, reusado pelo módulo Encargos
+-- Sociais para a folha CLT) — aqui só armazenamos o valor calculado.
 
 ALTER TABLE public.prolabore_payroll_items
-  ADD COLUMN IF NOT EXISTS patronal_amount NUMERIC(15,2) NOT NULL DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS patronal_amount  NUMERIC(15,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS terceiros_amount NUMERIC(15,2) NOT NULL DEFAULT 0;
 
 ALTER TABLE public.prolabore_payrolls
-  ADD COLUMN IF NOT EXISTS patronal_total NUMERIC(15,2) NOT NULL DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS patronal_total   NUMERIC(15,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS terceiros_total  NUMERIC(15,2) NOT NULL DEFAULT 0;

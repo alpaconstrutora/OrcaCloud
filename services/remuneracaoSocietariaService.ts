@@ -4,6 +4,7 @@ import { payrollEngine } from './payrollEngine';
 import { documentService } from './documentService';
 import { supplierService } from './supplierService';
 import { companyService } from './companyService';
+import { getOrgTerceirosTaxes } from './payrollService';
 import { calculateIRRF } from '../lib/payrollCalc';
 import {
     PartnerCompensationSettings, PartnerCompensationSettingsUpsert,
@@ -21,6 +22,7 @@ export interface ProlaboreCalcResult {
     irrf_amount: number;
     net_amount: number;
     patronal_amount: number;
+    terceiros_amount: number;
 }
 
 export interface ProlaboreInssRule {
@@ -70,6 +72,10 @@ export const remuneracaoSocietariaService = {
     // de lib/payrollCalc; applyIRRFReducer do payrollEngine cobre o redutor 2026+).
     // Cota Patronal (20%) é despesa da empresa — não desconta do líquido do
     // sócio — e só incide se a empresa NÃO for optante do Simples Nacional.
+    // Contribuições de Terceiros (Sistema S) incidem sobre a MESMA base da
+    // Cota Patronal, inclusive sobre pró-labore — reusa a config por
+    // organização já usada na folha CLT (payrollService.getOrgTerceirosTaxes),
+    // sem duplicar a alíquota.
 
     async getProlaboreInssRule(competenceDate: string): Promise<ProlaboreInssRule> {
         const { data, error } = await supabase
@@ -85,7 +91,7 @@ export const remuneracaoSocietariaService = {
         return data as ProlaboreInssRule;
     },
 
-    async calculateProlabore(grossAmount: number, competenceDate: string, regimeTributario?: string): Promise<ProlaboreCalcResult> {
+    async calculateProlabore(grossAmount: number, competenceDate: string, regimeTributario?: string, organizationId?: string): Promise<ProlaboreCalcResult> {
         const [rule, irrfBrackets] = await Promise.all([
             this.getProlaboreInssRule(competenceDate),
             fiscalService.getIRRFBrackets(competenceDate),
@@ -99,7 +105,12 @@ export const remuneracaoSocietariaService = {
         const year = parseInt(competenceDate.slice(0, 4), 10);
         const irrf = year >= 2026 ? payrollEngine.applyIRRFReducer(rawIrrf, irrfBase) : rawIrrf;
 
-        const patronal = regimeTributario === 'simples' ? 0 : baseInss * rule.patronal_rate;
+        const isento = regimeTributario === 'simples';
+        const patronal = isento ? 0 : baseInss * rule.patronal_rate;
+        const terceiroTotalRate = organizationId
+            ? getOrgTerceirosTaxes(organizationId).reduce((s, t) => s + t.rate, 0)
+            : 0;
+        const terceiros = isento ? 0 : baseInss * terceiroTotalRate;
 
         return {
             partner_id: '',
@@ -108,10 +119,23 @@ export const remuneracaoSocietariaService = {
             irrf_amount: Math.round(irrf * 100) / 100,
             net_amount: Math.round((grossAmount - inss - irrf) * 100) / 100,
             patronal_amount: Math.round(patronal * 100) / 100,
+            terceiros_amount: Math.round(terceiros * 100) / 100,
         };
     },
 
     // ─── Folha de pró-labore mensal ─────────────────────────────
+
+    /** Leitura pura — usado por telas de relatório (ex.: Encargos Sociais) que não devem criar rascunho. */
+    async getPayrollByCompetence(companyId: string, competenceMonth: string): Promise<ProlaborePayroll | null> {
+        const { data, error } = await supabase
+            .from('prolabore_payrolls')
+            .select('*')
+            .eq('company_id', companyId)
+            .eq('competence_month', competenceMonth)
+            .maybeSingle();
+        if (error) throw error;
+        return data as ProlaborePayroll | null;
+    },
 
     async getOrCreatePayroll(organizationId: string, companyId: string, competenceMonth: string): Promise<ProlaborePayroll> {
         const { data: existing, error: findError } = await supabase
@@ -298,7 +322,7 @@ export const remuneracaoSocietariaService = {
 
         const items: Omit<ProlaborePayrollItem, 'id' | 'created_at' | 'updated_at'>[] = [];
         for (const s of active) {
-            const calc = await this.calculateProlabore(s.prolabore_amount!, payroll.competence_month, company.regime_tributario);
+            const calc = await this.calculateProlabore(s.prolabore_amount!, payroll.competence_month, company.regime_tributario, payroll.organization_id);
             items.push({
                 payroll_id: payroll.id,
                 partner_id: s.partner_id,
@@ -307,6 +331,7 @@ export const remuneracaoSocietariaService = {
                 irrf_amount: calc.irrf_amount,
                 net_amount: calc.net_amount,
                 patronal_amount: calc.patronal_amount,
+                terceiros_amount: calc.terceiros_amount,
                 cost_center_id: s.cost_center_id,
                 status: 'calculado',
             });
@@ -324,7 +349,8 @@ export const remuneracaoSocietariaService = {
             irrf: acc.irrf + i.irrf_amount,
             net: acc.net + i.net_amount,
             patronal: acc.patronal + i.patronal_amount,
-        }), { gross: 0, inss: 0, irrf: 0, net: 0, patronal: 0 });
+            terceiros: acc.terceiros + i.terceiros_amount,
+        }), { gross: 0, inss: 0, irrf: 0, net: 0, patronal: 0, terceiros: 0 });
 
         const { error: updError } = await supabase
             .from('prolabore_payrolls')
@@ -335,6 +361,7 @@ export const remuneracaoSocietariaService = {
                 irrf_total: totals.irrf,
                 net_total: totals.net,
                 patronal_total: totals.patronal,
+                terceiros_total: totals.terceiros,
             })
             .eq('id', payroll.id);
         if (updError) throw updError;
@@ -393,9 +420,10 @@ export const remuneracaoSocietariaService = {
             if (itemError) throw itemError;
         }
 
-        // Cota Patronal: despesa da empresa perante o INSS (guia única, não é
-        // pagamento a um "fornecedor" — não gera invoice, só o lançamento
-        // contábil/DRE). Uma linha por folha, cobrindo todos os sócios.
+        // Cota Patronal + Contribuições de Terceiros: despesas da empresa
+        // perante o INSS/Sistema S (guia única, não é pagamento a um
+        // "fornecedor" — não gera invoice, só o lançamento contábil/DRE).
+        // Uma linha por folha para cada, cobrindo todos os sócios.
         if (payroll.patronal_total > 0) {
             const { error: patronalError } = await supabase
                 .from('internal_transactions')
@@ -411,6 +439,23 @@ export const remuneracaoSocietariaService = {
                     status: 'PENDING',
                 });
             if (patronalError) throw patronalError;
+        }
+
+        if (payroll.terceiros_total > 0) {
+            const { error: terceirosError } = await supabase
+                .from('internal_transactions')
+                .insert({
+                    organization_id: organizationId,
+                    source_system: 'PROLABORE',
+                    reference_id: payroll.id,
+                    transaction_date: payroll.competence_month,
+                    amount: payroll.terceiros_total,
+                    direction: 'DEBIT',
+                    description: `Contribuições de Terceiros s/ Pró-labore ${payroll.competence_month.slice(0, 7)}`,
+                    category: 'Contribuições de Terceiros (Pró-labore)',
+                    status: 'PENDING',
+                });
+            if (terceirosError) throw terceirosError;
         }
 
         const { error } = await supabase

@@ -13,8 +13,9 @@ import {
 import { supabase } from '../lib/supabase';
 import LaborEncargosINSS from './LaborEncargosINSS';
 import LaborFolhaEmpregado from './LaborFolhaEmpregado';
+import LaborEncargosProlabore from './LaborEncargosProlabore';
 
-type EncargosTab = 'contribuicoes' | 'inss' | 'folha';
+type EncargosTab = 'contribuicoes' | 'inss' | 'folha' | 'prolabore';
 
 interface LaborEncargosProps {
     orgId: string;
@@ -200,6 +201,16 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                         <FileText className="w-3.5 h-3.5" />
                         Relação por Empregado
                     </button>
+                    <button
+                        onClick={() => setActiveTab('prolabore')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-bold uppercase tracking-wider transition-all
+                            ${activeTab === 'prolabore'
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20'
+                                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
+                    >
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        Pró-labore
+                    </button>
                 </div>
 
                 {/* Competência compartilhada */}
@@ -224,6 +235,11 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
             {/* ── ABA: RELAÇÃO POR EMPREGADO ── */}
             {activeTab === 'folha' && (
                 <LaborFolhaEmpregado orgId={orgId} period={period} />
+            )}
+
+            {/* ── ABA: PRÓ-LABORE (Remuneração Societária) ── */}
+            {activeTab === 'prolabore' && (
+                <LaborEncargosProlabore orgId={orgId} period={period} />
             )}
 
             {/* ── ABA: CONTRIBUIÇÕES SOCIAIS ── */}

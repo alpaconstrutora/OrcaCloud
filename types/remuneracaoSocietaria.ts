@@ -39,6 +39,7 @@ export interface ProlaborePayroll {
   irrf_total: number;
   net_total: number;
   patronal_total: number;
+  terceiros_total: number;
   approved_by_email?: string;
   approved_at?: string;
   created_by_email?: string;
@@ -57,6 +58,7 @@ export interface ProlaborePayrollItem {
   irrf_amount: number;
   net_amount: number;
   patronal_amount: number;
+  terceiros_amount: number;
   cost_center_id?: string;
   financial_entry_id?: string;
   receipt_document_id?: string;

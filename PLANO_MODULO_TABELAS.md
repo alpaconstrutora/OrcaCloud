@@ -18,8 +18,8 @@
 | Drawer lateral / confirmação | `Sheet` + `useConfirm` (ver `UI_PATTERNS.md`) | #3, #10, #36 |
 
 Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager, ContasPagarManager.
-Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule.
-Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote).
+Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab).
+Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote), ClientChargesModule (cancelar cobrança em lote).
 
 **Exceção conhecida:** ContasReceberManager tem ordenação própria (`handleSort`/`SortIcon`), não usa `SortableHeader`/`useTableColumns` para sort — decisão já registrada (refatoração considerada complexa, custo/benefício baixo). F1/F3 foram aplicados por cima sem tocar nisso.
 
@@ -46,6 +46,10 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   campos **introduziria o bug inverso**. Não têm duplicação de formatação de moeda.
   InvoiceManager (upload de NFe/recibos): também descartado — sem coluna de valor
   monetário e a única data é `createdAt` (timestamp de upload, não DATE de negócio).
+- DunningModule tem duas famílias de data distintas: `fmtDate` (topo do arquivo,
+  timestamp completo com hora, usado no `sent_at` de eventos) ficou intocado — é
+  timestamptz de verdade, não DATE; já `fmtBRL`/`fmtDue` do `HistoricoTab` migraram
+  para as primitivas (mesmo padrão DATE-only de vencimento).
 - Pendente: util de alinhamento genérico (#6) e marcador visual de origem
   manual×importado×calculado (#25) — ainda não extraídos como primitiva.
 
@@ -61,6 +65,10 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
 - ✅ ContasPagarManager — marcar pago em lote.
 - ✅ ContasReceberManager — baixar (receber) em lote; critério de seleção espelha o botão
   "Baixar" por linha (`effective_status !== 'RECEBIDO'`).
+- ✅ ClientChargesModule — cancelar cobrança (boleto/PIX Asaas) em lote; critério espelha
+  `handleCancel` por linha (`status !== 'CANCELLED' && !PAID.includes(status) &&
+  transaction_id` presente); confirmação única antes do lote (mesmo padrão do botão
+  individual, que já pedia `confirm()`).
 - BoletoManager já tinha seleção em massa própria (pré-existente, não migrada para o
   padrão comum — avaliar unificação depois).
 - **Avaliado e descartado:** FinancialApprovalModule — fila mistura 3 entidades
@@ -68,7 +76,11 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   por item, e rejeição exige motivo obrigatório individual. Bulk sem modal por item
   perderia esse contexto; precisaria de desenho próprio (ex.: bulk só para "aprovar
   sem observação", nunca para rejeitar) — não faz sentido forçar o padrão genérico aqui.
-- Próximo candidato a avaliar: DunningModule / ClientChargesModule (cobrança em lote).
+- **Avaliado e descartado:** DunningModule — `ReguaTab` é config de regras (não
+  transacional); `HistoricoTab` é log de auditoria de disparos, sem ação por item
+  (doc §12: auditoria é para rastrear, não para agir em lote).
+- Próximo candidato a avaliar: PayrollRunList / LaborBIAnalytics ou fila de Suprimentos
+  (ProcurementModule/ThreeWayMatchPanel).
 
 ### F4 — Totalizadores padronizados (#21)
 - Rodapé de resumo reutilizável (respeita filtro) — generalizar o que já existe

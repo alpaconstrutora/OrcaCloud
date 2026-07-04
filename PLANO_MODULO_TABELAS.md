@@ -18,7 +18,7 @@
 | Drawer lateral / confirmação | `Sheet` + `useConfirm` (ver `UI_PATTERNS.md`) | #3, #10, #36 |
 
 Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager, ContasPagarManager.
-Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda), PriceTableManager (só moeda), ContractMeasurementModal (moeda + data de aditivo — corrigiu bug de sinal negativo), BalanceteReport (só moeda), WIPReport (moeda + % — corrigiu separador decimal do percentual), SmartReconciliationCenter + GroupMatchPanel (moeda/data), BankReconciliation (moeda em 8 pontos + formatDateBR local unificado com a primitiva), ReconciliationDashboard (só moeda), ContractsDashboard (só data), InventoryModule (moeda/data/% — corrigiu bug de fuso real em 3 datas + separador decimal), PayrollEventModal (só moeda).
+Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda), PriceTableManager (só moeda), ContractMeasurementModal (moeda + data de aditivo — corrigiu bug de sinal negativo), BalanceteReport (só moeda), WIPReport (moeda + % — corrigiu separador decimal do percentual), SmartReconciliationCenter + GroupMatchPanel (moeda/data), BankReconciliation (moeda em 8 pontos + formatDateBR local unificado com a primitiva), ReconciliationDashboard (só moeda), ContractsDashboard (só data), InventoryModule (moeda/data/% — corrigiu bug de fuso real em 3 datas + separador decimal), PayrollEventModal (só moeda), LaborEmployeeList (só moeda), OperacionalDetail (data + dedup interno de moeda).
 Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote), ClientChargesModule (cancelar cobrança em lote), SupplyChainOrderList (excluir pedidos em lote, só na visão em lista), InventoryModule (cancelar requisições de material em lote).
 
 **Exceção conhecida:** ContasReceberManager tem ordenação própria (`handleSort`/`SortIcon`), não usa `SortableHeader`/`useTableColumns` para sort — decisão já registrada (refatoração considerada complexa, custo/benefício baixo). F1/F3 foram aplicados por cima sem tocar nisso.
@@ -118,6 +118,16 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   desconto). Timestamp de auditoria (`toLocaleString` com hora) mantido.
 - **LaborPayroll** é só orquestrador (delega para PayrollRunList, já migrado); não tem
   tabela própria além de um `alert()` nativo com `toFixed`, fora do escopo de UI.
+- **LaborEmployeeList:** `base_salary` (padrão manual "R$ "+toLocaleString) migrado.
+  `daily_cost`/`hourly_cost` mantidos SEM prefixo "R$" (usam ícone DollarSign/Clock como
+  indicador) — migrar acrescentaria texto "R$" que hoje não existe, mudança de design
+  não pedida. LaborEmployeeForm: `fmt` local (faixa salarial, uso único) não extraído.
+- **OperacionalDetail:** `fmtDate` local (já usava `T00:00:00`, correto — interpretado
+  como horário local, não UTC) tinha saída idêntica à `formatDateBR`; unificado mantendo
+  o nome (zero-diff). `budgetedValue` deduplicado para chamar o `fmtCurrency` já local
+  do arquivo (mesma expressão repetida inline). `fmtCurrency`/`fmtDateTime` mantidos.
+  OperacionalList avaliado, nada alterado — `fmtDate` ali tem formato abreviado
+  (dia+mês, sem ano) diferente de `formatDateBR`, não é duplicata.
 
 ### F2 — Memória completa da tabela (#34)
 - `useTableColumns` passa a persistir também **ordenação, filtros e página**
@@ -194,8 +204,16 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
 - **Avaliado e descartado:** PayrollEventModal — lista pequena de lançamentos manuais
   por colaborador dentro de UMA folha; cada exclusão recalcula a folha individualmente,
   sem caso de uso concreto para bulk. LaborPayroll é só orquestrador, sem tabela própria.
-- Próximo candidato a avaliar: LaborEmployeeList/LaborEmployeeForm ou
-  OperacionalList/OperacionalDetail.
+- **Avaliado e descartado:** LaborEmployeeList — ações mistas (editar/compartilhar/
+  toggle status/excluir) sobre dado sensível de RH, mesma cautela de LaborBIAnalytics/
+  PayrollRunList. LaborEmployeeForm é formulário de 1 registro, não lista.
+- **Avaliado e descartado:** OperacionalList/OperacionalDetail — lista é tipo "Consulta"
+  (só navegação por linha, sem ação inline); transições de status vivem na página de
+  detalhe de UMA ordem (OperacionalDetail), não é lista para bulk-agir.
+- Próximo candidato a avaliar: PLANO_MODULO_PROCESSOS.md pode indicar uma frente nova
+  (arquivo apareceu no repo, não relacionado a esta varredura — verificar com o usuário
+  se há algo lá que valha revisitar). Fora isso, considerar CompaniesModule ou
+  OfficesDashboard/OfficesFinanceiro.
 
 ### F4 — Totalizadores padronizados (#21)
 - Rodapé de resumo reutilizável (respeita filtro) — generalizar o que já existe

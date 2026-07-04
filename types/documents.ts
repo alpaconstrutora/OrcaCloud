@@ -42,6 +42,8 @@ export interface OpuraFolder {
   name: string;
   parent_id?: string;
   categoria: OpuraDocumentCategoria;
+  naming_mask?: string;
+  disciplines?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -103,4 +105,14 @@ export interface OpuraDocumentAuditLog {
   action: 'criado' | 'versao_enviada' | 'download' | 'visualizado' | 'movido_pasta' | 'status_alterado';
   details?: string;
   created_at: string;
+}
+
+export interface OpuraDocumentMarkup {
+  id: string;
+  document_id: string;
+  version_id: string;
+  user_email: string;
+  markup_data: any; // rabiscos, caixas e nuvens de revisão
+  created_at: string;
+  updated_at: string;
 }

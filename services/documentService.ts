@@ -11,6 +11,7 @@ import {
   OpuraDocumentApprovalInsert,
   OpuraDocumentApprovalStatus,
   OpuraDocumentAuditLog,
+  OpuraDocumentMarkup,
 } from '../types';
 import { notificationService } from './notificationService';
 
@@ -1195,5 +1196,70 @@ export const documentService = {
     }
 
     return (data || []) as OpuraDocumentAuditLog[];
+  },
+
+  async saveDocumentMarkup(
+    documentId: string,
+    versionId: string,
+    userEmail: string,
+    markupData: any
+  ): Promise<OpuraDocumentMarkup> {
+    const { data, error } = await supabase
+      .from('opura_document_markups')
+      .insert({
+        document_id: documentId,
+        version_id: versionId,
+        user_email: userEmail,
+        markup_data: markupData,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DocumentService] Erro ao salvar marcação do documento:', error);
+      throw new Error(`Erro ao salvar marcações: ${error.message}`);
+    }
+
+    return data as OpuraDocumentMarkup;
+  },
+
+  async listDocumentMarkups(
+    documentId: string,
+    versionId: string
+  ): Promise<OpuraDocumentMarkup[]> {
+    const { data, error } = await supabase
+      .from('opura_document_markups')
+      .select('*')
+      .eq('document_id', documentId)
+      .eq('version_id', versionId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao carregar marcações do documento:', error);
+      throw new Error(`Erro ao obter marcações: ${error.message}`);
+    }
+
+    return (data || []) as OpuraDocumentMarkup[];
+  },
+
+  async getPublicDocumentStatus(docId: string): Promise<{
+    document_name: string;
+    category: string;
+    active_version_id: string;
+    active_version_number: number;
+    active_version_created_at: string;
+    active_version_storage_path: string;
+    status: string;
+  } | null> {
+    const { data, error } = await supabase
+      .rpc('fn_get_document_status_public', { doc_id: docId });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao verificar status público do documento:', error);
+      throw new Error(`Erro ao checar status público: ${error.message}`);
+    }
+
+    if (!data || data.length === 0) return null;
+    return data[0];
   },
 };

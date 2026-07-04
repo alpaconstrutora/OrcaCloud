@@ -269,6 +269,7 @@ import { useProjectOperations } from './hooks/useProjectOperations';
 import AppRouter from './components/AppRouter';
 import { ErrorBoundary } from './components/ErrorBoundary';
 const PublicMarketplaceView = React.lazy(() => import('./components/public/PublicMarketplaceView'));
+const PublicPlantChecker = React.lazy(() => import('./components/public/PublicPlantChecker').then(m => ({ default: m.PublicPlantChecker })));
 import { PWAInstallPrompt, OfflineIndicator } from './components/PWAInstallPrompt';
 import { useTabRouter } from './hooks/useTabRouter';
 import { syncViewToUrl } from './lib/tabRouter';
@@ -502,6 +503,18 @@ const App: React.FC = () => {
   if (marketplaceSlug) return (
     <React.Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
       <PublicMarketplaceView slug={marketplaceSlug} />
+    </React.Suspense>
+  );
+
+  // ── Guard público: verificação de plantas via QR Code (DMS/GED) ──────────────
+  const publicPlantDocId = React.useMemo(() => {
+    const match = window.location.pathname.match(/^\/publico\/validar-planta\/([0-9a-f-]{36})$/i);
+    return match ? match[1] : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (publicPlantDocId) return (
+    <React.Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}>
+      <PublicPlantChecker />
     </React.Suspense>
   );
 

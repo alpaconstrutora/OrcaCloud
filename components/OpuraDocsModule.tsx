@@ -13,6 +13,7 @@ import {
   Image as ImageIcon,
   Download,
   History,
+  Pencil,
   CheckCircle2,
   X,
   ChevronDown,
@@ -23,6 +24,7 @@ import {
   Loader2,
   FolderPlus,
   ChevronRight,
+  QrCode,
   CornerDownRight,
   Clock,
   ThumbsUp,
@@ -31,6 +33,8 @@ import {
   Eye,
 } from 'lucide-react';
 import { documentService } from '../services/documentService';
+import { DocumentMarkupViewer } from './ui/DocumentMarkupViewer';
+import { validateFileNameAgainstMask } from '../utils/dmsUtils';
 import {
   OpuraDocument,
   OpuraDocumentVersion,
@@ -77,6 +81,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [searchQuery, setSearchQuery] = React.useState('');
   const [uploadModalOpen, setUploadModalOpen] = React.useState(false);
   const [selectedDocForVersions, setSelectedDocForVersions] = React.useState<OpuraDocument | null>(null);
+  const [selectedDocForQrCode, setSelectedDocForQrCode] = React.useState<OpuraDocument | null>(null);
+  const [selectedDocForMarkup, setSelectedDocForMarkup] = React.useState<OpuraDocument | null>(null);
+  const [showMetrics, setShowMetrics] = React.useState(false);
+  const [folderNamingMask, setFolderNamingMask] = React.useState('');
+  const [selectedMaskPreset, setSelectedMaskPreset] = React.useState('none');
 
   // Estados locais da Onda 1 (Pastas Virtuais e Movimentação)
   const [folders, setFolders] = React.useState<OpuraFolder[]>([]);
@@ -408,8 +417,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         name: newFolderName.trim(),
         parent_id: currentFolderId || undefined,
         categoria: activeTab,
+        naming_mask: folderNamingMask || undefined,
       });
       setNewFolderName('');
+      setFolderNamingMask('');
+      setSelectedMaskPreset('none');
       setCreateFolderModalOpen(false);
       fetchFolders();
     } catch (err: any) {
@@ -524,6 +536,18 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       return;
     }
     
+    // Validação da máscara de nomenclatura de arquivos (GED)
+    if (currentFolderId && newDocFile) {
+      const targetFolder = folders.find(f => f.id === currentFolderId);
+      if (targetFolder?.naming_mask) {
+        if (!validateFileNameAgainstMask(newDocFile.name, targetFolder.naming_mask)) {
+          alert(`O nome do arquivo físico ("${newDocFile.name}") não atende ao padrão exigido nesta pasta:\n"${targetFolder.naming_mask}"\n\nPor favor, renomeie o arquivo de acordo com a máscara.`);
+          return;
+        }
+      }
+    }
+
+    setUploading(true);
     // Validar tipo de arquivo
     const allowedExtensions = ['pdf', 'docx', 'xlsx', 'dwg', 'jpg', 'png'];
     const fileExt = newDocFile.name.split('.').pop()?.toLowerCase() || '';
@@ -768,11 +792,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           const isAllowed = canAccessTab(cat.id);
           if (!isAllowed) return null; // Esconde abas proibidas pelo controle de acesso (Feature 3)
 
-          const isActive = activeTab === cat.id;
+          const isActive = activeTab === cat.id && !showMetrics;
           return (
             <button
               key={cat.id}
-              onClick={() => setActiveTab(cat.id)}
+              onClick={() => { setActiveTab(cat.id); setShowMetrics(false); }}
               className={`px-5 py-4 font-black text-form-input uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
                 isActive
                   ? 'border-blue-600 text-blue-600'
@@ -783,6 +807,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             </button>
           );
         })}
+
+        <button
+          onClick={() => { setShowMetrics(true); setShowPendingOnly(false); }}
+          className={`px-5 py-4 font-black text-form-input uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
+            showMetrics
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          📊 Saúde Documental
+        </button>
 
         {pendingApprovals.length > 0 && (
           <button
@@ -800,7 +835,125 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       </div>
 
       {/* ─── FILTROS DE BUSCA E LISTAGEM ─── */}
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+      {showMetrics ? (
+        <div className="space-y-6 animate-in fade-in-50 duration-200">
+          {/* Dashboard Premium de Saúde Documental (BI) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
+              <div className="absolute right-0 bottom-0 translate-x-2 translate-y-2 opacity-10">
+                <FileText className="w-36 h-36" />
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Total de Arquivos</p>
+              <h3 className="text-3xl font-black mt-2">{documents.length}</h3>
+              <p className="text-xs mt-1 font-semibold opacity-90">Centralizados no acervo</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
+              <div className="absolute right-0 bottom-0 translate-x-2 translate-y-2 opacity-10">
+                <CheckCircle2 className="w-36 h-36" />
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Versões Ativas / Aprovadas</p>
+              <h3 className="text-3xl font-black mt-2">
+                {documents.filter(d => d.status === 'ativo' || d.approval_status === 'aprovado').length}
+              </h3>
+              <p className="text-xs mt-1 font-semibold opacity-90">Liberados para uso</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
+              <div className="absolute right-0 bottom-0 translate-x-2 translate-y-2 opacity-10">
+                <Clock className="w-36 h-36" />
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Aguardando Aprovação</p>
+              <h3 className="text-3xl font-black mt-2">
+                {documents.filter(d => d.status === 'pendente_aprovacao' || d.approval_status === 'pendente').length}
+              </h3>
+              <p className="text-xs mt-1 font-semibold opacity-90">Prazos e revisões sob análise</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
+              <div className="absolute right-0 bottom-0 translate-x-2 translate-y-2 opacity-10">
+                <AlertTriangle className="w-36 h-36" />
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Vencidos / Críticos</p>
+              <h3 className="text-3xl font-black mt-2">
+                {documents.filter(d => d.status === 'vencido' || d.status === 'alerta').length}
+              </h3>
+              <p className="text-xs mt-1 font-semibold opacity-90">Necessitam de revisão urgente</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Distribuição por Categoria */}
+            <div className="lg:col-span-1 bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-6">
+              <div>
+                <h4 className="font-black text-slate-800 text-sm uppercase tracking-wide">Distribuição por Categoria</h4>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Volume de documentos no acervo</p>
+              </div>
+
+              <div className="space-y-4">
+                {CATEGORIES.map(cat => {
+                  const count = documents.filter(d => d.categoria === cat.id).length;
+                  const pct = documents.length > 0 ? Math.round((count / documents.length) * 100) : 0;
+                  return (
+                    <div key={cat.id} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs font-bold uppercase text-slate-600">
+                        <span>{cat.label}</span>
+                        <span>{count} ({pct}%)</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div className="bg-blue-600 h-full rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Documentos Críticos / Vencendo */}
+            <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-black text-slate-800 text-sm uppercase tracking-wide">Documentos Críticos & Alertas</h4>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ações corretivas pendentes</p>
+                </div>
+                <span className="px-2.5 py-1 text-[10px] font-black uppercase bg-red-50 text-red-600 rounded-full tracking-widest">
+                  CRÍTICO
+                </span>
+              </div>
+
+              <div className="divide-y divide-slate-100 max-h-[300px] overflow-auto">
+                {documents.filter(d => d.status === 'vencido' || d.status === 'alerta').length === 0 ? (
+                  <div className="text-center py-12 text-xs text-slate-400 font-bold uppercase tracking-wider">
+                    Sem pendências críticas ou documentos vencidos no momento! 🎉
+                  </div>
+                ) : (
+                  documents.filter(d => d.status === 'vencido' || d.status === 'alerta').map(doc => (
+                    <div key={doc.id} className="py-3.5 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`p-2 rounded-xl ${doc.status === 'vencido' ? 'bg-red-50 text-red-500' : 'bg-amber-50 text-amber-500'}`}>
+                          <AlertTriangle className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <h5 className="font-bold text-slate-700 text-xs uppercase truncate">{doc.nome}</h5>
+                          <p className="text-[10px] text-slate-400 font-semibold uppercase">
+                            Validade: {doc.data_validade ? new Date(doc.data_validade).toLocaleDateString() : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded tracking-wider ${
+                        doc.status === 'vencido' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {doc.status}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         {/* Barra de Busca e Breadcrumb */}
         <div className="p-4 border-b border-slate-100 bg-slate-50/20 space-y-3">
           <div className="relative">
@@ -1113,6 +1266,22 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             </button>
                           )}
                           <button
+                            onClick={() => setSelectedDocForQrCode(doc)}
+                            title="Gerar etiqueta QR Code de canteiro"
+                            className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
+                          >
+                            <QrCode className="w-4 h-4" />
+                          </button>
+                          {doc.active_version && (doc.active_version.mime_type === 'application/pdf' || doc.nome.toLowerCase().endsWith('.pdf')) && (
+                            <button
+                              onClick={() => setSelectedDocForMarkup(doc)}
+                              title="Fazer anotações gráficas no PDF (Revisar)"
+                              className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
                             onClick={async () => {
                               const fullDoc = await documentService.getDocumentById(doc.id);
                               setSelectedDocForVersions(fullDoc);
@@ -1155,6 +1324,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           </div>
         )}
       </div>
+      )}
 
       {/* ─── MODAL DE UPLOAD DE NOVO DOCUMENTO (Feature 1) ─── */}
       {uploadModalOpen && (
@@ -1625,6 +1795,48 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 />
               </div>
 
+              <div className="space-y-1.5">
+                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Padrão de Nome (Nomenclatura)</label>
+                <select
+                  value={selectedMaskPreset}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedMaskPreset(val);
+                    if (val === 'custom') {
+                      setFolderNamingMask('');
+                    } else if (val === 'none') {
+                      setFolderNamingMask('');
+                    } else {
+                      setFolderNamingMask(val);
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                >
+                  <option value="none">Sem padrão (Livre)</option>
+                  <option value="[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]">Padrão Construtora: [OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]</option>
+                  <option value="[DISCIPLINA]-[NUMERO]">Padrão Simples: [DISCIPLINA]-[NUMERO]</option>
+                  <option value="[OBRA]-[DISCIPLINA]-[NUMERO]-V[REVISAO]">Padrão Versão: [OBRA]-[DISCIPLINA]-[NUMERO]-V[REVISAO]</option>
+                  <option value="custom">Outro (Personalizado...)</option>
+                </select>
+              </div>
+
+              {selectedMaskPreset === 'custom' && (
+                <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-200">
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Máscara Personalizada</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: [OBRA]-PL-[NUMERO]"
+                    value={folderNamingMask}
+                    onChange={(e) => setFolderNamingMask(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  />
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                    Use as tags: <span className="text-blue-600">[OBRA]</span>, <span className="text-blue-600">[DISCIPLINA]</span>, <span className="text-blue-600">[NUMERO]</span>, <span className="text-blue-600">[REVISAO]</span>.
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -1708,6 +1920,173 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Modal de Etiqueta QR Code de Canteiro */}
+      {selectedDocForQrCode && (() => {
+        const publicValidationUrl = `${window.location.origin}/publico/validar-planta/${selectedDocForQrCode.id}?v=${selectedDocForQrCode.active_version?.version_number || 1}`;
+        const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(publicValidationUrl)}`;
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
+                <div>
+                  <h3 className="font-black text-slate-800 text-lg uppercase tracking-wide">Etiqueta QR Code</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Identificação e Validação Física</p>
+                </div>
+                <button
+                  onClick={() => setSelectedDocForQrCode(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6 flex flex-col items-center">
+                {/* Visualização de Impressão */}
+                <div id="printable-qr-label" className="w-full border-2 border-dashed border-slate-200 rounded-2xl p-6 bg-slate-50/50 flex flex-col items-center text-center space-y-4">
+                  <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                    <img 
+                      src={qrCodeImageUrl} 
+                      alt="QR Code de Validação" 
+                      className="w-44 h-44 object-contain"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="font-black text-slate-800 uppercase tracking-wide text-xs">{selectedDocForQrCode.nome}</h4>
+                    <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">
+                      Revisão Ativa: V{selectedDocForQrCode.active_version?.version_number || 1}
+                    </p>
+                    <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-widest">
+                      Validação: {publicValidationUrl.replace('http://', '').replace('https://', '')}
+                    </p>
+                  </div>
+                  <div className="w-full pt-3 border-t border-slate-200/60 flex items-center justify-between text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                    <span>ÓPURA DOCS</span>
+                    <span>{new Date().toLocaleDateString()}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 w-full">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDocForQrCode(null)}
+                    className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-500 font-bold text-button uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors text-center"
+                  >
+                    Fechar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const printContents = document.getElementById('printable-qr-label')?.innerHTML;
+                      if (printContents) {
+                        const printWindow = window.open('', '_blank');
+                        if (printWindow) {
+                          printWindow.document.write(`
+                            <html>
+                              <head>
+                                <title>Imprimir Etiqueta QR Code</title>
+                                <style>
+                                  body {
+                                    font-family: system-ui, sans-serif;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    height: 100vh;
+                                    margin: 0;
+                                    padding: 0;
+                                    background: white;
+                                  }
+                                  .label-card {
+                                    width: 80mm;
+                                    height: 80mm;
+                                    border: 1px solid #ccc;
+                                    padding: 5mm;
+                                    box-sizing: border-box;
+                                    display: flex;
+                                    flex-direction: column;
+                                    align-items: center;
+                                    justify-content: space-between;
+                                    text-align: center;
+                                  }
+                                  img {
+                                    width: 45mm;
+                                    height: 45mm;
+                                    margin-bottom: 2mm;
+                                  }
+                                  h4 {
+                                    margin: 0 0 1mm 0;
+                                    font-size: 11px;
+                                    font-weight: bold;
+                                    text-transform: uppercase;
+                                    word-break: break-word;
+                                  }
+                                  p {
+                                    margin: 0;
+                                    font-size: 9px;
+                                    color: #555;
+                                  }
+                                  .footer {
+                                    width: 100%;
+                                    border-top: 1px solid #eee;
+                                    padding-top: 1.5mm;
+                                    display: flex;
+                                    justify-content: space-between;
+                                    font-size: 8px;
+                                    color: #888;
+                                    text-transform: uppercase;
+                                  }
+                                  @media print {
+                                    body { height: auto; }
+                                    .label-card { border: none; width: 100%; height: auto; padding: 0; }
+                                  }
+                                </style>
+                              </head>
+                              <body>
+                                <div class="label-card">
+                                  <img src="${qrCodeImageUrl}" />
+                                  <div>
+                                    <h4>${selectedDocForQrCode.nome}</h4>
+                                    <p>REVISÃO ATIVA: V${selectedDocForQrCode.active_version?.version_number || 1}</p>
+                                    <p style="font-size: 7px; color: #999; margin-top: 0.5mm;">VALIDAÇÃO: ${publicValidationUrl.replace('https://', '').replace('http://', '')}</p>
+                                  </div>
+                                  <div class="footer">
+                                    <span>ÓPURA DOCS</span>
+                                    <span>${new Date().toLocaleDateString()}</span>
+                                  </div>
+                                </div>
+                                <script>
+                                  window.onload = function() {
+                                    window.print();
+                                    setTimeout(function() { window.close(); }, 500);
+                                  };
+                                </script>
+                              </body>
+                            </html>
+                          `);
+                          printWindow.document.close();
+                        }
+                      }
+                    }}
+                    className="flex-1 px-5 py-2.5 bg-blue-600 text-white font-black text-button uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md text-center"
+                  >
+                    Imprimir
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Modal Visualizador de Marcação (Markups) de PDF */}
+      {selectedDocForMarkup && (
+        <DocumentMarkupViewer
+          document={selectedDocForMarkup}
+          userEmail={currentProfile?.email || 'user@alpaconstrutora.com.br'}
+          onClose={() => setSelectedDocForMarkup(null)}
+        />
       )}
     </div>
   );

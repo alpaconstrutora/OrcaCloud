@@ -20,6 +20,7 @@ const ENTITY_TAG: Record<ActionQueueItem['entity'], string> = {
     transaction:    'Transação',
     contract:       'Contrato',
     purchase_order: 'Compra',
+    process_step:   'Processo',
 };
 
 function dispatchSubmit(item: ActionQueueItem, organizationId: string): Promise<unknown> {

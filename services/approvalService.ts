@@ -29,7 +29,7 @@ export interface ActionQueueItem {
 // ============================================================
 
 /** Entidades que participam do fluxo unificado de aprovação. */
-export type ApprovalEntity = 'transaction' | 'contract' | 'purchase_order';
+export type ApprovalEntity = 'transaction' | 'contract' | 'purchase_order' | 'process_step';
 
 interface EntityMeta {
     /** Tabela no banco. */
@@ -43,6 +43,11 @@ const ENTITY_META: Record<ApprovalEntity, EntityMeta> = {
     contract:       { table: 'contracts',             valueField: 'current_value' },
     // Fase 2 — confirmar a coluna de valor real de purchase_orders antes de ligar.
     purchase_order: { table: 'purchase_orders',       valueField: 'total_value' },
+    // process_instance_steps não tem organization_id nem valor monetário em coluna
+    // simples (o processo pode não ser sobre dinheiro) — o motor de Processos SEMPRE
+    // deve chamar submit() passando opts.organizationId e opts.amount explícitos
+    // (amount=0 para aprovação não monetária), do mesmo jeito que purchase_order faz.
+    process_step:   { table: 'process_instance_steps', valueField: 'amount' },
 };
 
 export interface ResolvedLevels {

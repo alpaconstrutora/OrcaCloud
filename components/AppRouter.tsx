@@ -80,6 +80,7 @@ const BoletoManager            = React.lazy(() => import('./BoletoManager'));
 const BankReconciliation       = React.lazy(() => import('./BankReconciliation'));
 const ContasReceberManager  = React.lazy(() => import('./ContasReceberManager'));
 const FinancialApprovalModule = React.lazy(() => import('./FinancialApprovalModule'));
+const ProcessosModule        = React.lazy(() => import('./ProcessosModule'));
 const FinancialCalendar       = React.lazy(() => import('./FinancialCalendar'));
 const DunningModule           = React.lazy(() => import('./DunningModule'));
 const MasterDataBrowser     = React.lazy(() => import('./MasterDataBrowser'));
@@ -1255,6 +1256,18 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           <FinancialApprovalModule
             organizationId={activeOrganizationId || organizations[0]?.id || ''}
             userEmail={session?.user?.email}
+          />
+        </React.Suspense>
+      );
+
+    // ── Processos ────────────────────────────────────────────────────────────
+    case 'opura-processos':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <ProcessosModule
+            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            userId={session?.user?.id || ''}
+            userEmail={session?.user?.email || ''}
           />
         </React.Suspense>
       );

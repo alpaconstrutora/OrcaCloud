@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
     Upload, Search, CheckCircle2, AlertCircle, 
     ArrowRightLeft, FileText, Download, Trash2, Check,
@@ -81,6 +82,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const confirm = useConfirm();
     const navigateToFocus = useStore(s => s.navigateToFocus);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const bankScrollRef = useRef<HTMLDivElement>(null);
+    const internalScrollRef = useRef<HTMLDivElement>(null);
     const categoriesLoadedForOrg = useRef<string | null>(null);
     const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
     const [selectedBankTxIds, setSelectedBankTxIds] = useState<Set<string>>(new Set());
@@ -352,6 +355,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         return map;
     }, [suggestions]);
 
+    // Virtualização das listas da aba Pendentes (modo lista): só renderiza os cards visíveis,
+    // evitando montar centenas de cards de uma vez. Altura estimada + medição dinâmica.
+    const bankRowVirtualizer = useVirtualizer({
+        count: sortedBankTransactions.length,
+        getScrollElement: () => bankScrollRef.current,
+        estimateSize: () => 140,
+        overscan: 8,
+    });
+    const internalRowVirtualizer = useVirtualizer({
+        count: sortedInternalTransactions.length,
+        getScrollElement: () => internalScrollRef.current,
+        estimateSize: () => 120,
+        overscan: 8,
+    });
+
     // Fonte de verdade: financial_categories. O useMemo abaixo é apenas um alias ordenado.
     const uniqueCategories = useMemo(() => [...managedCategories].sort(), [managedCategories]);
 
@@ -434,11 +452,29 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         return due || tx.transaction_date;
     };
 
+    // Maps/Sets O(1) — evitam .find()/.some() lineares repetidos no render de cada card
+    const projectNameById = useMemo(
+        () => new Map(masterProjects.map(p => [p.id, p.name])),
+        [masterProjects]
+    );
+    const costCenterNameById = useMemo(
+        () => new Map(masterCostCenters.map(c => [c.id, c.name])),
+        [masterCostCenters]
+    );
+    const masterSuppliersLower = useMemo(
+        () => new Set(masterSuppliers.map(s => s.toLowerCase())),
+        [masterSuppliers]
+    );
+    const masterClientsLower = useMemo(
+        () => new Set(masterClients.map(c => c.toLowerCase())),
+        [masterClients]
+    );
+
     const projectName = (id?: string | null) =>
-        id ? (masterProjects.find(p => p.id === id)?.name ?? null) : null;
+        id ? (projectNameById.get(id) ?? null) : null;
 
     const costCenterName = (id?: string | null) =>
-        id ? (masterCostCenters.find(c => c.id === id)?.name ?? null) : null;
+        id ? (costCenterNameById.get(id) ?? null) : null;
 
     // Listas separadas de parceiros para sugestão nas regras
     const uniqueClients = useMemo(() => {
@@ -3766,8 +3802,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         {(() => {
                                                             const cp = (tx.counterparty_name || '').trim().toLowerCase();
                                                             const registered = tx.direction === 'DEBIT'
-                                                                ? masterSuppliers.some(s => s.toLowerCase() === cp)
-                                                                : masterClients.some(c => c.toLowerCase() === cp);
+                                                                ? masterSuppliersLower.has(cp)
+                                                                : masterClientsLower.has(cp);
                                                             if (registered) return null;
                                                             return (
                                                                 <button

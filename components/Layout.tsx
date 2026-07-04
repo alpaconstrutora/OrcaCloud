@@ -425,6 +425,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'imovib', label: 'Estudos de viabilidade', group: 'Comercial', icon: BarChart3 },
       { id: 'opura-docs', label: 'Documentos', group: 'Corporativo', icon: FolderOpen },
       { id: 'opura-assets', label: 'Ativos', group: 'Corporativo', icon: Package },
+      { id: 'opura-processos', label: 'Processos', group: 'Corporativo', icon: ClipboardList },
       { id: 'settings', label: 'Configurações', group: 'Sistema', icon: Settings },
       { id: 'master-data', label: 'Cadastros', group: 'Sistema', icon: Database },
       { id: 'action-new-record', label: 'Novo registro', group: 'Ação rápida', icon: Plus, shortcut: 'N' },
@@ -763,6 +764,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="organization" icon={Building2} label="Minha Organização" />
               <NavItem id="opura-assets" icon={Package} label="Gestão de Ativos" />
               <NavItem id="opura-docs" icon={FolderOpen} label="Gestão de Documentos" />
+              <NavItem id="opura-processos" icon={ClipboardList} label="Processos" />
 
               {(mod.obras || isDev) && (
                 <>

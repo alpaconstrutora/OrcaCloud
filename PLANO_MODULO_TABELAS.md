@@ -18,7 +18,7 @@
 | Drawer lateral / confirmação | `Sheet` + `useConfirm` (ver `UI_PATTERNS.md`) | #3, #10, #36 |
 
 Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager, ContasPagarManager.
-Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda), PriceTableManager (só moeda), ContractMeasurementModal (moeda + data de aditivo — corrigiu bug de sinal negativo), BalanceteReport (só moeda), WIPReport (moeda + % — corrigiu separador decimal do percentual), SmartReconciliationCenter + GroupMatchPanel (moeda/data), BankReconciliation (moeda em 8 pontos + formatDateBR local unificado com a primitiva), ReconciliationDashboard (só moeda), ContractsDashboard (só data), InventoryModule (moeda/data/% — corrigiu bug de fuso real em 3 datas + separador decimal), PayrollEventModal (só moeda), LaborEmployeeList (só moeda), OperacionalDetail (data + dedup interno de moeda).
+Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager, FinancialApprovalModule, ClientChargesModule, DunningModule (HistoricoTab), PayrollRunList, ThreeWayMatchPanel (só moeda), ProcurementModule (moeda/data/mês — corrigiu bug de fuso real), SupplyChainOrderList (moeda de detalhe + data de entrega), StockConsumptionModal (só moeda), PriceTableManager (só moeda), ContractMeasurementModal (moeda + data de aditivo — corrigiu bug de sinal negativo), BalanceteReport (só moeda), WIPReport (moeda + % — corrigiu separador decimal do percentual), SmartReconciliationCenter + GroupMatchPanel (moeda/data), BankReconciliation (moeda em 8 pontos + formatDateBR local unificado com a primitiva), ReconciliationDashboard (só moeda), ContractsDashboard (só data), InventoryModule (moeda/data/% — corrigiu bug de fuso real em 3 datas + separador decimal), PayrollEventModal (só moeda), LaborEmployeeList (só moeda), OperacionalDetail (data + dedup interno de moeda), CompaniesModule (só moeda), OfficesDashboard (só %), OfficesFinanceiro (data — corrigiu bug de fuso real).
 Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote), ClientChargesModule (cancelar cobrança em lote), SupplyChainOrderList (excluir pedidos em lote, só na visão em lista), InventoryModule (cancelar requisições de material em lote).
 
 **Exceção conhecida:** ContasReceberManager tem ordenação própria (`handleSort`/`SortIcon`), não usa `SortableHeader`/`useTableColumns` para sort — decisão já registrada (refatoração considerada complexa, custo/benefício baixo). F1/F3 foram aplicados por cima sem tocar nisso.
@@ -128,6 +128,16 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   do arquivo (mesma expressão repetida inline). `fmtCurrency`/`fmtDateTime` mantidos.
   OperacionalList avaliado, nada alterado — `fmtDate` ali tem formato abreviado
   (dia+mês, sem ano) diferente de `formatDateBR`, não é duplicata.
+- **CompaniesModule:** `capital_social` (única ocorrência, sem helper local, já 2
+  casas) migrado direto.
+- **OfficesDashboard/OfficesFinanceiro — bug real de fuso corrigido:**
+  `inst.vencimento` (OfficesFinanceiro) é gerado como string DATE pura em
+  `officesService.ts` (`new Date(...).toISOString().split('T')[0]`), mas formatado via
+  `new Date(iso).toLocaleDateString(...)` — retrocede 1 dia em UTC-3. Migrado para
+  `formatDateBR`. `l.created_at` (OfficesDashboard, leads) mantido — TIMESTAMPTZ
+  confirmado na migration `opura_offices`. `kpi.delta` (já correto) migrado p/
+  `formatPercent` por consistência. `BRL`/`COMPACT` (moeda sem centavos + notação
+  compacta) mantidos — convenção de dashboard.
 
 ### F2 — Memória completa da tabela (#34)
 - `useTableColumns` passa a persistir também **ordenação, filtros e página**
@@ -210,10 +220,12 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
 - **Avaliado e descartado:** OperacionalList/OperacionalDetail — lista é tipo "Consulta"
   (só navegação por linha, sem ação inline); transições de status vivem na página de
   detalhe de UMA ordem (OperacionalDetail), não é lista para bulk-agir.
-- Próximo candidato a avaliar: PLANO_MODULO_PROCESSOS.md pode indicar uma frente nova
-  (arquivo apareceu no repo, não relacionado a esta varredura — verificar com o usuário
-  se há algo lá que valha revisitar). Fora isso, considerar CompaniesModule ou
-  OfficesDashboard/OfficesFinanceiro.
+- **Avaliado e descartado:** CompaniesModule — única ação por linha é excluir
+  empresa/CNPJ, dado mestre sensível e tipicamente poucas linhas.
+- **Avaliado e descartado:** OfficesDashboard/OfficesFinanceiro — ambos read-only
+  (funil de leads / fluxo de caixa projetado); `MoreHorizontal` é botão decorativo sem
+  handler, não ação de linha.
+- Próximo candidato a avaliar: aguardando indicação do usuário.
 
 ### F4 — Totalizadores padronizados (#21)
 - Rodapé de resumo reutilizável (respeita filtro) — generalizar o que já existe

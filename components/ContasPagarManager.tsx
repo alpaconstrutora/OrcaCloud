@@ -8,6 +8,7 @@ import { invoiceService } from '../services/invoiceService';
 import { Invoice } from '../types/financial';
 import type { Organization } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { Money, formatMoney, formatDateBR } from './ui/Format';
 import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
 
 type InvoiceRow = Invoice & { supplierName?: string; supplierOrganizationId?: string };
@@ -63,16 +64,6 @@ function StatusBadge({ inv }: { inv: InvoiceRow }) {
     );
 }
 
-function fmt(v: number | undefined) {
-    if (v == null) return '—';
-    return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
-function fmtDate(d: string | undefined) {
-    if (!d) return '—';
-    return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR');
-}
-
 interface Props {
     organizationId?: string;
     organizations?: Organization[];
@@ -85,6 +76,8 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     const [error, setError] = useState<string | null>(null);
     const [marcandoPago, setMarcandoPago] = useState<string | null>(null);
     const [pagandoAsaas, setPagandoAsaas] = useState<InvoiceRow | null>(null);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [bulkLoading, setBulkLoading] = useState(false);
 
     const [selectedOrgId, setSelectedOrgId] = useState<string>('ALL');
     const [search, setSearch] = useState('');
@@ -102,6 +95,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
         try {
             const data = await invoiceService.listAll(orgId);
             setInvoices(data);
+            setSelectedIds(new Set());
         } catch (e: any) {
             setError(e.message ?? 'Erro ao carregar contas a pagar');
         } finally {
@@ -179,6 +173,67 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
         }
         return result;
     }, [invoices, statusFilter, vencDe, vencAte, search, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    /** Só linhas ainda pagáveis (não pagas/rejeitadas) podem entrar em ação em massa. */
+    const isSelectable = (inv: InvoiceRow) => !['paid', 'rejected'].includes(inv.status);
+    const selectableVisible = useMemo(() => filtered.filter(isSelectable), [filtered]);
+    // Interseção da seleção com o que está visível+pagável (poda filtros que mudaram).
+    const selectedVisible = useMemo(
+        () => selectableVisible.filter(inv => selectedIds.has(inv.id)),
+        [selectableVisible, selectedIds],
+    );
+    const allVisibleSelected = selectableVisible.length > 0 && selectedVisible.length === selectableVisible.length;
+    const selectedTotal = selectedVisible.reduce((s, i) => s + (i.amount ?? 0), 0);
+
+    function toggleRow(id: string) {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    }
+    function toggleAllVisible() {
+        setSelectedIds(prev => {
+            if (allVisibleSelected) {
+                const next = new Set(prev);
+                selectableVisible.forEach(inv => next.delete(inv.id));
+                return next;
+            }
+            const next = new Set(prev);
+            selectableVisible.forEach(inv => next.add(inv.id));
+            return next;
+        });
+    }
+    const clearSelection = () => setSelectedIds(new Set());
+
+    async function handleBulkPago() {
+        const alvos = selectedVisible;
+        if (alvos.length === 0) return;
+        setBulkLoading(true);
+        const okIds: string[] = [];
+        const falhas: string[] = [];
+        for (const inv of alvos) {
+            try {
+                await invoiceService.marcarPago(inv.id);
+                okIds.push(inv.id);
+            } catch {
+                falhas.push(inv.supplierName ?? inv.id);
+            }
+        }
+        if (okIds.length) {
+            const okSet = new Set(okIds);
+            setInvoices(prev => prev.map(i => okSet.has(i.id) ? { ...i, status: 'paid' } : i));
+        }
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            okIds.forEach(id => next.delete(id));
+            return next;
+        });
+        setBulkLoading(false);
+        if (falhas.length) {
+            alert(`${okIds.length} marcada(s) como paga(s). Falha em ${falhas.length}: ${falhas.join(', ')}`);
+        }
+    }
 
     const summary = useMemo(() => {
         const now = today();
@@ -265,7 +320,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 className={`bg-white rounded-xl border border-gray-200 p-4 text-left hover:border-${card.color}-300 hover:shadow-sm transition-all`}
                             >
                                 <p className="text-button font-semibold text-gray-500 uppercase tracking-wide mb-1">{card.label}</p>
-                                <p className={`text-xl font-bold text-${card.color}-600`}>{fmt(card.value)}</p>
+                                <p className={`text-xl font-bold text-${card.color}-600`}>{formatMoney(card.value)}</p>
                             </button>
                         ))}
                     </div>
@@ -337,6 +392,31 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                         )}
                     </div>
 
+                    {/* Barra de ação em massa (F3) */}
+                    {selectedVisible.length > 0 && (
+                        <div className="flex items-center gap-4 bg-red-600 text-white rounded-xl px-4 py-3 shadow-sm">
+                            <span className="text-sm font-semibold">
+                                {selectedVisible.length} selecionada{selectedVisible.length !== 1 ? 's' : ''}
+                                <span className="ml-2 font-normal text-red-100">{formatMoney(selectedTotal)}</span>
+                            </span>
+                            <div className="flex-1" />
+                            <button
+                                onClick={handleBulkPago}
+                                disabled={bulkLoading}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-red-700 text-sm font-semibold hover:bg-red-50 disabled:opacity-60 transition-colors"
+                            >
+                                {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                Marcar como pago
+                            </button>
+                            <button
+                                onClick={clearSelection}
+                                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium text-red-100 hover:text-white hover:bg-red-500 transition-colors"
+                            >
+                                <X className="w-3.5 h-3.5" /> Limpar
+                            </button>
+                        </div>
+                    )}
+
                     {/* Tabela */}
                     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                         {loading ? (
@@ -359,6 +439,16 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                        <th className="w-10 px-4 py-3 text-center">
+                                            <input
+                                                type="checkbox"
+                                                className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer disabled:opacity-40"
+                                                checked={allVisibleSelected}
+                                                disabled={selectableVisible.length === 0}
+                                                onChange={toggleAllVisible}
+                                                title="Selecionar todos (pagáveis)"
+                                            />
+                                        </th>
                                         {tableColumns.visibleColumns.includes('supplier') && (
                                             <SortableHeader
                                                 label="Fornecedor / Documento"
@@ -424,7 +514,17 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                         const fromBoleto = (inv.notes ?? '').includes('[boleto:');
 
                                         return (
-                                            <tr key={inv.id} className={`hover:bg-gray-50 transition-colors ${overdue ? 'bg-red-50/30' : ''}`}>
+                                            <tr key={inv.id} className={`hover:bg-gray-50 transition-colors ${selectedIds.has(inv.id) ? 'bg-red-50/60' : overdue ? 'bg-red-50/30' : ''}`}>
+                                                <td className="w-10 px-4 py-3 text-center">
+                                                    {isSelectable(inv) ? (
+                                                        <input
+                                                            type="checkbox"
+                                                            className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                                            checked={selectedIds.has(inv.id)}
+                                                            onChange={() => toggleRow(inv.id)}
+                                                        />
+                                                    ) : null}
+                                                </td>
                                                 {tableColumns.visibleColumns.includes('supplier') && (
                                                     <td className="px-4 py-3">
                                                         <p className="font-medium text-gray-900 truncate max-w-xs">{inv.supplierName ?? '—'}</p>
@@ -446,12 +546,12 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 )}
                                                 {tableColumns.visibleColumns.includes('valor') && (
                                                     <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                                                        {fmt(inv.amount)}
+                                                        <Money value={inv.amount} />
                                                     </td>
                                                 )}
                                                 {tableColumns.visibleColumns.includes('vencimento') && (
                                                     <td className={`px-4 py-3 text-center text-table-body font-medium ${overdue ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
-                                                        {fmtDate(inv.dueDate)}
+                                                        {formatDateBR(inv.dueDate)}
                                                         {overdue && dueDate && (
                                                             <div className="text-xs text-red-500">
                                                                 {Math.floor((today().getTime() - dueDate.getTime()) / 86400000)}d atraso
@@ -520,11 +620,11 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 </tbody>
                                 <tfoot>
                                     <tr className="bg-gray-50 border-t border-gray-200">
-                                        <td colSpan={2} className="px-4 py-2 text-table-body text-gray-500">
+                                        <td colSpan={3} className="px-4 py-2 text-table-body text-gray-500">
                                             {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
                                         </td>
                                         <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
-                                            {fmt(filtered.filter(i => !['paid', 'rejected'].includes(i.status)).reduce((s, i) => s + (i.amount ?? 0), 0))}
+                                            {formatMoney(filtered.filter(i => !['paid', 'rejected'].includes(i.status)).reduce((s, i) => s + (i.amount ?? 0), 0))}
                                         </td>
                                         <td colSpan={3} className="px-4 py-2 text-table-body text-gray-400 text-right">total a pagar (filtrado)</td>
                                     </tr>

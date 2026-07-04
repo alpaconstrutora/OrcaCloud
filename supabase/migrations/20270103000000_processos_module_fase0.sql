@@ -147,7 +147,9 @@ ALTER TABLE public.process_instances
     DROP CONSTRAINT IF EXISTS process_instances_current_step_fk;
 ALTER TABLE public.process_instances
     ADD CONSTRAINT process_instances_current_step_fk
-    FOREIGN KEY (current_step_id) REFERENCES public.process_instance_steps(id) ON DELETE SET NULL;
+    FOREIGN KEY (current_step_id) REFERENCES public.process_instance_steps(id) ON DELETE SET NULL NOT VALID;
+ALTER TABLE public.process_instances
+    VALIDATE CONSTRAINT process_instances_current_step_fk;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 5. process_comments — comentários por instância/etapa

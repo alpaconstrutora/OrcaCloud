@@ -30,6 +30,7 @@ import {
 import { inventoryService } from '../services/inventoryService';
 import Button from './ui/Button';
 import { useStore } from '../store/useStore';
+import { formatMoney, formatDateBR, formatPercent } from './ui/Format';
 import type {
     Warehouse as WarehouseType,
     StockBalance,
@@ -373,7 +374,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     }, [tab, activeOrganizationId]);
 
     const fmt = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-    const fmtBrl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmtBrl = formatMoney;
 
     const filteredBalances = balances.filter(b =>
         !searchTerm || b.inputDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -690,11 +691,11 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                     <td className="px-4 py-3 text-right text-green-400 font-mono">{fmt(s.inflow30d)} {s.inputUnit}</td>
                                                     <td className="px-4 py-3 text-right">
                                                         <span className={`font-bold ${s.turnoverRate > 0.5 ? 'text-green-400' : s.turnoverRate > 0.1 ? 'text-yellow-400' : 'text-gray-400'}`}>
-                                                            {(s.turnoverRate * 100).toFixed(1)}%
+                                                            {formatPercent(s.turnoverRate, { decimals: 1 })}
                                                         </span>
                                                     </td>
                                                     <td className="px-4 py-3 text-right text-gray-400 hidden md:table-cell">
-                                                        {s.lastMovementDate ? new Date(s.lastMovementDate).toLocaleDateString('pt-BR') : '—'}
+                                                        {formatDateBR(s.lastMovementDate)}
                                                     </td>
                                                 </tr>
                                             ))}
@@ -744,7 +745,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                             return (
                                                 <tr key={m.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
                                                     <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
-                                                        {new Date(m.movedAt).toLocaleDateString('pt-BR')}
+                                                        {formatDateBR(m.movedAt)}
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <span className={`px-2 py-0.5 rounded-full text-table-body font-medium ${
@@ -1196,10 +1197,55 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
     const [delivering, setDelivering] = React.useState<string | null>(null);
     const [cancelling, setCancelling] = React.useState<string | null>(null);
     const [err, setErr] = React.useState('');
+    const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+    const [bulkCancelling, setBulkCancelling] = React.useState(false);
 
     const filters = ['', 'pending', 'approved', 'separated', 'delivered', 'rejected', 'cancelled'];
     const filterLabels: Record<string, string> = { '': 'Todos', ...STATUS_LABELS };
     const visible = reqFilter ? requests.filter(r => r.status === reqFilter) : requests;
+
+    const isCancellable = (r: MaterialRequest) => ['pending', 'approved', 'separated'].includes(r.status);
+    const selectableVisible = visible.filter(isCancellable);
+    const selectedVisible = selectableVisible.filter(r => selectedIds.has(r.id));
+    const allVisibleSelected = selectableVisible.length > 0 && selectedVisible.length === selectableVisible.length;
+
+    const toggleRow = (id: string) => setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+    });
+    const toggleAllVisible = () => setSelectedIds(prev => {
+        if (allVisibleSelected) {
+            const next = new Set(prev);
+            selectableVisible.forEach(r => next.delete(r.id));
+            return next;
+        }
+        const next = new Set(prev);
+        selectableVisible.forEach(r => next.add(r.id));
+        return next;
+    });
+    const clearSelection = () => setSelectedIds(new Set());
+
+    const handleBulkCancel = async () => {
+        const alvos = selectedVisible;
+        if (alvos.length === 0) return;
+        setBulkCancelling(true);
+        setErr('');
+        const falhas: string[] = [];
+        let okCount = 0;
+        for (const r of alvos) {
+            try {
+                await inventoryService.cancelMaterialRequest(r.id);
+                okCount++;
+            } catch {
+                falhas.push(r.number);
+            }
+        }
+        setSelectedIds(new Set());
+        setBulkCancelling(false);
+        reload();
+        if (falhas.length) setErr(`${okCount} cancelada(s). Falha em ${falhas.length}: ${falhas.join(', ')}`);
+    };
 
     const handleDeliver = async (id: string) => {
         setDelivering(id); setErr('');
@@ -1238,6 +1284,36 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
 
             {err && <p className="text-red-400 text-xs">{err}</p>}
 
+            {selectableVisible.length > 0 && (
+                <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        checked={allVisibleSelected}
+                        onChange={toggleAllVisible}
+                    />
+                    Selecionar todas (canceláveis)
+                </label>
+            )}
+
+            {selectedVisible.length > 0 && (
+                <div className="flex items-center gap-4 bg-gray-700 text-white px-4 py-2.5 rounded-xl">
+                    <span className="text-sm font-semibold">{selectedVisible.length} selecionada{selectedVisible.length !== 1 ? 's' : ''}</span>
+                    <div className="flex-1" />
+                    <button
+                        onClick={handleBulkCancel}
+                        disabled={bulkCancelling}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-60"
+                    >
+                        {bulkCancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                        Cancelar selecionadas
+                    </button>
+                    <button onClick={clearSelection} className="px-2 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-600">
+                        Limpar
+                    </button>
+                </div>
+            )}
+
             {visible.length === 0 && (
                 <div className="text-center py-12 text-gray-500 border border-dashed border-gray-700 rounded-xl">
                     Nenhuma requisição{reqFilter ? ` com status "${STATUS_LABELS[reqFilter]}"` : ''}.
@@ -1246,9 +1322,17 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
 
             <div className="space-y-4">
                 {visible.map(req => (
-                    <div key={req.id} className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 space-y-3">
+                    <div key={req.id} className={`bg-gray-800/50 border rounded-xl p-4 space-y-3 ${selectedIds.has(req.id) ? 'border-blue-500' : 'border-gray-700'}`}>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-3">
+                                {isCancellable(req) && (
+                                    <input
+                                        type="checkbox"
+                                        className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
+                                        checked={selectedIds.has(req.id)}
+                                        onChange={() => toggleRow(req.id)}
+                                    />
+                                )}
                                 <ClipboardList className="w-4 h-4 text-blue-400 shrink-0" />
                                 <span className="font-semibold text-white">{req.number}</span>
                                 <span className={`px-2 py-0.5 rounded-full text-button font-medium ${STATUS_COLORS[req.status]}`}>
@@ -1290,7 +1374,7 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
                             <div><span className="text-gray-500">Solicitante:</span> <span className="text-gray-200">{req.requestedBy}</span></div>
                             {req.warehouseName && <div><span className="text-gray-500">Almoxarifado:</span> <span className="text-gray-200">{req.warehouseName}</span></div>}
                             {req.projectName && <div><span className="text-gray-500">Obra:</span> <span className="text-gray-200">{req.projectName}</span></div>}
-                            <div><span className="text-gray-500">Data:</span> <span className="text-gray-200">{new Date(req.requestedAt).toLocaleDateString('pt-BR')}</span></div>
+                            <div><span className="text-gray-500">Data:</span> <span className="text-gray-200">{formatDateBR(req.requestedAt)}</span></div>
                             {req.approvedBy && <div><span className="text-gray-500">Aprovado por:</span> <span className="text-gray-200">{req.approvedBy}</span></div>}
                         </div>
                         {req.notes && <p className="text-xs text-gray-500 italic">{req.notes}</p>}

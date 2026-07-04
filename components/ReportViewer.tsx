@@ -5,6 +5,7 @@ import { sinapiService } from '../services/sinapiService';
 import { projectService } from '../services/projectService';
 import { FileDown, FileText, Printer, ChevronDown, ChevronRight, Share2, Loader2, Building2, Layers, Search, ClipboardList, Box, Database } from 'lucide-react';
 import Button from './ui/Button';
+import { formatMoney } from './ui/Format';
 
 interface ReportViewerProps {
     budget: BudgetEntry[];
@@ -698,13 +699,13 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                                 </td>
                                                 <td className="py-1.5 px-2 border-r border-gray-100 text-center text-gray-500">{item.unit}</td>
                                                 <td className="py-1.5 px-2 border-r border-gray-100 text-center font-bold text-gray-700">{item.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}</td>
-                                                <td className="py-1.5 px-2 border-r border-gray-100 text-right text-gray-600">{item.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                                <td className="py-1.5 px-2 text-right font-bold text-gray-900">{item.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                <td className="py-1.5 px-2 border-r border-gray-100 text-right text-gray-600">{formatMoney(item.price)}</td>
+                                                <td className="py-1.5 px-2 text-right font-bold text-gray-900">{formatMoney(item.total)}</td>
                                             </tr>
                                         ))}
                                         <tr className="bg-gray-100 font-bold text-gray-900 text-xs border-t-2 border-gray-200">
                                             <td colSpan={6} className="py-3 px-2 text-right uppercase">Total de Insumos (Sem BDI)</td>
-                                            <td className="py-3 px-2 text-right">{totalInsumos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                            <td className="py-3 px-2 text-right">{formatMoney(totalInsumos)}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -745,7 +746,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                                     <td className="py-2 px-2 border-r border-blue-700"></td>
                                                     <td className="py-2 px-2 border-r border-blue-700"></td>
                                                     <td colSpan={4} className="py-2 px-2 border-r border-blue-700">{cleanLabel(group.name)}</td>
-                                                    <td className="py-2 px-2 text-right">{calculateGroupTotal(group).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                    <td className="py-2 px-2 text-right">{formatMoney(calculateGroupTotal(group))}</td>
                                                     {showNatureBreakdown && (() => {
                                                         const nat = calculateGroupNatureTotal(group.name);
                                                         return (
@@ -778,7 +779,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                                                         {!hasItemsRecursive && <span className="text-gray-400 font-normal text-[9px] normal-case italic">(Sem itens)</span>}
                                                                     </div>
                                                                 </td>
-                                                                <td className="py-1.5 px-2 text-right">{calculatePhaseTotal(group.name, phase).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                                <td className="py-1.5 px-2 text-right">{formatMoney(calculatePhaseTotal(group.name, phase))}</td>
                                                                 {showNatureBreakdown && (() => {
                                                                     const nat = calculatePhaseNatureTotal(group.name, phase.name);
                                                                     return (
@@ -810,7 +811,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                                                                     {items.length === 0 && <span className="font-normal text-[9px] text-gray-300 italic">Vazio</span>}
                                                                                 </div>
                                                                             </td>
-                                                                            <td className="py-1 px-2 text-right">{calculateSubPhaseTotal(group.name, phase.name, subPhase).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                                            <td className="py-1 px-2 text-right">{formatMoney(calculateSubPhaseTotal(group.name, phase.name, subPhase))}</td>
                                                                             {showNatureBreakdown && (() => {
                                                                                 const nat = calculateSubPhaseNatureTotal(group.name, phase.name, subPhase);
                                                                                 return (
@@ -896,7 +897,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                     {/* Report Footer */}
                     < div className="border-t-2 border-gray-200 pt-4 mt-8 flex justify-between text-xs text-gray-400" >
                         <div>
-                            <p>BDI Aplicado: {settings.bdi}% ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBDI)})</p>
+                            <p>BDI Aplicado: {settings.bdi}% ({formatMoney(totalBDI)})</p>
                             <p className="text-xs mt-1">Gerado via Opura em {new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
                         </div>
                         <div className="text-right">

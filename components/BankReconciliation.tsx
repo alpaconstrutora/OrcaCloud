@@ -862,9 +862,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 autoQuery = autoQuery.lte('transaction_date', endDate);
             }
 
-            const { count: matchedCount } = await matchedQuery;
-            const { count: totalCount } = await totalQuery;
-            const { count: autoCount } = await autoQuery;
+            const [{ count: matchedCount }, { count: totalCount }, { count: autoCount }] = await Promise.all([
+                matchedQuery,
+                totalQuery,
+                autoQuery
+            ]);
 
             const rate = totalCount ? (matchedCount || 0) / totalCount : 0;
             

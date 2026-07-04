@@ -527,7 +527,8 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
     };
 
     const rascunhos = calculos.filter(c => c.status === 'rascunho');
-    const totalLiquido = calculos.reduce((s, c) => s + c.valor_liquido, 0);
+    const aprovadosOuPagos = calculos.filter(c => c.status === 'aprovado' || c.status === 'pago');
+    const totalLiquido = aprovadosOuPagos.reduce((s, c) => s + c.valor_liquido, 0);
 
     return (
         <div className="space-y-5">
@@ -563,7 +564,7 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
                         { label: 'Colaboradores', value: calculos.length.toString(), color: 'text-slate-700' },
                         { label: 'Dias elegíveis (média)', value: calculos.length ? (calculos.reduce((s, c) => s + c.dias_elegiveis, 0) / calculos.length).toFixed(1) : '—', color: 'text-orange-700' },
                         { label: 'Total bruto', value: `R$ ${calculos.reduce((s, c) => s + c.valor_bruto, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-blue-700' },
-                        { label: 'Total líquido', value: `R$ ${totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-emerald-700' },
+                        { label: 'Total líquido (aprovados)', value: `R$ ${totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-emerald-700' },
                     ].map(k => (
                         <div key={k.label} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
                             <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{k.label}</p>
@@ -694,6 +695,110 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
     );
 };
 
+// ─── Aba Aprovados ────────────────────────────────────────────────────────────
+
+const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
+    const hoje = new Date();
+    const [ano, setAno] = useState(hoje.getFullYear());
+    const [mes, setMes] = useState(hoje.getMonth());
+    const mesIso = primeiroDiaMes(ano, mes);
+
+    const { data: calculos = [], isLoading } = useQuery({
+        queryKey: ['vr_calculos', orgId, mesIso],
+        queryFn: () => vrService.listCalculos(orgId, mesIso),
+    });
+
+    const aprovados = useMemo(
+        () => calculos.filter(c => c.status === 'aprovado' || c.status === 'pago'),
+        [calculos]
+    );
+    const totalLiquido = aprovados.reduce((s, c) => s + c.valor_liquido, 0);
+    const totalBruto = aprovados.reduce((s, c) => s + c.valor_bruto, 0);
+    const totalDesconto = aprovados.reduce((s, c) => s + c.desconto_folha, 0);
+
+    return (
+        <div className="space-y-5">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">Aprovados</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Relação de colaboradores com benefício aprovado e valor total do lote</p>
+                </div>
+                <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
+                    <button onClick={() => { if (mes === 0) { setMes(11); setAno(a => a - 1); } else setMes(m => m - 1); }} className="px-3 py-1.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-white transition-colors">‹</button>
+                    <span className="px-3 py-1.5 text-sm font-black text-slate-900 min-w-[120px] text-center">{MESES[mes]}/{ano}</span>
+                    <button onClick={() => { if (mes === 11) { setMes(0); setAno(a => a + 1); } else setMes(m => m + 1); }} className="px-3 py-1.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-white transition-colors">›</button>
+                </div>
+            </div>
+
+            {aprovados.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                        { label: 'Colaboradores aprovados', value: aprovados.length.toString(), color: 'text-slate-700' },
+                        { label: 'Total bruto', value: `R$ ${totalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-blue-700' },
+                        { label: 'Total descontos', value: `R$ ${totalDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-rose-700' },
+                        { label: 'Total líquido', value: `R$ ${totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-emerald-700' },
+                    ].map(k => (
+                        <div key={k.label} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{k.label}</p>
+                            <p className={`text-xl font-black mt-1 ${k.color}`}>{k.value}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {isLoading ? (
+                <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div>
+            ) : aprovados.length === 0 ? (
+                <div className="text-center py-16 text-slate-400">
+                    <CheckCheck className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p className="font-bold text-sm">Nenhum benefício aprovado em {MESES[mes]}/{ano}</p>
+                    <p className="text-xs mt-1">Aprove os cálculos na aba "Cálculo Mensal" para vê-los aqui</p>
+                </div>
+            ) : (
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="bg-slate-50 border-b border-slate-100">
+                                    {['Colaborador','Obra','Elegíveis','Valor/Dia','Bruto','Desconto','Líquido','Status'].map(h => (
+                                        <th key={h} className="px-3 py-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {aprovados.map(c => {
+                                    const st = STATUS_CFG[c.status];
+                                    return (
+                                        <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                                            <td className="px-3 py-3 font-bold text-slate-900 whitespace-nowrap">{c.employee_name}</td>
+                                            <td className="px-3 py-3 text-slate-500 text-table-body whitespace-nowrap">{c.project_name || '—'}</td>
+                                            <td className="px-3 py-3 text-center font-black text-emerald-700">{c.dias_elegiveis}</td>
+                                            <td className="px-3 py-3 text-right font-bold text-slate-600 whitespace-nowrap">R$ {c.valor_diario.toFixed(2)}</td>
+                                            <td className="px-3 py-3 text-right font-bold text-slate-700 whitespace-nowrap">R$ {c.valor_bruto.toFixed(2)}</td>
+                                            <td className="px-3 py-3 text-right text-rose-600 font-bold whitespace-nowrap">{c.desconto_folha > 0 ? `- R$ ${c.desconto_folha.toFixed(2)}` : '—'}</td>
+                                            <td className="px-3 py-3 text-right font-black text-emerald-700 whitespace-nowrap">R$ {c.valor_liquido.toFixed(2)}</td>
+                                            <td className="px-3 py-3">
+                                                <span className={`text-xs font-black px-2 py-1 rounded-full whitespace-nowrap ${st.bg} ${st.color}`}>{st.label}</span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                            <tfoot>
+                                <tr className="bg-slate-50 border-t-2 border-slate-200">
+                                    <td colSpan={6} className="px-3 py-3 text-right font-black text-slate-700 uppercase text-xs tracking-wider">Total do lote</td>
+                                    <td className="px-3 py-3 text-right font-black text-emerald-700 whitespace-nowrap">R$ {totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                    <td />
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 // ─── Aba Histórico ────────────────────────────────────────────────────────────
 
 const AbaHistorico: React.FC<{ orgId: string }> = ({ orgId }) => {
@@ -762,7 +867,7 @@ const AbaHistorico: React.FC<{ orgId: string }> = ({ orgId }) => {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-type VrTab = 'regras' | 'calendario' | 'calculo' | 'historico';
+type VrTab = 'regras' | 'calendario' | 'calculo' | 'aprovados' | 'historico';
 
 interface LaborValeRefeicaoProps {
     orgId: string;
@@ -775,6 +880,7 @@ const TABS: { id: VrTab; label: string; icon: React.ElementType }[] = [
     { id: 'regras',     label: 'Regras',         icon: Settings },
     { id: 'calendario', label: 'Feriados',        icon: CalendarDays },
     { id: 'calculo',    label: 'Cálculo Mensal',  icon: Calculator },
+    { id: 'aprovados',  label: 'Aprovados',       icon: CheckCheck },
     { id: 'historico',  label: 'Histórico',       icon: FileText },
 ];
 
@@ -812,6 +918,7 @@ const LaborValeRefeicao: React.FC<LaborValeRefeicaoProps> = ({ orgId, organizati
             {tab === 'regras'     && <AbaRegras orgId={orgId} projects={projects} />}
             {tab === 'calendario' && <AbaCalendario orgId={orgId} organizations={organizations} projects={projects} />}
             {tab === 'calculo'    && <AbaCalculo orgId={orgId} employees={employees} projects={projects} />}
+            {tab === 'aprovados'  && <AbaAprovados orgId={orgId} />}
             {tab === 'historico'  && <AbaHistorico orgId={orgId} />}
         </div>
     );

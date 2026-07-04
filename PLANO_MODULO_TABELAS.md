@@ -139,10 +139,24 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
   `formatPercent` por consistência. `BRL`/`COMPACT` (moeda sem centavos + notação
   compacta) mantidos — convenção de dashboard.
 
-### F2 — Memória completa da tabela (#34)
-- `useTableColumns` passa a persistir também **ordenação, filtros e página**
-  (hoje só colunas). Mesmo `storageKey`.
-- Avaliar persistência por-usuário no servidor (hoje só localStorage/por-browser).
+### F2 — Memória completa da tabela (#34) — ✅ INFRAESTRUTURA PRONTA, 1/N telas piloto
+- `useTableColumns` (`components/ui/TableUtils.tsx`) passa a persistir **ordenação**
+  junto com colunas visíveis, no mesmo `storageKey`. Formato legado (array puro) ainda
+  é lido corretamente — sem quebrar preferências já salvas.
+- Novo `usePersistedState<T>(key, defaultValue)` — hook genérico (mesma assinatura de
+  `useState`) para qualquer tela persistir filtros/página em localStorage, sem
+  reimplementar load/save a cada vez.
+- **Piloto:** ContasPagarManager — `search`/`statusFilter`/`vencDe`/`vencAte` via
+  `usePersistedState` (chaves `contasPagarManagerFilters:*`).
+- **Testado e confirmado** com harness Playwright isolado: reload completo de página
+  restaura busca + filtro de status + ordenação, lidos direto do localStorage (não só
+  visualmente). Zero erros de console.
+- **Pendente:** rollout do `usePersistedState` para as demais ~15 telas com
+  `useTableColumns` (ContasReceberManager, BoletoManager, ProjectList, ClientList,
+  SupplyChainOrderList, InventoryModule etc.) — cada uma tem filtros com nomes/tipos
+  próprios, então é aplicar tela a tela, não uma migração automática.
+- Avaliar persistência por-usuário no servidor (hoje só localStorage/por-browser) —
+  não feito, fica pra decisão futura se localStorage não for suficiente.
 
 ### F3 — Ação em massa (#11) — EM ANDAMENTO (2/N telas)
 - Coluna de checkbox + barra de seleção ("N selecionados | Ação | Limpar").

@@ -10,6 +10,8 @@ import ClientCategoriesSettings from './ClientCategoriesSettings';
 
 const Settings: React.FC = () => {
     const confirm = useConfirm();
+    const [activeTab, setActiveTab] = React.useState<'geral' | 'whatsapp' | 'email' | 'database'>('geral');
+    
     const [status, setStatus] = React.useState<'IDLE' | 'MIGRATING' | 'SUCCESS' | 'ERROR'>('IDLE');
     const [message, setMessage] = React.useState('');
 
@@ -115,7 +117,35 @@ const Settings: React.FC = () => {
         <div className="max-w-4xl mx-auto p-6">
             <h1 className="text-2xl font-bold text-gray-900 mb-6">Configurações do Sistema</h1>
 
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex border-b border-gray-200 mb-6 overflow-x-auto scrollbar-hide">
+                <button
+                    onClick={() => setActiveTab('geral')}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'geral' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                >
+                    Geral
+                </button>
+                <button
+                    onClick={() => setActiveTab('whatsapp')}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'whatsapp' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                >
+                    WhatsApp & Integrações
+                </button>
+                <button
+                    onClick={() => setActiveTab('email')}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'email' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                >
+                    Templates de E-mail
+                </button>
+                <button
+                    onClick={() => setActiveTab('database')}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'database' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                >
+                    Banco de Dados
+                </button>
+            </div>
+
+            {activeTab === 'database' && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-start gap-4">
                     <div className="p-3 bg-blue-50 rounded-lg">
                         <Database className="w-6 h-6 text-blue-600" />
@@ -152,12 +182,15 @@ const Settings: React.FC = () => {
                     )}
                 </div>
             </div>
+            )}
 
-            {/* Tipos de Clientes */}
-            <ClientCategoriesSettings />
+            {activeTab === 'geral' && (
+                <div className="space-y-6">
+                    {/* Tipos de Clientes */}
+                    <ClientCategoriesSettings />
 
-            {/* Numeração de Pedidos */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-6">
+                    {/* Numeração de Pedidos */}
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
                         <div className="p-3 bg-indigo-50 rounded-lg">
@@ -203,9 +236,12 @@ const Settings: React.FC = () => {
                     </button>
                 </div>
             </div>
+                </div>
+            )}
 
+            {activeTab === 'email' && (
             {/* Templates de E-mail */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
                         <div className="p-3 bg-blue-50 rounded-lg">
@@ -253,9 +289,12 @@ const Settings: React.FC = () => {
                     </Button>
                 </div>
             </div>
+            )}
 
+            {activeTab === 'whatsapp' && (
+                <div className="space-y-6">
             {/* Z-API / WhatsApp */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-start gap-4">
                     <div className="p-3 bg-green-50 rounded-lg">
                         <MessageCircle className="w-6 h-6 text-green-600" />
@@ -327,7 +366,7 @@ const Settings: React.FC = () => {
                 </div>
             </div>
             {/* Templates WhatsApp */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
                         <div className="p-3 bg-green-50 rounded-lg">
@@ -388,6 +427,8 @@ const Settings: React.FC = () => {
                     </button>
                 </div>
             </div>
+                </div>
+            )}
         </div>
     );
 };

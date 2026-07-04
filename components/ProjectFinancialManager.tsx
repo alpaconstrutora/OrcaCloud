@@ -79,7 +79,6 @@ import FinancialOrderDetails from './FinancialOrderDetails';
 import BankReconciliation from './BankReconciliation';
 import BoletoManager from './BoletoManager';
 import ContasPagarManager from './ContasPagarManager';
-const FinancialCategoriesManager = React.lazy(() => import('./FinancialCategoriesManager'));
 import { financialSyncService } from '../services/financialSyncService';
 
 interface ProjectFinancialManagerProps {
@@ -116,7 +115,7 @@ const fmtShort = (v: unknown): string => {
     return fmt(v);
 };
 
-type TabKey = 'resumo' | 'receitas' | 'despesas' | 'fluxo' | 'rentabilidade' | 'extrato' | 'conciliacao' | 'boletos' | 'contas_pagar' | 'categorias';
+type TabKey = 'resumo' | 'receitas' | 'despesas' | 'fluxo' | 'rentabilidade' | 'extrato' | 'conciliacao' | 'boletos' | 'contas_pagar';
 
 const KPICard = ({ title, value, icon: Icon, color, subtitle, trend }: KPICardProps) => (
     <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 transition-all hover:shadow-md group">
@@ -1564,7 +1563,6 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         { key: 'conciliacao', label: 'Conciliação' },
         { key: 'boletos', label: 'Boletos' },
         { key: 'contas_pagar', label: 'Contas a Pagar' },
-        { key: 'categorias', label: 'Categorias' },
     ];
 
     return (
@@ -1641,7 +1639,6 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             { activeTab === 'conciliacao' && <BankReconciliation organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} /> }
             { activeTab === 'boletos' && <BoletoManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} userEmail={userEmail} organizations={organizations} onOrgChange={onOrgChange || (() => {})} /> }
             { activeTab === 'contas_pagar' && <ContasPagarManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} organizations={organizations} onOrgChange={(id) => onOrgChange?.(id)} /> }
-            { activeTab === 'categorias' && <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}><FinancialCategoriesManager /></React.Suspense> }
 
             {selectedOrderId && <FinancialOrderDetails orderId={selectedOrderId} onUpdate={() => setRefreshTrigger(p => p + 1)} onClose={() => setSelectedOrderId(null)} />}
 

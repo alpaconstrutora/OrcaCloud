@@ -8,10 +8,11 @@ import { useConfirm } from './ui/confirm';
 import Button from './ui/Button';
 import ClientCategoriesSettings from './ClientCategoriesSettings';
 import SupplierCategoriesSettings from './SupplierCategoriesSettings';
+import FinancialCategoriesManager from './FinancialCategoriesManager';
 
 const Settings: React.FC = () => {
     const confirm = useConfirm();
-    const [activeTab, setActiveTab] = React.useState<'geral' | 'crm' | 'whatsapp' | 'email' | 'database'>('geral');
+    const [activeTab, setActiveTab] = React.useState<'geral' | 'categorias' | 'whatsapp' | 'email' | 'database'>('geral');
     
     const [status, setStatus] = React.useState<'IDLE' | 'MIGRATING' | 'SUCCESS' | 'ERROR'>('IDLE');
     const [message, setMessage] = React.useState('');
@@ -126,10 +127,10 @@ const Settings: React.FC = () => {
                     Geral
                 </button>
                 <button
-                    onClick={() => setActiveTab('crm')}
-                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'crm' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    onClick={() => setActiveTab('categorias')}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'categorias' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 >
-                    CRM & Categorias
+                    Categorias Gerais
                 </button>
                 <button
                     onClick={() => setActiveTab('whatsapp')}
@@ -435,10 +436,15 @@ const Settings: React.FC = () => {
                 </div>
             )}
 
-            {activeTab === 'crm' && (
+            {activeTab === 'categorias' && (
                 <div className="space-y-6">
                     <ClientCategoriesSettings />
                     <SupplierCategoriesSettings />
+                    
+                    {/* Para separar visualmente sem destoar, envolvemos num container branco parecido */}
+                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                        <FinancialCategoriesManager />
+                    </div>
                 </div>
             )}
         </div>

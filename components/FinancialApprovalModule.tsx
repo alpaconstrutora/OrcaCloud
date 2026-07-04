@@ -11,6 +11,7 @@ import type {
     FinancialApprovalConfig, ApprovalStep,
 } from '../types/financial';
 import Button from './ui/Button';
+import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 
 // ─── dispatch por entidade ───────────────────────────────────
 // A fila é unificada; cada ação vai ao serviço de domínio correto.
@@ -40,17 +41,6 @@ function dispatchReject(item: ActionQueueItem, userEmail: string, reason: string
     if (item.entity === 'contract')       return contractService.rejectContract(item.id, userEmail, reason);
     if (item.entity === 'purchase_order') return orderService.rejectOrder(item.id, userEmail, reason);
     return financialApprovalService.reject(item.id, userEmail, reason);
-}
-
-// ─── helpers ────────────────────────────────────────────────
-
-function fmt(v: number) {
-    return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-function fmtDate(d: string | null | undefined) {
-    if (!d) return '—';
-    const [y, m, day] = d.split('-');
-    return `${day}/${m}/${y}`;
 }
 
 // ─── ApprovalTrail ───────────────────────────────────────────

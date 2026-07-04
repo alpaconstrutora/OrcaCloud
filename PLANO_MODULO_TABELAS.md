@@ -13,11 +13,15 @@
 | Restaurar padrão de colunas | `resetColumns` | #20 |
 | Labels humanos | `ColumnConfig.label` (texto livre) | #47 |
 | Totalizador que respeita o filtro | `ContasPagarManager.tsx:527` (`filtered...reduce`) | #21 (só nesse componente) |
-| Formatação BR de moeda | `ContasPagarManager.tsx:68` `toLocaleString('pt-BR', BRL)` | #7 (duplicado por arquivo) |
-| Formatação BR de data sem bug de fuso | `ContasPagarManager.tsx:73` `new Date(d+'T00:00:00')` | #7 (duplicado por arquivo) |
+| **Primitivas de formato BR (F1 CONCLUÍDA)** | `components/ui/Format.tsx` (`Money`/`DateBR`/`formatMoney`/`formatDateBR`/`formatPercent`) | #6/#7 |
+| **Ação em massa (F3, 2 de N telas)** | ContasPagarManager e ContasReceberManager: checkbox + barra de seleção + total selecionado + ação em lote | #11 |
 | Drawer lateral / confirmação | `Sheet` + `useConfirm` (ver `UI_PATTERNS.md`) | #3, #10, #36 |
 
 Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager, ContasPagarManager.
+Componentes já migrados p/ `Format.tsx` (primitivas): ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` delega), ContasReceberManager.
+Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), ContasReceberManager (baixar/receber em lote).
+
+**Exceção conhecida:** ContasReceberManager tem ordenação própria (`handleSort`/`SortIcon`), não usa `SortableHeader`/`useTableColumns` para sort — decisão já registrada (refatoração considerada complexa, custo/benefício baixo). F1/F3 foram aplicados por cima sem tocar nisso.
 
 ## Não fazer (over-engineering rejeitado)
 
@@ -29,24 +33,34 @@ Componentes já migrados p/ `TableUtils`: ProjectList, ClientList, BoletoManager
 
 ## Fases (ordem de ROI)
 
-### F1 — Primitivas de célula (extração, não invenção)
-- `<Money>` (alinhado à direita) — extrair o `fmt` duplicado. #6/#7.
-- `<DateBR>` — extrair o formatador. **Nascer com split de string / `T00:00:00`**,
-  nunca `new Date('YYYY-MM-DD')` cru (bug de fuso já documentado na memória).
-- Util de alinhamento (texto=esq, número=dir, ações=dir). #6.
-- Marcador visual de origem manual×importado×calculado (#25) — ícone discreto de célula.
-- **Meta:** substituir formatadores locais em ProjectList/ClientList/Boleto/ContasPagar.
+### F1 — Primitivas de célula (extração, não invenção) — ✅ CONCLUÍDA
+- `<Money>`/`formatMoney`, `<DateBR>`/`formatDateBR`, `formatPercent` em `components/ui/Format.tsx`.
+  `formatDateBR` nasceu com split de string, nunca `new Date('YYYY-MM-DD')` cru (bug de
+  fuso já documentado na memória).
+- **Aplicado em:** ContasPagarManager, BoletoManager, BoletoFormModal (`formatBRL` agora
+  delega), ContasReceberManager (import com alias `fmt`/`fmtDate` p/ menor diff).
+- **Não aplicado propositalmente:** ProjectList/ClientList — datas lá são `created_at`/
+  `updated_at`/`expires_at` (timestamptz com hora real), não `vencimento`/`dueDate` (DATE
+  puro). Usar `formatDateBR` (que ignora timezone e só lê o prefixo `YYYY-MM-DD`) nesses
+  campos **introduziria o bug inverso**. Não têm duplicação de formatação de moeda.
+- Pendente: util de alinhamento genérico (#6) e marcador visual de origem
+  manual×importado×calculado (#25) — ainda não extraídos como primitiva.
 
 ### F2 — Memória completa da tabela (#34)
 - `useTableColumns` passa a persistir também **ordenação, filtros e página**
   (hoje só colunas). Mesmo `storageKey`.
 - Avaliar persistência por-usuário no servidor (hoje só localStorage/por-browser).
 
-### F3 — Ação em massa (#11)
-- Coluna de checkbox + barra de seleção ("N selecionados | Aprovar | Exportar | …").
+### F3 — Ação em massa (#11) — EM ANDAMENTO (2/N telas)
+- Coluna de checkbox + barra de seleção ("N selecionados | Ação | Limpar").
 - Regra de clique fixa (resolve conflito #35×#10×#11):
   **linha abre drawer; checkbox seleciona; botão/menu NÃO propaga (stopPropagation).**
-- Primeiro alvo: ContasPagarManager (aprovar/enviar p/ pagamento em lote).
+- ✅ ContasPagarManager — marcar pago em lote.
+- ✅ ContasReceberManager — baixar (receber) em lote; critério de seleção espelha o botão
+  "Baixar" por linha (`effective_status !== 'RECEBIDO'`).
+- BoletoManager já tinha seleção em massa própria (pré-existente, não migrada para o
+  padrão comum — avaliar unificação depois).
+- Próximos candidatos: InvoiceManager, aprovações financeiras (FinancialApprovalModule).
 
 ### F4 — Totalizadores padronizados (#21)
 - Rodapé de resumo reutilizável (respeita filtro) — generalizar o que já existe

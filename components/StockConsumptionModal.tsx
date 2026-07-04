@@ -6,6 +6,7 @@ import React from 'react';
 import { X, Plus, Trash2, Loader2, PackageMinus, Check, AlertTriangle } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import Button from './ui/Button';
+import { formatMoney } from './ui/Format';
 import type { Warehouse, StockBalance, StockConsumptionItem } from '../types/inventory';
 
 interface Props {
@@ -117,7 +118,7 @@ export const StockConsumptionModal: React.FC<Props> = ({
     };
 
     const fmt = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-    const fmtBrl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const fmtBrl = formatMoney;
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">

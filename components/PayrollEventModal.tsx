@@ -7,6 +7,7 @@ import {
     computeEventAmount,
     isDuplicateRubric,
 } from '../lib/payrollUIHelpers';
+import { formatMoney } from './ui/Format';
 
 interface PayrollEventModalProps {
     run: PayrollRun;
@@ -329,7 +330,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                         </p>
                                     </div>
                                     <p className={`text-button font-black ${item.type === 'provento' ? 'text-indigo-600' : item.type === 'desconto' ? 'text-rose-500' : 'text-slate-500'}`}>
-                                        {item.type === 'provento' ? '+' : item.type === 'desconto' ? '-' : ' '} R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        {item.type === 'provento' ? '+' : item.type === 'desconto' ? '-' : ' '} {formatMoney(item.amount)}
                                     </p>
                                 </div>
                             ))}
@@ -353,7 +354,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                             </div>
                                             <div className="flex items-center gap-4">
                                                 <p className={`text-xs font-black ${ev.type === 'provento' ? 'text-indigo-600' : ev.type === 'desconto' ? 'text-rose-500' : 'text-slate-500'}`}>
-                                                    {ev.type === 'provento' ? '+' : ev.type === 'desconto' ? '-' : ' '} R$ {ev.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                    {ev.type === 'provento' ? '+' : ev.type === 'desconto' ? '-' : ' '} {formatMoney(ev.amount)}
                                                 </p>
                                                 {run.status !== 'FECHADO' && (
                                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">

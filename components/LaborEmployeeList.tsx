@@ -3,6 +3,7 @@ import { Search, Filter, Edit3, UserMinus, UserCheck, Building2, Briefcase, Doll
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import LaborEmployeeSharing from './LaborEmployeeSharing';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { formatMoney } from './ui/Format';
 
 const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Colaborador', sortable: true },
@@ -254,7 +255,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                     <td className="px-4 py-4 text-right">
                                         {emp.base_salary > 0 ? (
                                             <span className="text-xs font-black text-slate-900">
-                                                R$ {emp.base_salary.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                {formatMoney(emp.base_salary)}
                                             </span>
                                         ) : (
                                             <span className="text-xs text-slate-300 font-bold">—</span>

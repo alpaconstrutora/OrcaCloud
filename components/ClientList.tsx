@@ -10,7 +10,7 @@ import { clientMessagesService } from '../services/clientMessagesService';
 import { useServicesToast } from './services/useServicestoast';
 import ServicesToast from './services/ServicesToast';
 import { useStore } from '../store/useStore';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import Button from './ui/Button';
 
 interface ClientListProps {
@@ -33,11 +33,12 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const [clients, setClients] = React.useState<Client[]>([]);
     const [projects, setProjects] = React.useState<any[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
-    const [searchTerm, setSearchTerm] = React.useState('');
+    // F2: filtros sobrevivem a navegação/reload.
+    const [searchTerm, setSearchTerm] = usePersistedState('clientListFilters:search', '');
     const [isModalOpen, setIsModalOpen] = React.useState(false);
     const [selectedClient, setSelectedClient] = React.useState<Client | undefined>(undefined);
-    const [viewMode, setViewMode] = React.useState<'list' | 'grid'>('list');
-    const [categoryFilter, setCategoryFilter] = React.useState<string>('all');
+    const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('clientListFilters:viewMode', 'list');
+    const [categoryFilter, setCategoryFilter] = usePersistedState<string>('clientListFilters:category', 'all');
     const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
     const tableColumns = useTableColumns(CLIENT_COLUMNS, 'clientListColumns');
 

@@ -5,7 +5,7 @@ import {
     Activity, Users, UserPlus,
     TrendingUp, HandCoins, Filter, Truck, Settings, Send
 } from 'lucide-react';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import Button from './ui/Button';
 
 const ORG_LIST_COLUMNS: ColumnConfig[] = [
@@ -70,9 +70,10 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     onImportProject,
     onExportProject
 }) => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
-    const [sortBy, setSortBy] = useState<string>('name-asc');
+    // F2: filtros sobrevivem a navegação/reload.
+    const [searchTerm, setSearchTerm] = usePersistedState('organizationListFilters:search', '');
+    const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('organizationListFilters:viewMode', 'list');
+    const [sortBy, setSortBy] = usePersistedState<string>('organizationListFilters:sortBy', 'name-asc');
     const [managingOrgId, setManagingOrgId] = useState<string | null>(null);
     const tableColumns = useTableColumns(ORG_LIST_COLUMNS, 'organizationListColumns');
     const { activeOrganizationId, setActiveOrganizationId } = useStore();

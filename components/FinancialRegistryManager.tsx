@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Save, X, Search, Building2, Filter, HandCoins, AlertCircle, Download, FileDown, Upload } from 'lucide-react';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import Button from './ui/Button';
 
 interface RegistryItem {
@@ -54,7 +54,8 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
 }) => {
     const [isEditing, setIsEditing] = useState<string | null>(null);
     const [isAdding, setIsAdding] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
+    // F2: filtro sobrevive a navegação/reload.
+    const [searchTerm, setSearchTerm] = usePersistedState('financialRegistryFilters:search', '');
     const [loading, setLoading] = useState(false);
 
     // Form state

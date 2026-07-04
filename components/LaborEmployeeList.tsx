@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Search, Filter, Edit3, UserMinus, UserCheck, Building2, Briefcase, DollarSign, Clock, ChevronDown, ChevronUp, Trash2, Share2 } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import LaborEmployeeSharing from './LaborEmployeeSharing';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { formatMoney } from './ui/Format';
 
 const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
@@ -43,11 +43,12 @@ const STATUS_COLORS: Record<EmployeeStatus, string> = {
 };
 
 const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organizations = [], currentUserEmail, onEdit, onRefresh }) => {
-    const [search, setSearch] = useState('');
-    const [filterStatus, setFilterStatus] = useState<EmployeeStatus | 'ALL'>('ATIVO');
-    const [filterContract, setFilterContract] = useState<ContractType | 'ALL'>('ALL');
-    const [sortBy, setSortBy] = useState<'name' | 'cost'>('name');
-    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+    // F2: filtros sobrevivem a navegação/reload.
+    const [search, setSearch] = usePersistedState('laborEmployeeListFilters:search', '');
+    const [filterStatus, setFilterStatus] = usePersistedState<EmployeeStatus | 'ALL'>('laborEmployeeListFilters:status', 'ATIVO');
+    const [filterContract, setFilterContract] = usePersistedState<ContractType | 'ALL'>('laborEmployeeListFilters:contract', 'ALL');
+    const [sortBy, setSortBy] = usePersistedState<'name' | 'cost'>('laborEmployeeListFilters:sortBy', 'name');
+    const [sortDir, setSortDir] = usePersistedState<'asc' | 'desc'>('laborEmployeeListFilters:sortDir', 'asc');
     const [sharingEmployee, setSharingEmployee] = useState<Employee | null>(null);
     const tableColumns = useTableColumns(LABOR_EMPLOYEE_COLUMNS, 'laborEmployeeListColumns');
 

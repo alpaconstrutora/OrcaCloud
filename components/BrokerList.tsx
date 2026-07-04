@@ -5,7 +5,7 @@ import { brokerService } from '../services/brokerService';
 import { brokerPortalService, BrokerPortalToken } from '../services/brokerPortalService';
 import BrokerModal from './BrokerModal';
 import { useStore } from '../store/useStore';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
 const BROKER_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Corretor', sortable: true },
@@ -26,10 +26,11 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
 
     const [brokers, setBrokers] = React.useState<BrokerProfile[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
-    const [searchTerm, setSearchTerm] = React.useState('');
-    const [statusFilter, setStatusFilter] = React.useState<'all' | 'active' | 'inactive'>('all');
-    const [sortBy, setSortBy] = React.useState('name-asc');
-    const [viewMode, setViewMode] = React.useState<'list' | 'grid'>('list');
+    // F2: filtros sobrevivem a navegação/reload.
+    const [searchTerm, setSearchTerm] = usePersistedState('brokerListFilters:search', '');
+    const [statusFilter, setStatusFilter] = usePersistedState<'all' | 'active' | 'inactive'>('brokerListFilters:status', 'all');
+    const [sortBy, setSortBy] = usePersistedState('brokerListFilters:sortBy', 'name-asc');
+    const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('brokerListFilters:viewMode', 'list');
 
     const [isModalOpen, setIsModalOpen] = React.useState(false);
     const [selectedBroker, setSelectedBroker] = React.useState<BrokerProfile | undefined>(undefined);

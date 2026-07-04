@@ -11,7 +11,7 @@ import { clientService } from '../services/clientService';
 import type { ClientCharge, BillingType } from '../services/clientChargeService';
 import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
 import type { Organization } from '../types';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 
 // ─── helpers ────────────────────────────────────────────────
@@ -615,14 +615,17 @@ export default function ContasReceberManager({ organizationId, organizations, on
     const [loading, setLoading]   = useState(true);
     const [error, setError]       = useState<string | null>(null);
 
-    const [search, setSearch]           = useState('');
-    const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-    const [dueFrom, setDueFrom]         = useState('');
-    const [dueTo, setDueTo]             = useState('');
+    // F2: filtros + ordenação sobrevivem a navegação/reload.
+    const [search, setSearch]           = usePersistedState('contasReceberManagerFilters:search', '');
+    const [statusFilter, setStatusFilter] = usePersistedState<StatusFilter>('contasReceberManagerFilters:status', 'all');
+    const [dueFrom, setDueFrom]         = usePersistedState('contasReceberManagerFilters:dueFrom', '');
+    const [dueTo, setDueTo]             = usePersistedState('contasReceberManagerFilters:dueTo', '');
     const [showFilters, setShowFilters]  = useState(false);
     const [showInad, setShowInad]        = useState(false);
-    const [sort, setSort]               = useState<SortConfig>({ key: 'due_date', dir: 'asc' });
-    const tableColumns = useTableColumns(RECEBER_COLUMNS);
+    const [sort, setSort]               = usePersistedState<SortConfig>('contasReceberManagerFilters:sort', { key: 'due_date', dir: 'asc' });
+    // storageKey explícito — antes usava o default 'tableColumns' e colidia com
+    // qualquer outro componente que também não passasse a chave.
+    const tableColumns = useTableColumns(RECEBER_COLUMNS, 'contasReceberManagerColumns');
 
     const [showNovo, setShowNovo]         = useState(false);
     const [baixando, setBaixando]         = useState<Receivable | null>(null);

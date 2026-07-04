@@ -2,7 +2,7 @@ import React from 'react';
 import { projectService } from '../services/projectService';
 import { FolderOpen, Calendar, Search, Loader2, Settings, FileSpreadsheet, Edit2, LayoutDashboard, Clock, AlertCircle, CheckCircle2, ChevronRight, Copy, Trash2 } from 'lucide-react';
 import { ProjectSchedule } from '../types';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import Button from './ui/Button';
 
 const COLUMNS: ColumnConfig[] = [
@@ -46,8 +46,9 @@ const PlanningList: React.FC<PlanningListProps> = ({
 }) => {
     const [projects, setProjects] = React.useState<ProjectSummary[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
-    const [searchTerm, setSearchTerm] = React.useState('');
-    const [viewMode, setViewMode] = React.useState<'list' | 'grid'>('list');
+    // F2: filtros sobrevivem a navegação/reload.
+    const [searchTerm, setSearchTerm] = usePersistedState('planningListFilters:search', '');
+    const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('planningListFilters:viewMode', 'list');
     const tableColumns = useTableColumns(COLUMNS, 'planningListColumns');
 
     const loadProjects = async () => {

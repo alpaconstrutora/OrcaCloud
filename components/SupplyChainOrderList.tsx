@@ -1,7 +1,7 @@
 import React from 'react';
 import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, Pencil, FileCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import Button from './ui/Button';
 import { formatMoney, formatDateBR } from './ui/Format';
 
@@ -34,14 +34,15 @@ interface SupplyChainOrderListProps {
 const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew, onViewDetails, onViewLogistics, onEdit, version }) => {
     const [orders, setOrders] = React.useState<any[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [sortBy, setSortBy] = React.useState<string>('date-desc');
-    const [searchTerm, setSearchTerm] = React.useState('');
-    const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
+    // F2: filtros sobrevivem a navegação/reload.
+    const [sortBy, setSortBy] = usePersistedState<string>('supplyChainOrderFilters:sortBy', 'date-desc');
+    const [searchTerm, setSearchTerm] = usePersistedState('supplyChainOrderFilters:search', '');
+    const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplyChainOrderFilters:viewMode', 'list');
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainOrderColumns');
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
     const [linkedNfeOrderIds, setLinkedNfeOrderIds] = React.useState<Set<string>>(new Set());
-    const [nfFilter, setNfFilter] = React.useState<'all' | 'sem-nf'>('all');
+    const [nfFilter, setNfFilter] = usePersistedState<'all' | 'sem-nf'>('supplyChainOrderFilters:nf', 'all');
     const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
     const [bulkLoading, setBulkLoading] = React.useState(false);
 

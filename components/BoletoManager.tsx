@@ -14,7 +14,7 @@ import BoletoFormModal, { formatBRL } from './BoletoFormModal';
 import BoletoLoteModal from './BoletoLoteModal';
 import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
 import { useStore } from '../store/useStore';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { formatDateBR } from './ui/Format';
 import Button from './ui/Button';
 
@@ -251,8 +251,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [projectList, setProjectList] = useState<{ id: string; name: string }[]>([]);
     const [ccList, setCcList] = useState<{ id: string; name: string }[]>([]);
 
-    const [filtroStatus, setFiltroStatus] = useState<BoletoStatus | 'todos'>('todos');
-    const [busca, setBusca] = useState('');
+    // F2: filtros sobrevivem a navegação/reload.
+    const [filtroStatus, setFiltroStatus] = usePersistedState<BoletoStatus | 'todos'>('boletoManagerFilters:status', 'todos');
+    const [busca, setBusca] = usePersistedState('boletoManagerFilters:busca', '');
     const [buscaDebounced, setBuscaDebounced] = useState('');
 
     // Debounce da busca textual: evita refiltrar/reordenar a lista inteira
@@ -264,13 +265,13 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
 
     // Filtros avançados (client-side)
     const [showFiltros, setShowFiltros] = useState(false);
-    const [vencDe, setVencDe] = useState('');
-    const [vencAte, setVencAte] = useState('');
-    const [valorMin, setValorMin] = useState('');
-    const [valorMax, setValorMax] = useState('');
-    const [ordenarPor, setOrdenarPor] = useState<'vencimento' | 'valor' | 'created_at' | 'numero' | 'project_id' | 'cost_center_id' | 'beneficiario_nome' | 'status'>('created_at');
-    const [ordenarDir, setOrdenarDir] = useState<'asc' | 'desc'>('desc');
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+    const [vencDe, setVencDe] = usePersistedState('boletoManagerFilters:vencDe', '');
+    const [vencAte, setVencAte] = usePersistedState('boletoManagerFilters:vencAte', '');
+    const [valorMin, setValorMin] = usePersistedState('boletoManagerFilters:valorMin', '');
+    const [valorMax, setValorMax] = usePersistedState('boletoManagerFilters:valorMax', '');
+    const [ordenarPor, setOrdenarPor] = usePersistedState<'vencimento' | 'valor' | 'created_at' | 'numero' | 'project_id' | 'cost_center_id' | 'beneficiario_nome' | 'status'>('boletoManagerFilters:ordenarPor', 'created_at');
+    const [ordenarDir, setOrdenarDir] = usePersistedState<'asc' | 'desc'>('boletoManagerFilters:ordenarDir', 'desc');
+    const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('boletoManagerFilters:viewMode', 'list');
 
     // Lookup maps para exibição nos cards/linhas
     const [ccMap, setCcMap] = useState<Record<string, string>>({});

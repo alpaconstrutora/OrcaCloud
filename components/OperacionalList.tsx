@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { WorkOrderStatus, WorkOrderPriority } from '../types/operational-control'
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils'
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils'
 import Button from './ui/Button'
 
 const OPERACIONAL_COLUMNS: ColumnConfig[] = [
@@ -123,11 +123,12 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
   const [workOrders, setWorkOrders] = useState<WorkOrderRow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<WorkOrderStatus | 'all'>('all')
-  const [phaseFilter, setPhaseFilter] = useState<string>('all')
-  const [overdueOnly, setOverdueOnly] = useState(false)
-  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards')
+  // F2: filtros sobrevivem a navegação/reload.
+  const [search, setSearch] = usePersistedState('operacionalListFilters:search', '')
+  const [statusFilter, setStatusFilter] = usePersistedState<WorkOrderStatus | 'all'>('operacionalListFilters:status', 'all')
+  const [phaseFilter, setPhaseFilter] = usePersistedState<string>('operacionalListFilters:phase', 'all')
+  const [overdueOnly, setOverdueOnly] = usePersistedState('operacionalListFilters:overdueOnly', false)
+  const [viewMode, setViewMode] = usePersistedState<'cards' | 'list'>('operacionalListFilters:viewMode', 'cards')
   const tableColumns = useTableColumns(OPERACIONAL_COLUMNS, 'operacionalListColumns')
 
   const load = async () => {

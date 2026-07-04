@@ -27,7 +27,7 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 
 import ExcelImportModal from './ExcelImportModal';
 import { BudgetEntry, ProjectSettings } from '../types';
-import { useTableColumns } from './ui/TableUtils';
+import { useTableColumns, usePersistedState } from './ui/TableUtils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SettingsLike = any;
@@ -100,9 +100,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const [projects, setProjects] = React.useState<ProjectSummary[]>([]);
     const [orderCounts, setOrderCounts] = React.useState<Record<string, number>>({});
     const [isLoading, setIsLoading] = React.useState(true);
-    const [searchTerm, setSearchTerm] = React.useState('');
+    // F2: filtros sobrevivem a navegação/reload.
+    const [searchTerm, setSearchTerm] = usePersistedState('projectListFilters:search', '');
     const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
-    const [viewMode, setViewMode] = React.useState<'list' | 'grid'>('list');
+    const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('projectListFilters:viewMode', 'list');
     const [activeTab, setActiveTab] = React.useState<'budgets' | 'templates'>(
         classificationFilter === 'OBRA' ? 'templates' : 'budgets'
     );

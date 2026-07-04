@@ -4,7 +4,7 @@ import { Supplier } from '../types';
 import { supplierService } from '../services/supplierService';
 import { SupplierModal } from './SupplierModal';
 import { SupplierCategoryModal } from './SupplierCategoryModal';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
 const SUPPLIER_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Fornecedor', sortable: true },
@@ -21,13 +21,14 @@ interface SupplierListProps {
 export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) => {
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
-    const [searchTerm, setSearchTerm] = React.useState('');
+    // F2: filtros sobrevivem a navegação/reload.
+    const [searchTerm, setSearchTerm] = usePersistedState('supplierListFilters:search', '');
     const [isIdInitialized, setIsIdInitialized] = React.useState(false);
     const [isModalOpen, setIsModalOpen] = React.useState(false);
     const [isCategoryModalOpen, setIsCategoryModalOpen] = React.useState(false);
     const [editingSupplier, setEditingSupplier] = React.useState<Supplier | undefined>();
-    const [sortBy, setSortBy] = React.useState<string>('name-asc');
-    const [viewMode, setViewMode] = React.useState<'list' | 'grid'>('list');
+    const [sortBy, setSortBy] = usePersistedState<string>('supplierListFilters:sortBy', 'name-asc');
+    const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('supplierListFilters:viewMode', 'list');
 
     const loadSuppliers = async () => {
         setIsLoading(true);

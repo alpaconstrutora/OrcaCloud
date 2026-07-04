@@ -2,7 +2,7 @@ import React from 'react';
 import { Plus, FileText, Calendar, Clock, ChevronRight, Search, Filter, LayoutDashboard, Table2, ArrowRight } from 'lucide-react';
 import { QuotationRequest } from '../types';
 import { quotationService } from '../services/quotationService';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import Button from './ui/Button';
 
 const COLUMNS: ColumnConfig[] = [
@@ -22,8 +22,9 @@ interface SupplyChainQuotationListProps {
 const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onCreateNew, onViewDetails, onViewComparison }) => {
     const [requests, setRequests] = React.useState<QuotationRequest[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [searchTerm, setSearchTerm] = React.useState('');
-    const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
+    // F2: filtros sobrevivem a navegação/reload.
+    const [searchTerm, setSearchTerm] = usePersistedState('supplyChainQuotationFilters:search', '');
+    const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplyChainQuotationFilters:viewMode', 'list');
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainQuotationColumns');
 
     React.useEffect(() => {

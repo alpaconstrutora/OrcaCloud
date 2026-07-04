@@ -9,7 +9,7 @@ import {
 import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
 import type { GroupByField } from './TasksModule'
-import { ColumnConfig, useTableColumns, ColumnConfigButton } from './ui/TableUtils'
+import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState } from './ui/TableUtils'
 
 interface TaskGroup { key: string; label: string; color?: string; tasks: TaskRecord[] }
 
@@ -120,15 +120,16 @@ const TasksList: React.FC<Props> = ({
   tasks, loading, employees, projects, statuses = [], groupBy = 'none', resetDragSignal,
   onToggleDone, onEdit, onAddSubtask, onMakeSubtask, onAddTask, onNavigate,
 }) => {
-  const [search, setSearch]           = useState('')
-  const [sortCol, setSortCol]         = useState<SortCol | null>(null)
-  const [sortDir, setSortDir]         = useState<SortDir>('asc')
+  // F2: filtros + ordenação sobrevivem a navegação/reload.
+  const [search, setSearch]           = usePersistedState('tasksListFilters:search', '')
+  const [sortCol, setSortCol]         = usePersistedState<SortCol | null>('tasksListFilters:sortCol', null)
+  const [sortDir, setSortDir]         = usePersistedState<SortDir>('tasksListFilters:sortDir', 'asc')
   const [expanded, setExpanded]       = useState<Set<string>>(new Set())
   const [showFilters, setShowFilters] = useState(false)
-  const [fPriority, setFPriority]     = useState('')
-  const [fStatus, setFStatus]         = useState('')
-  const [fAssignee, setFAssignee]     = useState('')
-  const [fProject, setFProject]       = useState('')
+  const [fPriority, setFPriority]     = usePersistedState('tasksListFilters:priority', '')
+  const [fStatus, setFStatus]         = usePersistedState('tasksListFilters:status', '')
+  const [fAssignee, setFAssignee]     = usePersistedState('tasksListFilters:assignee', '')
+  const [fProject, setFProject]       = usePersistedState('tasksListFilters:project', '')
 
   const [draggingId, setDraggingId]         = useState<string | null>(null)
   const [dragOverId, setDragOverId]         = useState<string | null>(null)

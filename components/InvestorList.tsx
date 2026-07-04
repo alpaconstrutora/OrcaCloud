@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, TrendingUp, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X } from 'lucide-react';
 import InvestorModal from './InvestorModal';
 import { useStore } from '../store/useStore';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
 const INVESTOR_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Investidor', sortable: true },
@@ -27,10 +27,11 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
     const [investors, setInvestors] = React.useState<Investor[]>([]);
     const [projects, setProjects] = React.useState<any[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
-    const [searchTerm, setSearchTerm] = React.useState('');
+    // F2: filtros sobrevivem a navegação/reload.
+    const [searchTerm, setSearchTerm] = usePersistedState('investorListFilters:search', '');
     const [isModalOpen, setIsModalOpen] = React.useState(false);
     const [selectedInvestor, setSelectedInvestor] = React.useState<Investor | undefined>(undefined);
-    const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
+    const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('investorListFilters:viewMode', 'list');
 
     // Token modal
     const [tokenModal, setTokenModal] = React.useState<{ investor: Investor; token: InvestorPortalToken | null } | null>(null);

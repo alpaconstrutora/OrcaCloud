@@ -9,7 +9,7 @@ interface Props {
     period: string; // 'YYYY-MM', compartilhado com as demais abas de Encargos Sociais
 }
 
-const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const BRL = (v: number | null | undefined) => (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 /**
  * Sub-aba de Encargos Sociais dedicada ao pró-labore — consolida o mesmo tipo
@@ -107,7 +107,7 @@ const LaborEncargosProlabore: React.FC<Props> = ({ orgId, period }) => {
                         <div>
                             <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">Custo Total da Empresa</p>
                             <p className="text-3xl font-black text-white tracking-tight">
-                                {BRL(payroll.gross_total + payroll.patronal_total + payroll.terceiros_total)}
+                                {BRL((payroll.gross_total || 0) + (payroll.patronal_total || 0) + (payroll.terceiros_total || 0))}
                             </p>
                             <p className="text-xs text-indigo-200 font-medium mt-1">Bruto + Cota Patronal + Contrib. Terceiros (não inclui FGTS — não incide sobre pró-labore)</p>
                         </div>

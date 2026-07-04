@@ -401,7 +401,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
         }
     };
 
-    const BRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const BRL = (v: number | null | undefined) => (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     return (
         <div className="space-y-4">

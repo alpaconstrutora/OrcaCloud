@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
 import { 
     Upload, Search, CheckCircle2, AlertCircle, 
     ArrowRightLeft, FileText, Download, Trash2, Check,
@@ -82,8 +81,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const confirm = useConfirm();
     const navigateToFocus = useStore(s => s.navigateToFocus);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const bankScrollRef = useRef<HTMLDivElement>(null);
-    const internalScrollRef = useRef<HTMLDivElement>(null);
     const categoriesLoadedForOrg = useRef<string | null>(null);
     const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
     const [selectedBankTxIds, setSelectedBankTxIds] = useState<Set<string>>(new Set());
@@ -354,21 +351,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         }
         return map;
     }, [suggestions]);
-
-    // Virtualização das listas da aba Pendentes (modo lista): só renderiza os cards visíveis,
-    // evitando montar centenas de cards de uma vez. Altura estimada + medição dinâmica.
-    const bankRowVirtualizer = useVirtualizer({
-        count: sortedBankTransactions.length,
-        getScrollElement: () => bankScrollRef.current,
-        estimateSize: () => 140,
-        overscan: 8,
-    });
-    const internalRowVirtualizer = useVirtualizer({
-        count: sortedInternalTransactions.length,
-        getScrollElement: () => internalScrollRef.current,
-        estimateSize: () => 120,
-        overscan: 8,
-    });
 
     // Fonte de verdade: financial_categories. O useMemo abaixo é apenas um alias ordenado.
     const uniqueCategories = useMemo(() => [...managedCategories].sort(), [managedCategories]);
@@ -3617,7 +3599,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                     <p className="text-xs text-gray-400 max-w-[200px]">Importe um arquivo OFX, CSV, CNAB ou Excel (XLSX) para iniciar a conciliação.</p>
                                 </div>
                             ) : (
-                                <div className={pendentesViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "flex flex-col gap-3 p-3"}>
+                                <div
+                                    className={pendentesViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "flex flex-col gap-3 p-3 overflow-y-auto reconc-scroll"}
+                                    style={pendentesViewMode === 'list' ? { maxHeight: 'calc(100vh - 300px)' } : undefined}
+                                >
 
                                     {pendentesViewMode === 'list' && sortedBankTransactions.length > 0 && (
                                         <div className="flex items-center gap-3 px-4 py-2">
@@ -3644,7 +3629,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                     )}
 
                                     {sortedBankTransactions.map(tx => (
-                                        <div key={tx.id} className="group relative">
+                                        <div
+                                            key={tx.id}
+                                            className="group relative"
+                                            style={pendentesViewMode === 'list' ? ({ contentVisibility: 'auto', containIntrinsicSize: 'auto 140px' } as React.CSSProperties) : undefined}
+                                        >
                                             {pendentesViewMode === 'grid' ? (
                                                 <div 
                                                     onClick={() => setSelectedBankTxId(selectedBankTxId === tx.id ? null : tx.id)}
@@ -4099,7 +4088,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                     </p>
                                 </div>
                             ) : (
-                                <div className={pendentesViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "flex flex-col gap-3 p-3"}>
+                                <div
+                                    className={pendentesViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "flex flex-col gap-3 p-3 overflow-y-auto reconc-scroll"}
+                                    style={pendentesViewMode === 'list' ? { maxHeight: 'calc(100vh - 300px)' } : undefined}
+                                >
 
                                     {pendentesViewMode === 'list' && sortedInternalTransactions.length > 0 && (
                                         <div className="flex items-center gap-3 px-4 py-2">
@@ -4228,7 +4220,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div key={tx.id} className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-3 hover:shadow-md transition-all group">
+                                            <div key={tx.id} className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-3 hover:shadow-md transition-all group" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 120px' } as React.CSSProperties}>
                                                 {/* Linha 1: checkbox + ícone + descrição */}
                                                 <div className="flex items-center gap-3 min-w-0">
                                                     <input

@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- Hotfix: pgcrypto digest no Supabase fica no schema extensions.
 -- A funcao calculate_area_version precisa enxergar extensions.digest.
 -- ============================================================

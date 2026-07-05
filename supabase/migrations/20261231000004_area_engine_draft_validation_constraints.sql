@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- Hotfix: permitir dados incompletos em rascunho/importacao.
 -- O motor validate_area_version deve bloquear calculo/aprovacao com
 -- MOTOR_007, MOTOR_011, MOTOR_012 etc., em vez de o INSERT falhar antes.

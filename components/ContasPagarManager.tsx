@@ -243,20 +243,22 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
         const em7 = new Date(now); em7.setDate(em7.getDate() + 7);
 
         let aPagar = 0, venc7 = 0, atrasado = 0, pagoMes = 0;
+        let qtdAPagar = 0, qtdVenc7 = 0, qtdAtrasado = 0, qtdPagoMes = 0;
         invoices.forEach(inv => {
             const due = inv.dueDate ? new Date(inv.dueDate + 'T00:00:00') : null;
             if (inv.status === 'paid') {
                 const criado = new Date(inv.createdAt);
-                if (criado >= inicioMes && criado <= fimMes) pagoMes += inv.amount ?? 0;
+                if (criado >= inicioMes && criado <= fimMes) { pagoMes += inv.amount ?? 0; qtdPagoMes++; }
             } else if (inv.status !== 'rejected') {
                 aPagar += inv.amount ?? 0;
+                qtdAPagar++;
                 if (due) {
-                    if (due < now) atrasado += inv.amount ?? 0;
-                    else if (due <= em7) venc7 += inv.amount ?? 0;
+                    if (due < now) { atrasado += inv.amount ?? 0; qtdAtrasado++; }
+                    else if (due <= em7) { venc7 += inv.amount ?? 0; qtdVenc7++; }
                 }
             }
         });
-        return { aPagar, venc7, atrasado, pagoMes };
+        return { aPagar, venc7, atrasado, pagoMes, qtdAPagar, qtdVenc7, qtdAtrasado, qtdPagoMes };
     }, [invoices]);
 
     return (
@@ -310,17 +312,22 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                     {/* KPI Cards */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         {[
-                            { label: 'A Pagar', value: summary.aPagar, color: 'blue', onClick: () => setStatusFilter('all') },
-                            { label: 'Vence em 7d', value: summary.venc7, color: 'yellow', onClick: () => { setStatusFilter('all'); const d = new Date(); d.setDate(d.getDate() + 7); setVencAte(d.toISOString().slice(0, 10)); setVencDe(new Date().toISOString().slice(0, 10)); } },
-                            { label: 'Em Atraso', value: summary.atrasado, color: 'red', onClick: () => setStatusFilter('overdue') },
-                            { label: 'Pago no Mês', value: summary.pagoMes, color: 'green', onClick: () => setStatusFilter('paid') },
+                            { label: 'A Pagar', value: summary.aPagar, qtd: summary.qtdAPagar, color: 'blue', onClick: () => setStatusFilter('all') },
+                            { label: 'Vence em 7d', value: summary.venc7, qtd: summary.qtdVenc7, color: 'yellow', onClick: () => { setStatusFilter('all'); const d = new Date(); d.setDate(d.getDate() + 7); setVencAte(d.toISOString().slice(0, 10)); setVencDe(new Date().toISOString().slice(0, 10)); } },
+                            { label: 'Em Atraso', value: summary.atrasado, qtd: summary.qtdAtrasado, color: 'red', onClick: () => setStatusFilter('overdue') },
+                            { label: 'Pago no Mês', value: summary.pagoMes, qtd: summary.qtdPagoMes, color: 'green', onClick: () => setStatusFilter('paid') },
                         ].map(card => (
                             <button
                                 key={card.label}
                                 onClick={card.onClick}
                                 className={`bg-white rounded-xl border border-gray-200 p-4 text-left hover:border-${card.color}-300 hover:shadow-sm transition-all`}
                             >
-                                <p className="text-button font-semibold text-gray-500 uppercase tracking-wide mb-1">{card.label}</p>
+                                <div className="flex justify-between items-start mb-1">
+                                    <p className="text-button font-semibold text-gray-500 uppercase tracking-wide">{card.label}</p>
+                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full bg-${card.color}-50 text-${card.color}-600 border border-${card.color}-100`}>
+                                        {card.qtd}
+                                    </span>
+                                </div>
                                 <p className={`text-xl font-bold text-${card.color}-600`}>{formatMoney(card.value)}</p>
                             </button>
                         ))}

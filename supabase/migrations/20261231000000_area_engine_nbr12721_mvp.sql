@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- Modulo: Areas NBR 12721 / Quadros I, II e IV-B
 -- OrcaCloud SaaS - MVP v1.2.1
 --
@@ -637,90 +637,126 @@ CREATE TABLE IF NOT EXISTS public.area_version_export_files (
 -- ============================================================
 
 ALTER TABLE public.area_version_floors
+    DROP CONSTRAINT IF EXISTS area_floors_block_same_version_fk;
+ALTER TABLE public.area_version_floors
     ADD CONSTRAINT area_floors_block_same_version_fk
     FOREIGN KEY (area_version_id, block_id)
     REFERENCES public.area_version_blocks(area_version_id, id) ON DELETE CASCADE;
 
+ALTER TABLE public.area_version_units
+    DROP CONSTRAINT IF EXISTS area_units_block_same_version_fk;
 ALTER TABLE public.area_version_units
     ADD CONSTRAINT area_units_block_same_version_fk
     FOREIGN KEY (area_version_id, block_id)
     REFERENCES public.area_version_blocks(area_version_id, id) ON DELETE CASCADE;
 
 ALTER TABLE public.area_version_units
+    DROP CONSTRAINT IF EXISTS area_units_floor_same_version_fk;
+ALTER TABLE public.area_version_units
     ADD CONSTRAINT area_units_floor_same_version_fk
     FOREIGN KEY (area_version_id, primary_floor_id)
     REFERENCES public.area_version_floors(area_version_id, id);
 
+ALTER TABLE public.area_version_spaces
+    DROP CONSTRAINT IF EXISTS area_spaces_block_same_version_fk;
 ALTER TABLE public.area_version_spaces
     ADD CONSTRAINT area_spaces_block_same_version_fk
     FOREIGN KEY (area_version_id, block_id)
     REFERENCES public.area_version_blocks(area_version_id, id) ON DELETE CASCADE;
 
 ALTER TABLE public.area_version_spaces
+    DROP CONSTRAINT IF EXISTS area_spaces_floor_same_version_fk;
+ALTER TABLE public.area_version_spaces
     ADD CONSTRAINT area_spaces_floor_same_version_fk
     FOREIGN KEY (area_version_id, floor_id)
     REFERENCES public.area_version_floors(area_version_id, id);
 
+ALTER TABLE public.area_version_spaces
+    DROP CONSTRAINT IF EXISTS area_spaces_unit_same_version_fk;
 ALTER TABLE public.area_version_spaces
     ADD CONSTRAINT area_spaces_unit_same_version_fk
     FOREIGN KEY (area_version_id, unit_id)
     REFERENCES public.area_version_units(area_version_id, id);
 
 ALTER TABLE public.area_version_unit_accessory_links
+    DROP CONSTRAINT IF EXISTS area_accessory_parent_same_version_fk;
+ALTER TABLE public.area_version_unit_accessory_links
     ADD CONSTRAINT area_accessory_parent_same_version_fk
     FOREIGN KEY (area_version_id, parent_unit_id)
     REFERENCES public.area_version_units(area_version_id, id) ON DELETE CASCADE;
 
+ALTER TABLE public.area_version_unit_accessory_links
+    DROP CONSTRAINT IF EXISTS area_accessory_space_same_version_fk;
 ALTER TABLE public.area_version_unit_accessory_links
     ADD CONSTRAINT area_accessory_space_same_version_fk
     FOREIGN KEY (area_version_id, accessory_space_id)
     REFERENCES public.area_version_spaces(area_version_id, id) ON DELETE CASCADE;
 
 ALTER TABLE public.area_version_unit_accessory_links
+    DROP CONSTRAINT IF EXISTS area_accessory_unit_same_version_fk;
+ALTER TABLE public.area_version_unit_accessory_links
     ADD CONSTRAINT area_accessory_unit_same_version_fk
     FOREIGN KEY (area_version_id, accessory_unit_id)
     REFERENCES public.area_version_units(area_version_id, id) ON DELETE CASCADE;
 
+ALTER TABLE public.area_version_common_allocations
+    DROP CONSTRAINT IF EXISTS area_common_alloc_space_same_version_fk;
 ALTER TABLE public.area_version_common_allocations
     ADD CONSTRAINT area_common_alloc_space_same_version_fk
     FOREIGN KEY (area_version_id, common_space_id)
     REFERENCES public.area_version_spaces(area_version_id, id) ON DELETE CASCADE;
 
 ALTER TABLE public.area_version_common_allocations
+    DROP CONSTRAINT IF EXISTS area_common_alloc_unit_same_version_fk;
+ALTER TABLE public.area_version_common_allocations
     ADD CONSTRAINT area_common_alloc_unit_same_version_fk
     FOREIGN KEY (area_version_id, target_unit_id)
     REFERENCES public.area_version_units(area_version_id, id) ON DELETE CASCADE;
 
+ALTER TABLE public.area_version_common_distribution_scopes
+    DROP CONSTRAINT IF EXISTS area_common_scope_space_same_version_fk;
 ALTER TABLE public.area_version_common_distribution_scopes
     ADD CONSTRAINT area_common_scope_space_same_version_fk
     FOREIGN KEY (area_version_id, common_space_id)
     REFERENCES public.area_version_spaces(area_version_id, id) ON DELETE CASCADE;
 
 ALTER TABLE public.area_version_common_distribution_scopes
+    DROP CONSTRAINT IF EXISTS area_common_scope_block_same_version_fk;
+ALTER TABLE public.area_version_common_distribution_scopes
     ADD CONSTRAINT area_common_scope_block_same_version_fk
     FOREIGN KEY (area_version_id, block_id)
     REFERENCES public.area_version_blocks(area_version_id, id) ON DELETE CASCADE;
 
+ALTER TABLE public.area_version_quadro_i_rows
+    DROP CONSTRAINT IF EXISTS area_qi_block_same_version_fk;
 ALTER TABLE public.area_version_quadro_i_rows
     ADD CONSTRAINT area_qi_block_same_version_fk
     FOREIGN KEY (area_version_id, block_id)
     REFERENCES public.area_version_blocks(area_version_id, id) ON DELETE CASCADE;
 
 ALTER TABLE public.area_version_quadro_i_rows
+    DROP CONSTRAINT IF EXISTS area_qi_floor_same_version_fk;
+ALTER TABLE public.area_version_quadro_i_rows
     ADD CONSTRAINT area_qi_floor_same_version_fk
     FOREIGN KEY (area_version_id, floor_id)
     REFERENCES public.area_version_floors(area_version_id, id) ON DELETE CASCADE;
 
+ALTER TABLE public.area_version_quadro_ii_rows
+    DROP CONSTRAINT IF EXISTS area_qii_unit_same_version_fk;
 ALTER TABLE public.area_version_quadro_ii_rows
     ADD CONSTRAINT area_qii_unit_same_version_fk
     FOREIGN KEY (area_version_id, unit_id)
     REFERENCES public.area_version_units(area_version_id, id) ON DELETE CASCADE;
 
 ALTER TABLE public.area_version_fraction_ideals
+    DROP CONSTRAINT IF EXISTS area_fraction_unit_same_version_fk;
+ALTER TABLE public.area_version_fraction_ideals
     ADD CONSTRAINT area_fraction_unit_same_version_fk
     FOREIGN KEY (area_version_id, unit_id)
     REFERENCES public.area_version_units(area_version_id, id) ON DELETE CASCADE;
 
+ALTER TABLE public.area_version_quadro_ivb_rows
+    DROP CONSTRAINT IF EXISTS area_qivb_unit_same_version_fk;
 ALTER TABLE public.area_version_quadro_ivb_rows
     ADD CONSTRAINT area_qivb_unit_same_version_fk
     FOREIGN KEY (area_version_id, unit_id)

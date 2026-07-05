@@ -357,7 +357,7 @@ function DocumentDetail({
               className="f-btn f-btn-primary f-btn-sm"
               onClick={() => setShowApproveModal(true)}
             >
-              + Gerar Título
+              + Lançamento Financeiro
             </button>
           )}
           {invoice.linked_transaction_id && (

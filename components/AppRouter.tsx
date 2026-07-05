@@ -13,6 +13,7 @@ interface CurrentProfile {
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
 
 // Views — lazy (carregadas apenas quando acessadas)
+const BudgetActualPage      = React.lazy(() => import('./fpa/BudgetActualPage'));
 const Dashboard             = React.lazy(() => import('./Dashboard'));
 const ProjectList           = React.lazy(() => import('./ProjectList'));
 const ProjectOverview       = React.lazy(() => import('./ProjectOverview'));
@@ -104,6 +105,7 @@ const P2PFlowBoard          = React.lazy(() => import('./P2PFlowBoard').then(m =
 const PartnerPortal         = React.lazy(() => import('./partner/PartnerPortal').then(m => ({ default: m.PartnerPortal })));
 const PartnerWorkspaceManager = React.lazy(() => import('./partner/PartnerWorkspaceManager').then(m => ({ default: m.PartnerWorkspaceManager })));
 const PlantaAiDashboard     = React.lazy(() => import('./planta_ai/PlantaAiDashboard'));
+const DataTablePrototype    = React.lazy(() => import('./DataTablePrototype'));
 
 
 
@@ -367,8 +369,30 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     );
   }
 
+const BudgetActualPage = React.lazy(() => import('./fpa/BudgetActualPage'));
+const CashflowProjectionPage = React.lazy(() => import('./fpa/CashflowProjectionPage'));
+const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
+
   // ── Roteamento principal ─────────────────────────────────────────────────────
   switch (activeView) {
+    case 'fpa-budget-scenarios':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <BudgetScenarioPage organizationId={activeOrganizationId || undefined} projectId={projectId || undefined} />
+        </React.Suspense>
+      );
+    case 'fpa-cashflow-projection':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <CashflowProjectionPage organizationId={activeOrganizationId || undefined} />
+        </React.Suspense>
+      );
+    case 'fpa-budget-actual':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <BudgetActualPage organizationId={activeOrganizationId || undefined} projectId={projectId || undefined} />
+        </React.Suspense>
+      );
     case 'partner-workspaces-admin':
       return (
         <React.Suspense fallback={<Spinner />}>
@@ -443,6 +467,13 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<Spinner />}>
           <PlantaAiDashboard />
+        </React.Suspense>
+      );
+
+    case 'table-prototype':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <DataTablePrototype onBack={() => setActiveView('dashboard')} />
         </React.Suspense>
       );
 
@@ -1317,6 +1348,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   return (
     <React.Suspense fallback={<Spinner />}>
       {renderContent()}
+      
+      {/* Botão flutuante temporário para acessar o protótipo da tabela */}
+      {activeView !== 'table-prototype' && (
+        <button 
+          onClick={() => setActiveView('table-prototype')}
+          className="fixed bottom-4 right-4 z-[9999] bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg font-bold border-2 border-white hover:scale-105 transition-transform flex items-center gap-2"
+        >
+          🌟 Testar Protótipo (Opção A)
+        </button>
+      )}
     </React.Suspense>
   );
 };

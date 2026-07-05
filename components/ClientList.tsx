@@ -12,6 +12,8 @@ import ServicesToast from './services/ServicesToast';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import Button from './ui/Button';
+import { DataTable } from './ui/DataTable';
+import { ColumnDef } from '@tanstack/react-table';
 
 interface ClientListProps {
     onClientsChange?: () => void;
@@ -224,6 +226,171 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
         }
     };
 
+
+    const clientColumns = React.useMemo<ColumnDef<Client>[]>(() => {
+        const baseColumns: ColumnDef<Client>[] = [
+            {
+                accessorKey: 'name',
+                header: 'Cliente',
+                cell: ({ row }) => (
+                    <div className="flex items-center">
+                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mr-3">
+                            <User className="w-5 h-5" />
+                        </div>
+                        <span className="text-sm font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
+                            {row.original.name}
+                        </span>
+                    </div>
+                )
+            },
+            {
+                accessorKey: 'category',
+                header: 'Tipo',
+                cell: ({ row }) => {
+                    const category = row.original.category;
+                    return (
+                        <span className={`text-xs font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${category === 'Vendas' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                            category === 'Locação' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                            category === 'Serviços' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                            'bg-gray-50 text-gray-400 border-gray-100'}`}>
+                            {category || 'Não definido'}
+                        </span>
+                    );
+                }
+            },
+            {
+                accessorKey: 'organization',
+                header: 'Organização',
+                cell: ({ row }) => (
+                    <span className="text-xs font-semibold text-gray-700">
+                        {row.original.organization_name || '-'}
+                    </span>
+                )
+            },
+            {
+                id: 'contact',
+                header: 'Contato',
+                cell: ({ row }) => (
+                    <div className="space-y-1">
+                        {row.original.email && (
+                            <div className="flex items-center text-xs text-gray-600">
+                                <Mail className="w-3 h-3 mr-1.5 text-blue-500" />
+                                {row.original.email}
+                            </div>
+                        )}
+                        {row.original.phone && (
+                            <div className="flex items-center text-xs text-gray-600">
+                                <Phone className="w-3 h-3 mr-1.5" />
+                                {row.original.phone}
+                            </div>
+                        )}
+                    </div>
+                )
+            },
+            {
+                accessorKey: 'document',
+                header: 'Documento',
+                cell: ({ row }) => (
+                    <span className="text-sm text-gray-600">{row.original.document || '-'}</span>
+                )
+            },
+            {
+                id: 'projects',
+                header: 'Obra Vinculada',
+                cell: ({ row }) => {
+                    const clientProjects = projects.filter(p =>
+                        p.settings?.clientId === row.original.id &&
+                        p.settings?.classification === 'OBRA'
+                    );
+                    if (clientProjects.length === 0) {
+                        return <span className="text-gray-400 text-sm">-</span>;
+                    }
+                    return (
+                        <div className="flex flex-col gap-1.5">
+                            {clientProjects.map(p => (
+                                <div key={p.id} className="flex items-center gap-1.5 text-sm text-gray-700">
+                                    <Building2 className="w-3.5 h-3.5 text-blue-500" />
+                                    <span className="font-medium truncate max-w-[200px]" title={p.name}>
+                                        {p.name}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    );
+                }
+            },
+            {
+                id: 'actions',
+                header: 'Ações',
+                cell: ({ row }) => {
+                    const client = row.original;
+                    return (
+                        <div className="flex justify-end gap-2">
+                            {onSelectClient && (
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            const fullClient = await clientService.getById(client.id);
+                                            if (fullClient) onSelectClient(fullClient);
+                                        } catch (error) {
+                                            console.error('Erro ao carregar:', error);
+                                            alert('Erro ao carregar dados do portal.');
+                                        }
+                                    }}
+                                    className="p-2 text-indigo-600 hover:text-white hover:bg-indigo-600 rounded-lg transition-colors"
+                                    title="Acessar Portal"
+                                >
+                                    <LayoutDashboard className="w-4 h-4" />
+                                </button>
+                            )}
+                            <button
+                                onClick={() => openTokenModal(client)}
+                                className="p-2 text-emerald-600 hover:text-white hover:bg-emerald-600 rounded-lg transition-colors"
+                                title="Link de Acesso"
+                            >
+                                <Link2 className="w-4 h-4" />
+                            </button>
+                            {(client.category === 'Locação' || client.category === 'Serviços') && (
+                                <button
+                                    onClick={() => setRequestsModal(client)}
+                                    className="p-2 text-violet-500 hover:text-white hover:bg-violet-500 rounded-lg transition-colors"
+                                    title={client.category === 'Serviços' ? 'Ordens de Serviço' : 'Chamados de Manutenção'}
+                                >
+                                    {client.category === 'Serviços' ? <ClipboardList className="w-4 h-4" /> : <Wrench className="w-4 h-4" />}
+                                </button>
+                            )}
+                            <button
+                                onClick={() => { setComunicadoModal(client); setComunicadoForm({ title: '', body: '' }); }}
+                                className="p-2 text-orange-400 hover:text-white hover:bg-orange-400 rounded-lg transition-colors"
+                                title="Enviar Comunicado"
+                            >
+                                <Bell className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => handleOpenModal(client)}
+                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Editar"
+                            >
+                                <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => handleDelete(client.id, client.name)}
+                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Excluir"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        </div>
+                    );
+                }
+            }
+        ];
+
+        return baseColumns.filter(col => 
+            col.id === 'actions' || tableColumns.visibleColumns.includes((col as any).accessorKey || col.id)
+        );
+    }, [projects, tableColumns.visibleColumns, onSelectClient, openTokenModal, setRequestsModal, setComunicadoModal, setComunicadoForm, handleOpenModal, handleDelete]);
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -327,205 +494,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             ) : (
                 viewMode === 'list' ? (
                     <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm">
-                        <table className="w-full text-left">
-                            <thead className="bg-gray-50 border-b border-gray-200">
-                                <tr>
-                                    {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader
-                                            label="Cliente"
-                                            colKey="name"
-                                            sortable={true}
-                                            sortColumn={tableColumns.sortColumn}
-                                            sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-5"
-                                        />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('category') && (
-                                        <SortableHeader
-                                            label="Tipo"
-                                            colKey="category"
-                                            sortable={true}
-                                            sortColumn={tableColumns.sortColumn}
-                                            sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-5"
-                                        />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('organization') && (
-                                        <SortableHeader
-                                            label="Organização"
-                                            colKey="organization"
-                                            sortable={true}
-                                            sortColumn={tableColumns.sortColumn}
-                                            sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-5"
-                                        />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('contact') && (
-                                        <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Contato</th>
-                                    )}
-                                    {tableColumns.visibleColumns.includes('document') && (
-                                        <SortableHeader
-                                            label="Documento"
-                                            colKey="document"
-                                            sortable={true}
-                                            sortColumn={tableColumns.sortColumn}
-                                            sortDirection={tableColumns.sortDirection}
-                                            onSort={tableColumns.handleColumnSort}
-                                            className="px-6 py-5"
-                                        />
-                                    )}
-                                    {tableColumns.visibleColumns.includes('projects') && (
-                                        <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Obra Vinculada</th>
-                                    )}
-                                    <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                                {filteredClients.map(client => (
-                                    <tr key={client.id} className="hover:bg-gray-50 transition-colors group">
-                                        {tableColumns.visibleColumns.includes('name') && (
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center">
-                                                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mr-3">
-                                                        <User className="w-5 h-5" />
-                                                    </div>
-                                                    <span className="text-sm font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
-                                                        {client.name}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('category') && (
-                                            <td className="px-6 py-4">
-                                                <span className={`text-xs font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${client.category === 'Vendas' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                    client.category === 'Locação' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                                                        client.category === 'Serviços' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                                                            'bg-gray-50 text-gray-400 border-gray-100'
-                                                    }`}>
-                                                    {client.category || 'Não definido'}
-                                                </span>
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('organization') && (
-                                            <td className="px-6 py-4">
-                                                <span className="text-xs font-semibold text-gray-700">
-                                                    {client.organization_name || '-'}
-                                                </span>
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('contact') && (
-                                            <td className="px-6 py-4">
-                                                <div className="space-y-1">
-                                                    {client.email && (
-                                                        <div className="flex items-center text-xs text-gray-600">
-                                                            <Mail className="w-3 h-3 mr-1.5 text-blue-500" />
-                                                            {client.email}
-                                                        </div>
-                                                    )}
-                                                    {client.phone && (
-                                                        <div className="flex items-center text-xs text-gray-600">
-                                                            <Phone className="w-3 h-3 mr-1.5" />
-                                                            {client.phone}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('document') && (
-                                            <td className="px-6 py-4">
-                                                <span className="text-sm text-gray-600">{client.document || '-'}</span>
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('projects') && (
-                                            <td className="px-6 py-4">
-                                                {(() => {
-                                                    const clientProjects = projects.filter(p =>
-                                                        p.settings?.clientId === client.id &&
-                                                        p.settings?.classification === 'OBRA'
-                                                    );
-
-                                                    if (clientProjects.length === 0) {
-                                                        return <span className="text-gray-400 text-sm">-</span>;
-                                                    }
-
-                                                    return (
-                                                        <div className="flex flex-col gap-1.5">
-                                                            {clientProjects.map(p => (
-                                                                <div key={p.id} className="flex items-center gap-1.5 text-sm text-gray-700">
-                                                                    <Building2 className="w-3.5 h-3.5 text-blue-500" />
-                                                                    <span className="font-medium truncate max-w-[200px]" title={p.name}>
-                                                                        {p.name}
-                                                                    </span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </td>
-                                        )}
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex justify-end gap-2">
-                                                {onSelectClient && (
-                                                    <button
-                                                        onClick={async () => {
-                                                            try {
-                                                                const fullClient = await clientService.getById(client.id);
-                                                                if (fullClient) onSelectClient(fullClient);
-                                                            } catch (error) {
-                                                                console.error("Erro ao carregar dados completos do cliente:", error);
-                                                                alert("Erro ao carregar os dados do portal deste cliente.");
-                                                            }
-                                                        }}
-                                                        className="p-2 text-indigo-600 hover:text-white hover:bg-indigo-600 rounded-lg transition-colors"
-                                                        title="Acessar Portal"
-                                                    >
-                                                        <LayoutDashboard className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                                <button
-                                                    onClick={() => openTokenModal(client)}
-                                                    className="p-2 text-emerald-600 hover:text-white hover:bg-emerald-600 rounded-lg transition-colors"
-                                                    title="Link de Acesso ao Portal"
-                                                >
-                                                    <Link2 className="w-4 h-4" />
-                                                </button>
-                                                {(client.category === 'Locação' || client.category === 'Serviços') && (
-                                                    <button
-                                                        onClick={() => setRequestsModal(client)}
-                                                        className="p-2 text-violet-500 hover:text-white hover:bg-violet-500 rounded-lg transition-colors"
-                                                        title={client.category === 'Serviços' ? 'Ordens de Serviço' : 'Chamados de Manutenção'}
-                                                    >
-                                                        {client.category === 'Serviços' ? <ClipboardList className="w-4 h-4" /> : <Wrench className="w-4 h-4" />}
-                                                    </button>
-                                                )}
-                                                <button
-                                                    onClick={() => { setComunicadoModal(client); setComunicadoForm({ title: '', body: '' }); }}
-                                                    className="p-2 text-orange-400 hover:text-white hover:bg-orange-400 rounded-lg transition-colors"
-                                                    title="Enviar Comunicado"
-                                                >
-                                                    <Bell className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleOpenModal(client)}
-                                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                >
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(client.id, client.name)}
-                                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        <DataTable columns={clientColumns} data={filteredClients} />
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

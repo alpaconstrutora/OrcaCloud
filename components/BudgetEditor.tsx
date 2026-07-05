@@ -5,6 +5,8 @@ import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, Mo
 import { customDatabaseService } from '../services/customDatabaseService';
 import { parametricService } from '../services/parametricService';
 import { BudgetRow } from './BudgetRow';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import SinapiRebaseModal from './SinapiRebaseModal';
 import { WBSImportModal } from './WBSImportModal';
 import { WBSTemplateModal } from './WBSTemplateModal';
@@ -130,6 +132,28 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [auxiliaryItems, setAuxiliaryItems] = React.useState<Map<string, SinapiItem>>(new Map());
   const [isLoadingAuxiliary, setIsLoadingAuxiliary] = React.useState(false);
   const [hasCPUChanges, setHasCPUChanges] = React.useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event;
+    if (active.id !== over?.id) {
+      const oldIndex = budget.findIndex((item) => item.id === active.id);
+      const newIndex = budget.findIndex((item) => item.id === over?.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        onUpdateBudget(arrayMove(budget, oldIndex, newIndex));
+      }
+    }
+  };
   const isLocked = settings.budgetStatus === 'Fechado';
 
 
@@ -2115,33 +2139,35 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                                     Nenhum item nesta subetapa. Clique em "+ Item" para adicionar.
                                   </div>
                                 ) : (
-                                  items.map((item, itemIndex) => (
-                                    <BudgetRow
-                                      key={item.id}
-                                      item={item}
-                                      itemIndex={itemIndex}
-                                      subIdDisplay={subIdDisplay}
-                                      onUpdateQuantity={handleUpdateQuantity}
-                                      onUpdatePrice={handleUpdateItemPrice}
-                                      onUpdateBDI={handleUpdateBDI}
-                                      onUpdateComposition={handleUpdateComposition}
-                                      onSaveToCustomDB={handleSaveToCustomDB}
-                                      onDeleteItem={handleDeleteItem}
-                                      onMoveItem={!isLocked ? handleMoveItem : undefined}
-                                      isFirst={itemIndex === 0}
-                                      isLast={itemIndex === items.length - 1}
-                                      globalBDI={settings.bdi}
-                                      viewMode={settings.cpuViewMode}
-                                      onOpenModal={handleOpenCPU}
-                                      onDuplicateItem={handleDuplicateItem}
-                                      isFavorite={item.sinapiItem ? favorites.includes(item.sinapiItem.code) : false}
-                                      onToggleFavorite={onToggleFavorite}
-                                      showNatureBreakdown={showNatureBreakdown}
-                                      natureBreakdown={showNatureBreakdown ? getNatureBreakdown(item) : undefined}
-                                      auxiliaryItems={auxiliaryItems}
-                                      isLocked={isLocked}
-                                    />
-                                  ))
+                                  <SortableContext items={items.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                                    {items.map((item, itemIndex) => (
+                                      <BudgetRow
+                                        key={item.id}
+                                        item={item}
+                                        itemIndex={itemIndex}
+                                        subIdDisplay={subIdDisplay}
+                                        onUpdateQuantity={handleUpdateQuantity}
+                                        onUpdatePrice={handleUpdateItemPrice}
+                                        onUpdateBDI={handleUpdateBDI}
+                                        onUpdateComposition={handleUpdateComposition}
+                                        onSaveToCustomDB={handleSaveToCustomDB}
+                                        onDeleteItem={handleDeleteItem}
+                                        onMoveItem={!isLocked ? handleMoveItem : undefined}
+                                        isFirst={itemIndex === 0}
+                                        isLast={itemIndex === items.length - 1}
+                                        globalBDI={settings.bdi}
+                                        viewMode={settings.cpuViewMode}
+                                        onOpenModal={handleOpenCPU}
+                                        onDuplicateItem={handleDuplicateItem}
+                                        isFavorite={item.sinapiItem ? favorites.includes(item.sinapiItem.code) : false}
+                                        onToggleFavorite={onToggleFavorite}
+                                        showNatureBreakdown={showNatureBreakdown}
+                                        natureBreakdown={showNatureBreakdown ? getNatureBreakdown(item) : undefined}
+                                        auxiliaryItems={auxiliaryItems}
+                                        isLocked={isLocked}
+                                      />
+                                    ))}
+                                  </SortableContext>
                                 )}
                               </div>
                             )}

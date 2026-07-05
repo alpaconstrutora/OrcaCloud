@@ -1,4 +1,7 @@
 import React from 'react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { GripVertical } from 'lucide-react';
 import { Layers, Box, Loader2, ChevronDown, ChevronRight, Maximize2, Star, Copy, Database, Trash2, Pencil, ArrowUp, ArrowDown } from 'lucide-react';
 import { BudgetEntry, SinapiItem, SinapiType, CompositionComponent } from '../types';
 
@@ -58,7 +61,7 @@ const getTypeBadge = (type: SinapiType, onClick?: (e: React.MouseEvent) => void)
 };
 
 export const BudgetRow: React.FC<BudgetRowProps> = ({
-    item,
+  item,
     itemIndex,
     subIdDisplay,
     onUpdateQuantity,
@@ -81,6 +84,20 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     auxiliaryItems,
     isLocked
 }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
     const [isExpanded, setIsExpanded] = React.useState(false);
     const [isSavingCustom, setIsSavingCustom] = React.useState(false);
     const hasComposition = item.sinapiItem?.composition && item.sinapiItem.composition.length > 0;
@@ -108,8 +125,13 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     };
 
     return (
-        <div className="border-t border-gray-50 hover:bg-blue-50/20 group">
-            <div className={`group relative grid ${showNatureBreakdown ? 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr_0.8fr_0.8fr_0.8fr]' : 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 px-4 py-2 hover:bg-gray-50/80 transition-all items-center border-b border-gray-100 ${isExpanded ? 'bg-blue-50/20' : ''}`}>
+        <div ref={setNodeRef} style={style} className={`border-t border-gray-50 hover:bg-blue-50/20 group ${isDragging ? 'z-50 relative bg-white shadow-xl ring-2 ring-blue-500' : ''}`}>
+            <div className={`group relative grid ${showNatureBreakdown ? 'grid-cols-[20px_0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr_0.8fr_0.8fr_0.8fr]' : 'grid-cols-[20px_0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 px-4 py-2 hover:bg-gray-50/80 transition-all items-center border-b border-gray-100 ${isExpanded ? 'bg-blue-50/20' : ''}`}>
+                                <div className="flex items-center gap-1 pr-1">
+                    <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 flex-shrink-0">
+                        <GripVertical className="w-3.5 h-3.5" />
+                    </button>
+                </div>
                 <div className="text-xs font-mono font-black text-gray-400 flex items-center gap-1.5">
                     {canOpenCPU && (
                         <button

@@ -383,7 +383,7 @@ const Layout: React.FC<LayoutProps> = ({
   const suprimentosViews = ['fluxo-p2p','supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
-  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-cashflow','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial'];
+  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-cashflow','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial', 'fpa-budget-actual', 'fpa-cashflow-projection', 'fpa-budget-scenarios'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const systemConfigViews = ['settings','master-data'];
@@ -917,6 +917,9 @@ const Layout: React.FC<LayoutProps> = ({
                     {(mod.financeiro || isDev) && (
                       <>
                         <DropdownItem id="financial-dashboard" label="Dashboard" icon={LayoutDashboard} />
+                        <DropdownItem id="fpa-budget-actual" label="FP&A: Orçado vs Realizado" icon={LineChart} />
+                        <DropdownItem id="fpa-cashflow-projection" label="FP&A: Projeção de Caixa" icon={TrendingUp} />
+                        <DropdownItem id="fpa-budget-scenarios" label="FP&A: Cenários (What-if)" icon={Calculator} />
                         <DropdownItem id="financial-cashflow" label="Fluxo de Caixa" icon={LineChart} />
                         <DropdownItem id="contas-a-receber" label="Contas a Receber" icon={TrendingUp} />
                         <DropdownItem id="financial-boletos" label="Boletos ao Cliente" icon={Receipt} />

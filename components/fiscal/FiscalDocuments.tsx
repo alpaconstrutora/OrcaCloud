@@ -229,7 +229,6 @@ function ApproveModal({
                 onChange={e => setPurchaseOrderId(e.target.value)}
                 className="f-input"
                 style={{ width: '100%' }}
-                disabled={!projectId}
               >
                 <option value="">Sem vínculo com pedido</option>
                 <option value="CREATE_NEW_ORDER">✨ Criar novo pedido automaticamente</option>

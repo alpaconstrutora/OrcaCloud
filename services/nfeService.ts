@@ -15,6 +15,8 @@ import type {
   PipelineHealth,
   UploadNfeResult,
 } from '../types/fiscal';
+import { supplierService } from './supplierService';
+import { orderService } from './orderService';
 
 // ============================================================
 // UPLOAD
@@ -364,5 +366,84 @@ export async function linkExistingTransaction(params: {
     .single<NfeInvoice>();
 
   if (updErr || !updated) throw new Error(`Erro ao atualizar NF-e: ${updErr?.message}`);
+  return updated;
+}
+
+// ============================================================
+// F2 — GERAR PEDIDO DE COMPRA A PARTIR DA NF-e
+// Cria um purchase_order baseado nos dados extraídos e vincula à NF.
+// ============================================================
+
+export async function createOrderFromNfe(params: {
+  invoiceId: string;
+  projectId: string;
+  userId: string;
+  autoCreateSupplier: boolean;
+}): Promise<NfeInvoice> {
+  const { invoiceId, projectId, autoCreateSupplier } = params;
+
+  // 1. Fetch NF-e and Items
+  const invoiceDetail = await getNfeInvoiceWithItems(invoiceId);
+  if (!invoiceDetail) throw new Error('NF-e não encontrada');
+  if (invoiceDetail.purchase_order_id) throw new Error('NF-e já possui Pedido de Compra vinculado');
+
+  // 2. Resolve Supplier (by CNPJ)
+  let supplierId = '';
+  const { data: suppliers, error: supErr } = await supabase
+    .from('suppliers')
+    .select('id')
+    .eq('document', invoiceDetail.issuer_cnpj)
+    .eq('organization_id', invoiceDetail.organization_id);
+
+  if (supErr) throw new Error('Erro ao buscar fornecedor: ' + supErr.message);
+
+  if (!suppliers || suppliers.length === 0) {
+    if (!autoCreateSupplier) {
+      throw new Error('SUPPLIER_NOT_FOUND');
+    }
+    // Auto-create supplier
+    const newSup = await supplierService.addSupplier({
+      organization_id: invoiceDetail.organization_id,
+      document: invoiceDetail.issuer_cnpj,
+      name: invoiceDetail.issuer_name,
+      type: 'PJ',
+      category: 'Geral',
+    });
+    supplierId = newSup.id;
+  } else {
+    supplierId = suppliers[0].id;
+  }
+
+  // 3. Map NF-e items to PurchaseOrderItems
+  const orderItems = invoiceDetail.items.map(item => ({
+    code: item.ncm || `NF-${item.line_number}`, // Fallback if NCM is missing
+    description: item.description,
+    unit: item.commercial_unit || 'UN',
+    quantity: item.quantity,
+    unitPrice: item.unit_value,
+    total: item.total_value,
+  }));
+
+  // 4. Call orderService.createOrder
+  const newOrder = await orderService.createOrder({
+    projectId,
+    supplierId,
+    status: 'Rascunho', // Will start as draft so the user can review it
+    deliveryDate: invoiceDetail.issue_date || new Date().toISOString().split('T')[0],
+    items: orderItems,
+  });
+
+  // 5. Link Order to NF-e
+  const { data: updated, error: updErr } = await supabase
+    .from('nfe_invoices')
+    .update({
+      purchase_order_id: newOrder.id,
+      project_id: projectId
+    })
+    .eq('id', invoiceId)
+    .select(NFE_COLS)
+    .single<NfeInvoice>();
+
+  if (updErr || !updated) throw new Error(`Erro ao atualizar NF-e com o pedido: ${updErr?.message}`);
   return updated;
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink, linkExistingTransaction } from '../../services/nfeService';
+import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink, linkExistingTransaction, createOrderFromNfe } from '../../services/nfeService';
 import { projectService } from '../../services/projectService';
 import type { NfeInvoice, NfeInvoiceWithItems, ProcessingStatus } from '../../types/fiscal';
 import { supabase } from '../../lib/supabase';
@@ -52,9 +52,9 @@ function ApproveModal({
   onClose: () => void;
   onSuccess: (updated: NfeInvoice) => void;
 }) {
-  const [tab, setTab] = useState<'new' | 'existing'>('new');
+  const [tab, setTab] = useState<'new' | 'existing' | 'newOrder'>('new');
   
-  // Aba: Criar Novo
+  // Aba: Criar Novo / Novo Pedido
   const [projectId, setProjectId] = useState(invoice.project_id ?? '');
   const [purchaseOrderId, setPurchaseOrderId] = useState(invoice.purchase_order_id ?? '');
   const [orders, setOrders] = useState<{ id: string; number: string }[]>([]);
@@ -136,6 +136,46 @@ function ApproveModal({
     }
   }
 
+  async function handleCreateOrder() {
+    if (!projectId) { setError('Selecione uma obra.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const doCreate = async (autoCreate: boolean) => {
+        return await createOrderFromNfe({
+          invoiceId: invoice.id,
+          projectId,
+          userId: user?.id ?? '',
+          autoCreateSupplier: autoCreate
+        });
+      };
+      
+      try {
+        const updated = await doCreate(false);
+        onSuccess(updated);
+      } catch (err: any) {
+        if (err.message === 'SUPPLIER_NOT_FOUND') {
+          const confirm = window.confirm('Fornecedor (emissor da NF-e) não encontrado. Deseja cadastrá-lo automaticamente e prosseguir?');
+          if (confirm) {
+            setSaving(true); // Manter o estado
+            const updated = await doCreate(true);
+            onSuccess(updated);
+          } else {
+            return;
+          }
+        } else {
+          throw err;
+        }
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erro ao gerar pedido');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div
       style={{
@@ -160,7 +200,7 @@ function ApproveModal({
             style={{ flex: 1 }}
             onClick={() => setTab('new')}
           >
-            Criar Novo Título
+            Criar Título
           </button>
           <button
             className={`f-btn f-btn-sm ${tab === 'existing' ? 'f-btn-primary' : 'f-btn-ghost'}`}
@@ -168,6 +208,13 @@ function ApproveModal({
             onClick={() => setTab('existing')}
           >
             Vincular Existente
+          </button>
+          <button
+            className={`f-btn f-btn-sm ${tab === 'newOrder' ? 'f-btn-primary' : 'f-btn-ghost'}`}
+            style={{ flex: 1 }}
+            onClick={() => setTab('newOrder')}
+          >
+            Criar Pedido
           </button>
         </div>
 
@@ -255,6 +302,30 @@ function ApproveModal({
           </div>
         )}
 
+        {tab === 'newOrder' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ fontSize: 12, color: 'var(--ftext3)' }}>
+              Esta ação criará um Pedido de Compra copiando todos os itens da Nota Fiscal automaticamente.
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ftext2)', display: 'block', marginBottom: 4 }}>
+                Obra / Projeto *
+              </label>
+              <select
+                value={projectId}
+                onChange={e => setProjectId(e.target.value)}
+                className="f-input"
+                style={{ width: '100%' }}
+              >
+                <option value="">Selecione...</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div style={{ color: 'var(--fred)', fontSize: 13, fontWeight: 600, marginTop: 14 }}>{error}</div>
         )}
@@ -265,10 +336,10 @@ function ApproveModal({
           </button>
           <button
             className="f-btn f-btn-primary f-btn-sm"
-            onClick={tab === 'new' ? handleCreateNew : handleLinkExisting}
-            disabled={saving || (tab === 'existing' && !selectedTxId)}
+            onClick={tab === 'new' ? handleCreateNew : tab === 'existing' ? handleLinkExisting : handleCreateOrder}
+            disabled={saving || (tab === 'existing' && !selectedTxId) || (tab === 'newOrder' && !projectId)}
           >
-            {saving ? 'Processando…' : (tab === 'new' ? 'Aprovar e Gerar Título' : 'Vincular a Título Selecionado')}
+            {saving ? 'Processando…' : (tab === 'new' ? 'Aprovar e Gerar Título' : tab === 'existing' ? 'Vincular Título' : 'Criar Pedido e Vincular')}
           </button>
         </div>
       </div>

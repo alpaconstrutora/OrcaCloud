@@ -52,9 +52,10 @@ function ApproveModal({
   onClose: () => void;
   onSuccess: (updated: NfeInvoice) => void;
 }) {
-  const [tab, setTab] = useState<'new' | 'existing' | 'newOrder'>('new');
+  const [tab, setTab] = useState<'new' | 'existing'>('new');
   
-  // Aba: Criar Novo / Novo Pedido
+  // Aba: Criar Novo
+
   const [projectId, setProjectId] = useState(invoice.project_id ?? '');
   const [purchaseOrderId, setPurchaseOrderId] = useState(invoice.purchase_order_id ?? '');
   const [orders, setOrders] = useState<{ id: string; number: string }[]>([]);
@@ -101,13 +102,42 @@ function ApproveModal({
     setError('');
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      let finalPurchaseOrderId = purchaseOrderId || undefined;
+      
+      if (purchaseOrderId === 'CREATE_NEW_ORDER') {
+        const doCreate = async (autoCreate: boolean) => {
+          return await createOrderFromNfe({
+            invoiceId: invoice.id,
+            projectId,
+            userId: user?.id ?? '',
+            autoCreateSupplier: autoCreate
+          });
+        };
+        try {
+          const tempNfe = await doCreate(false);
+          finalPurchaseOrderId = tempNfe.purchase_order_id ?? undefined;
+        } catch (err: any) {
+          if (err.message === 'SUPPLIER_NOT_FOUND') {
+            const confirm = window.confirm('Fornecedor (emissor da NF-e) não encontrado. Deseja cadastrá-lo automaticamente e prosseguir?');
+            if (confirm) {
+              const tempNfe = await doCreate(true);
+              finalPurchaseOrderId = tempNfe.purchase_order_id ?? undefined;
+            } else {
+              setSaving(false); return;
+            }
+          } else {
+            throw err;
+          }
+        }
+      }
+
       const updated = await approveAndLink({
         invoiceId: invoice.id,
         organizationId,
         projectId,
         dueDate,
         userId: user?.id ?? '',
-        purchaseOrderId: purchaseOrderId || undefined,
+        purchaseOrderId: finalPurchaseOrderId,
       });
       onSuccess(updated);
     } catch (e: unknown) {
@@ -131,46 +161,6 @@ function ApproveModal({
       onSuccess(updated);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro ao vincular título');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleCreateOrder() {
-    if (!projectId) { setError('Selecione uma obra.'); return; }
-    setSaving(true);
-    setError('');
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      const doCreate = async (autoCreate: boolean) => {
-        return await createOrderFromNfe({
-          invoiceId: invoice.id,
-          projectId,
-          userId: user?.id ?? '',
-          autoCreateSupplier: autoCreate
-        });
-      };
-      
-      try {
-        const updated = await doCreate(false);
-        onSuccess(updated);
-      } catch (err: any) {
-        if (err.message === 'SUPPLIER_NOT_FOUND') {
-          const confirm = window.confirm('Fornecedor (emissor da NF-e) não encontrado. Deseja cadastrá-lo automaticamente e prosseguir?');
-          if (confirm) {
-            setSaving(true); // Manter o estado
-            const updated = await doCreate(true);
-            onSuccess(updated);
-          } else {
-            return;
-          }
-        } else {
-          throw err;
-        }
-      }
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao gerar pedido');
     } finally {
       setSaving(false);
     }
@@ -209,13 +199,6 @@ function ApproveModal({
           >
             Vincular Existente
           </button>
-          <button
-            className={`f-btn f-btn-sm ${tab === 'newOrder' ? 'f-btn-primary' : 'f-btn-ghost'}`}
-            style={{ flex: 1 }}
-            onClick={() => setTab('newOrder')}
-          >
-            Criar Pedido
-          </button>
         </div>
 
         {tab === 'new' && (
@@ -249,6 +232,7 @@ function ApproveModal({
                 disabled={!projectId}
               >
                 <option value="">Sem vínculo com pedido</option>
+                <option value="CREATE_NEW_ORDER">✨ Criar novo pedido automaticamente</option>
                 {orders.map(o => (
                   <option key={o.id} value={o.id}>Pedido #{o.number}</option>
                 ))}
@@ -302,30 +286,6 @@ function ApproveModal({
           </div>
         )}
 
-        {tab === 'newOrder' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ fontSize: 12, color: 'var(--ftext3)' }}>
-              Esta ação criará um Pedido de Compra copiando todos os itens da Nota Fiscal automaticamente.
-            </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ftext2)', display: 'block', marginBottom: 4 }}>
-                Obra / Projeto *
-              </label>
-              <select
-                value={projectId}
-                onChange={e => setProjectId(e.target.value)}
-                className="f-input"
-                style={{ width: '100%' }}
-              >
-                <option value="">Selecione...</option>
-                {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-
         {error && (
           <div style={{ color: 'var(--fred)', fontSize: 13, fontWeight: 600, marginTop: 14 }}>{error}</div>
         )}
@@ -336,10 +296,10 @@ function ApproveModal({
           </button>
           <button
             className="f-btn f-btn-primary f-btn-sm"
-            onClick={tab === 'new' ? handleCreateNew : tab === 'existing' ? handleLinkExisting : handleCreateOrder}
-            disabled={saving || (tab === 'existing' && !selectedTxId) || (tab === 'newOrder' && !projectId)}
+            onClick={tab === 'new' ? handleCreateNew : handleLinkExisting}
+            disabled={saving || (tab === 'existing' && !selectedTxId)}
           >
-            {saving ? 'Processando…' : (tab === 'new' ? 'Aprovar e Gerar Título' : tab === 'existing' ? 'Vincular Título' : 'Criar Pedido e Vincular')}
+            {saving ? 'Processando…' : (tab === 'new' ? 'Aprovar e Gerar Título' : 'Vincular Título')}
           </button>
         </div>
       </div>

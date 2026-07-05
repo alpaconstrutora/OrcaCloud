@@ -2,13 +2,14 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
     Workflow, ClipboardList, Layers, Plus, CheckCircle2, XCircle, FileText,
     Loader2, ChevronRight, MessageSquare, Send, Trash2, Shield,
+    Activity, LayoutGrid, List as ListIcon, AlertTriangle,
 } from 'lucide-react';
 import { processService } from '../services/processService';
 import { documentService } from '../services/documentService';
 import { taskService } from '../services/taskService';
 import type {
     ProcessTemplate, ProcessTemplateStep, ProcessInstance, ProcessInstanceWithSteps,
-    ProcessInstanceStep, PendingStepItem, ProcessComment, ProcessStepType,
+    ProcessInstanceStep, PendingStepItem, ProcessComment, ProcessStepType, ProcessStepBottleneck,
 } from '../types/process';
 import type { OpuraDocument } from '../types/documents';
 import Button from './ui/Button';
@@ -456,9 +457,29 @@ function PendingList({ organizationId, userId, onOpen }: { organizationId: strin
 
 // ─── lista geral de processos ───────────────────────────────
 
+const KANBAN_COLUMNS = [
+    'EM_ANDAMENTO', 'AGUARDANDO_RESPONSAVEL', 'AGUARDANDO_APROVACAO', 'AGUARDANDO_DOCUMENTO',
+    'DEVOLVIDO', 'BLOQUEADO', 'ATRASADO', 'CONCLUIDO', 'CANCELADO',
+] as const;
+
+function InstanceCard({ instance, onOpen }: { instance: ProcessInstance & { template_name?: string }; onOpen: (id: string) => void }) {
+    return (
+        <button onClick={() => onOpen(instance.id)}
+            className="w-full flex items-center gap-3 bg-white border border-gray-200 rounded-2xl p-4 text-left hover:border-blue-300 transition-colors">
+            <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-gray-900 truncate">{instance.title}</p>
+                <p className="text-xs text-gray-500">{instance.template_name} · iniciado em {fmtDate(instance.started_at)}</p>
+            </div>
+            <StatusBadge status={instance.status} />
+            <ChevronRight className="w-4 h-4 text-gray-300" />
+        </button>
+    );
+}
+
 function InstanceList({ organizationId, onOpen }: { organizationId: string; onOpen: (id: string) => void }) {
     const [instances, setInstances] = useState<(ProcessInstance & { template_name?: string })[]>([]);
     const [loading, setLoading] = useState(true);
+    const [view, setView] = useState<'lista' | 'kanban'>('lista');
 
     useEffect(() => {
         if (!organizationId) return;
@@ -467,21 +488,121 @@ function InstanceList({ organizationId, onOpen }: { organizationId: string; onOp
     }, [organizationId]);
 
     if (loading) return <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>;
-    if (instances.length === 0) return <p className="p-8 text-center text-sm text-gray-400">Nenhum processo iniciado ainda.</p>;
 
     return (
-        <div className="p-4 space-y-2">
-            {instances.map(i => (
-                <button key={i.id} onClick={() => onOpen(i.id)}
-                    className="w-full flex items-center gap-3 bg-white border border-gray-200 rounded-2xl p-4 text-left hover:border-blue-300 transition-colors">
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-900 truncate">{i.title}</p>
-                        <p className="text-xs text-gray-500">{i.template_name} · iniciado em {fmtDate(i.started_at)}</p>
-                    </div>
-                    <StatusBadge status={i.status} />
-                    <ChevronRight className="w-4 h-4 text-gray-300" />
+        <div className="p-4">
+            <div className="flex justify-end gap-1 mb-3">
+                <button onClick={() => setView('lista')}
+                    className={`p-1.5 rounded-lg ${view === 'lista' ? 'bg-blue-100 text-blue-700' : 'text-gray-400 hover:text-gray-600'}`} title="Lista">
+                    <ListIcon className="w-4 h-4" />
                 </button>
-            ))}
+                <button onClick={() => setView('kanban')}
+                    className={`p-1.5 rounded-lg ${view === 'kanban' ? 'bg-blue-100 text-blue-700' : 'text-gray-400 hover:text-gray-600'}`} title="Kanban">
+                    <LayoutGrid className="w-4 h-4" />
+                </button>
+            </div>
+
+            {instances.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-8">Nenhum processo iniciado ainda.</p>
+            ) : view === 'lista' ? (
+                <div className="space-y-2">
+                    {instances.map(i => <InstanceCard key={i.id} instance={i} onOpen={onOpen} />)}
+                </div>
+            ) : (
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                    {KANBAN_COLUMNS.map(status => {
+                        const items = instances.filter(i => i.status === status);
+                        if (items.length === 0) return null;
+                        return (
+                            <div key={status} className="w-72 shrink-0">
+                                <div className="flex items-center gap-2 mb-2 px-1">
+                                    <StatusBadge status={status} />
+                                    <span className="text-xs text-gray-400">{items.length}</span>
+                                </div>
+                                <div className="space-y-2">
+                                    {items.map(i => <InstanceCard key={i.id} instance={i} onOpen={onOpen} />)}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── dashboard de gargalos ──────────────────────────────────
+
+function ProcessDashboard({ organizationId }: { organizationId: string }) {
+    const [bottlenecks, setBottlenecks] = useState<ProcessStepBottleneck[]>([]);
+    const [instances, setInstances] = useState<ProcessInstance[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!organizationId) return;
+        setLoading(true);
+        Promise.all([
+            processService.getBottlenecks(organizationId),
+            processService.listInstances(organizationId),
+        ]).then(([b, i]) => { setBottlenecks(b); setInstances(i); }).finally(() => setLoading(false));
+    }, [organizationId]);
+
+    if (loading) return <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>;
+
+    const statusCounts = KANBAN_COLUMNS.map(s => ({ status: s, count: instances.filter(i => i.status === s).length })).filter(c => c.count > 0);
+
+    return (
+        <div className="p-4 space-y-6">
+            <div>
+                <h3 className="text-xs font-black uppercase tracking-wide text-gray-500 mb-2">Processos por status</h3>
+                <div className="flex flex-wrap gap-2">
+                    {statusCounts.length === 0 && <p className="text-sm text-gray-400">Nenhum processo iniciado ainda.</p>}
+                    {statusCounts.map(c => (
+                        <div key={c.status} className="bg-white border border-gray-200 rounded-2xl px-4 py-3 flex items-center gap-2">
+                            <StatusBadge status={c.status} />
+                            <span className="text-lg font-black text-gray-900">{c.count}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div>
+                <h3 className="text-xs font-black uppercase tracking-wide text-gray-500 mb-2">Gargalos por etapa</h3>
+                {bottlenecks.length === 0 ? (
+                    <p className="text-sm text-gray-400">Sem dados suficientes ainda.</p>
+                ) : (
+                    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                                <tr>
+                                    <th className="text-left px-4 py-2 font-bold">Etapa</th>
+                                    <th className="text-left px-4 py-2 font-bold">Tipo</th>
+                                    <th className="text-right px-4 py-2 font-bold">Tempo médio</th>
+                                    <th className="text-right px-4 py-2 font-bold">Ativos</th>
+                                    <th className="text-right px-4 py-2 font-bold">Atrasados</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {bottlenecks.map((b, idx) => (
+                                    <tr key={`${b.step_name}-${idx}`} className="border-t border-gray-100">
+                                        <td className="px-4 py-2 font-semibold text-gray-900">{b.step_name}</td>
+                                        <td className="px-4 py-2 text-gray-500">{STEP_TYPE_LABEL[b.step_type]}</td>
+                                        <td className="px-4 py-2 text-right text-gray-700">{b.avg_hours != null ? `${b.avg_hours}h` : '—'}</td>
+                                        <td className="px-4 py-2 text-right text-gray-700">{b.active_count}</td>
+                                        <td className="px-4 py-2 text-right">
+                                            {b.overdue_count > 0 ? (
+                                                <span className="inline-flex items-center gap-1 text-red-600 font-bold">
+                                                    <AlertTriangle className="w-3.5 h-3.5" /> {b.overdue_count}
+                                                </span>
+                                            ) : '—'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
@@ -545,7 +666,7 @@ function TemplateList({ organizationId, onCreate }: { organizationId: string; on
 
 // ─── main ────────────────────────────────────────────────────
 
-type Tab = 'pendente' | 'processos' | 'templates';
+type Tab = 'pendente' | 'processos' | 'dashboard' | 'templates';
 
 interface Props {
     organizationId?: string;
@@ -567,8 +688,9 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
     }, [organizationId, refreshKey]);
 
     const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-        { id: 'pendente',  label: 'Pendente Comigo',   icon: ClipboardList },
+        { id: 'pendente',  label: 'Pendente Comigo',    icon: ClipboardList },
         { id: 'processos', label: 'Todos os Processos', icon: Workflow },
+        { id: 'dashboard', label: 'Dashboard',          icon: Activity },
         { id: 'templates', label: 'Templates',          icon: Layers },
     ];
 
@@ -607,6 +729,7 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
             <div className="flex-1 overflow-auto">
                 {tab === 'pendente'  && <PendingList key={refreshKey} organizationId={organizationId} userId={userId} onOpen={setOpenInstanceId} />}
                 {tab === 'processos' && <InstanceList key={refreshKey} organizationId={organizationId} onOpen={setOpenInstanceId} />}
+                {tab === 'dashboard' && <ProcessDashboard key={refreshKey} organizationId={organizationId} />}
                 {tab === 'templates' && <TemplateList organizationId={organizationId} onCreate={() => setShowNewTemplate(true)} />}
             </div>
 

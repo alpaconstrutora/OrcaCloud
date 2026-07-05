@@ -3,7 +3,7 @@ import { approvalService, type RoleLabels } from './approvalService';
 import type {
     ProcessTemplate, ProcessTemplateStep, ProcessInstance, ProcessInstanceStep,
     ProcessInstanceWithSteps, ProcessComment, ProcessInstanceStatus, PendingStepItem,
-    ProcessPriority, ProcessCriticality,
+    ProcessPriority, ProcessCriticality, ProcessEventKey, ProcessStepBottleneck,
 } from '../types/process';
 
 // ============================================================
@@ -227,7 +227,8 @@ export const processService = {
         templateId: string;
         title: string;
         description?: string;
-        requesterUserId: string;
+        /** Ausente quando a instância nasce de um gatilho automático (sem usuário no contexto). */
+        requesterUserId?: string;
         priority?: ProcessPriority;
         dueAt?: string;
         projectId?: string;
@@ -260,7 +261,7 @@ export const processService = {
                 description: opts.description ?? null,
                 priority: opts.priority ?? 'MEDIA',
                 criticality: (template as ProcessTemplate).criticality,
-                requester_user_id: opts.requesterUserId,
+                requester_user_id: opts.requesterUserId ?? null,
                 department_id: (template as ProcessTemplate).department_id ?? null,
                 project_id: opts.projectId ?? null,
                 supplier_id: opts.supplierId ?? null,
@@ -323,6 +324,76 @@ export const processService = {
             throw new Error(`Erro ao cancelar processo: ${error.message}`);
         }
         await logAction(id, userId, 'INSTANCE_CANCELLED', { metadata: { reason } });
+    },
+
+    // ── Costura P2P — gatilho de evento ─────────────────────────
+    //
+    // O motor não sabe nada sobre "pedido de compra" ou "recebimento"; ele só
+    // reage a uma chave de evento. Quem sabe que "Recebido" vira
+    // 'purchase_order.received' é o orderService, que chama isto como efeito
+    // colateral (mesmo padrão de financialService.syncOrderToFinance — best
+    // effort, não deve derrubar a atualização do pedido).
+
+    /**
+     * Dispara todos os templates ATIVOS com trigger_type='EVENTO' cuja
+     * trigger_event_key bate com `eventKey`. Idempotente por (template, PO):
+     * não inicia de novo se já existir instância não-terminal para o mesmo
+     * pedido — evita duplicar processo quando o status é regravado.
+     */
+    async triggerEvent(
+        organizationId: string,
+        eventKey: ProcessEventKey,
+        ctx: { title: string; purchaseOrderId?: string; supplierId?: string; projectId?: string; contractId?: string; clientId?: string },
+    ): Promise<void> {
+        const { data: templates, error } = await supabase
+            .from('process_templates')
+            .select('id')
+            .eq('organization_id', organizationId)
+            .eq('trigger_type', 'EVENTO')
+            .eq('trigger_event_key', eventKey)
+            .eq('status', 'ATIVO');
+        if (error) {
+            console.error('[processService] triggerEvent (templates):', error);
+            return; // best-effort — não derruba o fluxo que disparou o evento
+        }
+
+        for (const template of (templates ?? []) as { id: string }[]) {
+            try {
+                if (ctx.purchaseOrderId) {
+                    const { data: existing } = await supabase
+                        .from('process_instances')
+                        .select('id')
+                        .eq('process_template_id', template.id)
+                        .eq('purchase_order_id', ctx.purchaseOrderId)
+                        .not('status', 'in', '(CONCLUIDO,CANCELADO)')
+                        .maybeSingle();
+                    if (existing) continue; // já existe instância ativa para este pedido
+                }
+                await this.startInstance({
+                    organizationId,
+                    templateId: template.id,
+                    title: ctx.title,
+                    purchaseOrderId: ctx.purchaseOrderId,
+                    supplierId: ctx.supplierId,
+                    projectId: ctx.projectId,
+                    contractId: ctx.contractId,
+                    clientId: ctx.clientId,
+                });
+            } catch (startErr) {
+                console.error('[processService] triggerEvent (startInstance):', startErr);
+            }
+        }
+    },
+
+    // ── Dashboard de gargalos (Fase 2) ───────────────────────────
+
+    async getBottlenecks(organizationId: string): Promise<ProcessStepBottleneck[]> {
+        const { data, error } = await supabase.rpc('fn_process_bottlenecks', { p_organization_id: organizationId });
+        if (error) {
+            console.error('[processService] getBottlenecks:', error);
+            throw new Error(`Erro ao carregar gargalos: ${error.message}`);
+        }
+        return (data ?? []) as ProcessStepBottleneck[];
     },
 
     // ── Etapas — "assumir" e conclusão manual/validação ────────

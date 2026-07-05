@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink } from '../../services/nfeService';
+import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink, linkExistingTransaction } from '../../services/nfeService';
 import { projectService } from '../../services/projectService';
 import type { NfeInvoice, NfeInvoiceWithItems, ProcessingStatus } from '../../types/fiscal';
 import { supabase } from '../../lib/supabase';
@@ -38,7 +38,7 @@ const STEP_ORDER: Record<string, number> = {
   queued: 0, processing: 1, parsed: 2, normalized: 3, completed: 4,
 };
 
-// ── Modal: Gerar Título Financeiro ───────────────────────────────────────────
+// ── Modal: Gerar ou Vincular Título Financeiro ────────────────────────────────
 function ApproveModal({
   invoice,
   projects,
@@ -52,14 +52,22 @@ function ApproveModal({
   onClose: () => void;
   onSuccess: (updated: NfeInvoice) => void;
 }) {
+  const [tab, setTab] = useState<'new' | 'existing'>('new');
+  
+  // Aba: Criar Novo
   const [projectId, setProjectId] = useState(invoice.project_id ?? '');
   const [purchaseOrderId, setPurchaseOrderId] = useState(invoice.purchase_order_id ?? '');
   const [orders, setOrders] = useState<{ id: string; number: string }[]>([]);
   const [dueDate, setDueDate] = useState('');
+  
+  // Aba: Vincular Existente
+  const [existingTxs, setExistingTxs] = useState<{ id: string; description: string; amount: number; transaction_date: string; entity_name: string }[]>([]);
+  const [selectedTxId, setSelectedTxId] = useState('');
+  
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Busca pedidos ao trocar de projeto
+  // Busca pedidos ao trocar de projeto (Novo Título)
   useEffect(() => {
     if (!projectId) { setOrders([]); setPurchaseOrderId(''); return; }
     supabase
@@ -70,7 +78,23 @@ function ApproveModal({
       .then(({ data }) => setOrders((data ?? []) as { id: string; number: string }[]));
   }, [projectId]);
 
-  async function handleSubmit() {
+  // Busca títulos pendentes (Vincular Existente)
+  useEffect(() => {
+    if (tab === 'existing') {
+      supabase
+        .from('internal_transactions')
+        .select('id, description, amount, transaction_date, entity_name')
+        .eq('organization_id', organizationId)
+        .eq('direction', 'DEBIT')
+        .eq('status', 'PENDING')
+        // Tenta filtrar pelo nome/cnpj do emissor para não poluir
+        .ilike('entity_name', `%${invoice.issuer_name.split(' ')[0]}%`)
+        .order('transaction_date', { ascending: true })
+        .then(({ data }) => setExistingTxs(data ?? []));
+    }
+  }, [tab, organizationId, invoice.issuer_name]);
+
+  async function handleCreateNew() {
     if (!projectId) { setError('Selecione uma obra.'); return; }
     if (!dueDate)   { setError('Informe a data de vencimento.'); return; }
     setSaving(true);
@@ -93,6 +117,25 @@ function ApproveModal({
     }
   }
 
+  async function handleLinkExisting() {
+    if (!selectedTxId) { setError('Selecione um título financeiro.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const updated = await linkExistingTransaction({
+        invoiceId: invoice.id,
+        transactionId: selectedTxId,
+        userId: user?.id ?? '',
+      });
+      onSuccess(updated);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erro ao vincular título');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div
       style={{
@@ -103,75 +146,130 @@ function ApproveModal({
     >
       <div
         className="f-card"
-        style={{ width: 420, maxWidth: '90vw', margin: 0, padding: 24 }}
+        style={{ width: 480, maxWidth: '90vw', margin: 0, padding: 24 }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="f-section-title" style={{ marginBottom: 4 }}>Gerar Título Financeiro</div>
+        <div className="f-section-title" style={{ marginBottom: 4 }}>Lançamento Financeiro</div>
         <div style={{ fontSize: 13, color: 'var(--ftext3)', marginBottom: 20 }}>
           {invoice.issuer_name} — {fmt(invoice.total_value)}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ftext2)', display: 'block', marginBottom: 4 }}>
-              Obra / Projeto *
-            </label>
-            <select
-              value={projectId}
-              onChange={e => setProjectId(e.target.value)}
-              className="f-input"
-              style={{ width: '100%' }}
-            >
-              <option value="">Selecione...</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+          <button
+            className={`f-btn f-btn-sm ${tab === 'new' ? 'f-btn-primary' : 'f-btn-ghost'}`}
+            style={{ flex: 1 }}
+            onClick={() => setTab('new')}
+          >
+            Criar Novo Título
+          </button>
+          <button
+            className={`f-btn f-btn-sm ${tab === 'existing' ? 'f-btn-primary' : 'f-btn-ghost'}`}
+            style={{ flex: 1 }}
+            onClick={() => setTab('existing')}
+          >
+            Vincular Existente
+          </button>
+        </div>
 
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ftext2)', display: 'block', marginBottom: 4 }}>
-              Vincular Pedido de Compra <span style={{ fontWeight: 400, opacity: 0.6 }}>(opcional — habilita 3-way match)</span>
-            </label>
-            <select
-              value={purchaseOrderId}
-              onChange={e => setPurchaseOrderId(e.target.value)}
-              className="f-input"
-              style={{ width: '100%' }}
-              disabled={!projectId}
-            >
-              <option value="">Sem vínculo com pedido</option>
-              {orders.map(o => (
-                <option key={o.id} value={o.id}>Pedido #{o.number}</option>
-              ))}
-            </select>
-          </div>
+        {tab === 'new' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ftext2)', display: 'block', marginBottom: 4 }}>
+                Obra / Projeto *
+              </label>
+              <select
+                value={projectId}
+                onChange={e => setProjectId(e.target.value)}
+                className="f-input"
+                style={{ width: '100%' }}
+              >
+                <option value="">Selecione...</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
 
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ftext2)', display: 'block', marginBottom: 4 }}>
-              Vencimento *
-            </label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              className="f-input"
-              style={{ width: '100%' }}
-            />
-          </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ftext2)', display: 'block', marginBottom: 4 }}>
+                Vincular Pedido de Compra <span style={{ fontWeight: 400, opacity: 0.6 }}>(opcional — habilita 3-way match)</span>
+              </label>
+              <select
+                value={purchaseOrderId}
+                onChange={e => setPurchaseOrderId(e.target.value)}
+                className="f-input"
+                style={{ width: '100%' }}
+                disabled={!projectId}
+              >
+                <option value="">Sem vínculo com pedido</option>
+                {orders.map(o => (
+                  <option key={o.id} value={o.id}>Pedido #{o.number}</option>
+                ))}
+              </select>
+            </div>
 
-          {error && (
-            <div style={{ color: 'var(--fred)', fontSize: 13, fontWeight: 600 }}>{error}</div>
-          )}
-
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-            <button className="f-btn f-btn-ghost f-btn-sm" onClick={onClose} disabled={saving}>
-              Cancelar
-            </button>
-            <button className="f-btn f-btn-primary f-btn-sm" onClick={handleSubmit} disabled={saving}>
-              {saving ? 'Gerando…' : 'Aprovar e Gerar Título'}
-            </button>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ftext2)', display: 'block', marginBottom: 4 }}>
+                Vencimento *
+              </label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                className="f-input"
+                style={{ width: '100%' }}
+              />
+            </div>
           </div>
+        )}
+
+        {tab === 'existing' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ fontSize: 12, color: 'var(--ftext3)' }}>
+              Selecione um título financeiro pendente gerado por contratos ou pedidos de compra para amarrar a esta NF-e.
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ftext2)', display: 'block', marginBottom: 4 }}>
+                Título Pendente *
+              </label>
+              {existingTxs.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--fred)', padding: 12, border: '1px dashed var(--fred)', borderRadius: 8 }}>
+                  Nenhum título pendente encontrado para este fornecedor.
+                </div>
+              ) : (
+                <select
+                  value={selectedTxId}
+                  onChange={e => setSelectedTxId(e.target.value)}
+                  className="f-input"
+                  style={{ width: '100%' }}
+                >
+                  <option value="">Selecione um título...</option>
+                  {existingTxs.map(tx => (
+                    <option key={tx.id} value={tx.id}>
+                      {fmtDate(tx.transaction_date)} — {fmt(tx.amount)} — {tx.description}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div style={{ color: 'var(--fred)', fontSize: 13, fontWeight: 600, marginTop: 14 }}>{error}</div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 24 }}>
+          <button className="f-btn f-btn-ghost f-btn-sm" onClick={onClose} disabled={saving}>
+            Cancelar
+          </button>
+          <button
+            className="f-btn f-btn-primary f-btn-sm"
+            onClick={tab === 'new' ? handleCreateNew : handleLinkExisting}
+            disabled={saving || (tab === 'existing' && !selectedTxId)}
+          >
+            {saving ? 'Processando…' : (tab === 'new' ? 'Aprovar e Gerar Título' : 'Vincular a Título Selecionado')}
+          </button>
         </div>
       </div>
     </div>

@@ -315,3 +315,54 @@ export async function approveAndLink(params: {
   if (updErr || !updated) throw new Error(`Erro ao atualizar NF-e: ${updErr?.message}`);
   return updated;
 }
+
+// ============================================================
+// F1 — VINCULAR NF-e A TÍTULO EXISTENTE
+// Vincula a NF-e a uma internal_transaction (Boleto) já existente.
+// ============================================================
+
+export async function linkExistingTransaction(params: {
+  invoiceId: string;
+  transactionId: string;
+  userId: string;
+}): Promise<NfeInvoice> {
+  const { invoiceId, transactionId, userId } = params;
+
+  // 1. Buscar a nota
+  const { data: invoice, error: fetchErr } = await supabase
+    .from('nfe_invoices')
+    .select(NFE_COLS)
+    .eq('id', invoiceId)
+    .single<NfeInvoice>();
+
+  if (fetchErr || !invoice) throw new Error('NF-e não encontrada');
+  if (invoice.linked_transaction_id) throw new Error('NF-e já possui título financeiro vinculado');
+  if (invoice.document_status !== 'completed') throw new Error('NF-e ainda não foi processada com sucesso');
+
+  // 2. Buscar a transação existente
+  const { data: tx, error: txErr } = await supabase
+    .from('internal_transactions')
+    .select('id, project_id, organization_id')
+    .eq('id', transactionId)
+    .single();
+
+  if (txErr || !tx) throw new Error('Título financeiro não encontrado');
+  if (tx.organization_id !== invoice.organization_id) throw new Error('Título financeiro pertence a outra organização');
+
+  // 3. Vincular a NF-e à transação
+  const { data: updated, error: updErr } = await supabase
+    .from('nfe_invoices')
+    .update({
+      linked_transaction_id: tx.id,
+      project_id:            tx.project_id, // Herda a obra do título
+      approved_at:           new Date().toISOString(),
+      approved_by:           userId,
+      payment_status:        'approved',
+    })
+    .eq('id', invoiceId)
+    .select(NFE_COLS)
+    .single<NfeInvoice>();
+
+  if (updErr || !updated) throw new Error(`Erro ao atualizar NF-e: ${updErr?.message}`);
+  return updated;
+}

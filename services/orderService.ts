@@ -12,6 +12,7 @@ import { notificationLogService } from './notificationLogService';
 import { whatsappService } from './whatsappService';
 import { approvalService } from './approvalService';
 import { appSettingsService } from './appSettingsService';
+import { processService } from './processService';
 
 type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; chart_of_accounts?: string; notes?: string; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
 
@@ -309,6 +310,27 @@ export const orderService = {
                     await financialService.syncOrderToFinance(id);
                 } catch (finError) {
                     console.error("[ORDER SERVICE] Financial sync failed:", finError);
+                }
+            }
+
+            // 2b. Costura P2P — dispara templates de Processos (EVENTO) para
+            // Recebido/Divergência. Best-effort: nunca deve derrubar o pedido.
+            if (['Recebido', 'Divergência'].includes(updates.status)) {
+                try {
+                    const eventKey = updates.status === 'Recebido' ? 'purchase_order.received' : 'purchase_order.divergence';
+                    const orgId = data.empresa_id
+                        ? (await supabase.from('companies').select('org_id').eq('id', data.empresa_id).maybeSingle()).data?.org_id
+                        : null;
+                    if (orgId) {
+                        await processService.triggerEvent(orgId, eventKey, {
+                            title: `Pedido ${data.number} — ${updates.status}`,
+                            purchaseOrderId: data.id,
+                            supplierId: data.supplier_id ?? undefined,
+                            projectId: data.project_id ?? undefined,
+                        });
+                    }
+                } catch (procError) {
+                    console.error("[ORDER SERVICE] Process trigger failed:", procError);
                 }
             }
 

@@ -30,6 +30,8 @@ export interface ProcessTemplate {
     criticality: ProcessCriticality;
     default_sla_hours?: number | null;
     trigger_type: ProcessTriggerType;
+    /** Chave do evento que dispara a instância (ex.: 'purchase_order.received'). Só usada quando trigger_type='EVENTO'. */
+    trigger_event_key?: string | null;
     created_at: string;
     updated_at: string;
     archived_at?: string | null;
@@ -135,3 +137,16 @@ export interface PendingStepItem extends ProcessInstanceStep {
     instance_status: ProcessInstanceStatus;
     instance_priority: ProcessPriority;
 }
+
+/** Linha do dashboard de gargalos — agregado por nome de etapa (fn_process_bottlenecks). */
+export interface ProcessStepBottleneck {
+    step_name: string;
+    step_type: ProcessStepType;
+    avg_hours: number | null;
+    completed_count: number;
+    active_count: number;
+    overdue_count: number;
+}
+
+/** Chaves de evento do P2P que o motor de Processos escuta (costura — ver PLANO_MODULO_PROCESSOS.md §6). */
+export type ProcessEventKey = 'purchase_order.received' | 'purchase_order.divergence';

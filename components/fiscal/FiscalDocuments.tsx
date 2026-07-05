@@ -313,7 +313,7 @@ function DocumentDetail({
 
   const currentStep = STEP_ORDER[invoice.document_status] ?? -1;
   const isError = ['failed', 'dead_letter'].includes(invoice.document_status);
-  const canApprove = invoice.document_status === 'completed' && !invoice.linked_transaction_id;
+  const canApprove = ['completed', 'active'].includes(invoice.document_status) && !invoice.linked_transaction_id;
   const linkedProject = projects.find(p => p.id === invoice.project_id);
 
   return (

@@ -58,6 +58,7 @@ function ApproveModal({
 
   const [projectId, setProjectId] = useState(invoice.project_id ?? '');
   const [purchaseOrderId, setPurchaseOrderId] = useState(invoice.purchase_order_id ?? '');
+  const [orderMode, setOrderMode] = useState<'none' | 'existing' | 'new'>(invoice.purchase_order_id ? 'existing' : 'none');
   const [orders, setOrders] = useState<{ id: string; number: string }[]>([]);
   const [dueDate, setDueDate] = useState('');
   
@@ -102,9 +103,9 @@ function ApproveModal({
     setError('');
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      let finalPurchaseOrderId = purchaseOrderId || undefined;
+      let finalPurchaseOrderId = orderMode === 'existing' ? (purchaseOrderId || undefined) : undefined;
       
-      if (purchaseOrderId === 'CREATE_NEW_ORDER') {
+      if (orderMode === 'new') {
         const doCreate = async (autoCreate: boolean) => {
           return await createOrderFromNfe({
             invoiceId: invoice.id,
@@ -222,20 +223,53 @@ function ApproveModal({
 
             <div>
               <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ftext2)', display: 'block', marginBottom: 4 }}>
-                Vincular Pedido de Compra <span style={{ fontWeight: 400, opacity: 0.6 }}>(opcional — habilita 3-way match)</span>
+                Pedido de Compra <span style={{ fontWeight: 400, opacity: 0.6 }}>(habilita 3-way match)</span>
               </label>
-              <select
-                value={purchaseOrderId}
-                onChange={e => setPurchaseOrderId(e.target.value)}
-                className="f-input"
-                style={{ width: '100%' }}
-              >
-                <option value="">Sem vínculo com pedido</option>
-                <option value="CREATE_NEW_ORDER">✨ Criar novo pedido automaticamente</option>
-                {orders.map(o => (
-                  <option key={o.id} value={o.id}>Pedido #{o.number}</option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', gap: 8, marginBottom: orderMode === 'existing' ? 8 : 0 }}>
+                <button
+                  type="button"
+                  className={`f-btn f-btn-sm ${orderMode === 'none' ? 'f-btn-primary' : 'f-btn-ghost'}`}
+                  style={{ flex: 1 }}
+                  onClick={() => { setOrderMode('none'); setPurchaseOrderId(''); }}
+                >
+                  Sem Vínculo
+                </button>
+                <button
+                  type="button"
+                  className={`f-btn f-btn-sm ${orderMode === 'existing' ? 'f-btn-primary' : 'f-btn-ghost'}`}
+                  style={{ flex: 1 }}
+                  onClick={() => { setOrderMode('existing'); setPurchaseOrderId(''); }}
+                >
+                  Vincular Existente
+                </button>
+                <button
+                  type="button"
+                  className={`f-btn f-btn-sm ${orderMode === 'new' ? 'f-btn-primary' : 'f-btn-ghost'}`}
+                  style={{ flex: 1 }}
+                  onClick={() => { setOrderMode('new'); setPurchaseOrderId(''); }}
+                >
+                  Criar Novo
+                </button>
+              </div>
+
+              {orderMode === 'existing' && (
+                <select
+                  value={purchaseOrderId}
+                  onChange={e => setPurchaseOrderId(e.target.value)}
+                  className="f-input"
+                  style={{ width: '100%' }}
+                >
+                  <option value="">Selecione um pedido...</option>
+                  {orders.map(o => (
+                    <option key={o.id} value={o.id}>Pedido #{o.number}</option>
+                  ))}
+                </select>
+              )}
+              {orderMode === 'new' && (
+                <div style={{ fontSize: 12, color: 'var(--ftext3)', marginTop: 8 }}>
+                  ✨ Um novo Pedido de Compra será gerado copiando os itens desta NF-e.
+                </div>
+              )}
             </div>
 
             <div>

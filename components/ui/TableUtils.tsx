@@ -140,8 +140,32 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
   onToggleColumn,
   onReset,
 }) => {
+  const menuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showColumnConfig) {
+        onToggleShow();
+      }
+    };
+    
+    const handleClickOutside = (e: MouseEvent) => {
+      if (showColumnConfig && menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onToggleShow();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showColumnConfig, onToggleShow]);
+
   return (
-    <div className="relative">
+    <div className="relative" ref={menuRef}>
       <button
         onClick={onToggleShow}
         className="p-2.5 rounded-xl transition-all text-gray-400 hover:text-gray-600 relative"

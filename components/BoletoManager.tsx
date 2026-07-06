@@ -3,7 +3,7 @@ import {
     Plus, Search, FileText, Loader2, RefreshCw,
     Building2, Calendar, AlertTriangle, ChevronDown,
     Wallet, Clock, CheckCircle2, SlidersHorizontal, X,
-    ArrowUpDown, Download, LayoutGrid, List, Upload, Pencil,
+    ArrowUpDown, Download, LayoutGrid, List, Upload, Pencil, AlertCircle,
 } from 'lucide-react';
 import { boletoService } from '../services/boletoService';
 import { financialRegistryService } from '../services/financialRegistryService';
@@ -42,6 +42,16 @@ const STATUS_COLORS: Record<BoletoStatus, string> = {
     programado: 'bg-indigo-100 text-indigo-700',
     pago: 'bg-emerald-100 text-emerald-700',
     cancelado: 'bg-red-100 text-red-700',
+};
+
+// Padrão guia seção 8 — texto simples, sem pílula
+const STATUS_TEXT_COLORS: Record<BoletoStatus, string> = {
+    rascunho:   'text-gray-700',
+    revisao:    'text-amber-700',
+    aprovado:   'text-blue-700',
+    programado: 'text-indigo-700',
+    pago:       'text-emerald-700',
+    cancelado:  'text-red-700',
 };
 
 const BOLETO_COLUMNS: ColumnConfig[] = [
@@ -160,11 +170,11 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
     return (
         <tr
             onClick={() => onOpen(b)}
-            className={`cursor-pointer hover:bg-gray-50 transition-colors ${
+            className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${
                 isHighlighted ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : selected ? 'bg-blue-50/60' : atrasado ? 'bg-red-50/40' : ''
             }`}
         >
-            <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+            <td className="px-4 py-2.5 border-r border-gray-100" onClick={e => e.stopPropagation()}>
                 <input
                     type="checkbox"
                     checked={selected}
@@ -174,52 +184,50 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
                 />
             </td>
             {visibleColumns.includes('numero') && (
-                <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="text-xs font-black text-gray-500 tracking-widest">
-                        {b.numero != null ? `#${String(b.numero).padStart(4, '0')}` : '—'}
-                    </span>
+                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                    {b.numero != null ? `#${String(b.numero).padStart(4, '0')}` : '—'}
                 </td>
             )}
             {visibleColumns.includes('beneficiario') && (
-                <td className="px-4 py-3 text-gray-700 max-w-[200px]">
-                    <p className="font-medium truncate">
+                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 max-w-[200px]">
+                    <p className="truncate">
                         {b.supplier_id
                             ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
                             : (b.beneficiario_nome ?? b.documento_nome)}
                     </p>
                     {b.beneficiario_cnpj && !b.supplier_id && (
-                        <p className="text-xs text-gray-400 font-mono truncate">{b.beneficiario_cnpj}</p>
+                        <p className="text-xs text-gray-400 font-normal truncate">{b.beneficiario_cnpj}</p>
                     )}
                 </td>
             )}
             {visibleColumns.includes('obra') && (
-                <td className="px-4 py-3 text-table-body text-gray-500 max-w-[160px]">
+                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[160px]">
                     <p className="truncate">{b.project_id ? (projectMap[b.project_id] ?? '—') : '—'}</p>
                 </td>
             )}
             {visibleColumns.includes('centro_custo') && (
-                <td className="px-4 py-3 text-table-body text-gray-500 max-w-[140px]">
+                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[140px]">
                     <p className="truncate">{b.cost_center_id ? (ccMap[b.cost_center_id] ?? '—') : '—'}</p>
                 </td>
             )}
             {visibleColumns.includes('valor') && (
-                <td className="px-4 py-3 text-right font-bold text-gray-900 whitespace-nowrap">
+                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right whitespace-nowrap">
                     {formatBRL(b.valor)}
                 </td>
             )}
             {visibleColumns.includes('vencimento') && (
-                <td className={`px-4 py-3 text-center text-sm font-semibold whitespace-nowrap ${atrasado ? 'text-red-600' : 'text-gray-700'}`}>
+                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal whitespace-nowrap ${atrasado ? 'text-red-600' : 'text-gray-600'}`}>
                     {formatDateBR(b.vencimento)}
-                    {atrasado && <div className="text-xs text-red-400 font-bold">ATRASADO</div>}
+                    {atrasado && <div className="text-xs text-red-400 font-normal">Atrasado</div>}
                 </td>
             )}
             {visibleColumns.includes('status') && (
-                <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
+                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                    <span className={`text-sm font-normal ${STATUS_TEXT_COLORS[b.status]}`}>
                         {STATUS_LABELS[b.status]}
                     </span>
                     {b.confidence_score !== undefined && b.confidence_score < 80 && (
-                        <div className="mt-0.5 flex items-center justify-center gap-0.5 text-[9px] font-bold text-amber-600">
+                        <div className="mt-0.5 flex items-center gap-0.5 text-[9px] font-normal text-amber-600">
                             <AlertTriangle className="w-2.5 h-2.5" /> {b.confidence_score}%
                         </div>
                     )}
@@ -245,6 +253,17 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isLoteEditOpen, setIsLoteEditOpen] = useState(false);
     const tableColumns = useTableColumns(BOLETO_COLUMNS, 'boletoManagerColumns');
+
+    // Toast de Notificação — Seção 13 do guia
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
+
+    // Modal de Confirmação — Seção 14 do guia
+    const [pendingConfirm, setPendingConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
+    const askConfirm = (message: string, onConfirm: () => void) => setPendingConfirm({ message, onConfirm });
 
     // Raw arrays kept alongside maps for the bulk-edit modal dropdowns
     const [supplierList, setSupplierList] = useState<{ id: string; name: string }[]>([]);
@@ -589,53 +608,74 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
 
             {/* Cards de resumo */}
             {!loading && boletos.length > 0 && (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {/* A Pagar */}
-                    <div className="bg-white rounded-2xl border border-gray-100 p-5">
-                        <div className="flex items-center justify-between mb-3">
-                            <span className="text-xs font-bold uppercase tracking-widest text-gray-400">A Pagar</span>
-                            <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center">
-                                <Wallet className="w-4 h-4 text-blue-500" />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+
+                    {/* A Pagar — padrão guia seção 4 */}
+                    <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-blue-100 transition-all">
+                        <div className="p-3.5 bg-blue-50 text-blue-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
+                            <Wallet className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">A Pagar</p>
+                            <p className="text-2xl font-bold text-gray-900">{formatBRL(summary.totalPendente)}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></span>
+                                <p className="text-xs text-gray-400 font-medium truncate">{summary.countPendente} boleto{summary.countPendente !== 1 ? 's' : ''} pendente{summary.countPendente !== 1 ? 's' : ''}</p>
                             </div>
                         </div>
-                        <p className="text-xl font-black text-gray-900 leading-tight">{formatBRL(summary.totalPendente)}</p>
-                        <p className="text-xs text-gray-400 mt-1">{summary.countPendente} boleto{summary.countPendente !== 1 ? 's' : ''} pendente{summary.countPendente !== 1 ? 's' : ''}</p>
                     </div>
 
                     {/* Vencem em 7 dias */}
-                    <div className={`rounded-2xl border p-5 transition-colors ${summary.countAVencer7 > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100'}`}>
-                        <div className="flex items-center justify-between mb-3">
-                            <span className={`text-xs font-bold uppercase tracking-widest ${summary.countAVencer7 > 0 ? 'text-amber-500' : 'text-gray-400'}`}>Vencem em 7 dias</span>
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${summary.countAVencer7 > 0 ? 'bg-amber-100' : 'bg-gray-50'}`}>
-                                <Clock className={`w-4 h-4 ${summary.countAVencer7 > 0 ? 'text-amber-500' : 'text-gray-400'}`} />
+                    <div className={`p-5 rounded-[1.5rem] shadow-sm border flex items-center gap-5 group hover:shadow-lg transition-all ${
+                        summary.countAVencer7 > 0 ? 'bg-amber-50 border-amber-200 hover:border-amber-300' : 'bg-white border-gray-100 hover:border-amber-100'
+                    }`}>
+                        <div className={`p-3.5 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform ${
+                            summary.countAVencer7 > 0 ? 'bg-amber-100 text-amber-600' : 'bg-amber-50 text-amber-600'
+                        }`}>
+                            <Clock className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Vencem em 7 dias</p>
+                            <p className={`text-2xl font-bold ${summary.countAVencer7 > 0 ? 'text-amber-700' : 'text-gray-900'}`}>{formatBRL(summary.totalAVencer7)}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${summary.countAVencer7 > 0 ? 'bg-amber-500' : 'bg-gray-300'}`}></span>
+                                <p className="text-xs text-gray-400 font-medium truncate">{summary.countAVencer7} boleto{summary.countAVencer7 !== 1 ? 's' : ''}</p>
                             </div>
                         </div>
-                        <p className={`text-xl font-black leading-tight ${summary.countAVencer7 > 0 ? 'text-amber-700' : 'text-gray-900'}`}>{formatBRL(summary.totalAVencer7)}</p>
-                        <p className={`text-xs mt-1 ${summary.countAVencer7 > 0 ? 'text-amber-500' : 'text-gray-400'}`}>{summary.countAVencer7} boleto{summary.countAVencer7 !== 1 ? 's' : ''}</p>
                     </div>
 
                     {/* Em atraso */}
-                    <div className={`rounded-2xl border p-5 transition-colors ${summary.countAtrasado > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-gray-100'}`}>
-                        <div className="flex items-center justify-between mb-3">
-                            <span className={`text-xs font-bold uppercase tracking-widest ${summary.countAtrasado > 0 ? 'text-red-500' : 'text-gray-400'}`}>Em Atraso</span>
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${summary.countAtrasado > 0 ? 'bg-red-100' : 'bg-gray-50'}`}>
-                                <AlertTriangle className={`w-4 h-4 ${summary.countAtrasado > 0 ? 'text-red-500' : 'text-gray-400'}`} />
+                    <div className={`p-5 rounded-[1.5rem] shadow-sm border flex items-center gap-5 group hover:shadow-lg transition-all ${
+                        summary.countAtrasado > 0 ? 'bg-red-50 border-red-200 hover:border-red-300' : 'bg-white border-gray-100 hover:border-red-100'
+                    }`}>
+                        <div className={`p-3.5 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform ${
+                            summary.countAtrasado > 0 ? 'bg-red-100 text-red-600' : 'bg-red-50 text-red-600'
+                        }`}>
+                            <AlertTriangle className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Em Atraso</p>
+                            <p className={`text-2xl font-bold ${summary.countAtrasado > 0 ? 'text-red-700' : 'text-gray-900'}`}>{formatBRL(summary.totalAtrasado)}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 animate-pulse ${summary.countAtrasado > 0 ? 'bg-red-500' : 'bg-gray-300'}`}></span>
+                                <p className="text-xs text-gray-400 font-medium truncate">{summary.countAtrasado} boleto{summary.countAtrasado !== 1 ? 's' : ''}</p>
                             </div>
                         </div>
-                        <p className={`text-xl font-black leading-tight ${summary.countAtrasado > 0 ? 'text-red-700' : 'text-gray-900'}`}>{formatBRL(summary.totalAtrasado)}</p>
-                        <p className={`text-xs mt-1 ${summary.countAtrasado > 0 ? 'text-red-500' : 'text-gray-400'}`}>{summary.countAtrasado} boleto{summary.countAtrasado !== 1 ? 's' : ''}</p>
                     </div>
 
                     {/* Pagos no mês */}
-                    <div className="bg-white rounded-2xl border border-gray-100 p-5">
-                        <div className="flex items-center justify-between mb-3">
-                            <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Pagos no Mês</span>
-                            <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
-                                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-emerald-100 transition-all">
+                        <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
+                            <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Pagos no Mês</p>
+                            <p className="text-2xl font-bold text-gray-900">{formatBRL(summary.totalPagoMes)}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0"></span>
+                                <p className="text-xs text-gray-400 font-medium truncate">{summary.countPagoMes} boleto{summary.countPagoMes !== 1 ? 's' : ''}</p>
                             </div>
                         </div>
-                        <p className="text-xl font-black text-gray-900 leading-tight">{formatBRL(summary.totalPagoMes)}</p>
-                        <p className="text-xs text-gray-400 mt-1">{summary.countPagoMes} boleto{summary.countPagoMes !== 1 ? 's' : ''}</p>
                     </div>
                 </div>
             )}
@@ -660,14 +700,15 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
 
             {/* Busca + botão filtros + toggle view */}
             <div className="flex gap-2">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                {/* Search — padrão guia seção 5 */}
+                <div className="flex-1 relative w-full">
+                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
                         placeholder="Buscar por nome do arquivo, beneficiário ou linha digitável..."
                         value={busca}
                         onChange={(e) => setBusca(e.target.value)}
-                        className="w-full pl-10 pr-3 py-3 bg-white border border-gray-100 rounded-2xl text-sm"
+                        className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-transparent rounded-[1.5rem] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                 </div>
                 <button
@@ -841,15 +882,19 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             )}
 
+            {/* Loading — padrão guia seção 11 */}
             {loading ? (
-                <div className="flex items-center justify-center py-16 text-gray-400">
-                    <Loader2 className="w-6 h-6 animate-spin mr-2" /> Carregando...
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-500">Carregando boletos...</p>
                 </div>
             ) : filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                    <FileText className="w-12 h-12 mb-4 text-gray-300" />
-                    <p className="font-medium">Nenhum boleto encontrado.</p>
-                    <button onClick={abrirNovo} className="mt-4 text-blue-600 hover:underline text-sm font-bold">
+                <div className="text-center py-12 bg-white rounded-[2.5rem] shadow-sm border border-gray-100">
+                    {/* Empty State — padrão guia seção 12 */}
+                    <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum boleto encontrado</h3>
+                    <p className="text-sm text-gray-500">Tente ajustar seus filtros de busca.</p>
+                    <button onClick={abrirNovo} className="mt-4 text-blue-600 hover:underline text-sm font-medium">
                         Capturar o primeiro boleto
                     </button>
                 </div>
@@ -876,11 +921,11 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             ) : (
                 /* ── Vista em lista ── */
-                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="bg-gray-50 border-b border-gray-100 text-xs font-bold uppercase tracking-widest text-gray-400">
-                                <th className="px-4 py-3 w-10">
+                <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
+                            <tr>
+                                <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                     <input
                                         type="checkbox"
                                         checked={filtered.length > 0 && filtered.every(b => selectedIds.has(b.id))}
@@ -897,7 +942,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="text-left px-4 py-3 w-20"
+                                        className="px-6 py-2 border-r border-gray-100 w-20"
                                     />
                                 )}
                                 {tableColumns.visibleColumns.includes('beneficiario') && (
@@ -908,7 +953,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="text-left px-4 py-3"
+                                        className="px-6 py-2 border-r border-gray-100"
                                     />
                                 )}
                                 {tableColumns.visibleColumns.includes('obra') && (
@@ -919,7 +964,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="text-left px-4 py-3"
+                                        className="px-6 py-2 border-r border-gray-100"
                                     />
                                 )}
                                 {tableColumns.visibleColumns.includes('centro_custo') && (
@@ -930,7 +975,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="text-left px-4 py-3"
+                                        className="px-6 py-2 border-r border-gray-100"
                                     />
                                 )}
                                 {tableColumns.visibleColumns.includes('valor') && (
@@ -941,7 +986,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="text-right px-4 py-3"
+                                        className="px-6 py-2 border-r border-gray-100 text-right"
                                     />
                                 )}
                                 {tableColumns.visibleColumns.includes('vencimento') && (
@@ -952,7 +997,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="text-center px-4 py-3"
+                                        className="px-6 py-2 border-r border-gray-100 text-center"
                                     />
                                 )}
                                 {tableColumns.visibleColumns.includes('status') && (
@@ -963,12 +1008,12 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
-                                        className="text-center px-4 py-3"
+                                        className="px-6 py-2 border-r border-gray-100 text-center"
                                     />
                                 )}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50">
+                        <tbody className="divide-y divide-gray-200">
                             {filtered.map((b, idx) => {
                                 const atrasado = !!(b.vencimento && !['pago','cancelado'].includes(b.status)
                                     && new Date(b.vencimento + 'T00:00:00') < new Date());
@@ -1039,6 +1084,39 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     onClose={() => { setIsLoteEditOpen(false); clearSelection(); }}
                     onSaved={() => carregar(effectiveOrgId)}
                 />
+            )}
+            {/* Toast de Notificação — padrão guia seção 13 */}
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
+                </div>
+            )}
+
+            {/* Modal de Confirmação — padrão guia seção 14 */}
+            {pendingConfirm && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 border border-gray-100 animate-in zoom-in-95 duration-200">
+                        <p className="text-sm font-normal text-gray-700 mb-6 leading-relaxed">{pendingConfirm.message}</p>
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => setPendingConfirm(null)}
+                                className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-semibold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-all"
+                            >
+                                Cancelar
+                            </button>
+                            <Button
+                                variant="danger"
+                                onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }}
+                                className="rounded-2xl"
+                            >
+                                Confirmar
+                            </Button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -341,6 +341,13 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                             description="Gerencie pedidos, contratos e cotações de materiais."
                             view="supplies-orders"
                         />
+                        <ShortcutCard
+                            label="Previdência da Obra"
+                            icon={CheckCircle2}
+                            color="bg-indigo-600"
+                            description="Gestão de CNO, INSS da Obra e regularização SERO."
+                            view="social-security"
+                        />
                     </div>
                 </div>
 

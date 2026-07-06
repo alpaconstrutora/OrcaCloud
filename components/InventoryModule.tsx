@@ -31,6 +31,7 @@ import { inventoryService } from '../services/inventoryService';
 import Button from './ui/Button';
 import { useStore } from '../store/useStore';
 import { formatMoney, formatDateBR, formatPercent } from './ui/Format';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import type {
     Warehouse as WarehouseType,
     StockBalance,
@@ -47,6 +48,16 @@ import type {
     CreateTransferInput,
     CreateMaterialRequestInput,
 } from '../types/inventory';
+
+const StatusBadge = ({ status, label }: { status: 'success'|'danger'|'warning'|'info', label: string }) => {
+    const colors = {
+        success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        danger: 'bg-rose-50 text-rose-700 border-rose-200',
+        warning: 'bg-amber-50 text-amber-700 border-amber-200',
+        info: 'bg-blue-50 text-blue-700 border-blue-200'
+    };
+    return <span className={`px-2 py-1 rounded-md text-xs font-medium border ${colors[status]}`}>{label}</span>;
+};
 
 interface Props {
     activeOrganizationId: string | null;
@@ -96,21 +107,21 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
     };
 
     const label = form.type === 'in' ? 'Entrada' : form.type === 'out' ? 'Saída' : 'Ajuste';
-    const color = form.type === 'in' ? 'text-green-400' : form.type === 'out' ? 'text-red-400' : 'text-yellow-400';
+    const headerColor = form.type === 'in' ? 'text-green-700 bg-green-50' : form.type === 'out' ? 'text-red-700 bg-red-50' : 'text-yellow-700 bg-yellow-50';
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                    <h3 className={`font-semibold text-lg ${color}`}>{label} Manual</h3>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                <div className={`flex items-center justify-between px-6 py-4 border-b border-gray-100 ${headerColor}`}>
+                    <h3 className="font-semibold text-lg">{label} Manual</h3>
+                    <button onClick={onClose} className="p-1 rounded-md hover:bg-black/5 text-gray-500 transition-colors"><X className="w-5 h-5" /></button>
                 </div>
 
-                <div className="space-y-3">
+                <div className="p-6 space-y-4">
                     <div>
-                        <label className="block text-form-label text-gray-400 mb-1">Almoxarifado</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Almoxarifado</label>
                         <select
-                            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.warehouseId}
                             onChange={e => setForm(f => ({ ...f, warehouseId: e.target.value }))}
                         >
@@ -120,49 +131,49 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
                         </select>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2">
-                            <label className="block text-form-label text-gray-400 mb-1">Insumo / Descrição *</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Insumo / Descrição *</label>
                             <input
-                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.inputDescription}
                                 onChange={e => setForm(f => ({ ...f, inputDescription: e.target.value }))}
                                 placeholder="Ex: Cimento CP-II 50kg"
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label text-gray-400 mb-1">Código</label>
+                            <label className="block text-form-label text-gray-700 mb-1">Código</label>
                             <input
-                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.inputCode ?? ''}
                                 onChange={e => setForm(f => ({ ...f, inputCode: e.target.value || undefined }))}
                                 placeholder="SINAPI ou próprio"
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label text-gray-400 mb-1">Unidade *</label>
+                            <label className="block text-form-label text-gray-700 mb-1">Unidade *</label>
                             <input
-                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.inputUnit}
                                 onChange={e => setForm(f => ({ ...f, inputUnit: e.target.value }))}
                                 placeholder="sc, m³, un"
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label text-gray-400 mb-1">Quantidade *</label>
+                            <label className="block text-form-label text-gray-700 mb-1">Quantidade *</label>
                             <input
                                 type="number" min="0.0001" step="0.01"
-                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.quantity || ''}
                                 onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))}
                             />
                         </div>
                         {form.type === 'in' && (
                             <div>
-                                <label className="block text-form-label text-gray-400 mb-1">Custo unitário</label>
+                                <label className="block text-form-label text-gray-700 mb-1">Custo unitário</label>
                                 <input
                                     type="number" min="0" step="0.01"
-                                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                     value={form.unitCost ?? ''}
                                     onChange={e => setForm(f => ({ ...f, unitCost: parseFloat(e.target.value) || undefined }))}
                                     placeholder="R$"
@@ -170,10 +181,10 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
                             </div>
                         )}
                         <div>
-                            <label className="block text-form-label text-gray-400 mb-1">Data</label>
+                            <label className="block text-form-label text-gray-700 mb-1">Data</label>
                             <input
                                 type="date"
-                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.movedAt ?? ''}
                                 onChange={e => setForm(f => ({ ...f, movedAt: e.target.value }))}
                             />
@@ -181,28 +192,30 @@ const MovementModal: React.FC<MovementModalProps> = ({ orgId, warehouses, defaul
                     </div>
 
                     <div>
-                        <label className="block text-form-label text-gray-400 mb-1">Observações</label>
+                        <label className="block text-form-label text-gray-700 mb-1">Observações</label>
                         <input
-                            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.notes ?? ''}
                             onChange={e => setForm(f => ({ ...f, notes: e.target.value || undefined }))}
                         />
                     </div>
                 </div>
 
-                {err && <p className="text-red-400 text-xs">{err}</p>}
-
-                <div className="flex gap-3 pt-2">
-                    <button onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800">
-                        Cancelar
-                    </button>
-                    <Button
-                        onClick={save} disabled={saving}
-                        className="flex-1 justify-center"
-                    >
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                        Registrar
-                    </Button>
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-col gap-3">
+                    {err && <p className="text-red-500 text-sm font-medium">{err}</p>}
+                    <div className="flex gap-3">
+                        <Button variant="secondary" onClick={onClose} className="flex-1 justify-center border-gray-200 text-gray-700 hover:bg-gray-100 !py-2.5">
+                            Cancelar
+                        </Button>
+                        <Button
+                            variant="primary"
+                            onClick={save} disabled={saving}
+                            className="flex-1 justify-center bg-blue-600 hover:bg-blue-700 !py-2.5"
+                        >
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                            Registrar
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -246,26 +259,26 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-sm p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-white">{existing ? 'Editar' : 'Novo'} Almoxarifado</h3>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                    <h3 className="font-semibold text-lg text-gray-900">{existing ? 'Editar' : 'Novo'} Almoxarifado</h3>
+                    <button onClick={onClose} className="p-1 rounded-md hover:bg-black/5 text-gray-500 transition-colors"><X className="w-5 h-5" /></button>
                 </div>
 
-                <div className="space-y-3">
+                <div className="p-6 space-y-4">
                     <div>
-                        <label className="block text-form-label text-gray-400 mb-1">Nome *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
                         <input
-                            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.name}
                             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                         />
                     </div>
                     <div>
-                        <label className="block text-form-label text-gray-400 mb-1">Tipo</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
                         <select
-                            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.type}
                             onChange={e => setForm(f => ({ ...f, type: e.target.value as CreateWarehouseInput['type'] }))}
                         >
@@ -275,9 +288,9 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
                         </select>
                     </div>
                     <div>
-                        <label className="block text-form-label text-gray-400 mb-1">Obra (opcional)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Obra (opcional)</label>
                         <select
-                            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.projectId ?? ''}
                             onChange={e => setForm(f => ({ ...f, projectId: e.target.value || null }))}
                         >
@@ -286,28 +299,55 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
                         </select>
                     </div>
                     <div>
-                        <label className="block text-form-label text-gray-400 mb-1">Observações</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
                         <input
-                            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.notes ?? ''}
                             onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                         />
                     </div>
                 </div>
 
-                {err && <p className="text-red-400 text-xs">{err}</p>}
-
-                <div className="flex gap-3 pt-2">
-                    <button onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800">Cancelar</button>
-                    <Button onClick={save} disabled={saving} className="flex-1 justify-center">
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                        Salvar
-                    </Button>
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-col gap-3">
+                    {err && <p className="text-red-500 text-sm font-medium">{err}</p>}
+                    <div className="flex gap-3">
+                        <Button variant="secondary" onClick={onClose} className="flex-1 justify-center border-gray-200 text-gray-700 hover:bg-gray-100 !py-2.5">
+                            Cancelar
+                        </Button>
+                        <Button
+                            variant="primary"
+                            onClick={save} disabled={saving}
+                            className="flex-1 justify-center bg-blue-600 hover:bg-blue-700 !py-2.5"
+                        >
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                            Salvar
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
+
+// ─── Configuração de Colunas ─────────────────────────────────────────────────────
+
+const COLUMNS_SALDOS: ColumnConfig[] = [
+    { key: 'insumo', label: 'Insumo', sortable: true },
+    { key: 'almoxarifado', label: 'Almoxarifado', sortable: true },
+    { key: 'quantidade', label: 'Qtd', sortable: true },
+    { key: 'unidade', label: 'Un', sortable: false },
+    { key: 'custo', label: 'Custo Médio', sortable: true },
+    { key: 'valor', label: 'Valor Total', sortable: true },
+];
+
+const COLUMNS_MOVIMENTOS: ColumnConfig[] = [
+    { key: 'data', label: 'Data', sortable: true },
+    { key: 'tipo', label: 'Tipo', sortable: true },
+    { key: 'insumo', label: 'Insumo', sortable: true },
+    { key: 'almoxarifado', label: 'Almoxarifado', sortable: true },
+    { key: 'quantidade', label: 'Qtd', sortable: true },
+    { key: 'valor', label: 'Valor', sortable: true },
+];
 
 // ─── Módulo principal ──────────────────────────────────────────────────────────
 export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
@@ -324,8 +364,15 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const [netPositions, setNetPositions] = React.useState<StockNetPosition[]>([]);
     const [summary, setSummary] = React.useState<StockSummary[]>([]);
 
-    const [selectedWarehouseId, setSelectedWarehouseId] = React.useState<string>('');
-    const [searchTerm, setSearchTerm] = React.useState('');
+    const [selectedWarehouseId, setSelectedWarehouseId] = usePersistedState<string>('inventory-warehouse-filter', '');
+    const [searchTerm, setSearchTerm] = usePersistedState('inventory-search', '');
+    
+    // Configurações de Tabelas
+    const tableSaldos = useTableColumns(COLUMNS_SALDOS, 'inventory-saldos-cols');
+    const tableMovimentos = useTableColumns(COLUMNS_MOVIMENTOS, 'inventory-movimentos-cols');
+    
+    // View modes
+    const [viewMode, setViewMode] = usePersistedState<'list'|'grid'>('inventory-view-mode', 'list');
 
     const [movementModal, setMovementModal] = React.useState<'in' | 'out' | 'adjust' | null>(null);
     const [warehouseModal, setWarehouseModal] = React.useState<WarehouseType | true | null>(null);
@@ -398,19 +445,16 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
+            {/* Page Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                        <Warehouse className="w-6 h-6 text-blue-400" />
-                        Almoxarifado
-                    </h1>
-                    <p className="text-sm text-gray-400 mt-1">Controle de estoque, movimentos e posição de materiais</p>
+                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Gestão de Almoxarifado</h1>
+                    <p className="text-sm text-gray-500 mt-1">Controle de estoque, movimentos e posição de materiais</p>
                 </div>
                 <div className="flex gap-2">
                     <button
                         onClick={() => setMovementModal('in')}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-medium"
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors"
                     >
                         <ArrowDownCircle className="w-4 h-4" /> Entrada
                     </button>
@@ -423,52 +467,28 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                 </div>
             </div>
 
-            {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Stats Dashboard */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                    { label: 'Almoxarifados', value: warehouses.length, icon: Warehouse, color: 'text-blue-400' },
-                    { label: 'Itens em Estoque', value: balances.filter(b => b.quantity > 0).length, icon: Package, color: 'text-green-400' },
-                    { label: 'Sem Saldo', value: lowStock, icon: AlertTriangle, color: 'text-yellow-400' },
-                    { label: 'Valor Total', value: fmtBrl(totalValue), icon: BarChart3, color: 'text-purple-400' },
-                ].map(kpi => (
-                    <div key={kpi.label} className="bg-gray-800/50 border border-gray-700 rounded-xl p-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
-                            <span className="text-xs text-gray-400">{kpi.label}</span>
+                    { label: 'Almoxarifados', value: warehouses.length, icon: Warehouse, color: 'blue' as const },
+                    { label: 'Itens em Estoque', value: balances.filter(b => b.quantity > 0).length, icon: Package, color: 'green' as const },
+                    { label: 'Sem Saldo', value: lowStock, icon: AlertTriangle, color: 'amber' as const },
+                    { label: 'Valor Total', value: fmtBrl(totalValue), icon: BarChart3, color: 'purple' as const },
+                ].map((kpi, idx) => (
+                    <div key={idx} className={`bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-${kpi.color}-100 transition-all`}>
+                        <div className={`p-3.5 bg-${kpi.color}-50 text-${kpi.color}-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform`}>
+                            <kpi.icon className="w-5 h-5" />
                         </div>
-                        <p className="text-xl font-bold text-white">{kpi.value}</p>
+                        <div className="min-w-0">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">{kpi.label}</p>
+                            <p className="text-2xl font-bold text-gray-900 truncate">{kpi.value}</p>
+                        </div>
                     </div>
                 ))}
             </div>
 
-            {/* Filtro de almoxarifado */}
-            <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2">
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                    <select
-                        className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
-                        value={selectedWarehouseId}
-                        onChange={e => setSelectedWarehouseId(e.target.value)}
-                    >
-                        <option value="">Todos os almoxarifados</option>
-                        {warehouses.map(w => (
-                            <option key={w.id} value={w.id}>{w.name}{w.projectName ? ` — ${w.projectName}` : ''}</option>
-                        ))}
-                    </select>
-                </div>
-                <div className="relative flex-1 min-w-48">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-sm text-white placeholder-gray-500"
-                        placeholder="Buscar insumo..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                    />
-                </div>
-            </div>
-
             {/* Tabs */}
-            <div className="flex flex-wrap gap-1 bg-gray-800/50 rounded-xl p-1 w-fit">
+            <div className="flex items-center gap-1 border-b border-gray-200">
                 {([
                     { key: 'saldos', label: 'Saldos', icon: Package },
                     { key: 'posicao', label: 'Posição Líquida', icon: Activity },
@@ -481,14 +501,51 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     <button
                         key={t.key}
                         onClick={() => setTab(t.key)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            tab === t.key ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                            tab === t.key 
+                            ? 'border-blue-600 text-blue-600' 
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                         }`}
                     >
                         <t.icon className="w-4 h-4" />
                         {t.label}
                     </button>
                 ))}
+            </div>
+
+            {/* Toolbar */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:w-80">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Buscar insumo..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 transition-all"
+                        />
+                    </div>
+                    <div className="h-8 w-[1px] bg-gray-200 hidden sm:block"></div>
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2 focus-within:ring-2 focus-within:ring-blue-500 transition-all cursor-pointer">
+                        <Warehouse className="w-4 h-4 text-gray-500" />
+                        <select
+                            className="bg-transparent border-none text-gray-600 text-sm font-medium focus:ring-0 cursor-pointer outline-none min-w-[160px]"
+                            value={selectedWarehouseId}
+                            onChange={e => setSelectedWarehouseId(e.target.value)}
+                        >
+                            <option value="">Todos os almoxarifados</option>
+                            {warehouses.map(w => (
+                                <option key={w.id} value={w.id}>{w.name}{w.projectName ? ` — ${w.projectName}` : ''}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    {tab === 'saldos' && <ColumnConfigButton columns={COLUMNS_SALDOS} visibleColumns={tableSaldos.visibleColumns} showColumnConfig={tableSaldos.showColumnConfig} onToggleShow={() => tableSaldos.setShowColumnConfig(!tableSaldos.showColumnConfig)} onToggleColumn={tableSaldos.toggleColumn} onReset={tableSaldos.resetColumns} />}
+                    {tab === 'movimentos' && <ColumnConfigButton columns={COLUMNS_MOVIMENTOS} visibleColumns={tableMovimentos.visibleColumns} showColumnConfig={tableMovimentos.showColumnConfig} onToggleShow={() => tableMovimentos.setShowColumnConfig(!tableMovimentos.showColumnConfig)} onToggleColumn={tableMovimentos.toggleColumn} onReset={tableMovimentos.resetColumns} />}
+                </div>
             </div>
 
             {loading && (
@@ -501,52 +558,66 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                 <>
                     {/* ── TAB: SALDOS ── */}
                     {tab === 'saldos' && (
-                        <div className="bg-gray-800/30 border border-gray-700 rounded-xl overflow-hidden">
+                        <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
                             {filteredBalances.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                                    <Package className="w-10 h-10 mb-3 opacity-40" />
-                                    <p>Nenhum item em estoque.</p>
-                                    <p className="text-xs mt-1">Registre uma entrada para iniciar o controle.</p>
+                                <div className="flex flex-col items-center justify-center py-20 text-gray-400 bg-gray-50/50">
+                                    <Package className="w-12 h-12 mb-4 text-gray-300" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-1">Nenhum item em estoque</h3>
+                                    <p className="text-sm text-gray-500 max-w-sm text-center mb-6">Registre uma entrada para iniciar o controle de saldos.</p>
                                 </div>
                             ) : (
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase">
-                                            <th className="text-left px-4 py-3">Insumo</th>
-                                            <th className="text-left px-4 py-3 hidden md:table-cell">Almoxarifado</th>
-                                            <th className="text-right px-4 py-3">Qtd</th>
-                                            <th className="text-left px-4 py-3 hidden sm:table-cell">Un</th>
-                                            <th className="text-right px-4 py-3 hidden lg:table-cell">Custo Médio</th>
-                                            <th className="text-right px-4 py-3">Valor Total</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredBalances.map((b, i) => (
-                                            <tr
-                                                key={`${b.warehouseId}-${b.inputCode}`}
-                                                className={`border-b border-gray-700/50 hover:bg-gray-700/30 ${i % 2 === 0 ? '' : 'bg-gray-800/20'}`}
-                                            >
-                                                <td className="px-4 py-3">
-                                                    <p className="text-white font-medium">{b.inputDescription}</p>
-                                                    {b.inputCode && <p className="text-xs text-gray-500">{b.inputCode}</p>}
-                                                </td>
-                                                <td className="px-4 py-3 text-gray-400 hidden md:table-cell">{b.warehouseName ?? '—'}</td>
-                                                <td className={`px-4 py-3 text-right font-mono font-bold ${b.quantity <= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                                                    {fmt(b.quantity)}
-                                                </td>
-                                                <td className="px-4 py-3 text-gray-400 hidden sm:table-cell">{b.inputUnit}</td>
-                                                <td className="px-4 py-3 text-right text-gray-300 hidden lg:table-cell">{fmtBrl(b.avgUnitCost)}</td>
-                                                <td className="px-4 py-3 text-right text-white font-medium">{fmtBrl(b.totalValue)}</td>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left">
+                                        <thead>
+                                            <tr className="border-b border-gray-100 bg-gray-50/50">
+                                                {tableSaldos.visibleColumns.includes('insumo') && <SortableHeader colKey="insumo" label="Insumo" sortColumn={tableSaldos.sortColumn} sortDirection={tableSaldos.sortDirection} onSort={tableSaldos.handleColumnSort} />}
+                                                {tableSaldos.visibleColumns.includes('almoxarifado') && <SortableHeader colKey="almoxarifado" label="Almoxarifado" sortColumn={tableSaldos.sortColumn} sortDirection={tableSaldos.sortDirection} onSort={tableSaldos.handleColumnSort} />}
+                                                {tableSaldos.visibleColumns.includes('quantidade') && <SortableHeader colKey="quantidade" label="Qtd" sortColumn={tableSaldos.sortColumn} sortDirection={tableSaldos.sortDirection} onSort={tableSaldos.handleColumnSort} className="text-right" />}
+                                                {tableSaldos.visibleColumns.includes('unidade') && <SortableHeader colKey="unidade" label="Un" sortColumn={tableSaldos.sortColumn} sortDirection={tableSaldos.sortDirection} onSort={tableSaldos.handleColumnSort} />}
+                                                {tableSaldos.visibleColumns.includes('custo') && <SortableHeader colKey="custo" label="Custo Médio" sortColumn={tableSaldos.sortColumn} sortDirection={tableSaldos.sortDirection} onSort={tableSaldos.handleColumnSort} className="text-right" />}
+                                                {tableSaldos.visibleColumns.includes('valor') && <SortableHeader colKey="valor" label="Valor Total" sortColumn={tableSaldos.sortColumn} sortDirection={tableSaldos.sortDirection} onSort={tableSaldos.handleColumnSort} className="text-right" />}
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                    <tfoot>
-                                        <tr className="border-t border-gray-600 bg-gray-800/50">
-                                            <td colSpan={5} className="px-4 py-3 text-right text-gray-400 text-table-body uppercase font-medium">Total em Estoque</td>
-                                            <td className="px-4 py-3 text-right text-white font-bold">{fmtBrl(filteredBalances.reduce((s, b) => s + b.totalValue, 0))}</td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {filteredBalances.map((b, i) => (
+                                                <tr
+                                                    key={`${b.warehouseId}-${b.inputCode}`}
+                                                    className="group hover:bg-gray-50/50 transition-colors"
+                                                >
+                                                    {tableSaldos.visibleColumns.includes('insumo') && (
+                                                        <td className="px-4 py-3">
+                                                            <p className="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">{b.inputDescription}</p>
+                                                            {b.inputCode && <p className="text-xs text-gray-500 mt-0.5">{b.inputCode}</p>}
+                                                        </td>
+                                                    )}
+                                                    {tableSaldos.visibleColumns.includes('almoxarifado') && (
+                                                        <td className="px-4 py-3 text-sm text-gray-600">{b.warehouseName ?? '—'}</td>
+                                                    )}
+                                                    {tableSaldos.visibleColumns.includes('quantidade') && (
+                                                        <td className={`px-4 py-3 text-right font-medium ${b.quantity <= 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                                            {fmt(b.quantity)}
+                                                        </td>
+                                                    )}
+                                                    {tableSaldos.visibleColumns.includes('unidade') && (
+                                                        <td className="px-4 py-3 text-sm text-gray-500">{b.inputUnit}</td>
+                                                    )}
+                                                    {tableSaldos.visibleColumns.includes('custo') && (
+                                                        <td className="px-4 py-3 text-right text-sm text-gray-600">{fmtBrl(b.avgUnitCost)}</td>
+                                                    )}
+                                                    {tableSaldos.visibleColumns.includes('valor') && (
+                                                        <td className="px-4 py-3 text-right font-medium text-gray-900">{fmtBrl(b.totalValue)}</td>
+                                                    )}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr className="border-t border-gray-100 bg-gray-50/80">
+                                                <td colSpan={tableSaldos.visibleColumns.length - 1} className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Total em Estoque</td>
+                                                <td className="px-4 py-3 text-right font-bold text-gray-900">{fmtBrl(filteredBalances.reduce((s, b) => s + b.totalValue, 0))}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
                             )}
                         </div>
                     )}
@@ -562,29 +633,29 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                 return (ruptures > 0 || belowMin > 0 || excess > 0) ? (
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                         {ruptures > 0 && (
-                                            <div className="flex items-center gap-3 bg-red-900/20 border border-red-800 rounded-xl p-4">
-                                                <ShieldAlert className="w-5 h-5 text-red-400 shrink-0" />
+                                            <div className="flex items-center gap-3 bg-red-50 border border-red-100 rounded-xl p-4">
+                                                <ShieldAlert className="w-5 h-5 text-red-500 shrink-0" />
                                                 <div>
-                                                    <p className="text-xs text-red-300">Ruptura de estoque</p>
-                                                    <p className="text-lg font-bold text-red-400">{ruptures} {ruptures === 1 ? 'item' : 'itens'}</p>
+                                                    <p className="text-xs text-red-600 font-medium">Ruptura de estoque</p>
+                                                    <p className="text-lg font-bold text-red-700">{ruptures} {ruptures === 1 ? 'item' : 'itens'}</p>
                                                 </div>
                                             </div>
                                         )}
                                         {belowMin > 0 && (
-                                            <div className="flex items-center gap-3 bg-yellow-900/20 border border-yellow-800 rounded-xl p-4">
-                                                <TrendingDown className="w-5 h-5 text-yellow-400 shrink-0" />
+                                            <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-100 rounded-xl p-4">
+                                                <TrendingDown className="w-5 h-5 text-yellow-500 shrink-0" />
                                                 <div>
-                                                    <p className="text-xs text-yellow-300">Abaixo do mínimo</p>
-                                                    <p className="text-lg font-bold text-yellow-400">{belowMin} {belowMin === 1 ? 'item' : 'itens'}</p>
+                                                    <p className="text-xs text-yellow-600 font-medium">Abaixo do mínimo</p>
+                                                    <p className="text-lg font-bold text-yellow-700">{belowMin} {belowMin === 1 ? 'item' : 'itens'}</p>
                                                 </div>
                                             </div>
                                         )}
                                         {excess > 0 && (
-                                            <div className="flex items-center gap-3 bg-blue-900/20 border border-blue-800 rounded-xl p-4">
-                                                <TrendingUp className="w-5 h-5 text-blue-400 shrink-0" />
+                                            <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl p-4">
+                                                <TrendingUp className="w-5 h-5 text-blue-500 shrink-0" />
                                                 <div>
-                                                    <p className="text-xs text-blue-300">Possível excesso</p>
-                                                    <p className="text-lg font-bold text-blue-400">{excess} {excess === 1 ? 'item' : 'itens'}</p>
+                                                    <p className="text-xs text-blue-600 font-medium">Possível excesso</p>
+                                                    <p className="text-lg font-bold text-blue-700">{excess} {excess === 1 ? 'item' : 'itens'}</p>
                                                 </div>
                                             </div>
                                         )}
@@ -593,63 +664,64 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                             })()}
 
                             {/* Tabela de posição líquida */}
-                            <div className="bg-gray-800/30 border border-gray-700 rounded-xl overflow-hidden">
-                                <div className="px-4 py-3 border-b border-gray-700">
-                                    <p className="text-sm text-white font-medium">Posição Líquida por Insumo</p>
-                                    <p className="text-xs text-gray-400">Saldo + Em Trânsito (POs ativos) − Reservado</p>
+                            <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                                    <p className="text-sm text-gray-900 font-medium">Posição Líquida por Insumo</p>
+                                    <p className="text-xs text-gray-500 mt-1">Saldo + Em Trânsito (POs ativos) − Reservado</p>
                                 </div>
                                 {netPositions.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                                        <Activity className="w-10 h-10 mb-3 opacity-40" />
-                                        <p>Nenhum dado de posição líquida disponível.</p>
+                                    <div className="flex flex-col items-center justify-center py-20 text-gray-400 bg-gray-50/50">
+                                        <Activity className="w-12 h-12 mb-4 text-gray-300" />
+                                        <p className="text-lg font-medium text-gray-900 mb-1">Nenhum dado de posição líquida disponível.</p>
                                     </div>
                                 ) : (
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase">
-                                                <th className="text-left px-4 py-3">Insumo</th>
-                                                <th className="text-left px-4 py-3 hidden md:table-cell">Almoxarifado</th>
-                                                <th className="text-right px-4 py-3">Saldo</th>
-                                                <th className="text-right px-4 py-3 hidden lg:table-cell">Em Trânsito</th>
-                                                <th className="text-right px-4 py-3 hidden lg:table-cell">Reservado</th>
-                                                <th className="text-right px-4 py-3 font-bold">Líquido</th>
-                                                <th className="text-right px-4 py-3 hidden xl:table-cell">Valor</th>
-                                                <th className="text-center px-4 py-3">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm text-left">
+                                            <thead>
+                                                <tr className="border-b border-gray-100 bg-gray-50/50 text-gray-500 text-xs uppercase font-medium">
+                                                    <th className="px-4 py-3">Insumo</th>
+                                                    <th className="px-4 py-3 hidden md:table-cell">Almoxarifado</th>
+                                                    <th className="px-4 py-3 text-right">Saldo</th>
+                                                    <th className="px-4 py-3 text-right hidden lg:table-cell">Em Trânsito</th>
+                                                    <th className="px-4 py-3 text-right hidden lg:table-cell">Reservado</th>
+                                                    <th className="px-4 py-3 text-right font-bold text-gray-700">Líquido</th>
+                                                    <th className="px-4 py-3 text-right hidden xl:table-cell">Valor</th>
+                                                    <th className="px-4 py-3 text-center">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
                                             {netPositions.map((p, i) => {
                                                 const smr = summary.find(s => s.warehouseId === p.warehouseId && s.inputCode === p.inputCode);
                                                 const isRupture  = smr?.isRupture  ?? p.netQty <= 0;
                                                 const isExcess   = smr?.isExcess   ?? false;
                                                 const isBelowMin = p.isBelowMin;
                                                 return (
-                                                    <tr key={`${p.warehouseId}-${p.inputCode}`} className={`border-b border-gray-700/50 hover:bg-gray-700/30 ${i % 2 === 0 ? '' : 'bg-gray-800/20'}`}>
+                                                    <tr key={`${p.warehouseId}-${p.inputCode}`} className="group hover:bg-gray-50/50 transition-colors">
                                                         <td className="px-4 py-3">
-                                                            <p className="text-white font-medium">{p.inputDescription}</p>
-                                                            {p.inputCode && <p className="text-xs text-gray-500">{p.inputCode}</p>}
+                                                            <p className="text-sm font-medium text-gray-900">{p.inputDescription}</p>
+                                                            {p.inputCode && <p className="text-xs text-gray-500 mt-0.5">{p.inputCode}</p>}
                                                         </td>
-                                                        <td className="px-4 py-3 text-gray-400 hidden md:table-cell">{p.warehouseName ?? '—'}</td>
-                                                        <td className="px-4 py-3 text-right text-gray-300 font-mono">{fmt(p.balanceQty)}</td>
-                                                        <td className="px-4 py-3 text-right text-green-400 font-mono hidden lg:table-cell">
+                                                        <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.warehouseName ?? '—'}</td>
+                                                        <td className="px-4 py-3 text-right text-gray-700 font-medium">{fmt(p.balanceQty)}</td>
+                                                        <td className="px-4 py-3 text-right text-green-600 font-medium hidden lg:table-cell">
                                                             {p.inTransitQty > 0 ? `+${fmt(p.inTransitQty)}` : '—'}
                                                         </td>
-                                                        <td className="px-4 py-3 text-right text-yellow-400 font-mono hidden lg:table-cell">
+                                                        <td className="px-4 py-3 text-right text-yellow-600 font-medium hidden lg:table-cell">
                                                             {p.reservedQty > 0 ? `−${fmt(p.reservedQty)}` : '—'}
                                                         </td>
-                                                        <td className={`px-4 py-3 text-right font-mono font-bold ${isRupture ? 'text-red-400' : isBelowMin ? 'text-yellow-400' : 'text-green-400'}`}>
+                                                        <td className={`px-4 py-3 text-right font-medium ${isRupture ? 'text-red-600' : isBelowMin ? 'text-yellow-600' : 'text-green-600'}`}>
                                                             {fmt(p.netQty)} {p.inputUnit}
                                                         </td>
-                                                        <td className="px-4 py-3 text-right text-gray-300 hidden xl:table-cell">{fmtBrl(p.totalValue)}</td>
+                                                        <td className="px-4 py-3 text-right text-gray-600 hidden xl:table-cell">{fmtBrl(p.totalValue)}</td>
                                                         <td className="px-4 py-3 text-center">
                                                             {isRupture ? (
-                                                                <span className="px-2 py-0.5 rounded-full text-xs bg-red-900/40 text-red-400">Ruptura</span>
+                                                                <StatusBadge status="danger" label="Ruptura" />
                                                             ) : isBelowMin ? (
-                                                                <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-900/40 text-yellow-400">Baixo</span>
+                                                                <StatusBadge status="warning" label="Baixo" />
                                                             ) : isExcess ? (
-                                                                <span className="px-2 py-0.5 rounded-full text-xs bg-blue-900/40 text-blue-400">Excesso</span>
+                                                                <StatusBadge status="info" label="Excesso" />
                                                             ) : (
-                                                                <span className="px-2 py-0.5 rounded-full text-xs bg-green-900/40 text-green-400">OK</span>
+                                                                <StatusBadge status="success" label="OK" />
                                                             )}
                                                         </td>
                                                     </tr>
@@ -657,50 +729,53 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                             })}
                                         </tbody>
                                     </table>
+                                    </div>
                                 )}
                             </div>
 
                             {/* Giro de estoque (30 dias) */}
                             {summary.filter(s => s.outflow30d > 0).length > 0 && (
-                                <div className="bg-gray-800/30 border border-gray-700 rounded-xl overflow-hidden">
-                                    <div className="px-4 py-3 border-b border-gray-700">
-                                        <p className="text-sm text-white font-medium">Giro de Estoque — últimos 30 dias</p>
-                                        <p className="text-xs text-gray-400">Saídas ÷ saldo atual. Quanto maior, maior a rotatividade.</p>
+                                <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                                    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                                        <p className="text-sm text-gray-900 font-medium">Giro de Estoque — últimos 30 dias</p>
+                                        <p className="text-xs text-gray-500 mt-1">Saídas ÷ saldo atual. Quanto maior, maior a rotatividade.</p>
                                     </div>
-                                    <table className="w-full text-sm">
+                                    <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left">
                                         <thead>
-                                            <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase">
-                                                <th className="text-left px-4 py-3">Insumo</th>
+                                            <tr className="border-b border-gray-100 bg-gray-50/50 text-gray-500 text-xs uppercase font-medium">
+                                                <th className="px-4 py-3">Insumo</th>
                                                 <th className="text-right px-4 py-3">Saídas 30d</th>
                                                 <th className="text-right px-4 py-3">Entradas 30d</th>
                                                 <th className="text-right px-4 py-3">Giro</th>
                                                 <th className="text-right px-4 py-3 hidden md:table-cell">Último mov.</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody className="divide-y divide-gray-50">
                                             {summary
                                                 .filter(s => s.outflow30d > 0 || s.inflow30d > 0)
                                                 .sort((a, b) => b.turnoverRate - a.turnoverRate)
                                                 .map(s => (
-                                                <tr key={`${s.warehouseId}-${s.inputCode}`} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                                                <tr key={`${s.warehouseId}-${s.inputCode}`} className="group hover:bg-gray-50/50 transition-colors">
                                                     <td className="px-4 py-3">
-                                                        <p className="text-white">{s.inputDescription}</p>
-                                                        <p className="text-xs text-gray-500">{s.warehouseName}</p>
+                                                        <p className="text-sm font-medium text-gray-900">{s.inputDescription}</p>
+                                                        <p className="text-xs text-gray-500 mt-0.5">{s.warehouseName}</p>
                                                     </td>
-                                                    <td className="px-4 py-3 text-right text-red-400 font-mono">{fmt(s.outflow30d)} {s.inputUnit}</td>
-                                                    <td className="px-4 py-3 text-right text-green-400 font-mono">{fmt(s.inflow30d)} {s.inputUnit}</td>
+                                                    <td className="px-4 py-3 text-right text-red-600 font-medium">{fmt(s.outflow30d)} {s.inputUnit}</td>
+                                                    <td className="px-4 py-3 text-right text-green-600 font-medium">{fmt(s.inflow30d)} {s.inputUnit}</td>
                                                     <td className="px-4 py-3 text-right">
-                                                        <span className={`font-bold ${s.turnoverRate > 0.5 ? 'text-green-400' : s.turnoverRate > 0.1 ? 'text-yellow-400' : 'text-gray-400'}`}>
+                                                        <span className={`font-semibold ${s.turnoverRate > 0.5 ? 'text-green-600' : s.turnoverRate > 0.1 ? 'text-yellow-600' : 'text-gray-500'}`}>
                                                             {formatPercent(s.turnoverRate, { decimals: 1 })}
                                                         </span>
                                                     </td>
-                                                    <td className="px-4 py-3 text-right text-gray-400 hidden md:table-cell">
+                                                    <td className="px-4 py-3 text-right text-sm text-gray-500 hidden md:table-cell">
                                                         {formatDateBR(s.lastMovementDate)}
                                                     </td>
                                                 </tr>
                                             ))}
                                         </tbody>
                                     </table>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -708,122 +783,133 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
 
                     {/* ── TAB: MOVIMENTOS ── */}
                     {tab === 'movimentos' && (
-                        <div className="bg-gray-800/30 border border-gray-700 rounded-xl overflow-hidden">
-                            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-                                <span className="text-sm text-gray-400">{filteredMovements.length} movimentos</span>
-                                <button
+                        <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                                <span className="text-sm font-medium text-gray-500">{filteredMovements.length} movimentos</span>
+                                <Button
+                                    variant="secondary"
                                     onClick={() => setMovementModal('adjust')}
-                                    className="flex items-center gap-1 text-button text-yellow-400 hover:text-yellow-300"
+                                    className="!py-1.5 !px-3 text-sm text-yellow-600 border-yellow-200 bg-yellow-50 hover:bg-yellow-100 transition-colors"
                                 >
-                                    <Plus className="w-3 h-3" /> Ajuste
-                                </button>
+                                    <Plus className="w-3.5 h-3.5 mr-1" /> Ajuste
+                                </Button>
                             </div>
                             {filteredMovements.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                                    <History className="w-10 h-10 mb-3 opacity-40" />
-                                    <p>Nenhum movimento registrado.</p>
+                                <div className="flex flex-col items-center justify-center py-20 text-gray-400 bg-gray-50/50">
+                                    <History className="w-12 h-12 mb-4 text-gray-300" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-1">Nenhum movimento registrado</h3>
+                                    <p className="text-sm text-gray-500 max-w-sm text-center mb-6">Realize entradas, saídas ou transferências para ver o histórico aqui.</p>
                                 </div>
                             ) : (
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase">
-                                            <th className="text-left px-4 py-3">Data</th>
-                                            <th className="text-left px-4 py-3">Tipo</th>
-                                            <th className="text-left px-4 py-3">Insumo</th>
-                                            <th className="text-left px-4 py-3 hidden md:table-cell">Almoxarifado</th>
-                                            <th className="text-right px-4 py-3">Qtd</th>
-                                            <th className="text-right px-4 py-3 hidden lg:table-cell">Valor</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredMovements.map(m => {
-                                            const isIn = m.type === 'in' || m.type === 'transfer_in';
-                                            const typeLabel: Record<string, string> = {
-                                                in: 'Entrada', out: 'Saída', adjust: 'Ajuste',
-                                                transfer_in: 'Transf. In', transfer_out: 'Transf. Out',
-                                            };
-                                            return (
-                                                <tr key={m.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                                                    <td className="px-4 py-3 text-gray-400 whitespace-nowrap">
-                                                        {formatDateBR(m.movedAt)}
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <span className={`px-2 py-0.5 rounded-full text-table-body font-medium ${
-                                                            isIn ? 'bg-green-900/40 text-green-400' :
-                                                            m.type === 'adjust' ? 'bg-yellow-900/40 text-yellow-400' :
-                                                            'bg-red-900/40 text-red-400'
-                                                        }`}>
-                                                            {typeLabel[m.type]}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <p className="text-white">{m.inputDescription}</p>
-                                                        {m.notes && <p className="text-xs text-gray-500">{m.notes}</p>}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-gray-400 hidden md:table-cell">{m.warehouseName ?? '—'}</td>
-                                                    <td className={`px-4 py-3 text-right font-mono font-bold ${isIn ? 'text-green-400' : 'text-red-400'}`}>
-                                                        {isIn ? '+' : '−'}{fmt(m.quantity)} {m.inputUnit}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right text-gray-300 hidden lg:table-cell">
-                                                        {m.totalCost != null ? fmtBrl(m.totalCost) : '—'}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left">
+                                        <thead>
+                                            <tr className="border-b border-gray-100 bg-gray-50/50">
+                                                {tableMovimentos.visibleColumns.includes('data') && <SortableHeader colKey="data" label="Data" sortColumn={tableMovimentos.sortColumn} sortDirection={tableMovimentos.sortDirection} onSort={tableMovimentos.handleColumnSort} />}
+                                                {tableMovimentos.visibleColumns.includes('tipo') && <SortableHeader colKey="tipo" label="Tipo" sortColumn={tableMovimentos.sortColumn} sortDirection={tableMovimentos.sortDirection} onSort={tableMovimentos.handleColumnSort} />}
+                                                {tableMovimentos.visibleColumns.includes('insumo') && <SortableHeader colKey="insumo" label="Insumo" sortColumn={tableMovimentos.sortColumn} sortDirection={tableMovimentos.sortDirection} onSort={tableMovimentos.handleColumnSort} />}
+                                                {tableMovimentos.visibleColumns.includes('almoxarifado') && <SortableHeader colKey="almoxarifado" label="Almoxarifado" sortColumn={tableMovimentos.sortColumn} sortDirection={tableMovimentos.sortDirection} onSort={tableMovimentos.handleColumnSort} />}
+                                                {tableMovimentos.visibleColumns.includes('quantidade') && <SortableHeader colKey="quantidade" label="Qtd" sortColumn={tableMovimentos.sortColumn} sortDirection={tableMovimentos.sortDirection} onSort={tableMovimentos.handleColumnSort} className="text-right" />}
+                                                {tableMovimentos.visibleColumns.includes('valor') && <SortableHeader colKey="valor" label="Valor" sortColumn={tableMovimentos.sortColumn} sortDirection={tableMovimentos.sortDirection} onSort={tableMovimentos.handleColumnSort} className="text-right" />}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {filteredMovements.map(m => {
+                                                const isIn = m.type === 'in' || m.type === 'transfer_in';
+                                                const typeLabel: Record<string, string> = {
+                                                    in: 'Entrada', out: 'Saída', adjust: 'Ajuste',
+                                                    transfer_in: 'Transf. In', transfer_out: 'Transf. Out',
+                                                };
+                                                const badgeStatus = isIn ? 'success' : m.type === 'adjust' ? 'warning' : 'danger';
+                                                
+                                                return (
+                                                    <tr key={m.id} className="group hover:bg-gray-50/50 transition-colors">
+                                                        {tableMovimentos.visibleColumns.includes('data') && (
+                                                            <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+                                                                {formatDateBR(m.movedAt)}
+                                                            </td>
+                                                        )}
+                                                        {tableMovimentos.visibleColumns.includes('tipo') && (
+                                                            <td className="px-4 py-3">
+                                                                <StatusBadge status={badgeStatus} label={typeLabel[m.type]} />
+                                                            </td>
+                                                        )}
+                                                        {tableMovimentos.visibleColumns.includes('insumo') && (
+                                                            <td className="px-4 py-3">
+                                                                <p className="text-sm font-medium text-gray-900">{m.inputDescription}</p>
+                                                                {m.notes && <p className="text-xs text-gray-500 mt-0.5">{m.notes}</p>}
+                                                            </td>
+                                                        )}
+                                                        {tableMovimentos.visibleColumns.includes('almoxarifado') && (
+                                                            <td className="px-4 py-3 text-sm text-gray-600">{m.warehouseName ?? '—'}</td>
+                                                        )}
+                                                        {tableMovimentos.visibleColumns.includes('quantidade') && (
+                                                            <td className={`px-4 py-3 text-right font-medium ${isIn ? 'text-green-600' : 'text-red-600'}`}>
+                                                                {isIn ? '+' : '−'}{fmt(m.quantity)} {m.inputUnit}
+                                                            </td>
+                                                        )}
+                                                        {tableMovimentos.visibleColumns.includes('valor') && (
+                                                            <td className="px-4 py-3 text-right text-sm text-gray-600">
+                                                                {m.totalCost != null ? fmtBrl(m.totalCost) : '—'}
+                                                            </td>
+                                                        )}
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
                             )}
                         </div>
                     )}
 
                     {/* ── TAB: TRANSFERÊNCIAS ── */}
                     {tab === 'transferencias' && (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <div className="flex justify-end">
                                 <Button
                                     onClick={() => setTransferModal(true)}
                                 >
-                                    <Plus className="w-4 h-4" /> Nova Transferência
+                                    <Plus className="w-4 h-4 mr-2" /> Nova Transferência
                                 </Button>
                             </div>
-                            <div className="bg-gray-800/30 border border-gray-700 rounded-xl overflow-hidden">
+                            <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
                                 {transfers.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                                        <ArrowLeftRight className="w-10 h-10 mb-3 opacity-40" />
-                                        <p>Nenhuma transferência registrada.</p>
+                                    <div className="flex flex-col items-center justify-center py-20 text-gray-400 bg-gray-50/50">
+                                        <ArrowLeftRight className="w-12 h-12 mb-4 text-gray-300" />
+                                        <h3 className="text-lg font-medium text-gray-900 mb-1">Nenhuma transferência</h3>
+                                        <p className="text-sm text-gray-500 max-w-sm text-center mb-6">Nenhuma transferência de materiais registrada.</p>
                                     </div>
                                 ) : (
-                                    <div className="divide-y divide-gray-700">
+                                    <div className="divide-y divide-gray-100">
                                         {transfers.map(t => {
-                                            const statusColor: Record<string, string> = {
-                                                in_transit: 'bg-yellow-900/40 text-yellow-400',
-                                                received: 'bg-green-900/40 text-green-400',
-                                                cancelled: 'bg-gray-700 text-gray-500',
-                                            };
                                             const statusLabel: Record<string, string> = {
                                                 in_transit: 'Em trânsito',
                                                 received: 'Recebida',
                                                 cancelled: 'Cancelada',
                                             };
+                                            const badgeStatus: Record<string, string> = {
+                                                in_transit: 'warning',
+                                                received: 'success',
+                                                cancelled: 'default',
+                                            };
                                             return (
-                                                <div key={t.id} className="p-4 hover:bg-gray-700/20">
-                                                    <div className="flex items-start justify-between gap-4">
+                                                <div key={t.id} className="p-5 hover:bg-gray-50/50 transition-colors">
+                                                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                                                         <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                <span className="text-white font-medium">{t.fromWarehouseName ?? '—'}</span>
-                                                                <ArrowLeftRight className="w-4 h-4 text-gray-500 shrink-0" />
-                                                                <span className="text-white font-medium">{t.toWarehouseName ?? '—'}</span>
-                                                                <span className={`px-2 py-0.5 rounded-full text-table-body font-medium ${statusColor[t.status]}`}>
-                                                                    {statusLabel[t.status]}
-                                                                </span>
+                                                            <div className="flex items-center gap-3 flex-wrap">
+                                                                <span className="text-gray-900 font-medium">{t.fromWarehouseName ?? '—'}</span>
+                                                                <ArrowLeftRight className="w-4 h-4 text-gray-400 shrink-0" />
+                                                                <span className="text-gray-900 font-medium">{t.toWarehouseName ?? '—'}</span>
+                                                                <StatusBadge status={badgeStatus[t.status] as any} label={statusLabel[t.status]} />
                                                             </div>
-                                                            <p className="text-xs text-gray-400 mt-1">
+                                                            <p className="text-sm text-gray-500 mt-1">
                                                                 {new Date(t.created_at).toLocaleDateString('pt-BR')}
                                                                 {t.notes && ` — ${t.notes}`}
                                                             </p>
-                                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                            <div className="flex flex-wrap gap-2 mt-3">
                                                                 {t.items.map((item, idx) => (
-                                                                    <span key={idx} className="px-2 py-0.5 bg-gray-800 rounded text-xs text-gray-300">
+                                                                    <span key={idx} className="px-2.5 py-1 bg-gray-100 rounded-lg text-xs font-medium text-gray-600">
                                                                         {item.inputDescription}: {fmt(item.quantity)} {item.inputUnit}
                                                                     </span>
                                                                 ))}
@@ -831,25 +917,27 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                         </div>
                                                         {t.status === 'in_transit' && (
                                                             <div className="flex gap-2 shrink-0">
-                                                                <button
+                                                                <Button
+                                                                    variant="primary"
+                                                                    className="bg-green-600 hover:bg-green-700 !py-2"
                                                                     onClick={async () => {
                                                                         await inventoryService.receiveTransfer(t.id);
                                                                         load();
                                                                     }}
-                                                                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-button font-medium"
                                                                 >
-                                                                    <CheckCircle2 className="w-3 h-3" /> Receber
-                                                                </button>
-                                                                <button
+                                                                    <CheckCircle2 className="w-4 h-4 mr-1" /> Receber
+                                                                </Button>
+                                                                <Button
+                                                                    variant="secondary"
+                                                                    className="!py-2 text-gray-600 hover:text-red-600 border-gray-200"
                                                                     onClick={async () => {
                                                                         if (!confirm('Cancelar transferência?')) return;
                                                                         await inventoryService.cancelTransfer(t.id);
                                                                         load();
                                                                     }}
-                                                                    className="px-3 py-1.5 rounded-lg border border-gray-600 text-gray-400 hover:text-red-400 text-button"
                                                                 >
                                                                     Cancelar
-                                                                </button>
+                                                                </Button>
                                                             </div>
                                                         )}
                                                     </div>
@@ -864,19 +952,20 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
 
                     {/* ── TAB: ALMOXARIFADOS ── */}
                     {tab === 'almoxarifados' && (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <div className="flex justify-end">
                                 <Button
                                     onClick={() => setWarehouseModal(true)}
                                 >
-                                    <Plus className="w-4 h-4" /> Novo Almoxarifado
+                                    <Plus className="w-4 h-4 mr-2" /> Novo Almoxarifado
                                 </Button>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {warehouses.length === 0 && (
-                                    <div className="col-span-3 flex flex-col items-center justify-center py-16 text-gray-400 bg-gray-800/30 border border-gray-700 rounded-xl">
-                                        <Warehouse className="w-10 h-10 mb-3 opacity-40" />
-                                        <p>Nenhum almoxarifado cadastrado.</p>
+                                    <div className="col-span-3 flex flex-col items-center justify-center py-20 text-gray-400 bg-white rounded-[1.5rem] shadow-sm border border-gray-100">
+                                        <Warehouse className="w-12 h-12 mb-4 text-gray-300" />
+                                        <h3 className="text-lg font-medium text-gray-900 mb-1">Nenhum almoxarifado</h3>
+                                        <p className="text-sm text-gray-500 max-w-sm text-center mb-6">Nenhum almoxarifado cadastrado.</p>
                                     </div>
                                 )}
                                 {warehouses.map(w => {
@@ -884,41 +973,42 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                     const wBalance = balances.filter(b => b.warehouseId === w.id);
                                     const wValue = wBalance.reduce((s, b) => s + b.totalValue, 0);
                                     return (
-                                        <div key={w.id} className="bg-gray-800/40 border border-gray-700 rounded-xl p-5 space-y-3">
+                                        <div key={w.id} className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-6 space-y-4 hover:shadow-md transition-shadow">
                                             <div className="flex items-start justify-between">
                                                 <div>
-                                                    <p className="font-semibold text-white">{w.name}</p>
-                                                    <p className="text-xs text-gray-400">{typeLabel[w.type]}{w.projectName ? ` — ${w.projectName}` : ' — Central'}</p>
+                                                    <p className="font-semibold text-gray-900">{w.name}</p>
+                                                    <p className="text-xs text-gray-500 mt-1">{typeLabel[w.type]}{w.projectName ? ` — ${w.projectName}` : ' — Central'}</p>
                                                 </div>
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => setWarehouseModal(w)} className="text-gray-500 hover:text-blue-400">
+                                                <div className="flex gap-1 -mr-2">
+                                                    <Button variant="ghost" onClick={() => setWarehouseModal(w)} className="!p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50">
                                                         <Edit className="w-4 h-4" />
-                                                    </button>
-                                                    <button
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
                                                         onClick={async () => {
                                                             if (!confirm(`Desativar "${w.name}"?`)) return;
                                                             await inventoryService.updateWarehouse(w.id, { isActive: false });
                                                             load();
                                                         }}
-                                                        className="text-gray-500 hover:text-red-400"
+                                                        className="!p-2 text-gray-400 hover:text-red-600 hover:bg-red-50"
                                                     >
                                                         <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    </Button>
                                                 </div>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-2 text-center">
-                                                <div className="bg-gray-900/50 rounded-lg py-2">
-                                                    <p className="text-xs text-gray-500">Itens</p>
-                                                    <p className="font-bold text-white">{wBalance.filter(b => b.quantity > 0).length}</p>
+                                            <div className="grid grid-cols-2 gap-3 text-center">
+                                                <div className="bg-gray-50 rounded-xl py-3 border border-gray-100">
+                                                    <p className="text-xs font-medium text-gray-500 mb-1">Itens</p>
+                                                    <p className="font-bold text-gray-900">{wBalance.filter(b => b.quantity > 0).length}</p>
                                                 </div>
-                                                <div className="bg-gray-900/50 rounded-lg py-2">
-                                                    <p className="text-xs text-gray-500">Valor</p>
-                                                    <p className="font-bold text-blue-300 text-sm">{fmtBrl(wValue)}</p>
+                                                <div className="bg-blue-50/50 rounded-xl py-3 border border-blue-100">
+                                                    <p className="text-xs font-medium text-blue-600 mb-1">Valor Total</p>
+                                                    <p className="font-bold text-blue-700">{fmtBrl(wValue)}</p>
                                                 </div>
                                             </div>
-                                            <span className={`inline-block px-2 py-0.5 rounded-full text-button ${w.isActive ? 'bg-green-900/40 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
-                                                {w.isActive ? 'Ativo' : 'Inativo'}
-                                            </span>
+                                            <div>
+                                                <StatusBadge status={w.isActive ? 'success' : 'info'} label={w.isActive ? 'Ativo' : 'Inativo'} />
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -928,44 +1018,46 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
 
                     {/* ── TAB: LEAD TIMES ── */}
                     {tab === 'lead_times' && (
-                        <div className="bg-gray-800/30 border border-gray-700 rounded-xl overflow-hidden">
-                            <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+                        <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm text-white font-medium">Lead Time por Fornecedor</p>
-                                    <p className="text-xs text-gray-400">Usado pelo Plano de Aquisições para calcular a data de compra sugerida.</p>
+                                    <p className="text-sm text-gray-900 font-medium">Lead Time por Fornecedor</p>
+                                    <p className="text-xs text-gray-500 mt-1">Usado pelo Plano de Aquisições para calcular a data de compra sugerida.</p>
                                 </div>
                             </div>
                             {leadTimes.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                                    <Clock className="w-10 h-10 mb-3 opacity-40" />
-                                    <p>Nenhum lead time cadastrado.</p>
-                                    <p className="text-xs mt-1">Cadastre os prazos de entrega no módulo de Fornecedores.</p>
+                                <div className="flex flex-col items-center justify-center py-20 text-gray-400 bg-gray-50/50">
+                                    <Clock className="w-12 h-12 mb-4 text-gray-300" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-1">Nenhum lead time</h3>
+                                    <p className="text-sm text-gray-500 max-w-sm text-center mb-6">Cadastre os prazos de entrega no módulo de Fornecedores.</p>
                                 </div>
                             ) : (
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b border-gray-700 text-gray-400 text-xs uppercase">
-                                            <th className="text-left px-4 py-3">Fornecedor</th>
-                                            <th className="text-left px-4 py-3">Insumo / Categoria</th>
-                                            <th className="text-center px-4 py-3">Prazo (dias)</th>
-                                            <th className="text-left px-4 py-3 hidden md:table-cell">Obs.</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {leadTimes.map(lt => (
-                                            <tr key={lt.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                                                <td className="px-4 py-3 text-white">{lt.supplierName ?? lt.supplierId}</td>
-                                                <td className="px-4 py-3 text-gray-300">
-                                                    {lt.inputCode ? <code className="text-xs bg-gray-700 px-1 rounded">{lt.inputCode}</code> : <span className="text-gray-500 italic text-xs">Geral</span>}
-                                                </td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <span className="px-3 py-1 rounded-full bg-blue-900/40 text-blue-300 font-bold text-sm">{lt.leadTimeDays}d</span>
-                                                </td>
-                                                <td className="px-4 py-3 text-gray-400 hidden md:table-cell text-table-body">{lt.notes ?? '—'}</td>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left">
+                                        <thead>
+                                            <tr className="border-b border-gray-100 bg-gray-50/50 text-gray-500 text-xs uppercase font-medium">
+                                                <th className="px-4 py-3">Fornecedor</th>
+                                                <th className="px-4 py-3">Insumo / Categoria</th>
+                                                <th className="px-4 py-3 text-center">Prazo (dias)</th>
+                                                <th className="px-4 py-3 hidden md:table-cell">Obs.</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {leadTimes.map(lt => (
+                                                <tr key={lt.id} className="group hover:bg-gray-50/50 transition-colors">
+                                                    <td className="px-4 py-3 text-gray-900 font-medium">{lt.supplierName ?? lt.supplierId}</td>
+                                                    <td className="px-4 py-3 text-gray-600">
+                                                        {lt.inputCode ? <code className="text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">{lt.inputCode}</code> : <span className="text-gray-400 italic text-sm">Geral</span>}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 font-semibold text-sm">{lt.leadTimeDays}d</span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-gray-500 hidden md:table-cell text-sm">{lt.notes ?? '—'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             )}
                         </div>
                     )}
@@ -1067,22 +1159,22 @@ const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClos
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg flex flex-col max-h-[90vh]">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl flex flex-col max-h-[90vh] overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50 shrink-0">
                     <div className="flex items-center gap-2">
-                        <Send className="w-5 h-5 text-blue-400" />
-                        <h3 className="font-semibold text-white">Nova Transferência</h3>
+                        <Send className="w-5 h-5 text-blue-600" />
+                        <h3 className="font-semibold text-lg text-gray-900">Nova Transferência</h3>
                     </div>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-400 hover:text-white" /></button>
+                    <button onClick={onClose} className="p-1 rounded-md hover:bg-black/5 text-gray-500 transition-colors"><X className="w-5 h-5" /></button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
+                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-form-label text-gray-400 mb-1">Origem *</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Origem *</label>
                             <select
-                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.fromWarehouseId}
                                 onChange={e => setForm(f => ({ ...f, fromWarehouseId: e.target.value }))}
                             >
@@ -1090,9 +1182,9 @@ const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClos
                             </select>
                         </div>
                         <div>
-                            <label className="block text-form-label text-gray-400 mb-1">Destino *</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Destino *</label>
                             <select
-                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.toWarehouseId}
                                 onChange={e => setForm(f => ({ ...f, toWarehouseId: e.target.value }))}
                             >
@@ -1101,41 +1193,43 @@ const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClos
                         </div>
                     </div>
                     <div>
-                        <label className="block text-form-label text-gray-400 mb-1">Observações</label>
-                        <input className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white" value={form.notes ?? ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                        <input className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={form.notes ?? ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
                     </div>
 
-                    <div>
+                    <div className="space-y-3">
                         <div className="flex items-center justify-between mb-2">
-                            <label className="text-form-label text-gray-400 uppercase font-medium">Itens</label>
-                            <button onClick={addItem} className="flex items-center gap-1 text-button text-blue-400 hover:text-blue-300">
-                                <Plus className="w-3 h-3" /> Adicionar
-                            </button>
+                            <label className="text-sm font-semibold text-gray-900">Itens a Transferir</label>
+                            <Button variant="ghost" onClick={addItem} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 !py-1 !px-2 text-xs">
+                                <Plus className="w-3 h-3 mr-1" /> Adicionar
+                            </Button>
                         </div>
                         {form.items.length === 0 && (
-                            <div className="text-center py-6 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg">Adicione os materiais a transferir.</div>
+                            <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+                                Nenhum item adicionado à transferência.
+                            </div>
                         )}
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                             {form.items.map((item, idx) => (
-                                <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                                <div key={idx} className="grid grid-cols-12 gap-3 items-end bg-gray-50/50 border border-gray-200 rounded-xl p-4">
                                     <div className="col-span-5">
-                                        <label className="block text-form-label text-gray-500 mb-1">Descrição</label>
-                                        <input className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white" value={item.inputDescription} onChange={e => updateItem(idx, { inputDescription: e.target.value })} placeholder="Insumo" />
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Descrição</label>
+                                        <input className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" value={item.inputDescription} onChange={e => updateItem(idx, { inputDescription: e.target.value })} placeholder="Insumo" />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-form-label text-gray-500 mb-1">Cód.</label>
-                                        <input className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white" value={item.inputCode ?? ''} onChange={e => updateItem(idx, { inputCode: e.target.value || undefined })} />
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Cód.</label>
+                                        <input className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" value={item.inputCode ?? ''} onChange={e => updateItem(idx, { inputCode: e.target.value || undefined })} />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-form-label text-gray-500 mb-1">Un</label>
-                                        <input className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white" value={item.inputUnit} onChange={e => updateItem(idx, { inputUnit: e.target.value })} />
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Un</label>
+                                        <input className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" value={item.inputUnit} onChange={e => updateItem(idx, { inputUnit: e.target.value })} />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-form-label text-gray-500 mb-1">Qtd</label>
-                                        <input type="number" min="0.001" step="0.01" className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white" value={item.quantity || ''} onChange={e => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })} />
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Qtd</label>
+                                        <input type="number" min="0.001" step="0.01" className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" value={item.quantity || ''} onChange={e => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })} />
                                     </div>
-                                    <div className="col-span-1 flex justify-center">
-                                        <button onClick={() => removeItem(idx)} className="text-gray-600 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
+                                    <div className="col-span-1 flex justify-center pb-1.5">
+                                        <button onClick={() => removeItem(idx)} className="text-gray-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
                                     </div>
                                 </div>
                             ))}
@@ -1143,12 +1237,18 @@ const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClos
                     </div>
                 </div>
 
-                <div className="px-6 py-4 border-t border-gray-700 shrink-0">
-                    {err && <p className="text-red-400 text-xs mb-3">{err}</p>}
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex flex-col gap-3 shrink-0">
+                    {err && <p className="text-red-500 text-sm font-medium">{err}</p>}
                     <div className="flex gap-3">
-                        <button onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800">Cancelar</button>
-                        <Button onClick={save} disabled={saving} className="flex-1 justify-center">
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        <Button variant="secondary" onClick={onClose} className="flex-1 justify-center border-gray-200 text-gray-700 hover:bg-gray-100 !py-2.5">
+                            Cancelar
+                        </Button>
+                        <Button
+                            variant="primary"
+                            onClick={save} disabled={saving}
+                            className="flex-1 justify-center bg-blue-600 hover:bg-blue-700 !py-2.5"
+                        >
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
                             Enviar Transferência
                         </Button>
                     </div>
@@ -1169,12 +1269,12 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-    pending: 'bg-yellow-500/20 text-yellow-300',
-    approved: 'bg-green-500/20 text-green-300',
-    rejected: 'bg-red-500/20 text-red-300',
-    separated: 'bg-blue-500/20 text-blue-300',
-    delivered: 'bg-gray-500/20 text-gray-300',
-    cancelled: 'bg-gray-700/50 text-gray-500',
+    pending: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+    approved: 'bg-green-50 text-green-700 border border-green-200',
+    rejected: 'bg-red-50 text-red-700 border border-red-200',
+    separated: 'bg-blue-50 text-blue-700 border border-blue-200',
+    delivered: 'bg-gray-100 text-gray-700 border border-gray-200',
+    cancelled: 'bg-gray-50 text-gray-500 border border-gray-200',
 };
 
 interface RequisitionsTabProps {
@@ -1269,26 +1369,24 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
                         <button
                             key={f}
                             onClick={() => setReqFilter(f)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${reqFilter === f ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${reqFilter === f ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:text-blue-600 hover:border-blue-200 shadow-sm'}`}
                         >
                             {filterLabels[f]}
                         </button>
                     ))}
                 </div>
-                <Button
-                    onClick={() => setShowRequestModal(true)}
-                >
-                    <Plus className="w-4 h-4" /> Nova Requisição
+                <Button variant="primary" onClick={() => setShowRequestModal(true)}>
+                    <Plus className="w-4 h-4 mr-1" /> Nova Requisição
                 </Button>
             </div>
 
             {err && <p className="text-red-400 text-xs">{err}</p>}
 
             {selectableVisible.length > 0 && (
-                <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer">
                     <input
                         type="checkbox"
-                        className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500/20 cursor-pointer"
                         checked={allVisibleSelected}
                         onChange={toggleAllVisible}
                     />
@@ -1297,106 +1395,110 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
             )}
 
             {selectedVisible.length > 0 && (
-                <div className="flex items-center gap-4 bg-gray-700 text-white px-4 py-2.5 rounded-xl">
+                <div className="flex items-center gap-4 bg-blue-50/50 border border-blue-100 text-gray-900 px-4 py-2.5 rounded-xl shadow-sm">
                     <span className="text-sm font-semibold">{selectedVisible.length} selecionada{selectedVisible.length !== 1 ? 's' : ''}</span>
                     <div className="flex-1" />
-                    <button
+                    <Button
+                        variant="danger"
+                        size="sm"
                         onClick={handleBulkCancel}
                         disabled={bulkCancelling}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-semibold disabled:opacity-60"
                     >
-                        {bulkCancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                        {bulkCancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <X className="w-3.5 h-3.5 mr-1.5" />}
                         Cancelar selecionadas
-                    </button>
-                    <button onClick={clearSelection} className="px-2 py-1.5 rounded-lg text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-600">
+                    </Button>
+                    <button onClick={clearSelection} className="px-2 py-1.5 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors">
                         Limpar
                     </button>
                 </div>
             )}
 
             {visible.length === 0 && (
-                <div className="text-center py-12 text-gray-500 border border-dashed border-gray-700 rounded-xl">
+                <div className="text-center py-12 text-gray-500 border border-dashed border-gray-200 bg-gray-50/50 rounded-2xl shadow-sm">
                     Nenhuma requisição{reqFilter ? ` com status "${STATUS_LABELS[reqFilter]}"` : ''}.
                 </div>
             )}
 
             <div className="space-y-4">
                 {visible.map(req => (
-                    <div key={req.id} className={`bg-gray-800/50 border rounded-xl p-4 space-y-3 ${selectedIds.has(req.id) ? 'border-blue-500' : 'border-gray-700'}`}>
+                    <div key={req.id} className={`bg-white border rounded-2xl p-5 space-y-4 shadow-sm transition-all hover:shadow-md ${selectedIds.has(req.id) ? 'border-blue-500 ring-1 ring-blue-500/20' : 'border-gray-100'}`}>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-3">
                                 {isCancellable(req) && (
                                     <input
                                         type="checkbox"
-                                        className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
+                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500/20 cursor-pointer shrink-0"
                                         checked={selectedIds.has(req.id)}
                                         onChange={() => toggleRow(req.id)}
                                     />
                                 )}
-                                <ClipboardList className="w-4 h-4 text-blue-400 shrink-0" />
-                                <span className="font-semibold text-white">{req.number}</span>
-                                <span className={`px-2 py-0.5 rounded-full text-button font-medium ${STATUS_COLORS[req.status]}`}>
+                                <ClipboardList className="w-5 h-5 text-blue-600 shrink-0" />
+                                <span className="font-semibold text-lg text-gray-900">{req.number}</span>
+                                <span className={`px-2.5 py-1 rounded-md text-xs font-semibold uppercase tracking-wider ${STATUS_COLORS[req.status]}`}>
                                     {STATUS_LABELS[req.status]}
                                 </span>
                             </div>
                             <div className="flex items-center gap-2">
                                 {req.status === 'pending' && (
-                                    <button
+                                    <Button
+                                        size="sm"
+                                        className="bg-green-600 hover:bg-green-700 text-white"
                                         onClick={() => setApprovingRequest(req)}
-                                        className="px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-button font-medium flex items-center gap-1"
                                     >
-                                        <Check className="w-3 h-3" /> Avaliar
-                                    </button>
+                                        <Check className="w-4 h-4 mr-1.5" /> Avaliar
+                                    </Button>
                                 )}
                                 {(req.status === 'approved' || req.status === 'separated') && (
                                     <Button
                                         size="sm"
                                         onClick={() => handleDeliver(req.id)}
                                         disabled={delivering === req.id}
+                                        className="bg-blue-600 hover:bg-blue-700"
                                     >
-                                        {delivering === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
+                                        {delivering === req.id ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <CheckCircle2 className="w-4 h-4 mr-1.5" />}
                                         Entregar
                                     </Button>
                                 )}
                                 {(req.status === 'pending' || req.status === 'approved' || req.status === 'separated') && (
-                                    <button
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
                                         onClick={() => handleCancel(req.id)}
                                         disabled={cancelling === req.id}
-                                        className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 text-button font-medium flex items-center gap-1 disabled:opacity-50"
                                     >
-                                        {cancelling === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <X className="w-3 h-3" />}
+                                        {cancelling === req.id ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <X className="w-4 h-4 mr-1.5" />}
                                         Cancelar
-                                    </button>
+                                    </Button>
                                 )}
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1 text-xs text-gray-400">
-                            <div><span className="text-gray-500">Solicitante:</span> <span className="text-gray-200">{req.requestedBy}</span></div>
-                            {req.warehouseName && <div><span className="text-gray-500">Almoxarifado:</span> <span className="text-gray-200">{req.warehouseName}</span></div>}
-                            {req.projectName && <div><span className="text-gray-500">Obra:</span> <span className="text-gray-200">{req.projectName}</span></div>}
-                            <div><span className="text-gray-500">Data:</span> <span className="text-gray-200">{formatDateBR(req.requestedAt)}</span></div>
-                            {req.approvedBy && <div><span className="text-gray-500">Aprovado por:</span> <span className="text-gray-200">{req.approvedBy}</span></div>}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-1 text-sm text-gray-600">
+                            <div><span className="text-gray-400">Solicitante:</span> <span className="font-medium text-gray-900">{req.requestedBy}</span></div>
+                            {req.warehouseName && <div><span className="text-gray-400">Almoxarifado:</span> <span className="font-medium text-gray-900">{req.warehouseName}</span></div>}
+                            {req.projectName && <div><span className="text-gray-400">Obra:</span> <span className="font-medium text-gray-900">{req.projectName}</span></div>}
+                            <div><span className="text-gray-400">Data:</span> <span className="font-medium text-gray-900">{formatDateBR(req.requestedAt)}</span></div>
+                            {req.approvedBy && <div><span className="text-gray-400">Aprovado por:</span> <span className="font-medium text-gray-900">{req.approvedBy}</span></div>}
                         </div>
-                        {req.notes && <p className="text-xs text-gray-500 italic">{req.notes}</p>}
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
-                                <thead>
-                                    <tr className="text-gray-500 border-b border-gray-700">
-                                        <th className="text-left pb-1 font-medium">Insumo</th>
-                                        <th className="text-left pb-1 font-medium">Cód.</th>
-                                        <th className="text-right pb-1 font-medium">Solicitado</th>
-                                        <th className="text-right pb-1 font-medium">Aprovado</th>
-                                        <th className="text-right pb-1 font-medium">Entregue</th>
+                        {req.notes && <p className="text-sm text-gray-500 italic px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">{req.notes}</p>}
+                        <div className="overflow-x-auto rounded-xl border border-gray-100 mt-2">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-gray-50/50">
+                                    <tr className="text-gray-500 border-b border-gray-100">
+                                        <th className="px-4 py-2 font-medium">Insumo</th>
+                                        <th className="px-4 py-2 font-medium">Cód.</th>
+                                        <th className="px-4 py-2 text-right font-medium">Solicitado</th>
+                                        <th className="px-4 py-2 text-right font-medium">Aprovado</th>
+                                        <th className="px-4 py-2 text-right font-medium">Entregue</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody className="divide-y divide-gray-50">
                                     {req.items.map(item => (
-                                        <tr key={item.id} className="border-b border-gray-800">
-                                            <td className="py-1.5 text-gray-200">{item.inputDescription}</td>
-                                            <td className="py-1.5 text-gray-500">{item.inputCode ?? '—'}</td>
-                                            <td className="py-1.5 text-right text-gray-300">{item.quantityRequested} {item.inputUnit}</td>
-                                            <td className="py-1.5 text-right text-gray-300">{item.quantityApproved != null ? `${item.quantityApproved} ${item.inputUnit}` : '—'}</td>
-                                            <td className="py-1.5 text-right text-gray-300">{item.quantityDelivered != null ? `${item.quantityDelivered} ${item.inputUnit}` : '—'}</td>
+                                        <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                                            <td className="px-4 py-2 text-gray-900 font-medium">{item.inputDescription}</td>
+                                            <td className="px-4 py-2 text-gray-500 text-xs">{item.inputCode ?? '—'}</td>
+                                            <td className="px-4 py-2 text-right text-gray-700">{item.quantityRequested} {item.inputUnit}</td>
+                                            <td className="px-4 py-2 text-right text-gray-700 font-medium">{item.quantityApproved != null ? `${item.quantityApproved} ${item.inputUnit}` : '—'}</td>
+                                            <td className="px-4 py-2 text-right text-gray-700 font-medium">{item.quantityDelivered != null ? `${item.quantityDelivered} ${item.inputUnit}` : '—'}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -1473,31 +1575,31 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg flex flex-col max-h-[90vh]">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl flex flex-col max-h-[90vh] overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50 shrink-0">
                     <div className="flex items-center gap-2">
-                        <ClipboardList className="w-5 h-5 text-blue-400" />
-                        <h3 className="font-semibold text-white">Nova Requisição de Material</h3>
+                        <ClipboardList className="w-5 h-5 text-blue-600" />
+                        <h3 className="font-semibold text-lg text-gray-900">Nova Requisição de Material</h3>
                     </div>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-400 hover:text-white" /></button>
+                    <button onClick={onClose} className="p-1 rounded-md hover:bg-black/5 text-gray-500 transition-colors"><X className="w-5 h-5" /></button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
+                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-form-label text-gray-400 mb-1">Solicitante *</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Solicitante *</label>
                             <input
-                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.requestedBy}
                                 onChange={e => setForm(f => ({ ...f, requestedBy: e.target.value }))}
                                 placeholder="Nome do solicitante"
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label text-gray-400 mb-1">Almoxarifado</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Almoxarifado</label>
                             <select
-                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.warehouseId ?? ''}
                                 onChange={e => setForm(f => ({ ...f, warehouseId: e.target.value || undefined }))}
                             >
@@ -1507,65 +1609,65 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
                         </div>
                     </div>
                     <div>
-                        <label className="block text-form-label text-gray-400 mb-1">Observações</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
                         <input
-                            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.notes ?? ''}
                             onChange={e => setForm(f => ({ ...f, notes: e.target.value || undefined }))}
                         />
                     </div>
 
-                    <div>
+                    <div className="space-y-3">
                         <div className="flex items-center justify-between mb-2">
-                            <label className="text-form-label text-gray-400 uppercase font-medium">Itens *</label>
-                            <button onClick={addItem} className="flex items-center gap-1 text-button text-blue-400 hover:text-blue-300">
-                                <Plus className="w-3 h-3" /> Adicionar
-                            </button>
+                            <label className="text-sm font-semibold text-gray-900">Itens *</label>
+                            <Button variant="ghost" onClick={addItem} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 !py-1 !px-2 text-xs">
+                                <Plus className="w-3 h-3 mr-1" /> Adicionar
+                            </Button>
                         </div>
                         {form.items.length === 0 && (
-                            <div className="text-center py-6 text-gray-500 text-sm border border-dashed border-gray-700 rounded-lg">
+                            <div className="text-center py-8 text-gray-500 text-sm border border-dashed border-gray-200 bg-gray-50/50 rounded-xl">
                                 Adicione os materiais necessários.
                             </div>
                         )}
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                             {form.items.map((item, idx) => (
-                                <div key={idx} className="grid grid-cols-12 gap-2 items-end bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                                <div key={idx} className="grid grid-cols-12 gap-3 items-end bg-gray-50/50 border border-gray-200 rounded-xl p-4">
                                     <div className="col-span-5">
-                                        <label className="block text-form-label text-gray-500 mb-1">Descrição *</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Descrição *</label>
                                         <input
-                                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+                                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                             value={item.inputDescription}
                                             onChange={e => updateItem(idx, { inputDescription: e.target.value })}
                                             placeholder="Insumo"
                                         />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-form-label text-gray-500 mb-1">Cód.</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Cód.</label>
                                         <input
-                                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+                                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                             value={item.inputCode ?? ''}
                                             onChange={e => updateItem(idx, { inputCode: e.target.value || undefined })}
                                         />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-form-label text-gray-500 mb-1">Un</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Un</label>
                                         <input
-                                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+                                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                             value={item.inputUnit}
                                             onChange={e => updateItem(idx, { inputUnit: e.target.value })}
                                         />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-form-label text-gray-500 mb-1">Qtd *</label>
+                                        <label className="block text-xs font-medium text-gray-500 mb-1">Qtd *</label>
                                         <input
                                             type="number" min="0.001" step="0.01"
-                                            className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
+                                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                             value={item.quantityRequested || ''}
                                             onChange={e => updateItem(idx, { quantityRequested: parseFloat(e.target.value) || 0 })}
                                         />
                                     </div>
-                                    <div className="col-span-1 flex justify-center">
-                                        <button onClick={() => removeItem(idx)} className="text-gray-600 hover:text-red-400">
+                                    <div className="col-span-1 flex justify-center pb-1.5">
+                                        <button onClick={() => removeItem(idx)} className="text-gray-400 hover:text-red-600 transition-colors">
                                             <Trash2 className="w-4 h-4" />
                                         </button>
                                     </div>
@@ -1575,15 +1677,18 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
                     </div>
                 </div>
 
-                <div className="px-6 py-4 border-t border-gray-700 shrink-0">
-                    {err && <p className="text-red-400 text-xs mb-3">{err}</p>}
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 shrink-0">
+                    {err && <p className="text-red-500 text-sm font-medium mb-3">{err}</p>}
                     <div className="flex gap-3">
-                        <button onClick={onClose} className="flex-1 px-4 py-2 rounded-lg border border-gray-600 text-gray-300 text-sm hover:bg-gray-800">Cancelar</button>
+                        <Button variant="secondary" onClick={onClose} className="flex-1 justify-center border-gray-200 text-gray-700 hover:bg-gray-100 !py-2.5">
+                            Cancelar
+                        </Button>
                         <Button
+                            variant="primary"
                             onClick={save} disabled={saving}
-                            className="flex-1 justify-center"
+                            className="flex-1 justify-center bg-blue-600 hover:bg-blue-700 !py-2.5"
                         >
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
                             Enviar Requisição
                         </Button>
                     </div>
@@ -1626,21 +1731,21 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ request, onClose, onDone })
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-lg flex flex-col max-h-[90vh]">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700 shrink-0">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl flex flex-col max-h-[90vh] overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50/50 shrink-0">
                     <div>
-                        <h3 className="font-semibold text-white">Avaliar Requisição {request.number}</h3>
-                        <p className="text-xs text-gray-400 mt-0.5">Solicitante: {request.requestedBy}</p>
+                        <h3 className="font-semibold text-lg text-gray-900">Avaliar Requisição {request.number}</h3>
+                        <p className="text-sm text-gray-500 mt-0.5">Solicitante: {request.requestedBy}</p>
                     </div>
-                    <button onClick={onClose}><X className="w-5 h-5 text-gray-400 hover:text-white" /></button>
+                    <button onClick={onClose} className="p-1 rounded-md hover:bg-black/5 text-gray-500 transition-colors"><X className="w-5 h-5" /></button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
                     <div>
-                        <label className="block text-form-label text-gray-400 mb-1">Aprovado / Rejeitado por *</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Aprovado / Rejeitado por *</label>
                         <input
-                            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={approvedBy}
                             onChange={e => setApprovedBy(e.target.value)}
                             placeholder="Seu nome"
@@ -1648,22 +1753,22 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ request, onClose, onDone })
                     </div>
 
                     <div>
-                        <p className="text-xs text-gray-400 uppercase font-medium mb-2">Itens — ajuste as quantidades aprovadas</p>
-                        <div className="space-y-2">
+                        <p className="text-xs text-gray-500 uppercase font-bold tracking-wider mb-3">Itens — ajuste as quantidades aprovadas</p>
+                        <div className="space-y-3">
                             {request.items.map(item => (
-                                <div key={item.id} className="flex items-center gap-3 bg-gray-800/50 border border-gray-700 rounded-lg px-3 py-2">
+                                <div key={item.id} className="flex items-center gap-3 bg-gray-50/50 border border-gray-200 rounded-xl px-4 py-3">
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm text-white truncate">{item.inputDescription}</p>
-                                        <p className="text-xs text-gray-500">{item.inputCode ?? ''} · solicitado: {item.quantityRequested} {item.inputUnit}</p>
+                                        <p className="text-sm font-medium text-gray-900 truncate">{item.inputDescription}</p>
+                                        <p className="text-xs text-gray-500 mt-0.5">{item.inputCode ?? ''} · solicitado: {item.quantityRequested} {item.inputUnit}</p>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
                                         <input
                                             type="number" min="0" step="0.01"
-                                            className="w-20 bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white text-right"
+                                            className="w-24 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-900 text-right focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                             value={quantities[item.id] ?? item.quantityRequested}
                                             onChange={e => setQuantities(q => ({ ...q, [item.id]: parseFloat(e.target.value) || 0 }))}
                                         />
-                                        <span className="text-xs text-gray-500">{item.inputUnit}</span>
+                                        <span className="text-sm font-medium text-gray-600">{item.inputUnit}</span>
                                     </div>
                                 </div>
                             ))}
@@ -1671,24 +1776,25 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ request, onClose, onDone })
                     </div>
                 </div>
 
-                <div className="px-6 py-4 border-t border-gray-700 shrink-0">
-                    {err && <p className="text-red-400 text-xs mb-3">{err}</p>}
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 shrink-0">
+                    {err && <p className="text-red-500 text-sm font-medium mb-3">{err}</p>}
                     <div className="flex gap-3">
                         <Button
                             variant="danger"
                             onClick={() => handle('reject')} disabled={saving}
-                            className="flex-1 justify-center"
+                            className="flex-1 justify-center !py-2.5 bg-red-600 hover:bg-red-700"
                         >
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <X className="w-4 h-4 mr-2" />}
                             Rejeitar
                         </Button>
-                        <button
+                        <Button
+                            variant="primary"
                             onClick={() => handle('approve')} disabled={saving}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-green-700 hover:bg-green-600 text-white text-sm font-medium disabled:opacity-50"
+                            className="flex-1 justify-center !py-2.5 bg-green-600 hover:bg-green-700 border-none"
                         >
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
                             Aprovar
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </div>

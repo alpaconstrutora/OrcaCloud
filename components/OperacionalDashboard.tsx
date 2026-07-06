@@ -70,22 +70,40 @@ const STATUS_COLORS: Record<string, string> = {
 const fmtCurrency = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtPct = (v: number) => `${v.toFixed(1)}%`
 
+const COLOR_MAP: Record<string, { border: string, bg: string, text: string, dot: string }> = {
+  blue: { border: 'hover:border-blue-100', bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-500' },
+  emerald: { border: 'hover:border-emerald-100', bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' },
+  green: { border: 'hover:border-green-100', bg: 'bg-green-50', text: 'text-green-600', dot: 'bg-green-500' },
+  amber: { border: 'hover:border-amber-100', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-500' },
+  red: { border: 'hover:border-red-100', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
+  gray: { border: 'hover:border-gray-100', bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-500' },
+  indigo: { border: 'hover:border-indigo-100', bg: 'bg-indigo-50', text: 'text-indigo-600', dot: 'bg-indigo-500' },
+};
+
 const KpiCard: React.FC<{
   label: string
   value: string | number
   sub?: string
   icon: React.ElementType
   color: string
-}> = ({ label, value, sub, icon: Icon, color }) => (
-  <div className={`rounded-2xl p-4 ${color}`}>
-    <div className="flex items-start justify-between mb-2">
-      <p className="text-xs font-black uppercase tracking-widest opacity-70">{label}</p>
-      <Icon className="w-4 h-4 opacity-50" />
+}> = ({ label, value, sub, icon: Icon, color }) => {
+  const theme = COLOR_MAP[color] || COLOR_MAP.gray;
+  return (
+    <div className={`bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg transition-all ${theme.border}`}>
+      <div className={`p-3.5 ${theme.bg} ${theme.text} rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform`}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">{label}</p>
+        <p className="text-2xl font-bold text-gray-900">{value}</p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className={`w-1.5 h-1.5 ${theme.dot} rounded-full shrink-0`}></span>
+          <p className="text-xs text-gray-400 font-medium truncate">{sub ?? '—'}</p>
+        </div>
+      </div>
     </div>
-    <p className="text-2xl font-black">{value}</p>
-    {sub && <p className="text-xs mt-1 opacity-60 font-medium">{sub}</p>}
-  </div>
-)
+  )
+}
 
 const OperacionalDashboard: React.FC<Props> = ({ projectId, orgId, tipoObra }) => {
   const [data, setData] = useState<DashboardData | null>(null)
@@ -190,34 +208,34 @@ const OperacionalDashboard: React.FC<Props> = ({ projectId, orgId, tipoObra }) =
   return (
     <div className="space-y-6">
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-in fade-in slide-in-from-top-4 duration-700">
         <KpiCard
           label="OEs ativas"
           value={inProgress}
           sub={`de ${total} total`}
           icon={Activity}
-          color="bg-indigo-50 text-indigo-900"
+          color="indigo"
         />
         <KpiCard
           label="Concluídas"
           value={closed}
           sub={total > 0 ? fmtPct((closed / total) * 100) : '0%'}
           icon={CheckCircle2}
-          color="bg-green-50 text-green-900"
+          color="green"
         />
         <KpiCard
           label="Em atraso"
           value={overdue}
           sub={blocked > 0 ? `${blocked} bloqueadas` : undefined}
           icon={AlertTriangle}
-          color={overdue > 0 ? 'bg-red-50 text-red-900' : 'bg-slate-50 text-slate-900'}
+          color={overdue > 0 ? 'red' : 'gray'}
         />
         <KpiCard
           label="% médio execução"
           value={fmtPct(avgCompletion)}
           sub={critical > 0 ? `${critical} críticas` : undefined}
           icon={TrendingUp}
-          color="bg-blue-50 text-blue-900"
+          color="blue"
         />
       </div>
 

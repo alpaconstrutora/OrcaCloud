@@ -23,22 +23,32 @@ interface StatCardProps {
     color: 'blue' | 'emerald' | 'amber' | 'gray';
 }
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, subtext, icon: Icon, color }) => (
-    <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100 flex items-start justify-between hover:shadow-md transition-all">
-        <div>
-            <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-1">{title}</p>
-            <h3 className="text-2xl font-black text-gray-900">{value}</h3>
-            {subtext && <p className="text-xs mt-1.5 text-gray-500 font-medium">{subtext}</p>}
+const COLOR_MAP: Record<string, { border: string, bg: string, text: string, dot: string }> = {
+    blue: { border: 'hover:border-blue-100', bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-500' },
+    emerald: { border: 'hover:border-emerald-100', bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' },
+    amber: { border: 'hover:border-amber-100', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-500' },
+    red: { border: 'hover:border-red-100', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
+    gray: { border: 'hover:border-gray-100', bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-500' },
+};
+
+const StatCard: React.FC<StatCardProps> = ({ title, value, subtext, icon: Icon, color }) => {
+    const theme = COLOR_MAP[color] || COLOR_MAP.gray;
+    return (
+        <div className={`bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg transition-all ${theme.border}`}>
+            <div className={`p-3.5 ${theme.bg} ${theme.text} rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform`}>
+                <Icon className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">{title}</p>
+                <p className="text-2xl font-bold text-gray-900">{value}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={`w-1.5 h-1.5 ${theme.dot} rounded-full shrink-0`}></span>
+                    <p className="text-xs text-gray-400 font-medium truncate">{subtext}</p>
+                </div>
+            </div>
         </div>
-        <div className={`p-4 rounded-2xl ${color === 'blue' ? 'bg-blue-50 text-blue-600' :
-            color === 'emerald' ? 'bg-emerald-50 text-emerald-600' :
-                color === 'amber' ? 'bg-amber-50 text-amber-600' :
-                    'bg-gray-50 text-gray-600'
-            }`}>
-            <Icon className="w-6 h-6" />
-        </div>
-    </div>
-);
+    );
+};
 
 const DiaryDashboard: React.FC<DiaryDashboardProps> = ({ projects }) => {
     // Filter projects that are specifically classified as DIARIO or are OBRA with diary entries

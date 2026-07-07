@@ -1251,11 +1251,20 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
 
     // ── Extrato + Conciliação Bancária ─────────────────────────────────────────
     case 'extrato-bancario':
+      return (
+        <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" /></div>}>
+          <BankReconciliation
+            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            defaultView="statement"
+          />
+        </React.Suspense>
+      );
     case 'bank-reconciliation':
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <BankReconciliation
             organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            defaultView="dashboard"
           />
         </React.Suspense>
       );

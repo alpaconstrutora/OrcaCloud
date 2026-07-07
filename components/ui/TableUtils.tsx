@@ -11,28 +11,57 @@ interface PersistedTableState {
   visibleColumns: string[];
   sortColumn: string | null;
   sortDirection: 'asc' | 'desc';
+  /** Todas as chaves de coluna que este usuário já "conheceu" (visíveis ou ocultas),
+   *  usado só para detectar colunas novas introduzidas depois do último salvamento. */
+  knownColumns: string[];
 }
 
 /**
  * Lê o estado persistido. Aceita o formato legado (array puro de
  * visibleColumns) além do formato novo (objeto com sort), para não quebrar
  * preferências já salvas no localStorage dos usuários.
+ *
+ * Também mescla automaticamente colunas novas: se uma tela ganha uma coluna
+ * depois que o usuário já salvou preferências, essa coluna nova aparece
+ * visível por padrão (em vez de ficar escondida até o usuário abrir o menu de
+ * colunas manualmente). Colunas que o usuário já tinha e escondeu de propósito
+ * continuam escondidas — só chaves nunca vistas antes (fora de `knownColumns`)
+ * são adicionadas.
  */
 function loadPersistedTableState(storageKey: string, defaultVisibleColumns: string[]): PersistedTableState {
-  const fallback: PersistedTableState = { visibleColumns: defaultVisibleColumns, sortColumn: null, sortDirection: 'asc' };
+  const fallback: PersistedTableState = { visibleColumns: defaultVisibleColumns, sortColumn: null, sortDirection: 'asc', knownColumns: defaultVisibleColumns };
   if (typeof window === 'undefined') return fallback;
   try {
     const stored = localStorage.getItem(storageKey);
     if (!stored) return fallback;
     const parsed = JSON.parse(stored);
+
+    let storedVisible: string[];
+    let sortColumn: string | null;
+    let sortDirection: 'asc' | 'desc';
+    let knownColumns: string[];
+
     if (Array.isArray(parsed)) {
       // Formato legado: só as colunas visíveis.
-      return { ...fallback, visibleColumns: parsed };
+      storedVisible = parsed;
+      sortColumn = null;
+      sortDirection = 'asc';
+      knownColumns = parsed;
+    } else {
+      storedVisible = parsed.visibleColumns ?? defaultVisibleColumns;
+      sortColumn = parsed.sortColumn ?? null;
+      sortDirection = parsed.sortDirection ?? 'asc';
+      // Sem knownColumns salvo (preferência de antes dessa mudança): assume que
+      // o que estava visível é tudo que o usuário conhecia até então.
+      knownColumns = parsed.knownColumns ?? storedVisible;
     }
+
+    const newColumns = defaultVisibleColumns.filter(k => !knownColumns.includes(k));
     return {
-      visibleColumns: parsed.visibleColumns ?? defaultVisibleColumns,
-      sortColumn: parsed.sortColumn ?? null,
-      sortDirection: parsed.sortDirection ?? 'asc',
+      visibleColumns: newColumns.length ? [...storedVisible, ...newColumns] : storedVisible,
+      sortColumn,
+      sortDirection,
+      knownColumns: newColumns.length ? [...knownColumns, ...newColumns] : knownColumns,
     };
   } catch (e) {
     console.warn(`Failed to load table preferences from localStorage (${storageKey}):`, e);
@@ -47,16 +76,17 @@ export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: stri
   const [visibleColumns, setVisibleColumns] = React.useState<string[]>(initial.visibleColumns);
   const [sortColumn, setSortColumn] = React.useState<string | null>(initial.sortColumn);
   const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>(initial.sortDirection);
+  const [knownColumns, setKnownColumns] = React.useState<string[]>(initial.knownColumns);
   const [showColumnConfig, setShowColumnConfig] = React.useState(false);
 
-  // Persistir colunas + ordenação juntas (F2: a ordenação sobrevive a navegação/reload).
+  // Persistir colunas + ordenação + conhecidas juntas (F2: a ordenação sobrevive a navegação/reload).
   React.useEffect(() => {
     try {
-      localStorage.setItem(storageKey, JSON.stringify({ visibleColumns, sortColumn, sortDirection }));
+      localStorage.setItem(storageKey, JSON.stringify({ visibleColumns, sortColumn, sortDirection, knownColumns }));
     } catch (e) {
       console.warn(`Failed to save table preferences to localStorage (${storageKey}):`, e);
     }
-  }, [visibleColumns, sortColumn, sortDirection, storageKey]);
+  }, [visibleColumns, sortColumn, sortDirection, knownColumns, storageKey]);
 
   const handleColumnSort = (colKey: string) => {
     if (sortColumn === colKey) {
@@ -79,6 +109,7 @@ export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: stri
     setVisibleColumns(defaultVisibleColumns);
     setSortColumn(null);
     setSortDirection('asc');
+    setKnownColumns(defaultVisibleColumns);
     setShowColumnConfig(false);
   };
 
@@ -209,6 +240,8 @@ interface SortableHeaderProps {
   sortDirection?: 'asc' | 'desc';
   onSort?: (colKey: string) => void;
   className?: string;
+  /** Conteúdo extra dentro do <th> (ex.: alça de redimensionar coluna). Opcional — quem não passar não muda em nada. */
+  children?: React.ReactNode;
 }
 
 export const SortableHeader: React.FC<SortableHeaderProps> = ({
@@ -219,11 +252,13 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   sortDirection,
   onSort,
   className = 'px-6 py-4',
+  children,
 }) => {
   if (!sortable) {
     return (
-      <th className={`${className} text-table-header font-semibold text-gray-400 uppercase tracking-wider`}>
+      <th className={`${className} relative text-table-header font-semibold text-gray-400 uppercase tracking-wider`}>
         {label}
+        {children}
       </th>
     );
   }
@@ -231,7 +266,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   return (
     <th
       onClick={() => onSort?.(colKey)}
-      className={`${className} text-table-header font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-600 transition-colors select-none group`}
+      className={`${className} relative text-table-header font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-600 transition-colors select-none group`}
     >
       <div className="flex items-center gap-1.5">
         {label}
@@ -241,6 +276,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
           </span>
         )}
       </div>
+      {children}
     </th>
   );
 };

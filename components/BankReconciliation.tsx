@@ -4,7 +4,7 @@ import {
     ArrowRightLeft, FileText, Download, Trash2, Check,
     Plus, Calendar, DollarSign, Briefcase, RefreshCw,
     Zap, ShieldCheck, Settings2, Info, ArrowUpDown, X, Tag,
-    LayoutGrid, List, Users, UserPlus, ExternalLink
+    LayoutGrid, List, Users, UserPlus, ExternalLink, Rows3
 } from 'lucide-react';
 import {
     BankTransaction,
@@ -23,15 +23,64 @@ import { financialRegistryService } from '../services/financialRegistryService';
 import { useStore } from '../store/useStore';
 import { useConfirm } from './ui/confirm';
 import { formatMoney, formatDateBR } from './ui/Format';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 import ReconciliationDashboardView from './ReconciliationDashboard';
 import DivergencesPanel from './DivergencesPanel';
 import FinancialClosePanel from './FinancialClosePanel';
 import AnomaliesPanel from './AnomaliesPanel';
 import SmartReconciliationCenter from './SmartReconciliationCenter';
 
+type ReconciliationView = 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'statement' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close';
+
 interface BankReconciliationProps {
     organizationId: string;
+    /** Aba a exibir ao entrar pela rota (ex.: 'statement' via menu "Extrato Bancário",
+     *  'dashboard' via menu "Conciliação Bancária"). Sem isso, os dois itens do menu
+     *  caem sempre na última aba visitada (persistida em localStorage) e parecem a
+     *  mesma tela. */
+    defaultView?: ReconciliationView;
 }
+
+const STATEMENT_COLUMNS: ColumnConfig[] = [
+    { key: 'description',  label: 'Descrição',          sortable: true },
+    { key: 'counterparty', label: 'Cliente/Fornecedor', sortable: true },
+    { key: 'category',     label: 'Categoria',          sortable: true },
+    { key: 'project',      label: 'Obra',               sortable: false },
+    { key: 'costCenter',   label: 'Centro de Custo',    sortable: false },
+    { key: 'date',         label: 'Data',               sortable: true },
+    { key: 'amount',       label: 'Valor',              sortable: true },
+    { key: 'status',       label: 'Status',             sortable: false },
+    { key: 'actions',      label: 'Ações',              sortable: false },
+];
+
+// Larguras de coluna da tabela de Extrato — ajustáveis pelo usuário (arraste a borda
+// direita do cabeçalho); persistidas em localStorage. Duplo clique restaura o padrão.
+const DEFAULT_STATEMENT_COL_WIDTHS: Record<string, number> = {
+    description: 260,
+    counterparty: 200,
+    category: 160,
+    project: 160,
+    costCenter: 160,
+    date: 110,
+    amount: 130,
+    status: 150,
+};
+const STATEMENT_COL_MIN = 80;
+const STATEMENT_COL_MAX = 500;
+
+// Status simples colorido (guia UI/UX seção 8) — sem pílula/fundo/uppercase.
+const STATEMENT_STATUS_LABELS: Partial<Record<BankTransactionStatus, string>> = {
+    IMPORTED: 'Importado',
+    NORMALIZED: 'Normalizado',
+    CONFIRMED: 'Confirmado',
+    MATCHED: 'Conciliado',
+};
+const STATEMENT_STATUS_COLORS: Partial<Record<BankTransactionStatus, string>> = {
+    IMPORTED: 'text-gray-500',
+    NORMALIZED: 'text-gray-600',
+    CONFIRMED: 'text-blue-700',
+    MATCHED: 'text-emerald-700',
+};
 
 type LazyOption = { value: string; label: string };
 
@@ -77,7 +126,7 @@ const LazySelect: React.FC<{
     );
 };
 
-const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId }) => {
+const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId, defaultView }) => {
     const confirm = useConfirm();
     const navigateToFocus = useStore(s => s.navigateToFocus);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -148,9 +197,95 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     const [matches, setMatches] = useState<ReconciliationMatch[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [accountsLoading, setAccountsLoading] = useState(false);
-    const [activeView, setActiveView] = useState<'dashboard' | 'center' | 'divergences' | 'anomalies' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close'>(
-        (localStorage.getItem('reconciliation_active_tab') as 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close') || 'dashboard'
+    const [activeView, setActiveView] = useState<ReconciliationView>(
+        defaultView || (localStorage.getItem('reconciliation_active_tab') as ReconciliationView) || 'dashboard'
     );
+
+    // Ao navegar pelo menu (ex.: "Extrato Bancário" ↔ "Conciliação Bancária"), força a
+    // aba correspondente — sem isso, os dois itens caem sempre na última aba visitada.
+    useEffect(() => {
+        if (defaultView) setActiveView(defaultView);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [defaultView]);
+
+    const tableColumns = useTableColumns(STATEMENT_COLUMNS, 'extratoBancarioColumns');
+
+    // ── Redimensionamento de colunas da tabela de Extrato (arrastar borda do cabeçalho) ──
+    const [statementColWidths, setStatementColWidths] = useState<Record<string, number>>(() => {
+        try {
+            const saved = localStorage.getItem('extratoBancarioColWidths');
+            return saved ? JSON.parse(saved) : {};
+        } catch { return {}; }
+    });
+    const statementColResizeRef = useRef<{ colKey: string; startX: number; startW: number } | null>(null);
+    const statementTableRef = useRef<HTMLTableElement>(null);
+    const getStatementColWidth = (key: string) => statementColWidths[key] ?? DEFAULT_STATEMENT_COL_WIDTHS[key] ?? 150;
+
+    const handleStatementColResizeStart = (colKey: string, e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        statementColResizeRef.current = { colKey, startX: e.clientX, startW: getStatementColWidth(colKey) };
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    };
+
+    const handleStatementColDblClick = (colKey: string) => {
+        setStatementColWidths(prev => {
+            const next = { ...prev };
+            delete next[colKey];
+            localStorage.setItem('extratoBancarioColWidths', JSON.stringify(next));
+            return next;
+        });
+    };
+
+    useEffect(() => {
+        const onMouseMove = (e: MouseEvent) => {
+            const ref = statementColResizeRef.current;
+            if (!ref) return;
+            const delta = e.clientX - ref.startX;
+            const newW = Math.max(STATEMENT_COL_MIN, Math.min(STATEMENT_COL_MAX, ref.startW + delta));
+            if (statementTableRef.current) {
+                const col = statementTableRef.current.querySelector(`col[data-col-key="${ref.colKey}"]`) as HTMLElement | null;
+                if (col) col.style.width = `${newW}px`;
+            }
+        };
+        const onMouseUp = () => {
+            const ref = statementColResizeRef.current;
+            if (!ref) return;
+            let finalW = ref.startW;
+            if (statementTableRef.current) {
+                const col = statementTableRef.current.querySelector(`col[data-col-key="${ref.colKey}"]`) as HTMLElement | null;
+                if (col) finalW = parseInt(col.style.width) || ref.startW;
+            }
+            statementColResizeRef.current = null;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            setStatementColWidths(prev => {
+                const next = { ...prev, [ref.colKey]: finalW };
+                localStorage.setItem('extratoBancarioColWidths', JSON.stringify(next));
+                return next;
+            });
+        };
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+        };
+    }, []);
+
+    const StatementResizeHandle = ({ colKey }: { colKey: string }) => (
+        <div
+            onMouseDown={(e) => handleStatementColResizeStart(colKey, e)}
+            onDoubleClick={() => handleStatementColDblClick(colKey)}
+            onClick={(e) => e.stopPropagation()}
+            className="absolute right-0 top-0 bottom-0 w-[7px] cursor-col-resize z-20 group/resize hover:bg-blue-400/40 active:bg-blue-500/60 transition-colors"
+            title="Arraste para redimensionar (duplo clique para restaurar o padrão)"
+        >
+            <div className="absolute right-0 top-1/4 bottom-1/4 w-px bg-gray-200 group-hover/resize:bg-blue-400" />
+        </div>
+    );
+
     const [rulesViewMode, setRulesViewMode] = useState<'grid' | 'list'>(
         (localStorage.getItem('reconciliation_rules_view_mode') as 'grid' | 'list') || 'list'
     );
@@ -162,6 +297,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     );
     const [pendentesViewMode, setPendentesViewMode] = useState<'grid' | 'list'>(
         (localStorage.getItem('reconciliation_pendentes_view_mode') as 'grid' | 'list') || 'list'
+    );
+    const [pendentesCompact, setPendentesCompact] = useState<boolean>(
+        localStorage.getItem('reconciliation_pendentes_compact') === 'true'
     );
     const [isImporting, setIsImporting] = useState(false);
     const [rules, setRules] = useState<ReconciliationRule[]>([]);
@@ -518,6 +656,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
         () => masterProjects.map(p => ({ value: p.id, label: p.name })),
         [masterProjects]
     );
+    const costCenterOptions = useMemo<LazyOption[]>(
+        () => masterCostCenters.map(c => ({ value: c.id, label: c.name })),
+        [masterCostCenters]
+    );
     const credorOptions = useMemo<LazyOption[]>(
         () => uniqueCredores.map(n => ({ value: n, label: n })),
         [uniqueCredores]
@@ -621,6 +763,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
     useEffect(() => {
         localStorage.setItem('reconciliation_pendentes_view_mode', pendentesViewMode);
     }, [pendentesViewMode]);
+
+    useEffect(() => {
+        localStorage.setItem('reconciliation_pendentes_compact', String(pendentesCompact));
+    }, [pendentesCompact]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -976,7 +1122,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                 .select('*')
                 .eq('bank_account_id', selectedAccountId);
             
-            if (activeView === 'pending' || activeView === 'center') {
+            if (activeView === 'pending' || activeView === 'center' || activeView === 'statement') {
                 bankQuery = bankQuery.in('status', ['IMPORTED', 'NORMALIZED', 'RULE_APPLIED', 'CONFIRMED']);
             } else {
                 bankQuery = bankQuery.in('status', ['MATCHED']);
@@ -985,7 +1131,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             if (effStart) bankQuery = bankQuery.gte('transaction_date', effStart);
             if (effEnd)   bankQuery = bankQuery.lte('transaction_date', effEnd);
 
-            const isPendingView = activeView === 'pending' || activeView === 'center';
+            const isPendingView = activeView === 'pending' || activeView === 'center' || activeView === 'statement';
 
             // Load Internal Transactions based on view
             let iTxQuery = supabase
@@ -1900,6 +2046,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
             ));
         } catch (error) {
             console.error('Error updating project:', error);
+        }
+    };
+
+    const handleUpdateBankCostCenter = async (txId: string, costCenterId: string) => {
+        try {
+            const { error } = await supabase
+                .from('bank_transactions')
+                .update({ cost_center_id: costCenterId || null })
+                .eq('id', txId);
+            if (error) throw error;
+            setBankTransactions(prev => prev.map(tx =>
+                tx.id === txId ? { ...tx, cost_center_id: costCenterId || undefined } : tx
+            ));
+        } catch (error) {
+            console.error('Error updating cost center:', error);
         }
     };
 
@@ -2956,6 +3117,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                         Dashboard
                     </button>
                     <button
+                        onClick={() => setActiveView('statement')}
+                        className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${activeView === 'statement' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Extrato
+                    </button>
+                    <button
                         onClick={() => setActiveView('center')}
                         className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${activeView === 'center' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
@@ -3457,18 +3624,26 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                         )}
                     </div>
                 </div>
-            ) : (
+            ) : (activeView === 'pending' || activeView === 'statement') ? (
                 <div className="space-y-6">
+                    {activeView === 'pending' && (
                     <div className="flex justify-end px-4 -mb-4">
                         <div className="flex bg-white border border-gray-100 p-1 rounded-xl shadow-sm">
-                            <button 
+                            <button
                                 onClick={() => setPendentesViewMode('list')}
                                 className={`p-2 rounded-lg transition-all ${pendentesViewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
                                 title="Visualização em Linha"
                             >
                                 <List className="w-4 h-4" />
                             </button>
-                            <button 
+                            <button
+                                onClick={() => setPendentesCompact(c => !c)}
+                                className={`p-2 rounded-lg transition-all ${pendentesCompact ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                                title="Visualização Compacta"
+                            >
+                                <Rows3 className="w-4 h-4" />
+                            </button>
+                            <button
                                 onClick={() => setPendentesViewMode('grid')}
                                 className={`p-2 rounded-lg transition-all ${pendentesViewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
                                 title="Visualização em Grade"
@@ -3477,16 +3652,33 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                             </button>
                         </div>
                     </div>
+                    )}
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 min-h-[500px]">
+                    <div className={activeView === 'statement' ? "grid grid-cols-1 gap-8 min-h-[500px]" : "grid grid-cols-1 lg:grid-cols-2 gap-8 min-h-[500px]"}>
                     {/* Left: Bank Statement */}
                     <div className="space-y-4">
-                        <div className="flex justify-between items-center px-4">
+                        <div className={activeView === 'statement'
+                            ? "bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-3 items-center"
+                            : "flex justify-between items-center px-4"}>
+                            {activeView !== 'statement' && (
                             <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
                                 <Download className="w-4 h-4" />
                                 Extrato Bancário
                             </h4>
-                            <div className="flex items-center gap-2">
+                            )}
+                            {activeView === 'statement' && (
+                            <div className="flex-1 relative w-full order-1">
+                                <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por descrição, categoria ou cliente/fornecedor..."
+                                    value={bankSearch}
+                                    onChange={(e) => setBankSearch(e.target.value)}
+                                    className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-transparent rounded-[1.5rem] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
+                            </div>
+                            )}
+                            <div className={activeView === 'statement' ? "flex items-center gap-2 order-2 shrink-0" : "flex items-center gap-2"}>
                                 <div className="relative">
                                     <button
                                         onClick={() => { setBankCatDropdownOpen(o => !o); setInternalCatDropdownOpen(false); setBankCpDropdownOpen(false); }}
@@ -3546,6 +3738,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                         </div>
                                     )}
                                 </div>
+                                {activeView !== 'statement' && (
                                 <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-full px-3 py-1.5">
                                     <ArrowUpDown className="w-3 h-3 text-gray-400 shrink-0" />
                                     <select
@@ -3567,6 +3760,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                         {bankSortOrder === 'desc' ? '↓' : '↑'}
                                     </button>
                                 </div>
+                                )}
+                                {activeView !== 'statement' && (
                                 <div className="relative">
                                     <Search className="w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                                     <input
@@ -3586,11 +3781,269 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                         </button>
                                     )}
                                 </div>
+                                )}
+                                {activeView === 'statement' && (
+                                    <ColumnConfigButton
+                                        columns={STATEMENT_COLUMNS.filter(c => c.key !== 'actions')}
+                                        visibleColumns={tableColumns.visibleColumns}
+                                        showColumnConfig={tableColumns.showColumnConfig}
+                                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                        onToggleColumn={tableColumns.toggleColumn}
+                                        onReset={tableColumns.resetColumns}
+                                    />
+                                )}
                             </div>
                         </div>
 
-                        <div className={`min-h-[400px] ${pendentesViewMode === 'grid' ? 'bg-transparent border-none shadow-none' : 'bg-transparent'}`}>
-                            {bankTransactions.length === 0 ? (
+                        <div className={activeView === 'statement' ? '' : `min-h-[400px] ${pendentesViewMode === 'grid' ? 'bg-transparent border-none shadow-none' : 'bg-transparent'}`}>
+                            {activeView === 'statement' ? (
+                                bankTransactions.length === 0 ? (
+                                    <div className="text-center py-12 bg-white rounded-[2.5rem] shadow-sm border border-gray-100">
+                                        <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum extrato importado</h3>
+                                        <p className="text-sm text-gray-500">Importe um arquivo OFX, CSV, CNAB ou Excel (XLSX) para começar.</p>
+                                    </div>
+                                ) : (
+                                    <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
+                                        <table ref={statementTableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+                                            <colgroup>
+                                                <col style={{ width: '40px' }} />
+                                                {STATEMENT_COLUMNS.filter(c => c.key !== 'actions').map(c => (
+                                                    tableColumns.visibleColumns.includes(c.key) && (
+                                                        <col key={c.key} data-col-key={c.key} style={{ width: `${getStatementColWidth(c.key)}px` }} />
+                                                    )
+                                                ))}
+                                                {tableColumns.visibleColumns.includes('actions') && <col style={{ width: '90px' }} />}
+                                            </colgroup>
+                                            <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
+                                                <tr>
+                                                    <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                            checked={sortedBankTransactions.length > 0 && sortedBankTransactions.every(tx => selectedBankTxIds.has(tx.id))}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setSelectedBankTxIds(new Set([...selectedBankTxIds, ...sortedBankTransactions.map(tx => tx.id)]));
+                                                                } else {
+                                                                    const next = new Set(selectedBankTxIds);
+                                                                    sortedBankTransactions.forEach(tx => next.delete(tx.id));
+                                                                    setSelectedBankTxIds(next);
+                                                                }
+                                                            }}
+                                                        />
+                                                    </th>
+                                                    {tableColumns.visibleColumns.includes('description') && (
+                                                        <SortableHeader
+                                                            colKey="description" label="Descrição"
+                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
+                                                            onSort={() => bankSortField === 'description' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('description'), setBankSortOrder('asc'))}
+                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                                        >
+                                                            <StatementResizeHandle colKey="description" />
+                                                        </SortableHeader>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('counterparty') && (
+                                                        <SortableHeader
+                                                            colKey="counterparty" label="Cliente/Fornecedor"
+                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
+                                                            onSort={() => bankSortField === 'counterparty' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('counterparty'), setBankSortOrder('asc'))}
+                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                                        >
+                                                            <StatementResizeHandle colKey="counterparty" />
+                                                        </SortableHeader>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('category') && (
+                                                        <SortableHeader
+                                                            colKey="category" label="Categoria"
+                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
+                                                            onSort={() => bankSortField === 'category' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('category'), setBankSortOrder('asc'))}
+                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                                        >
+                                                            <StatementResizeHandle colKey="category" />
+                                                        </SortableHeader>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('project') && (
+                                                        <SortableHeader colKey="project" label="Obra" sortable={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                            <StatementResizeHandle colKey="project" />
+                                                        </SortableHeader>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('costCenter') && (
+                                                        <SortableHeader colKey="costCenter" label="Centro de Custo" sortable={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                            <StatementResizeHandle colKey="costCenter" />
+                                                        </SortableHeader>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('date') && (
+                                                        <SortableHeader
+                                                            colKey="date" label="Data"
+                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
+                                                            onSort={() => bankSortField === 'date' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('date'), setBankSortOrder('asc'))}
+                                                            className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
+                                                        >
+                                                            <StatementResizeHandle colKey="date" />
+                                                        </SortableHeader>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('amount') && (
+                                                        <SortableHeader
+                                                            colKey="amount" label="Valor"
+                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
+                                                            onSort={() => bankSortField === 'amount' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('amount'), setBankSortOrder('asc'))}
+                                                            className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden"
+                                                        >
+                                                            <StatementResizeHandle colKey="amount" />
+                                                        </SortableHeader>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('status') && (
+                                                        <SortableHeader colKey="status" label="Status" sortable={false} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden">
+                                                            <StatementResizeHandle colKey="status" />
+                                                        </SortableHeader>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('actions') && (
+                                                        <th className="px-6 py-2 text-right">Ações</th>
+                                                    )}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-200">
+                                                {sortedBankTransactions.map(tx => {
+                                                    const cpKey = (tx.counterparty_name || '').trim().toLowerCase();
+                                                    const cpRegistered = !cpKey || (tx.direction === 'DEBIT' ? masterSuppliersLower.has(cpKey) : masterClientsLower.has(cpKey));
+                                                    return (
+                                                        <tr key={tx.id} className="hover:bg-blue-50/50 transition-colors">
+                                                            <td className="px-4 py-2.5 border-r border-gray-100 text-center">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                    checked={selectedBankTxIds.has(tx.id)}
+                                                                    onChange={(e) => {
+                                                                        const next = new Set(selectedBankTxIds);
+                                                                        if (e.target.checked) next.add(tx.id); else next.delete(tx.id);
+                                                                        setSelectedBankTxIds(next);
+                                                                    }}
+                                                                />
+                                                            </td>
+                                                            {tableColumns.visibleColumns.includes('description') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 overflow-hidden">
+                                                                    <div className="flex items-center gap-2 min-w-0">
+                                                                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                                            {tx.direction === 'DEBIT' ? <ArrowRightLeft className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                                                                        </div>
+                                                                        <p className="truncate" title={tx.description_normalized || tx.description_raw}>{tx.description_normalized || tx.description_raw}</p>
+                                                                    </div>
+                                                                </td>
+                                                            )}
+                                                            {tableColumns.visibleColumns.includes('counterparty') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 overflow-hidden">
+                                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                                        <LazySelect
+                                                                            value={tx.counterparty_name || ''}
+                                                                            currentLabel={tx.counterparty_name || ''}
+                                                                            onChange={(v) => handleUpdateBankCounterparty(tx.id, v)}
+                                                                            options={tx.direction === 'DEBIT' ? credorOptions : clienteOptions}
+                                                                            placeholder="— selecionar"
+                                                                            className={`text-xs font-bold uppercase border-b border-dashed bg-transparent focus:outline-none cursor-pointer flex-1 min-w-0 truncate ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
+                                                                        />
+                                                                        {!cpRegistered && (
+                                                                            <button
+                                                                                onClick={() => openRegisterEntity(tx)}
+                                                                                className="p-1 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all shrink-0"
+                                                                                title={`Cadastrar ${tx.direction === 'DEBIT' ? 'fornecedor' : 'cliente'} a partir do extrato`}
+                                                                            >
+                                                                                <UserPlus className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </td>
+                                                            )}
+                                                            {tableColumns.visibleColumns.includes('category') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 overflow-hidden">
+                                                                    <LazySelect
+                                                                        value={tx.category || ''}
+                                                                        currentLabel={tx.category || ''}
+                                                                        onChange={(v) => handleUpdateBankCategory(tx.id, v)}
+                                                                        options={categoryOptions}
+                                                                        placeholder="Categoria"
+                                                                        className={`text-xs font-bold px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer ${tx.category ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+                                                                    />
+                                                                </td>
+                                                            )}
+                                                            {tableColumns.visibleColumns.includes('project') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 overflow-hidden">
+                                                                    <LazySelect
+                                                                        value={tx.project_id || ''}
+                                                                        currentLabel={projectName(tx.project_id) || ''}
+                                                                        onChange={(v) => handleUpdateBankProject(tx.id, v)}
+                                                                        options={projectOptions}
+                                                                        placeholder="Obra"
+                                                                        className={`text-xs font-bold px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer ${tx.project_id ? 'text-gray-900 bg-blue-50 border-blue-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+                                                                    />
+                                                                </td>
+                                                            )}
+                                                            {tableColumns.visibleColumns.includes('costCenter') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 overflow-hidden">
+                                                                    <LazySelect
+                                                                        value={tx.cost_center_id || ''}
+                                                                        currentLabel={costCenterName(tx.cost_center_id) || ''}
+                                                                        onChange={(v) => handleUpdateBankCostCenter(tx.id, v)}
+                                                                        options={costCenterOptions}
+                                                                        placeholder="Centro de Custo"
+                                                                        className={`text-xs font-bold px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer ${tx.cost_center_id ? 'text-gray-900 bg-violet-50 border-violet-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+                                                                    />
+                                                                </td>
+                                                            )}
+                                                            {tableColumns.visibleColumns.includes('date') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center whitespace-nowrap">
+                                                                    {formatDateBR(tx.transaction_date)}
+                                                                </td>
+                                                            )}
+                                                            {tableColumns.visibleColumns.includes('amount') && (
+                                                                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-right whitespace-nowrap ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                                    {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
+                                                                </td>
+                                                            )}
+                                                            {tableColumns.visibleColumns.includes('status') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
+                                                                    {tx.status === 'RULE_APPLIED' ? (
+                                                                        <div className="flex items-center justify-center gap-1.5">
+                                                                            <button
+                                                                                onClick={() => handleRejectRule(tx.id)}
+                                                                                className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 px-2 py-1 rounded-lg transition-all"
+                                                                                title="Rejeitar Automático"
+                                                                            >
+                                                                                <X className="w-3 h-3" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleConfirmMatch(tx.id)}
+                                                                                className="text-xs font-semibold text-white bg-purple-600 px-3 py-1 rounded-lg hover:bg-purple-700 transition-all"
+                                                                            >
+                                                                                Aceitar
+                                                                            </button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className={`text-sm font-normal ${STATEMENT_STATUS_COLORS[tx.status] || 'text-gray-600'}`}>
+                                                                            {STATEMENT_STATUS_LABELS[tx.status] || tx.status}
+                                                                        </span>
+                                                                    )}
+                                                                </td>
+                                                            )}
+                                                            {tableColumns.visibleColumns.includes('actions') && (
+                                                                <td className="px-6 py-2.5 text-right">
+                                                                    <button
+                                                                        onClick={() => handleDeleteBankTransactions([tx.id])}
+                                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                                        title="Excluir extrato"
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </td>
+                                                            )}
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )
+                            ) : bankTransactions.length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center p-12 text-center py-32 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm">
                                     <div className="w-20 h-20 bg-gray-50 text-gray-200 rounded-3xl flex items-center justify-center mb-6">
                                         <FileText className="w-10 h-10" />
@@ -3600,7 +4053,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                 </div>
                             ) : (
                                 <div
-                                    className={pendentesViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "flex flex-col gap-3 p-3 overflow-y-auto reconc-scroll"}
+                                    className={pendentesViewMode === 'grid' ? "grid grid-cols-1 gap-4" : "flex flex-col gap-3 p-3 overflow-y-auto reconc-scroll"}
                                     style={pendentesViewMode === 'list' ? { maxHeight: 'calc(100vh - 300px)' } : undefined}
                                 >
 
@@ -3632,7 +4085,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                         <div
                                             key={tx.id}
                                             className="group relative"
-                                            style={pendentesViewMode === 'list' ? ({ contentVisibility: 'auto', containIntrinsicSize: 'auto 140px' } as React.CSSProperties) : undefined}
+                                            style={pendentesViewMode === 'list' ? ({ contentVisibility: 'auto', containIntrinsicSize: pendentesCompact ? 'auto 80px' : 'auto 140px' } as React.CSSProperties) : undefined}
                                         >
                                             {pendentesViewMode === 'grid' ? (
                                                 <div 
@@ -3736,10 +4189,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                             ) : (
                                                 <div
                                                     onClick={() => setSelectedBankTxId(selectedBankTxId === tx.id ? null : tx.id)}
-                                                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col gap-3 z-10 relative hover:shadow-md ${selectedBankTxId === tx.id ? 'bg-blue-50 border-blue-400 shadow-lg ring-2 ring-blue-500/10 scale-[1.01]' : 'bg-white border-gray-100 shadow-sm'}`}
+                                                    className={`${pendentesCompact ? 'p-2 rounded-xl gap-1' : 'p-4 rounded-2xl gap-3'} border transition-all cursor-pointer flex flex-col z-10 relative hover:shadow-md ${selectedBankTxId === tx.id ? 'bg-blue-50 border-blue-400 shadow-lg ring-2 ring-blue-500/10 scale-[1.01]' : 'bg-white border-gray-100 shadow-sm'}`}
                                                 >
                                                     {/* Linha 1: checkbox + ícone + descrição */}
-                                                    <div className="flex items-center gap-3 min-w-0">
+                                                    <div className={`flex items-center min-w-0 ${pendentesCompact ? 'gap-2' : 'gap-3'}`}>
                                                         <div onClick={(e) => e.stopPropagation()}>
                                                             <input
                                                                 type="checkbox"
@@ -3753,10 +4206,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                                 }}
                                                             />
                                                         </div>
-                                                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
-                                                            {tx.direction === 'DEBIT' ? <ArrowRightLeft className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                                                        <div className={`${pendentesCompact ? 'w-6 h-6' : 'w-8 h-8'} rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                                                            {tx.direction === 'DEBIT' ? <ArrowRightLeft className={pendentesCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> : <Plus className={pendentesCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />}
                                                         </div>
-                                                        <p className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors uppercase truncate flex-1" title={tx.description_normalized || tx.description_raw}>
+                                                        <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-bold text-gray-900 group-hover:text-blue-600 transition-colors uppercase truncate flex-1`} title={tx.description_normalized || tx.description_raw}>
                                                             {tx.description_normalized || tx.description_raw}
                                                         </p>
                                                         {tx.status === 'RULE_APPLIED' && (
@@ -3767,10 +4220,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     </div>
 
                                                     {/* Linha 2: Fornecedor/Cliente / Categoria / Data / Valor */}
-                                                    <div className="flex items-center gap-3 pl-10 flex-wrap">
+                                                    <div className={`flex items-center flex-wrap ${pendentesCompact ? 'gap-2 pl-8' : 'gap-3 pl-10'}`}>
                                                         {/* Seletor de Cliente / Fornecedor */}
                                                         <div className="flex flex-col" onClick={(e) => e.stopPropagation()}>
-                                                            <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest mb-0.5">
+                                                            <span className={`text-[8px] font-black text-gray-300 uppercase tracking-widest mb-0.5 ${pendentesCompact ? 'hidden' : ''}`}>
                                                                 {tx.direction === 'DEBIT' ? 'Credor' : 'Cliente'}
                                                             </span>
                                                             <LazySelect
@@ -3797,7 +4250,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                             return (
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); openRegisterEntity(tx); }}
-                                                                    className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-lg border border-dashed border-blue-200 text-blue-500 hover:bg-blue-50 hover:border-blue-400 transition-all self-end"
+                                                                    className={`items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-lg border border-dashed border-blue-200 text-blue-500 hover:bg-blue-50 hover:border-blue-400 transition-all self-end ${pendentesCompact ? 'hidden' : 'flex'}`}
                                                                     title={`Cadastrar ${tx.direction === 'DEBIT' ? 'fornecedor' : 'cliente'} a partir do extrato`}
                                                                 >
                                                                     <UserPlus className="w-3 h-3" />
@@ -3813,7 +4266,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                                 onChange={(v) => handleUpdateBankCategory(tx.id, v)}
                                                                 options={categoryOptions}
                                                                 placeholder="Categoria"
-                                                                className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
+                                                                className={`text-[9px] font-black rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
                                                                     tx.category
                                                                         ? 'text-gray-900 bg-gray-100 border-gray-200/50 hover:bg-gray-200'
                                                                         : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
@@ -3828,7 +4281,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                                 onChange={(v) => handleUpdateBankProject(tx.id, v)}
                                                                 options={projectOptions}
                                                                 placeholder="Obra"
-                                                                className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
+                                                                className={`text-[9px] font-black rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
                                                                     tx.project_id
                                                                         ? 'text-gray-900 bg-blue-100 border-blue-200/50 hover:bg-blue-200'
                                                                         : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
@@ -3844,20 +4297,20 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         </div>
 
                                                         <div className="flex flex-col items-end gap-1">
-                                                            <p className={`text-sm font-black ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                            <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-black ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
                                                                 {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
                                                             </p>
                                                             {tx.status === 'RULE_APPLIED' ? (
                                                                 <div className="flex gap-1.5">
                                                                     <button
-                                                                        className="text-[9px] font-black text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 px-2 py-1 rounded-lg uppercase tracking-widest transition-all"
+                                                                        className={`text-[9px] font-black text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-lg uppercase tracking-widest transition-all ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
                                                                         onClick={(e) => { e.stopPropagation(); handleRejectRule(tx.id); }}
                                                                         title="Rejeitar Automático"
                                                                     >
                                                                         <X className="w-3 h-3" />
                                                                     </button>
                                                                     <button
-                                                                        className="text-[9px] font-black text-white bg-purple-600 px-3 py-1 rounded-lg uppercase tracking-widest hover:bg-purple-700 transition-all"
+                                                                        className={`text-[9px] font-black text-white bg-purple-600 rounded-lg uppercase tracking-widest hover:bg-purple-700 transition-all ${pendentesCompact ? 'px-2 py-0.5' : 'px-3 py-1'}`}
                                                                         onClick={(e) => { e.stopPropagation(); handleConfirmMatch(tx.id); }}
                                                                     >
                                                                         Aceitar
@@ -3868,7 +4321,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                             )}
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleDeleteBankTransactions([tx.id]); }}
-                                                                className="mt-1 p-1 text-gray-200 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                                className={`${pendentesCompact ? '' : 'mt-1'} p-1 text-gray-200 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all`}
                                                                 title="Excluir extrato"
                                                             >
                                                                 <Trash2 className="w-3.5 h-3.5" />
@@ -3883,7 +4336,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                 const cand = suggestion?.candidate_internal_transaction;
                                                 if (!suggestion || !cand) return null;
                                                 return (
-                                                    <div key={suggestion.id} className="mx-4 mb-2 -mt-2 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100 rounded-b-xl flex items-center justify-between shadow-inner">
+                                                    <div key={suggestion.id} className={`${pendentesCompact ? 'mx-2 mb-1 -mt-1 p-1.5' : 'mx-4 mb-2 -mt-2 p-3'} bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100 rounded-b-xl flex items-center justify-between shadow-inner`}>
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-6 h-6 rounded-full bg-purple-100/50 flex items-center justify-center text-purple-600">
                                                                 <Zap className="w-3 h-3" />
@@ -3919,8 +4372,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                         </div>
                     </div>
 
-                    {/* Right: Internal Ledger */}
+                    {activeView === 'pending' && (
                     <div className="space-y-4">
+                        {/* Right: Internal Ledger */}
                         <div className="flex justify-between items-center px-4">
                             <div className="flex items-center gap-4">
                                 <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
@@ -4089,7 +4543,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                 </div>
                             ) : (
                                 <div
-                                    className={pendentesViewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "flex flex-col gap-3 p-3 overflow-y-auto reconc-scroll"}
+                                    className={pendentesViewMode === 'grid' ? "grid grid-cols-1 gap-4" : "flex flex-col gap-3 p-3 overflow-y-auto reconc-scroll"}
                                     style={pendentesViewMode === 'list' ? { maxHeight: 'calc(100vh - 300px)' } : undefined}
                                 >
 
@@ -4220,9 +4674,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div key={tx.id} className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-3 hover:shadow-md transition-all group" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 120px' } as React.CSSProperties}>
+                                            <div key={tx.id} className={`bg-white border border-gray-100 shadow-sm flex flex-col hover:shadow-md transition-all group ${pendentesCompact ? 'p-2 rounded-xl gap-1' : 'p-4 rounded-2xl gap-3'}`} style={{ contentVisibility: 'auto', containIntrinsicSize: pendentesCompact ? 'auto 70px' : 'auto 120px' } as React.CSSProperties}>
                                                 {/* Linha 1: checkbox + ícone + descrição */}
-                                                <div className="flex items-center gap-3 min-w-0">
+                                                <div className={`flex items-center min-w-0 ${pendentesCompact ? 'gap-2' : 'gap-3'}`}>
                                                     <input
                                                         type="checkbox"
                                                         className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
@@ -4234,10 +4688,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                             setSelectedInternalTxIds(next);
                                                         }}
                                                     />
-                                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
-                                                        <Briefcase className="w-4 h-4" />
+                                                    <div className={`${pendentesCompact ? 'w-6 h-6' : 'w-8 h-8'} rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                                                        <Briefcase className={pendentesCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
                                                     </div>
-                                                    <p className="text-sm font-bold text-gray-900 uppercase truncate flex-1" title={displayTitle(tx)}>
+                                                    <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-bold text-gray-900 uppercase truncate flex-1`} title={displayTitle(tx)}>
                                                         {displayTitle(tx)}
                                                     </p>
                                                     {txCode(tx) && (
@@ -4268,9 +4722,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                 </div>
 
                                                 {/* Linha 2: Entidade / Categoria / Data / Valor / Ações */}
-                                                <div className="flex items-center gap-3 pl-10 flex-wrap">
+                                                <div className={`flex items-center flex-wrap ${pendentesCompact ? 'gap-2 pl-8' : 'gap-3 pl-10'}`}>
                                                     <div className="flex flex-col min-w-[80px]">
-                                                        <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">
+                                                        <span className={`text-[8px] font-black text-gray-300 uppercase tracking-widest ${pendentesCompact ? 'hidden' : ''}`}>
                                                             {displayPartyName(tx)
                                                                 ? (tx.party_type === 'CLIENT' || tx.direction === 'CREDIT' ? 'Cliente' : 'Fornecedor')
                                                                 : 'Origem'}
@@ -4282,7 +4736,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
                                                     {projectName(tx.project_id) && (
                                                         <div className="flex flex-col min-w-[80px]">
-                                                            <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Obra</span>
+                                                            <span className={`text-[8px] font-black text-gray-300 uppercase tracking-widest ${pendentesCompact ? 'hidden' : ''}`}>Obra</span>
                                                             <p className="text-xs font-black text-sky-700 uppercase truncate max-w-[130px]">
                                                                 {projectName(tx.project_id)}
                                                             </p>
@@ -4291,7 +4745,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
 
                                                     {costCenterName(tx.cost_center_id) && (
                                                         <div className="flex flex-col min-w-[80px]">
-                                                            <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Centro de Custo</span>
+                                                            <span className={`text-[8px] font-black text-gray-300 uppercase tracking-widest ${pendentesCompact ? 'hidden' : ''}`}>Centro de Custo</span>
                                                             <p className="text-xs font-black text-violet-700 uppercase truncate max-w-[130px]">
                                                                 {costCenterName(tx.cost_center_id)}
                                                             </p>
@@ -4304,7 +4758,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                         onChange={(v) => handleUpdateInternalCategory(tx.id, v)}
                                                         options={categoryOptions}
                                                         placeholder="Categoria"
-                                                        className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
+                                                        className={`text-[9px] font-black rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
                                                             tx.category
                                                                 ? 'text-gray-900 bg-gray-100 border-gray-200/50 hover:bg-gray-200'
                                                                 : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
@@ -4319,7 +4773,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                     </div>
 
                                                     <div className="flex flex-col items-end gap-1">
-                                                        <p className="text-sm font-black text-gray-900 leading-none">
+                                                        <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-black text-gray-900 leading-none`}>
                                                             {formatMoney(tx.amount)}
                                                         </p>
                                                         <div className="flex items-center gap-1.5">
@@ -4327,14 +4781,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                                 <>
                                                                     <button
                                                                         onClick={(e) => { e.stopPropagation(); handleEditInternalTx(tx); }}
-                                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                                        className={`text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all ${pendentesCompact ? 'p-1' : 'p-1.5'}`}
                                                                         title="Editar"
                                                                     >
                                                                         <Settings2 className="w-3.5 h-3.5" />
                                                                     </button>
                                                                     <button
                                                                         onClick={(e) => { e.stopPropagation(); handleDeleteInternalTx(tx.id); }}
-                                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                                        className={`text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all ${pendentesCompact ? 'p-1' : 'p-1.5'}`}
                                                                         title="Excluir"
                                                                     >
                                                                         <Trash2 className="w-3.5 h-3.5" />
@@ -4350,7 +4804,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                                                                     }
                                                                     handleConfirmMatch(selectedBankTxId, tx.id);
                                                                 }}
-                                                                className={`text-[9px] font-black uppercase tracking-widest py-1.5 px-3 rounded-lg transition-all ${selectedBankTxId ? 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 active:scale-95' : 'text-emerald-600 bg-emerald-50/50 hover:bg-emerald-100'}`}
+                                                                className={`text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${pendentesCompact ? 'py-1 px-2' : 'py-1.5 px-3'} ${selectedBankTxId ? 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 active:scale-95' : 'text-emerald-600 bg-emerald-50/50 hover:bg-emerald-100'}`}
                                                             >
                                                                 {selectedBankTxId ? 'Confirmar Vínculo' : 'Vincular'}
                                                             </button>
@@ -4364,9 +4818,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId 
                             )}
                         </div>
                     </div>
+                    )}
                 </div>
             </div>
-        )}
+        ) : null}
 
             {/* Audit Logs Section */}
             {activeView === 'conciliated' && auditLogs.length > 0 && (

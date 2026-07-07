@@ -194,6 +194,7 @@ export interface BankTransaction {
     category?: string;
     status: BankTransactionStatus;
     project_id?: string;
+    cost_center_id?: string;
     created_at?: string;
 }
 

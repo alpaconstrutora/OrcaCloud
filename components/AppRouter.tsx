@@ -1368,16 +1368,6 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
   return (
     <React.Suspense fallback={<Spinner />}>
       {renderContent()}
-      
-      {/* Botão flutuante temporário para acessar o protótipo da tabela */}
-      {activeView !== 'table-prototype' && (
-        <button 
-          onClick={() => setActiveView('table-prototype')}
-          className="fixed bottom-4 right-4 z-[9999] bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg font-bold border-2 border-white hover:scale-105 transition-transform flex items-center gap-2"
-        >
-          🌟 Testar Protótipo (Opção A)
-        </button>
-      )}
     </React.Suspense>
   );
 };

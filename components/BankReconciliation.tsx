@@ -4,7 +4,7 @@ import {
     ArrowRightLeft, FileText, Download, Trash2, Check,
     Plus, Calendar, DollarSign, Briefcase, RefreshCw,
     Zap, ShieldCheck, Settings2, Info, ArrowUpDown, X, Tag,
-    LayoutGrid, List, Users, UserPlus, ExternalLink, Rows3
+    LayoutGrid, List, Users, UserPlus, ExternalLink, Rows3, Pencil
 } from 'lucide-react';
 import {
     BankTransaction,
@@ -29,6 +29,7 @@ import DivergencesPanel from './DivergencesPanel';
 import FinancialClosePanel from './FinancialClosePanel';
 import AnomaliesPanel from './AnomaliesPanel';
 import SmartReconciliationCenter from './SmartReconciliationCenter';
+import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
 
 type ReconciliationView = 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'statement' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close';
 
@@ -134,6 +135,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
     const [selectedBankTxIds, setSelectedBankTxIds] = useState<Set<string>>(new Set());
     const [selectedInternalTxIds, setSelectedInternalTxIds] = useState<Set<string>>(new Set());
+    const [isLoteEditOpen, setIsLoteEditOpen] = useState(false);
     const [selectedRuleIds, setSelectedRuleIds] = useState<Set<string>>(new Set());
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
     const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
@@ -1980,6 +1982,40 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         }
     };
 
+    // Salva vários campos do extrato bancário de uma vez (usado pelo modal "Editar em Lote")
+    const handleBulkUpdateBankFields = async (
+        fields: Partial<Pick<BankTransaction, 'category' | 'counterparty_name' | 'project_id' | 'cost_center_id'>>
+    ) => {
+        const ids = Array.from(selectedBankTxIds);
+        if (ids.length === 0) return;
+
+        const updatePayload: Record<string, unknown> = { ...fields };
+        if (fields.category !== undefined) {
+            updatePayload.status = (fields.category ? 'RULE_APPLIED' : 'NORMALIZED') as BankTransactionStatus;
+        }
+
+        const { error } = await supabase
+            .from('bank_transactions')
+            .update(updatePayload)
+            .in('id', ids);
+
+        if (error) throw error;
+
+        setBankTransactions(prev => prev.map(tx =>
+            ids.includes(tx.id) ? { ...tx, ...updatePayload } : tx
+        ));
+        setMatches(prev => prev.map(m => {
+            const bId = m.bank_transaction?.id;
+            if (bId && ids.includes(bId)) {
+                return { ...m, bank_transaction: { ...m.bank_transaction, ...updatePayload } as never };
+            }
+            return m;
+        }));
+        setSelectedBankTxIds(new Set());
+        setActionFeedback({ message: `${ids.length} lançamento${ids.length !== 1 ? 's' : ''} atualizado${ids.length !== 1 ? 's' : ''} com sucesso!`, type: 'success' });
+        setTimeout(() => setActionFeedback(null), 3000);
+    };
+
     const handleUpdateInternalCategory = async (txId: string, newCategory: string) => {
         try {
             const { error } = await supabase
@@ -3285,8 +3321,50 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 </div>
             </div>
 
-            {/* Bulk Action Bar - Refinada */}
-            {(selectedBankTxIds.size > 0 || selectedInternalTxIds.size > 0) && (() => {
+            {/* Bulk Action Bar — Extrato (padrão simples: contagem + Editar em Lote + Desmarcar,
+                igual ao BoletoManager, com o modal cuidando dos campos) */}
+            {activeView === 'statement' && selectedBankTxIds.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                    <span className="flex-1 text-sm font-bold whitespace-nowrap">
+                        {selectedBankTxIds.size} lançamento{selectedBankTxIds.size !== 1 ? 's' : ''} selecionado{selectedBankTxIds.size !== 1 ? 's' : ''}
+                        <span className="ml-2 font-normal opacity-75">
+                            · {formatMoney(sortedBankTransactions.filter(tx => selectedBankTxIds.has(tx.id)).reduce((s, tx) => s + (tx.amount ?? 0), 0))}
+                        </span>
+                    </span>
+                    <button
+                        onClick={() => setIsLoteEditOpen(true)}
+                        className="flex items-center gap-2 px-3 py-2 bg-white text-blue-700 rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-50 transition-colors"
+                    >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Editar em Lote
+                    </button>
+                    <button
+                        onClick={() => setSelectedBankTxIds(new Set())}
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-400 transition-colors"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                        Desmarcar
+                    </button>
+                </div>
+            )}
+
+            {isLoteEditOpen && (
+                <BankTxEdicaoEmLoteModal
+                    transactions={sortedBankTransactions.filter(tx => selectedBankTxIds.has(tx.id))}
+                    categories={uniqueCategories}
+                    entityOptions={[
+                        ...uniqueClients.map(c => ({ value: c, label: c, group: 'Clientes' })),
+                        ...uniqueCredores.map(s => ({ value: s, label: s, group: 'Credores' })),
+                    ]}
+                    projects={masterProjects}
+                    costCenters={masterCostCenters}
+                    onClose={() => setIsLoteEditOpen(false)}
+                    onSave={handleBulkUpdateBankFields}
+                />
+            )}
+
+            {/* Bulk Action Bar - Refinada (demais visões: pendências/conciliação, bank + internal) */}
+            {activeView !== 'statement' && (selectedBankTxIds.size > 0 || selectedInternalTxIds.size > 0) && (() => {
                 const bankCount = selectedBankTxIds.size;
                 const internalCount = selectedInternalTxIds.size;
                 const totalCount = bankCount + internalCount;

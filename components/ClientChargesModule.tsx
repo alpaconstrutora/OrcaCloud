@@ -6,6 +6,7 @@ import {
 import { clientChargeService } from '../services/clientChargeService';
 import type { ClientCharge } from '../services/clientChargeService';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
+import KpiCard from './ui/KpiCard';
 
 // Asaas status → rótulo + cor
 const STATUS_META: Record<string, { label: string; cls: string }> = {
@@ -28,14 +29,6 @@ function StatusBadge({ status }: { status: string }) {
         </span>
     );
 }
-
-const COLOR_MAP: Record<string, { border: string, bg: string, text: string, dot: string }> = {
-  emerald: { border: 'hover:border-emerald-100', bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' },
-  blue: { border: 'hover:border-blue-100', bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-500' },
-  red: { border: 'hover:border-red-100', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
-  gray: { border: 'hover:border-gray-100', bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-500' },
-  amber: { border: 'hover:border-amber-100', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-500' },
-};
 
 type StatusFilter = 'all' | 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED';
 const FILTERS: { id: StatusFilter; label: string }[] = [
@@ -226,27 +219,10 @@ export default function ClientChargesModule({ organizationId }: Props) {
 
                 {/* KPIs */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {[
-                        { label: 'Total Emitido', value: kpis.emitido,  colorMap: 'gray',    icon: <Landmark className="w-5 h-5" /> },
-                        { label: 'Recebido',      value: kpis.recebido, colorMap: 'emerald', icon: <Check className="w-5 h-5" /> },
-                        { label: 'Pendente',      value: kpis.pendente, colorMap: 'blue',    icon: <RefreshCw className="w-5 h-5" /> },
-                        { label: 'Vencido',       value: kpis.vencido,  colorMap: kpis.vencido > 0 ? 'red' : 'gray', icon: <AlertCircle className="w-5 h-5" /> },
-                    ].map(k => {
-                        const colors = COLOR_MAP[k.colorMap];
-                        return (
-                            <div key={k.label} className={`bg-white rounded-2xl p-4 border border-gray-100 shadow-sm transition-colors cursor-default ${colors.border}`}>
-                                <div className="flex items-center justify-between">
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${colors.bg} ${colors.text}`}>
-                                        {k.icon}
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-sm font-medium text-gray-500">{k.label}</p>
-                                        <p className="text-2xl font-black text-gray-900 tracking-tight mt-1">{fmt(k.value)}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
+                    <KpiCard label="Total Emitido" value={fmt(kpis.emitido)}  sub={`${rows.filter(c => c.status !== 'CANCELLED').length} cobranças`} icon={<Landmark className="w-5 h-5" />} color="gray" />
+                    <KpiCard label="Recebido"      value={fmt(kpis.recebido)} sub={`${rows.filter(c => PAID.includes(c.status)).length} pagas`}     icon={<Check className="w-5 h-5" />}    color="emerald" />
+                    <KpiCard label="Pendente"      value={fmt(kpis.pendente)} sub={`${rows.filter(c => c.status === 'PENDING').length} aguardando`}  icon={<RefreshCw className="w-5 h-5" />} color="blue" />
+                    <KpiCard label="Vencido"       value={fmt(kpis.vencido)}  sub={`${rows.filter(c => c.status === 'OVERDUE').length} em atraso`}   icon={<AlertCircle className="w-5 h-5" />} color={kpis.vencido > 0 ? 'red' : 'gray'} />
                 </div>
 
                 {/* Toolbar e Search */}

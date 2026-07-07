@@ -23,7 +23,8 @@ import { financialRegistryService } from '../services/financialRegistryService';
 import { useStore } from '../store/useStore';
 import { useConfirm } from './ui/confirm';
 import { formatMoney, formatDateBR } from './ui/Format';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { KpiCard } from './ui/KpiCard';
 import ReconciliationDashboardView from './ReconciliationDashboard';
 import DivergencesPanel from './DivergencesPanel';
 import FinancialClosePanel from './FinancialClosePanel';
@@ -333,7 +334,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     });
 
     // Filtros e Ordenação
-    const [bankSearch, setBankSearch] = useState('');
+    const [bankSearch, setBankSearch] = usePersistedState<string>('extratoBancario:search', '');
     const [internalSearch, setInternalSearch] = useState('');
     const [bankCategoryFilter, setBankCategoryFilter] = useState<string[]>(() => {
         try { return JSON.parse(localStorage.getItem('reconciliation_bank_cat_filter') || '[]'); } catch { return []; }
@@ -3060,43 +3061,35 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         </div>
                     </div>
                 )}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
-                        <ArrowRightLeft className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Pendentes</p>
-                        <h3 className="text-2xl font-black text-gray-900 tracking-tight">{bankTransactions.length}</h3>
-                    </div>
-                </div>
-                <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
-                        <Zap className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Automação</p>
-                        <h3 className="text-2xl font-black text-emerald-600 tracking-tight">{stats.automationRate}%</h3>
-                    </div>
-                </div>
-                <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center">
-                        <ShieldCheck className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Regras Ativas</p>
-                        <h3 className="text-2xl font-black text-purple-600 tracking-tight">{rules.length}</h3>
-                    </div>
-                </div>
-                <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center">
-                        <AlertCircle className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Atenção</p>
-                        <h3 className="text-2xl font-black text-gray-900 tracking-tight">{internalTransactions.length}</h3>
-                    </div>
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <KpiCard
+                        label="Pendentes"
+                        value={bankTransactions.length}
+                        sub="Transações no extrato"
+                        icon={<ArrowRightLeft className="w-5 h-5" />}
+                        color="blue"
+                    />
+                    <KpiCard
+                        label="Automação"
+                        value={`${stats.automationRate}%`}
+                        sub="Conciliadas por regra"
+                        icon={<Zap className="w-5 h-5" />}
+                        color="emerald"
+                    />
+                    <KpiCard
+                        label="Regras Ativas"
+                        value={rules.length}
+                        sub="Regras de conciliação"
+                        icon={<ShieldCheck className="w-5 h-5" />}
+                        color="purple"
+                    />
+                    <KpiCard
+                        label="Atenção"
+                        value={internalTransactions.length}
+                        sub="Lançamentos internos pendentes"
+                        icon={<AlertCircle className="w-5 h-5" />}
+                        color="amber"
+                    />
             </div>
         </div>
 
@@ -4065,14 +4058,17 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 </div>
                                 )}
                                 {activeView === 'statement' && (
-                                    <ColumnConfigButton
-                                        columns={STATEMENT_COLUMNS.filter(c => c.key !== 'actions')}
-                                        visibleColumns={tableColumns.visibleColumns}
-                                        showColumnConfig={tableColumns.showColumnConfig}
-                                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                                        onToggleColumn={tableColumns.toggleColumn}
-                                        onReset={tableColumns.resetColumns}
-                                    />
+                                    <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                                        <ColumnConfigButton
+                                            columns={STATEMENT_COLUMNS.filter(c => c.key !== 'actions')}
+                                            visibleColumns={tableColumns.visibleColumns}
+                                            showColumnConfig={tableColumns.showColumnConfig}
+                                            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                            onToggleColumn={tableColumns.toggleColumn}
+                                            onReset={tableColumns.resetColumns}
+                                        />
+                                        <div className="w-px bg-gray-200 mx-1 my-1"></div>
+                                    </div>
                                 )}
                             </div>
                         </div>

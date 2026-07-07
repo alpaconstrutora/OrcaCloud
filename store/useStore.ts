@@ -279,7 +279,12 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
     logout: () => {
         broadcastSignOut();
         if (typeof window !== 'undefined') {
-            localStorage.clear();
+            // Remove só chaves de sessão/contexto (auth do Supabase + prefixo orca_).
+            // NÃO usar localStorage.clear(): isso apagava preferências de UI (colunas
+            // visíveis, ordenação, filtros salvos) que devem sobreviver a logout/login.
+            Object.keys(localStorage)
+                .filter(k => k.startsWith('sb-') || k.startsWith('orca_'))
+                .forEach(k => localStorage.removeItem(k));
             sessionStorage.clear();
         }
         set({

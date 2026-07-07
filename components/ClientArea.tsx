@@ -138,6 +138,33 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [showNotifications, setShowNotifications] = React.useState(false);
     const [showMoreSheet, setShowMoreSheet] = React.useState(false);
     const [mobileFinTab, setMobileFinTab] = React.useState<'detalhe' | 'historico'>('detalhe');
+
+    // Configuração de abas do portal precisa ser lida/gravada no projeto OBRA
+    // vinculado ao cliente (settings.clientId), não no projeto que porventura
+    // esteja aberto no workspace do admin — senão o toggle "Configurar Abas"
+    // salva/mostra o estado do projeto errado (bug: aba marcada não aparecia
+    // para o cliente, ou aba desmarcada continuava aparecendo).
+    const [linkedClientProject, setLinkedClientProject] = React.useState<{ id: string; name: string; settings: ProjectSettings; budget: BudgetEntry[] } | null>(null);
+    React.useEffect(() => {
+        if (!isAdmin || !clientProfile?.id) {
+            setLinkedClientProject(null);
+            return;
+        }
+        let cancelled = false;
+        projectService.listProjects(clientProfile.id).then(async (projects) => {
+            const match = (projects || []).find((p: any) => p.settings?.classification === 'OBRA') || (projects || [])[0];
+            if (!match) {
+                if (!cancelled) setLinkedClientProject(null);
+                return;
+            }
+            const full = await projectService.loadProject(match.id);
+            if (!cancelled && full) {
+                setLinkedClientProject({ id: full.id, name: full.name, settings: full.settings as ProjectSettings, budget: (full.budget as BudgetEntry[]) || [] });
+            }
+        }).catch(console.error);
+        return () => { cancelled = true; };
+    }, [isAdmin, clientProfile?.id]);
+
     React.useEffect(() => {
         if (!showNotifications) return;
         const close = () => setShowNotifications(false);
@@ -3636,8 +3663,13 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const clientCategory = clientProfile?.category ?? '';
     const categoryPreset = CATEGORY_TAB_PRESETS[clientCategory];
 
-    const enabledTabIds = settings.clientPortalTabs && settings.clientPortalTabs.length > 0
-        ? settings.clientPortalTabs
+    // Fonte de verdade da visibilidade das abas: o projeto OBRA vinculado ao
+    // cliente (linkedClientProject), quando encontrado — não o projeto que
+    // porventura esteja carregado no workspace do admin.
+    const tabVisibilitySettings = (isAdmin && linkedClientProject) ? linkedClientProject.settings : settings;
+
+    const enabledTabIds = tabVisibilitySettings.clientPortalTabs && tabVisibilitySettings.clientPortalTabs.length > 0
+        ? tabVisibilitySettings.clientPortalTabs
         : (categoryPreset ?? ALL_TABS.map(t => t.id));
 
     // tabs visíveis para o cliente (mobile + client desktop)
@@ -3645,14 +3677,33 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     // admin vê todas no desktop para poder configurar; cliente vê só as habilitadas
     const desktopNavTabs = isAdmin ? ALL_TABS : tabs;
 
-    const toggleTabVisibility = (tabId: string) => {
-        if (!onUpdateSettings) return;
-        const current = settings.clientPortalTabs && settings.clientPortalTabs.length > 0
-            ? settings.clientPortalTabs
+    const toggleTabVisibility = async (tabId: string) => {
+        const current = tabVisibilitySettings.clientPortalTabs && tabVisibilitySettings.clientPortalTabs.length > 0
+            ? tabVisibilitySettings.clientPortalTabs
             : ALL_TABS.map(t => t.id);
         const next = current.includes(tabId)
             ? current.filter(id => id !== tabId)
             : [...current, tabId];
+
+        if (isAdmin && linkedClientProject) {
+            const updatedSettings = { ...linkedClientProject.settings, clientPortalTabs: next };
+            const previous = linkedClientProject;
+            setLinkedClientProject({ ...linkedClientProject, settings: updatedSettings });
+            try {
+                await projectService.saveProject({
+                    id: linkedClientProject.id,
+                    name: linkedClientProject.name,
+                    settings: updatedSettings,
+                    budget: linkedClientProject.budget,
+                });
+            } catch (err) {
+                console.error('Erro ao salvar visibilidade de aba:', err);
+                setLinkedClientProject(previous);
+            }
+            return;
+        }
+
+        if (!onUpdateSettings) return;
         onUpdateSettings({ ...settings, clientPortalTabs: next });
     };
 

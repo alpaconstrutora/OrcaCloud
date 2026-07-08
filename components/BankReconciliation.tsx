@@ -309,6 +309,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [masterSuppliers, setMasterSuppliers] = useState<string[]>([]);
     const [supplierNameById, setSupplierNameById] = useState<Record<string, string>>({});
     const [masterClients, setMasterClients] = useState<string[]>([]);
+    const [clientNameById, setClientNameById] = useState<Record<string, string>>({});
     const [masterEmployees, setMasterEmployees] = useState<string[]>([]);
     const [masterProjects, setMasterProjects] = useState<Array<{ id: string; name: string }>>([]);
     const [masterCostCenters, setMasterCostCenters] = useState<Array<{ id: string; name: string }>>([]);
@@ -604,22 +605,30 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         const ents = new Set<string>();
         masterClients.forEach(c => ents.add(c));
         internalTransactions.filter(tx => tx.direction === 'CREDIT').forEach(tx => {
-            if (tx.entity_name) ents.add(tx.entity_name);
+            // Prioriza o nome cadastral atual via party_id: entity_name é um snapshot de
+            // texto gravado na criação do lançamento e pode ter ficado desatualizado
+            // (renomeação/fusão de cadastro), gerando variantes soltas no dropdown.
+            const resolved = (tx.party_id && clientNameById[tx.party_id]) || tx.entity_name;
+            if (resolved) ents.add(resolved);
         });
         return Array.from(ents).sort();
-    }, [internalTransactions, masterClients]);
+    }, [internalTransactions, masterClients, clientNameById]);
 
     const uniqueSuppliers = useMemo(() => {
         const ents = new Set<string>();
         masterSuppliers.forEach(s => ents.add(s));
-        // entity_name de lançamentos internos são nomes limpos digitados pelo usuário
         internalTransactions.filter(tx => tx.direction === 'DEBIT').forEach(tx => {
-            if (tx.entity_name) ents.add(tx.entity_name);
+            // Mesmo motivo do uniqueClients: prioriza o nome cadastral atual via
+            // supplier_id em vez do entity_name gravado no momento da criação
+            // (ex: boletos guardam o beneficiário bruto, que varia entre lançamentos
+            // do mesmo fornecedor).
+            const resolved = (tx.supplier_id && supplierNameById[tx.supplier_id]) || tx.entity_name;
+            if (resolved) ents.add(resolved);
         });
         // counterparty_name do extrato bancário NÃO é incluído: nomes vêm sujos do banco
         // (ex: "-PIX_DEB EDSON...") e poluem a lista; o cadastro rápido resolve isso
         return Array.from(ents).sort();
-    }, [internalTransactions, masterSuppliers]);
+    }, [internalTransactions, masterSuppliers, supplierNameById]);
 
     // Credores = fornecedores + colaboradores ativos (para extratos de débito)
     const uniqueCredores = useMemo(() => {
@@ -855,11 +864,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         try {
             const { data } = await supabase
                 .from('clients')
-                .select('name')
+                .select('id, name')
                 .or(`organization_id.eq.${orgId},organization_id.is.null`)
                 .order('name', { ascending: true })
                 .limit(10000);
-            if (data) setMasterClients(data.map(c => c.name));
+            if (data) {
+                setMasterClients(data.map(c => c.name));
+                setClientNameById(Object.fromEntries(data.map(c => [c.id, c.name])));
+            }
         } catch (error) {
             console.error('Error loading clients:', error);
         }

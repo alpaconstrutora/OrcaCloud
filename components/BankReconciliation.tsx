@@ -4364,7 +4364,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     }
                                                 }}
                                             />
-                                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                                            <span className="text-sm font-normal text-gray-500">
                                                 {sortedBankTransactions.every(tx => selectedBankTxIds.has(tx.id))
                                                     ? `${sortedBankTransactions.length} selecionados`
                                                     : `Selecionar todos visíveis (${sortedBankTransactions.length})`}
@@ -4509,7 +4509,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 onChange={(v) => handleUpdateBankCounterparty(tx.id, v)}
                                                                 options={tx.direction === 'DEBIT' ? credorOptions : clienteOptions}
                                                                 placeholder={tx.direction === 'DEBIT' ? 'Credor' : 'Cliente'}
-                                                                className={`text-xs font-black uppercase border-b border-dashed bg-transparent focus:outline-none cursor-pointer transition-colors max-w-[130px] ${
+                                                                className={`text-sm font-normal border-b border-dashed bg-transparent focus:outline-none cursor-pointer transition-colors max-w-[130px] ${
                                                                     tx.counterparty_name
                                                                         ? 'text-gray-700 border-gray-300'
                                                                         : 'text-gray-400 border-gray-200'
@@ -4524,7 +4524,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 onChange={(v) => handleUpdateBankCategory(tx.id, v)}
                                                                 options={categoryOptions}
                                                                 placeholder="Categoria"
-                                                                className={`text-[9px] font-black rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
+                                                                className={`text-sm font-normal rounded-lg border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
                                                                     tx.category
                                                                         ? 'text-gray-900 bg-gray-100 border-gray-200/50 hover:bg-gray-200'
                                                                         : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
@@ -4539,7 +4539,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 onChange={(v) => handleUpdateBankProject(tx.id, v)}
                                                                 options={projectOptions}
                                                                 placeholder="Obra"
-                                                                className={`text-[9px] font-black rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
+                                                                className={`text-sm font-normal rounded-lg border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
                                                                     tx.project_id
                                                                         ? 'text-gray-900 bg-blue-100 border-blue-200/50 hover:bg-blue-200'
                                                                         : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
@@ -4554,7 +4554,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 onChange={(v) => handleUpdateBankCostCenter(tx.id, v)}
                                                                 options={costCenterOptions}
                                                                 placeholder="Centro de Custo"
-                                                                className={`text-[9px] font-black rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
+                                                                className={`text-sm font-normal rounded-lg border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
                                                                     tx.cost_center_id
                                                                         ? 'text-gray-900 bg-violet-100 border-violet-200/50 hover:bg-violet-200'
                                                                         : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
@@ -4564,18 +4564,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
                                                         <div className="flex items-center gap-1 ml-auto shrink-0">
                                                             <Calendar className="w-3 h-3 text-gray-300 shrink-0" />
-                                                            <span className="text-xs font-black text-gray-400 uppercase">
+                                                            <span className="text-sm font-normal text-gray-500">
                                                                 {formatDateBR(tx.transaction_date)}
                                                             </span>
                                                         </div>
 
-                                                        <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-black shrink-0 ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                        <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-medium shrink-0 ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
                                                             {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
                                                         </p>
 
                                                         {tx.status === 'RULE_APPLIED' && (
-                                                            <span className="shrink-0 flex items-center gap-1 text-[8px] font-black text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full uppercase">
-                                                                <Zap className="w-2 h-2" /> Automático
+                                                            <span className="shrink-0 flex items-center gap-1 text-sm font-normal text-purple-600">
+                                                                <Zap className="w-3 h-3" /> Automático
                                                             </span>
                                                         )}
 
@@ -4583,21 +4583,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             {tx.status === 'RULE_APPLIED' ? (
                                                                 <>
                                                                     <button
-                                                                        className={`text-[9px] font-black text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-lg uppercase tracking-widest transition-all ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
+                                                                        className={`text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-lg uppercase tracking-widest transition-all ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
                                                                         onClick={(e) => { e.stopPropagation(); handleRejectRule(tx.id); }}
                                                                         title="Rejeitar Automático"
                                                                     >
                                                                         <X className="w-3 h-3" />
                                                                     </button>
                                                                     <button
-                                                                        className={`text-[9px] font-black text-white bg-purple-600 rounded-lg uppercase tracking-widest hover:bg-purple-700 transition-all ${pendentesCompact ? 'px-2 py-0.5' : 'px-3 py-1'}`}
+                                                                        className={`text-xs font-semibold text-white bg-purple-600 rounded-lg uppercase tracking-widest hover:bg-purple-700 transition-all ${pendentesCompact ? 'px-2 py-0.5' : 'px-3 py-1'}`}
                                                                         onClick={(e) => { e.stopPropagation(); handleConfirmMatch(tx.id); }}
                                                                     >
                                                                         Aceitar
                                                                     </button>
                                                                 </>
                                                             ) : (
-                                                                <span className="text-[10px] font-normal text-gray-300">{tx.status}</span>
+                                                                <span className="text-sm font-normal text-gray-400">{tx.status}</span>
                                                             )}
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleDeleteBankTransactions([tx.id]); }}
@@ -4843,7 +4843,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     }
                                                 }}
                                             />
-                                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                                            <span className="text-sm font-normal text-gray-500">
                                                 {sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id))
                                                     ? `${sortedInternalTransactions.length} selecionados`
                                                     : `Selecionar todos visíveis (${sortedInternalTransactions.length})`}
@@ -4971,13 +4971,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     <div className={`${pendentesCompact ? 'w-6 h-6' : 'w-8 h-8'} rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
                                                         <Briefcase className={pendentesCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
                                                     </div>
-                                                    <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-bold text-gray-900 uppercase truncate flex-1`} title={displayTitle(tx)}>
+                                                    <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-normal text-gray-900 truncate flex-1`} title={displayTitle(tx)}>
                                                         {displayTitle(tx)}
                                                     </p>
                                                     {txCode(tx) && (
                                                         <span
                                                             title="Código de origem"
-                                                            className="shrink-0 text-[9px] font-mono font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200"
+                                                            className="shrink-0 text-xs font-normal text-gray-500"
                                                         >
                                                             Nº {txCode(tx)}
                                                         </span>
@@ -4986,17 +4986,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         const m = getSourceMeta(tx.source_system);
                                                         if (!m) return null;
                                                         const link = getOriginLink(tx);
+                                                        const textColor = m.color.split(' ').find(c => c.startsWith('text-')) ?? 'text-gray-600';
                                                         return link ? (
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); goToOrigin(tx); }}
                                                                 title={`Abrir em ${m.label}`}
-                                                                className={`shrink-0 flex items-center gap-1 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide transition-all hover:brightness-95 hover:ring-1 hover:ring-current cursor-pointer ${m.color}`}
+                                                                className={`shrink-0 flex items-center gap-1 text-sm font-normal transition-all hover:underline cursor-pointer ${textColor}`}
                                                             >
                                                                 {m.label}
-                                                                <ExternalLink className="w-2.5 h-2.5" />
+                                                                <ExternalLink className="w-3 h-3" />
                                                             </button>
                                                         ) : (
-                                                            <span className={`shrink-0 text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide ${m.color}`}>{m.label}</span>
+                                                            <span className={`shrink-0 text-sm font-normal ${textColor}`}>{m.label}</span>
                                                         );
                                                     })()}
                                                 </div>
@@ -5004,20 +5005,20 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 {/* Linha 2: Entidade / Categoria / Data / Valor / Ações */}
                                                 <div className={`flex items-center flex-wrap ${pendentesCompact ? 'gap-2 pl-8' : 'gap-3 pl-10'}`}>
                                                     <div className="flex flex-col min-w-[80px]">
-                                                        <span className={`text-[8px] font-black text-gray-300 uppercase tracking-widest ${pendentesCompact ? 'hidden' : ''}`}>
+                                                        <span className={`text-xs font-semibold text-gray-400 uppercase tracking-wider ${pendentesCompact ? 'hidden' : ''}`}>
                                                             {displayPartyName(tx)
                                                                 ? (tx.party_type === 'CLIENT' || tx.direction === 'CREDIT' ? 'Cliente' : 'Fornecedor')
                                                                 : 'Origem'}
                                                         </span>
-                                                        <p className="text-xs font-black text-gray-700 uppercase truncate max-w-[140px]">
+                                                        <p className="text-sm font-normal text-gray-700 truncate max-w-[140px]">
                                                             {displayPartyName(tx) || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>}
                                                         </p>
                                                     </div>
 
                                                     {projectName(tx.project_id) && (
                                                         <div className="flex flex-col min-w-[80px]">
-                                                            <span className={`text-[8px] font-black text-gray-300 uppercase tracking-widest ${pendentesCompact ? 'hidden' : ''}`}>Obra</span>
-                                                            <p className="text-xs font-black text-sky-700 uppercase truncate max-w-[130px]">
+                                                            <span className={`text-xs font-semibold text-gray-400 uppercase tracking-wider ${pendentesCompact ? 'hidden' : ''}`}>Obra</span>
+                                                            <p className="text-sm font-normal text-sky-700 truncate max-w-[130px]">
                                                                 {projectName(tx.project_id)}
                                                             </p>
                                                         </div>
@@ -5025,8 +5026,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
                                                     {costCenterName(tx.cost_center_id) && (
                                                         <div className="flex flex-col min-w-[80px]">
-                                                            <span className={`text-[8px] font-black text-gray-300 uppercase tracking-widest ${pendentesCompact ? 'hidden' : ''}`}>Centro de Custo</span>
-                                                            <p className="text-xs font-black text-violet-700 uppercase truncate max-w-[130px]">
+                                                            <span className={`text-xs font-semibold text-gray-400 uppercase tracking-wider ${pendentesCompact ? 'hidden' : ''}`}>Centro de Custo</span>
+                                                            <p className="text-sm font-normal text-violet-700 truncate max-w-[130px]">
                                                                 {costCenterName(tx.cost_center_id)}
                                                             </p>
                                                         </div>
@@ -5038,7 +5039,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         onChange={(v) => handleUpdateInternalCategory(tx.id, v)}
                                                         options={categoryOptions}
                                                         placeholder="Categoria"
-                                                        className={`text-[9px] font-black rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
+                                                        className={`text-sm font-normal rounded-lg border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
                                                             tx.category
                                                                 ? 'text-gray-900 bg-gray-100 border-gray-200/50 hover:bg-gray-200'
                                                                 : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
@@ -5047,13 +5048,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
                                                     <div className="flex items-center gap-1 ml-auto">
                                                         <Calendar className="w-3 h-3 text-gray-300 shrink-0" />
-                                                        <span className="text-xs font-black text-gray-400 uppercase">
+                                                        <span className="text-sm font-normal text-gray-500">
                                                             {formatDateBR(displayDate(tx))}
                                                         </span>
                                                     </div>
 
                                                     <div className="flex flex-col items-end gap-1">
-                                                        <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-black text-gray-900 leading-none`}>
+                                                        <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-medium text-gray-900 leading-none`}>
                                                             {formatMoney(tx.amount)}
                                                         </p>
                                                         <div className="flex items-center gap-1.5">
@@ -5079,12 +5080,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (!selectedBankTxId) {
-                                                                        alert('Por favor, selecione primeiro uma transação no Extrato Bancário (lado esquerdo) para vincular.');
+                                                                        setActionFeedback({ message: 'Selecione primeiro uma transação no Extrato Bancário (lado esquerdo) para vincular.', type: 'error' });
+                                                                        setTimeout(() => setActionFeedback(null), 3000);
                                                                         return;
                                                                     }
                                                                     handleConfirmMatch(selectedBankTxId, tx.id);
                                                                 }}
-                                                                className={`text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${pendentesCompact ? 'py-1 px-2' : 'py-1.5 px-3'} ${selectedBankTxId ? 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 active:scale-95' : 'text-emerald-600 bg-emerald-50/50 hover:bg-emerald-100'}`}
+                                                                className={`text-xs font-semibold uppercase tracking-widest rounded-lg transition-all ${pendentesCompact ? 'py-1 px-2' : 'py-1.5 px-3'} ${selectedBankTxId ? 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 active:scale-95' : 'text-emerald-600 bg-emerald-50/50 hover:bg-emerald-100'}`}
                                                             >
                                                                 {selectedBankTxId ? 'Confirmar Vínculo' : 'Vincular'}
                                                             </button>

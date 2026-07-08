@@ -11,6 +11,7 @@ import { useServicesToast } from './services/useServicestoast';
 import ServicesToast from './services/ServicesToast';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import Button from './ui/Button';
 import { DataTable } from './ui/DataTable';
 import { ColumnDef } from '@tanstack/react-table';
@@ -30,6 +31,29 @@ const CLIENT_COLUMNS: ColumnConfig[] = [
     { key: 'projects', label: 'Obra Vinculada', sortable: false },
 ];
 
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
+// busca/categoria já existentes, não os substitui.
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'name', label: 'Cliente', type: 'text' },
+    { key: 'email', label: 'E-mail', type: 'text' },
+    { key: 'document', label: 'Documento', type: 'text' },
+    { key: 'organization', label: 'Organização', type: 'text' },
+    { key: 'category', label: 'Tipo', type: 'select', options: [
+        { value: 'Vendas', label: 'Vendas' }, { value: 'Locação', label: 'Locação' }, { value: 'Serviços', label: 'Serviços' },
+    ] },
+];
+
+function getAdvancedFilterValue(c: Client, key: string): unknown {
+    switch (key) {
+        case 'name': return c.name ?? '';
+        case 'email': return c.email ?? '';
+        case 'document': return c.document ?? '';
+        case 'organization': return c.organization_name ?? '';
+        case 'category': return c.category ?? '';
+        default: return null;
+    }
+}
+
 const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient, organizationId }) => {
     const { activeOrganizationId } = useStore();
     const [clients, setClients] = React.useState<Client[]>([]);
@@ -43,6 +67,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const [categoryFilter, setCategoryFilter] = usePersistedState<string>('clientListFilters:category', 'all');
     const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
     const tableColumns = useTableColumns(CLIENT_COLUMNS, 'clientListColumns');
+    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'clientListFilters:advanced');
 
     React.useEffect(() => {
         loadData();
@@ -165,14 +190,17 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     };
 
     const filteredClients = React.useMemo(() => {
-        return clients
+        let result = clients
             .filter(c =>
                 c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 c.document?.includes(searchTerm)
             )
-            .filter(c => categoryFilter === 'all' || c.category === categoryFilter)
-            .sort((a, b) => {
+            .filter(c => categoryFilter === 'all' || c.category === categoryFilter);
+
+        result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+
+        return result.sort((a, b) => {
                 // Ordenação por coluna (quando selecionada)
                 if (tableColumns.sortColumn) {
                     switch (tableColumns.sortColumn) {
@@ -202,7 +230,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 if (sortBy === 'recent') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
                 return 0;
             });
-    }, [clients, searchTerm, sortBy, categoryFilter, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [clients, searchTerm, sortBy, categoryFilter, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const handleSendComunicado = async () => {
         if (!comunicadoModal || !comunicadoForm.title.trim()) return;
@@ -445,6 +473,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                         <option value="recent">Mais Recentes</option>
                     </select>
                 </div>
+                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5">
                     <button
                         onClick={() => setViewMode('grid')}

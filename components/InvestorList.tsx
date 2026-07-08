@@ -6,6 +6,7 @@ import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, TrendingUp, La
 import InvestorModal from './InvestorModal';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 
 const INVESTOR_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Investidor', sortable: true },
@@ -13,6 +14,27 @@ const INVESTOR_COLUMNS: ColumnConfig[] = [
     { key: 'document', label: 'Documento', sortable: true },
     { key: 'project', label: 'Obra Vinculada', sortable: false },
 ];
+
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
+// busca já existente, não a substitui.
+type InvestorRow = Investor & { _projectNames?: string };
+
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'name', label: 'Investidor', type: 'text' },
+    { key: 'email', label: 'E-mail', type: 'text' },
+    { key: 'document', label: 'Documento', type: 'text' },
+    { key: 'project', label: 'Obra Vinculada', type: 'text' },
+];
+
+function getAdvancedFilterValue(inv: InvestorRow, key: string): unknown {
+    switch (key) {
+        case 'name': return inv.name ?? '';
+        case 'email': return inv.email ?? '';
+        case 'document': return inv.document ?? '';
+        case 'project': return inv._projectNames ?? '';
+        default: return null;
+    }
+}
 
 interface InvestorListProps {
     onInvestorsChange?: () => void;
@@ -147,15 +169,31 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
 
     const [sortBy, setSortBy] = React.useState<string>('name-asc');
     const tableColumns = useTableColumns(INVESTOR_COLUMNS, 'investorListColumns');
+    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'investorListFilters:advanced');
+
+    // Nomes das obras vinculadas, resolvidos aqui pra virar campo filtrável (mesmo
+    // critério já usado no render da coluna "Obra Vinculada" abaixo).
+    const investorsWithProjects: InvestorRow[] = React.useMemo(() => {
+        return investors.map(i => ({
+            ...i,
+            _projectNames: projects
+                .filter(p => (p.investor_id ?? p.settings?.investorId) === i.id && p.settings?.classification === 'OBRA')
+                .map(p => p.name)
+                .join(', '),
+        }));
+    }, [investors, projects]);
 
     const filteredInvestors = React.useMemo(() => {
-        return investors
+        let result = investorsWithProjects
             .filter(i =>
                 i.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 i.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 i.document?.includes(searchTerm)
-            )
-            .sort((a, b) => {
+            );
+
+        result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+
+        return result.sort((a, b) => {
                 // TableUtils sort takes priority over dropdown sort
                 if (tableColumns.sortColumn) {
                     const col = tableColumns.sortColumn;
@@ -168,7 +206,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                 if (sortBy === 'recent') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
                 return 0;
             });
-    }, [investors, searchTerm, sortBy, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [investorsWithProjects, searchTerm, sortBy, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     return (
         <div className="space-y-6">
@@ -231,6 +269,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                         <Table2 className="w-5 h-5" />
                     </button>
                 </div>
+                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 {viewMode === 'list' && (
                     <ColumnConfigButton
                         columns={INVESTOR_COLUMNS}

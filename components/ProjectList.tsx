@@ -28,6 +28,7 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import ExcelImportModal from './ExcelImportModal';
 import { BudgetEntry } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 
 interface ProjectSettings {
     classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO' | string;
@@ -90,6 +91,34 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'actions',       label: 'Ações',       sortable: false }
 ];
 
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
+// busca/ordenação/tipo já existentes, não os substitui.
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'code', label: 'Código', type: 'text' },
+    { key: 'name', label: 'Nome', type: 'text' },
+    { key: 'client', label: 'Cliente', type: 'text' },
+    { key: 'status-obra', label: 'Status Obra', type: 'select', options: [
+        { value: 'Em andamento', label: 'Em andamento' },
+        { value: 'Concluída', label: 'Concluída' },
+        { value: 'Não Iniciado', label: 'Não Iniciado' },
+    ] },
+    { key: 'updated', label: 'Atualização', type: 'date' },
+];
+
+function getAdvancedFilterValue(project: ProjectSummary, key: string): unknown {
+    switch (key) {
+        case 'code': return project.code || project.settings?.code || '';
+        case 'name': return project.name;
+        case 'client': return project.settings?.client ?? '';
+        case 'status-obra': return project.settings?.obraStatus ?? '';
+        case 'updated': {
+            const raw = project.updated_at || project.created_at;
+            return raw ? String(raw).slice(0, 10) : null;
+        }
+        default: return null;
+    }
+}
+
 const capitalizeStatus = (status: string): string => {
     if (!status) return status;
     return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
@@ -140,6 +169,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
         classificationFilter === 'OBRA' ? 'templates' : 'budgets'
     );
     const tableColumns = useTableColumns(COLUMNS, 'projectListColumns');
+    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'projectListFilters:advanced');
     const {
         visibleColumns,
         sortColumn,
@@ -237,7 +267,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
 
     const filteredProjects = React.useMemo(() => {
-        return projects
+        let result = projects
             .filter(p => {
                 if (p.name === 'Gestão Comercial') return false;
 
@@ -263,8 +293,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             : isOrcamento));
 
                 return matchesSearch && matchesTab && matchesTipo;
-            })
-            .sort((a, b) => {
+            });
+
+        result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+
+        return result.sort((a, b) => {
                 if (sortColumn) {
                     let valA: string | number | undefined, valB: string | number | undefined;
 
@@ -334,7 +367,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 }
                 return 0;
             });
-    }, [projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection]);
+    }, [projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules]);
 
     const stats = React.useMemo(() => {
         const total = filteredProjects.length;
@@ -635,6 +668,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     </button>
                 </div>
 
+                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
                     <ColumnConfigButton
                         columns={COLUMNS.filter(c => c.key !== 'actions')}

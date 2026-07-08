@@ -9,6 +9,7 @@ import {
 import { supabase } from '../lib/supabase'
 import type { WorkOrderStatus, WorkOrderPriority } from '../types/operational-control'
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils'
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils'
 import Button from './ui/Button'
 
 const OPERACIONAL_COLUMNS: ColumnConfig[] = [
@@ -64,6 +65,33 @@ const PRIORITY_CONFIG: Record<WorkOrderPriority, { label: string; color: string 
   normal:   { label: 'Normal',   color: 'text-slate-400' },
   high:     { label: 'Alta',     color: 'text-amber-500' },
   critical: { label: 'Crítica',  color: 'text-red-600' },
+}
+
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa
+// busca/status/etapa já existentes, não os substitui.
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+  { key: 'title', label: 'Título', type: 'text' },
+  { key: 'code', label: 'Código', type: 'text' },
+  { key: 'phase', label: 'Etapa', type: 'text' },
+  { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_CONFIG).map(([value, cfg]) => ({ value, label: cfg.label })) },
+  { key: 'priority', label: 'Prioridade', type: 'select', options: Object.entries(PRIORITY_CONFIG).map(([value, cfg]) => ({ value, label: cfg.label })) },
+  { key: 'progress', label: 'Avanço (%)', type: 'number' },
+  { key: 'cost', label: 'Custo Real', type: 'number' },
+  { key: 'deadline', label: 'Prazo', type: 'date' },
+]
+
+function getAdvancedFilterValue(wo: WorkOrderRow, key: string): unknown {
+  switch (key) {
+    case 'title': return wo.title ?? ''
+    case 'code': return wo.code ?? ''
+    case 'phase': return wo.phase ?? ''
+    case 'status': return wo.status
+    case 'priority': return wo.priority
+    case 'progress': return wo.completion_pct ?? null
+    case 'cost': return wo.actual_total_cost ?? null
+    case 'deadline': return wo.planned_end_date ?? null
+    default: return null
+  }
 }
 
 function isOverdue(wo: WorkOrderRow) {
@@ -149,6 +177,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
   const [overdueOnly, setOverdueOnly] = usePersistedState('operacionalListFilters:overdueOnly', false)
   const [viewMode, setViewMode] = usePersistedState<'cards' | 'list'>('operacionalListFilters:viewMode', 'cards')
   const tableColumns = useTableColumns(OPERACIONAL_COLUMNS, 'operacionalListColumns')
+  const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'operacionalListFilters:advanced')
 
   const load = async () => {
     setIsLoading(true)
@@ -186,7 +215,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
   }, [workOrders])
 
   const filtered = useMemo(() => {
-    const list = workOrders.filter(wo => {
+    let list = workOrders.filter(wo => {
       if (statusFilter !== 'all' && wo.status !== statusFilter) return false
       if (phaseFilter !== 'all' && wo.phase !== phaseFilter) return false
       if (overdueOnly && !isOverdue(wo)) return false
@@ -196,6 +225,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
       }
       return true
     })
+    list = applyFilterRules(list, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue)
     if (!tableColumns.sortColumn) return list
     return [...list].sort((a, b) => {
       const dir = tableColumns.sortDirection === 'asc' ? 1 : -1
@@ -209,7 +239,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
         default: return 0
       }
     })
-  }, [workOrders, statusFilter, phaseFilter, overdueOnly, search, tableColumns.sortColumn, tableColumns.sortDirection])
+  }, [workOrders, statusFilter, phaseFilter, overdueOnly, search, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection])
 
   // KPIs do topo
   const kpis = useMemo(() => ({
@@ -339,6 +369,7 @@ const StatCard: React.FC<{ title: string, value: string | number, subtext?: stri
             </button>
           </div>
 
+          <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
           {viewMode === 'list' && (
             <ColumnConfigButton
               columns={OPERACIONAL_COLUMNS}

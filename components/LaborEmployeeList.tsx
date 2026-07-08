@@ -3,6 +3,7 @@ import { Search, Filter, Edit3, UserMinus, UserCheck, Building2, Briefcase, Doll
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import LaborEmployeeSharing from './LaborEmployeeSharing';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { formatMoney } from './ui/Format';
 
 const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
@@ -42,6 +43,32 @@ const STATUS_COLORS: Record<EmployeeStatus, string> = {
     DESLIGADO: 'bg-red-100 text-red-700',
 };
 
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa
+// busca/status/vínculo já existentes, não os substitui.
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'name', label: 'Colaborador', type: 'text' },
+    { key: 'role', label: 'Função', type: 'text' },
+    { key: 'contract', label: 'Vínculo', type: 'select', options: Object.entries(CONTRACT_LABELS).map(([value, label]) => ({ value, label })) },
+    { key: 'status', label: 'Status', type: 'select', options: [
+        { value: 'ATIVO', label: 'Ativo' }, { value: 'INATIVO', label: 'Inativo' },
+        { value: 'AFASTADO', label: 'Afastado' }, { value: 'DESLIGADO', label: 'Desligado' },
+    ] },
+    { key: 'salary', label: 'Salário Base', type: 'number' },
+    { key: 'cost', label: 'Custo/Dia', type: 'number' },
+];
+
+function getAdvancedFilterValue(e: Employee, key: string): unknown {
+    switch (key) {
+        case 'name': return e.name ?? '';
+        case 'role': return e.role ?? '';
+        case 'contract': return e.contract_type;
+        case 'status': return e.status;
+        case 'salary': return e.base_salary ?? null;
+        case 'cost': return e.daily_cost ?? null;
+        default: return null;
+    }
+}
+
 const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organizations = [], currentUserEmail, onEdit, onRefresh }) => {
     // F2: filtros sobrevivem a navegação/reload.
     const [search, setSearch] = usePersistedState('laborEmployeeListFilters:search', '');
@@ -51,11 +78,15 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
     const [sortDir, setSortDir] = usePersistedState<'asc' | 'desc'>('laborEmployeeListFilters:sortDir', 'asc');
     const [sharingEmployee, setSharingEmployee] = useState<Employee | null>(null);
     const tableColumns = useTableColumns(LABOR_EMPLOYEE_COLUMNS, 'laborEmployeeListColumns');
+    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'laborEmployeeListFilters:advanced');
 
-    const filtered = useMemo(() => employees
-        .filter(e => filterStatus === 'ALL' || e.status === filterStatus)
-        .filter(e => filterContract === 'ALL' || e.contract_type === filterContract)
-        .filter(e => !search || e.name.toLowerCase().includes(search.toLowerCase()) || e.role.toLowerCase().includes(search.toLowerCase()) || (e.cpf || '').replace(/\D/g, '').includes(search.replace(/\D/g, '')))
+    const filtered = useMemo(() => applyFilterRules(
+        employees
+            .filter(e => filterStatus === 'ALL' || e.status === filterStatus)
+            .filter(e => filterContract === 'ALL' || e.contract_type === filterContract)
+            .filter(e => !search || e.name.toLowerCase().includes(search.toLowerCase()) || e.role.toLowerCase().includes(search.toLowerCase()) || (e.cpf || '').replace(/\D/g, '').includes(search.replace(/\D/g, ''))),
+        advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue,
+    )
         .sort((a, b) => {
             // tableColumns sort takes priority over legacy sort dropdowns
             if (tableColumns.sortColumn) {
@@ -74,7 +105,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
             if (sortBy === 'name') cmp = a.name.localeCompare(b.name);
             else cmp = (a.daily_cost || 0) - (b.daily_cost || 0);
             return sortDir === 'asc' ? cmp : -cmp;
-        }), [employees, filterStatus, filterContract, search, sortBy, sortDir, tableColumns.sortColumn, tableColumns.sortDirection]);
+        }), [employees, filterStatus, filterContract, search, advancedFilters.rules, sortBy, sortDir, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const handleToggleStatus = async (emp: Employee) => {
         try {
@@ -144,6 +175,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                         {Object.entries(CONTRACT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
                 </div>
+                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 <ColumnConfigButton
                     columns={LABOR_EMPLOYEE_COLUMNS.filter(c => c.key !== 'organization' || organizations.length > 1)}
                     visibleColumns={tableColumns.visibleColumns}

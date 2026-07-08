@@ -3,6 +3,7 @@ import { projectService } from '../services/projectService';
 import { FolderOpen, Calendar, Search, Loader2, Settings, FileSpreadsheet, Edit2, LayoutDashboard, Clock, AlertCircle, CheckCircle2, ChevronRight, Copy, Trash2 } from 'lucide-react';
 import { ProjectSchedule } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import Button from './ui/Button';
 
 const COLUMNS: ColumnConfig[] = [
@@ -15,6 +16,25 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: false },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
+// busca já existente, não a substitui.
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'name', label: 'Planejamento', type: 'text' },
+    { key: 'client', label: 'Cliente', type: 'text' },
+    { key: 'start', label: 'Início', type: 'date' },
+    { key: 'end', label: 'Prazo', type: 'date' },
+];
+
+function getAdvancedFilterValue(p: ProjectSummary, key: string): unknown {
+    switch (key) {
+        case 'name': return p.name ?? '';
+        case 'client': return p.settings?.client ?? '';
+        case 'start': return p.settings?.startDate ?? p.settings?.schedule?.startDate ?? null;
+        case 'end': return p.settings?.endDate ?? p.settings?.schedule?.endDate ?? null;
+        default: return null;
+    }
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ProjectSummarySettings = any;
@@ -50,6 +70,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
     const [searchTerm, setSearchTerm] = usePersistedState('planningListFilters:search', '');
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('planningListFilters:viewMode', 'list');
     const tableColumns = useTableColumns(COLUMNS, 'planningListColumns');
+    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'planningListFilters:advanced');
 
     const loadProjects = async () => {
         setIsLoading(true);
@@ -95,12 +116,13 @@ const PlanningList: React.FC<PlanningListProps> = ({
     };
 
     const filteredProjects = React.useMemo(() => {
-        const base = projects.filter(p =>
+        let base = projects.filter(p =>
             p.settings?.classification === 'PLANEJAMENTO' && (
                 p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 p.settings?.client?.toLowerCase().includes(searchTerm.toLowerCase())
             )
         );
+        base = applyFilterRules(base, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
         if (tableColumns.sortColumn) {
             return [...base].sort((a, b) => {
                 const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
@@ -120,7 +142,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
             });
         }
         return base.sort((a, b) => new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime());
-    }, [projects, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [projects, searchTerm, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const formatDate = (dateString?: string) => {
         if (!dateString) return '-';
@@ -215,6 +237,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
+                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                     {viewMode === 'list' && (
                         <ColumnConfigButton
                             columns={COLUMNS}

@@ -6,6 +6,7 @@ import { brokerPortalService, BrokerPortalToken } from '../services/brokerPortal
 import BrokerModal from './BrokerModal';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 
 const BROKER_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Corretor', sortable: true },
@@ -14,6 +15,29 @@ const BROKER_COLUMNS: ColumnConfig[] = [
     { key: 'creci', label: 'CRECI', sortable: true },
     { key: 'agency', label: 'Imobiliária', sortable: true },
 ];
+
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
+// busca/status já existentes, não os substitui.
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'name', label: 'Corretor', type: 'text' },
+    { key: 'email', label: 'E-mail', type: 'text' },
+    { key: 'creci', label: 'CRECI', type: 'text' },
+    { key: 'agency', label: 'Imobiliária', type: 'text' },
+    { key: 'status', label: 'Status', type: 'select', options: [
+        { value: 'active', label: 'Ativo' }, { value: 'inactive', label: 'Inativo' },
+    ] },
+];
+
+function getAdvancedFilterValue(b: BrokerProfile, key: string): unknown {
+    switch (key) {
+        case 'name': return b.name ?? '';
+        case 'email': return b.email ?? '';
+        case 'creci': return b.creci ?? '';
+        case 'agency': return b.agency_name ?? '';
+        case 'status': return b.is_active ? 'active' : 'inactive';
+        default: return null;
+    }
+}
 
 interface BrokerListProps {
     organizationId?: string;
@@ -131,17 +155,21 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
     };
 
     const tableColumns = useTableColumns(BROKER_COLUMNS, 'brokerListColumns');
+    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'brokerListFilters:advanced');
 
     // ── Filtragem / ordenação ────────────────────────────────────────────────────
     const filtered = React.useMemo(() => {
-        return brokers
+        let result = brokers
             .filter(b =>
                 b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 b.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 b.creci?.toLowerCase().includes(searchTerm.toLowerCase())
             )
-            .filter(b => statusFilter === 'all' || (statusFilter === 'active' ? b.is_active : !b.is_active))
-            .sort((a, b) => {
+            .filter(b => statusFilter === 'all' || (statusFilter === 'active' ? b.is_active : !b.is_active));
+
+        result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+
+        return result.sort((a, b) => {
                 // TableUtils sort takes priority over dropdown sort
                 if (tableColumns.sortColumn) {
                     const col = tableColumns.sortColumn;
@@ -156,7 +184,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                 if (sortBy === 'recent') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
                 return 0;
             });
-    }, [brokers, searchTerm, statusFilter, sortBy, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [brokers, searchTerm, statusFilter, sortBy, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const ActionBar = ({ broker }: { broker: BrokerProfile }) => (
         <div className="flex items-center gap-1.5">
@@ -244,6 +272,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                         <Table2 className="w-5 h-5" />
                     </button>
                 </div>
+                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 {viewMode === 'list' && (
                     <ColumnConfigButton
                         columns={BROKER_COLUMNS}

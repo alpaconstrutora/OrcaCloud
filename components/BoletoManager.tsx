@@ -15,6 +15,7 @@ import BoletoLoteModal from './BoletoLoteModal';
 import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { formatDateBR } from './ui/Format';
 import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
@@ -56,6 +57,27 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
+// filtros rápidos/campos de período já existentes, não os substitui.
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'beneficiario', label: 'Beneficiário', type: 'text' },
+    { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })) },
+    { key: 'valor', label: 'Valor', type: 'number' },
+    { key: 'vencimento', label: 'Vencimento', type: 'date' },
+    { key: 'banco', label: 'Banco', type: 'text' },
+];
+
+function getAdvancedFilterValue(b: Boleto, key: string): unknown {
+    switch (key) {
+        case 'beneficiario': return b.beneficiario_nome ?? b.documento_nome ?? '';
+        case 'status': return b.status;
+        case 'valor': return b.valor ?? null;
+        case 'vencimento': return b.vencimento ?? null;
+        case 'banco': return b.banco_nome ?? '';
+        default: return null;
+    }
+}
 
 interface BoletoItemBaseProps {
     boleto: Boleto;
@@ -256,6 +278,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isLoteEditOpen, setIsLoteEditOpen] = useState(false);
     const tableColumns = useTableColumns(BOLETO_COLUMNS, 'boletoManagerColumns');
+    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'boletoManagerFilters:advanced');
 
     // Toast de Notificação — Seção 13 do guia
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -408,6 +431,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         if (min !== null) list = list.filter(b => (b.valor ?? 0) >= min);
         if (max !== null) list = list.filter(b => (b.valor ?? 0) <= max);
 
+        list = applyFilterRules(list, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+
         // Ordenação
         list = [...list].sort((a, b) => {
             let va: string | number, vb: string | number;
@@ -430,7 +455,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         });
 
         return list;
-    }, [boletos, buscaDebounced, vencDe, vencAte, valorMin, valorMax, ordenarPor, ordenarDir, supplierMap, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [boletos, buscaDebounced, vencDe, vencAte, valorMin, valorMax, advancedFilters.rules, ordenarPor, ordenarDir, supplierMap, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     // Mantido estável enquanto `filtered` não muda, para que as linhas memoizadas
     // (BoletoCardItem/BoletoRowItem) não re-renderizem a cada seleção.
@@ -703,6 +728,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         <List className="w-4 h-4" />
                     </button>
                 </div>
+                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 {viewMode === 'list' && (
                     <ColumnConfigButton
                         columns={BOLETO_COLUMNS.filter(c => c.key !== 'actions')}

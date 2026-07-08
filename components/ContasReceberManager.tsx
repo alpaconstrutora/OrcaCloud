@@ -12,6 +12,7 @@ import type { ClientCharge, BillingType } from '../services/clientChargeService'
 import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
 import type { Organization } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 
@@ -49,6 +50,29 @@ const RECEBER_COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Roda client-side
+// por cima de `rows`, que já vem filtrado no servidor (search/status/período).
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'party_name', label: 'Cliente / Parte', type: 'text' },
+    { key: 'description', label: 'Descrição', type: 'text' },
+    { key: 'project_name', label: 'Obra', type: 'text' },
+    { key: 'amount', label: 'Valor', type: 'number' },
+    { key: 'due_date', label: 'Vencimento', type: 'date' },
+    { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })) },
+];
+
+function getAdvancedFilterValue(r: Receivable, key: string): unknown {
+    switch (key) {
+        case 'party_name': return r.party_name ?? '';
+        case 'description': return r.description ?? '';
+        case 'project_name': return r.project_name ?? '';
+        case 'amount': return r.amount ?? null;
+        case 'due_date': return r.due_date ?? null;
+        case 'status': return r.effective_status;
+        default: return null;
+    }
+}
 
 function StatusBadge({ status }: { status: string }) {
     return (
@@ -627,6 +651,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
     // storageKey explícito — antes usava o default 'tableColumns' e colidia com
     // qualquer outro componente que também não passasse a chave.
     const tableColumns = useTableColumns(RECEBER_COLUMNS, 'contasReceberManagerColumns');
+    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'contasReceberManagerFilters:advanced');
 
     // Toast de Notificação — Seção 13 do guia
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -704,7 +729,8 @@ export default function ContasReceberManager({ organizationId, organizations, on
     }
 
     const sorted = useMemo(() => {
-        const result = [...rows];
+        let result = applyFilterRules(rows, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+        result = [...result];
         if (tableColumns.sortColumn) {
             result.sort((a, b) => {
                 let va: string | number, vb: string | number;
@@ -723,7 +749,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
             });
         }
         return result;
-    }, [rows, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [rows, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     /** Mesmo critério do botão "Baixar" por linha: só não-RECEBIDO pode ser baixado. */
     const isSelectable = (r: Receivable) => r.effective_status !== 'RECEBIDO';
@@ -935,6 +961,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                     >
                         <Filter className="w-3.5 h-3.5" /> Filtros
                     </button>
+                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                     <ColumnConfigButton
                         columns={RECEBER_COLUMNS.filter(c => c.key !== 'actions')}
                         visibleColumns={tableColumns.visibleColumns}

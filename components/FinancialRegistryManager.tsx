@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Save, X, Search, Building2, Filter, HandCoins, AlertCircle, Download, FileDown, Upload } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import Button from './ui/Button';
 
 interface RegistryItem {
@@ -72,6 +73,24 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
 
     const tableColumns = useTableColumns(registryColumns, 'financialRegistryColumns');
 
+    // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Campos variam
+    // com as mesmas props que já controlam as colunas (showCode/showDescription/
+    // showBankDetails), pra não oferecer filtro de um campo que a tela não usa.
+    const advancedFilterFields = useMemo<FilterFieldConfig[]>(() => {
+        const fields: FilterFieldConfig[] = [{ key: 'name', label: 'Nome', type: 'text' }];
+        if (showCode) fields.push({ key: 'code', label: 'Código', type: 'text' });
+        if (showDescription) fields.push({ key: 'description', label: 'Descrição', type: 'text' });
+        if (showBankDetails) {
+            fields.push({ key: 'bank', label: 'Banco', type: 'text' });
+            fields.push({ key: 'account_number', label: 'Conta', type: 'text' });
+        }
+        return fields;
+    }, [showCode, showDescription, showBankDetails]);
+
+    const getAdvancedFilterValue = (item: RegistryItem, key: string): unknown => (item as any)[key] ?? null;
+
+    const advancedFilters = useAdvancedFilters(advancedFilterFields, 'financialRegistryFilters:advanced');
+
     const handleEdit = (item: RegistryItem) => {
         setFormData(item);
         setIsEditing(item.id);
@@ -105,11 +124,13 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
         }
     };
 
-    const filteredItems = useMemo(() => items
-        .filter(item =>
+    const filteredItems = useMemo(() => applyFilterRules(
+        items.filter(item =>
             item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (item.code?.toLowerCase().includes(searchTerm.toLowerCase()))
-        )
+        ),
+        advancedFilters.rules, advancedFilterFields, getAdvancedFilterValue,
+    )
         .sort((a, b) => {
             // TableUtils sort takes priority over default sort
             if (tableColumns.sortColumn) {
@@ -127,7 +148,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
             if (!a.code) return 1;
             if (!b.code) return -1;
             return a.code.localeCompare(b.code, 'pt-BR', { numeric: true });
-        }), [items, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
+        }), [items, searchTerm, advancedFilters.rules, advancedFilterFields, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const getLevel = (code?: string) => code ? code.split('.').length : 0;
 
@@ -195,6 +216,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                 <span>Exportar</span>
                             </Button>
                         )}
+                        <AdvancedFilterPanel fields={advancedFilterFields} state={advancedFilters} />
                         <ColumnConfigButton
                             columns={registryColumns}
                             visibleColumns={tableColumns.visibleColumns}

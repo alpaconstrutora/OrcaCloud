@@ -3,6 +3,7 @@ import { Plus, FileText, Calendar, Clock, ChevronRight, Search, Filter, LayoutDa
 import { QuotationRequest } from '../types';
 import { quotationService } from '../services/quotationService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import Button from './ui/Button';
 
 const COLUMNS: ColumnConfig[] = [
@@ -12,6 +13,30 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
+// busca já existente, não a substitui.
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'number', label: 'Número', type: 'text' },
+    { key: 'title', label: 'Título', type: 'text' },
+    { key: 'project', label: 'Obra', type: 'text' },
+    { key: 'status', label: 'Status', type: 'select', options: [
+        { value: 'Aberta', label: 'Aberta' }, { value: 'Em Análise', label: 'Em Análise' },
+        { value: 'Concluída', label: 'Concluída' }, { value: 'Cancelada', label: 'Cancelada' },
+    ] },
+    { key: 'deadline', label: 'Prazo Final', type: 'date' },
+];
+
+function getAdvancedFilterValue(req: QuotationRequest, key: string): unknown {
+    switch (key) {
+        case 'number': return req.number;
+        case 'title': return req.title;
+        case 'project': return req.projectName ?? '';
+        case 'status': return req.status;
+        case 'deadline': return req.deadline ?? null;
+        default: return null;
+    }
+}
 
 interface SupplyChainQuotationListProps {
     onCreateNew: () => void;
@@ -26,6 +51,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
     const [searchTerm, setSearchTerm] = usePersistedState('supplyChainQuotationFilters:search', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplyChainQuotationFilters:viewMode', 'list');
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainQuotationColumns');
+    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplyChainQuotationFilters:advanced');
 
     // Toast de Notificação — Seção 13 do guia
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -81,11 +107,14 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
     };
 
     const filteredRequests = React.useMemo(() => {
-        const filtered = requests.filter(req =>
+        let filtered = requests.filter(req =>
             req.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
             req.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (req.projectName && req.projectName.toLowerCase().includes(searchTerm.toLowerCase()))
         );
+
+        filtered = applyFilterRules(filtered, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+
         if (tableColumns.sortColumn) {
             const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
             return [...filtered].sort((a, b) => {
@@ -96,7 +125,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
             });
         }
         return filtered;
-    }, [requests, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [requests, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, advancedFilters.rules]);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -195,6 +224,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                     <Filter className="w-4 h-4" />
                 </button>
 
+                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
                     <ColumnConfigButton
                         columns={COLUMNS.filter(c => c.key !== 'actions')}

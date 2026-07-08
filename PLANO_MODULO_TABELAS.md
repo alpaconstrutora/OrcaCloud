@@ -256,6 +256,58 @@ Componentes com ação em massa (F3): ContasPagarManager (marcar pago em lote), 
 ### F5 (reservado) — Volume alto
 - Virtualização + eventual server-side apenas nas 4 telas citadas em "Não fazer".
 
+### F6 — Filtro avançado (construtor campo + operador + valor, padrão ClickUp)
+> Origem: usuário pediu filtro avançado igual ao ClickUp (print de referência com
+> "É / Não é / Está configurado / Não está configurado" + "Filtros salvos"). Avaliado
+> contra o design system: nenhuma tela tinha um construtor de regras genérico antes
+> disso — só filtros ad-hoc por tela (chips + campos soltos). Decisão: estender
+> `TableUtils.tsx` com um arquivo irmão, não criar sistema paralelo; manter os chips
+> rápidos de cada tela como estão (aditivo, não substitutivo).
+- **Escopo v1 (deliberado):** lista plana de regras em **AND**, sem grupos E/OU
+  aninhados — mesmo critério de "não fazer over-engineering" já usado no resto deste
+  documento. Grupos/OR viram F6.4 só se houver pedido concreto.
+- **F6.1 — ✅ CONCLUÍDA:** `components/ui/FilterUtils.tsx` — tipos (`FilterFieldConfig`,
+  `FilterRule`, `SavedFilter`), tabela de operadores por tipo de campo (text/select/
+  date/number), `applyFilterRules<T>()` (avaliador puro, client-side, recebe um
+  `getValue(item, key)` em vez de assumir `item[key]` — cobre campos derivados/
+  aninhados que várias telas já têm) e o hook `useAdvancedFilters(fields, storageKey)`
+  (regras + filtros salvos, ambos via `usePersistedState` já existente — zero código
+  novo de load/save, mesmo padrão do F2).
+- **F6.2 — ✅ CONCLUÍDA (piloto):** `AdvancedFilterPanel` (popover campo→operador→valor,
+  "+ Adicionar filtro", "Filtros salvos", "Salvar como...", "Limpar tudo"; mesmo
+  mecanismo de abre/fecha do `ColumnConfigButton` — click fora + Escape — por ser
+  controle transitório sobre a lista, não edição de item; não vira `Sheet`, conforme
+  `UI_PATTERNS.md`). Integrado em **ContasPagarManager** (piloto oficial do F2 também):
+  campos Fornecedor/Origem/Status/Valor/Vencimento, aplicado por cima do
+  search/status/período já existentes (`applyFilterRules` roda depois dos filtros
+  ad-hoc no mesmo `useMemo`). `npx tsc --noEmit` limpo.
+- **F6.3 — ✅ CONCLUÍDA (15/15 telas):** BoletoManager, BrokerList, ClientList,
+  ContasReceberManager, FinancialRegistryManager, InvestorList, LaborEmployeeList,
+  OperacionalList, OrganizationList, PlanningList, ProjectList, SupplierList,
+  SupplyChainOrderList, SupplyChainQuotationList, TasksList. Cada tela define seus
+  próprios `ADVANCED_FILTER_FIELDS`/`getAdvancedFilterValue`, aditivos aos filtros
+  ad-hoc já existentes (nada removido/alterado). `storageKey` sempre
+  `<tela>Filters:advanced`, mesmo padrão de nome do F2.
+  Casos notáveis: **ContasReceberManager** filtra client-side por cima de `rows`, que
+  já vem pré-filtrado do servidor (`receivableService.list`) — `applyFilterRules`
+  roda no mesmo `useMemo` de ordenação, antes do sort. **FinancialRegistryManager**
+  (componente genérico reusado por vários registros financeiros) monta os campos
+  dinamicamente com `useMemo` a partir das mesmas props que já controlam as colunas
+  (`showCode`/`showDescription`/`showBankDetails`), pra não oferecer filtro de campo
+  que a tela não usa. **InvestorList** precisou de um `useMemo` extra
+  (`investorsWithProjects`) pra resolver "Obra Vinculada" (campo não vinha pronto no
+  dado, é derivado de outro state) antes de virar filtrável. **TasksList** ficou
+  restrito a propriedades planas do `TaskRecord`, sem usar os mapas
+  (`empMap`/`projMap`/`statusMap`) que são escopo de componente, não do avaliador
+  genérico. `npx tsc --noEmit` limpo no projeto inteiro após o rollout completo.
+  **Trabalho paralelizado em 3 agentes** (5 telas cada); 2 dos 3 bateram o limite de
+  sessão no meio da tarefa e deixaram integrações parciais (import não usado, hook
+  sem aplicação de filtro, botão faltando no toolbar) em BoletoManager e InvestorList
+  — completadas manualmente depois, com `tsc` limpo confirmando.
+- **F6.4 (adiada):** grupos E/OU aninhados; persistência de filtro salvo no servidor
+  (hoje é `usePersistedState`/localStorage, por usuário/por navegador — só migra pra
+  tabela com RLS se precisar sincronizar entre dispositivos/usuários).
+
 ## Auditoria por grupo de menu — "Engenharia" (2026-07-04)
 Varredura focada nos 12 itens do dropdown "Engenharia" (Layout.tsx). Só 6 têm `<table>`:
 - **ProjectList/PlanningList** (Obras+Orçamentos, Planejamento) — já cobertos no rollout geral.

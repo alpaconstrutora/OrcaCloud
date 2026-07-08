@@ -10,6 +10,7 @@ import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults } from './
 import type { TaskStatus } from '../services/taskService'
 import type { GroupByField } from './TasksModule'
 import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState } from './ui/TableUtils'
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils'
 
 interface TaskGroup { key: string; label: string; color?: string; tasks: TaskRecord[] }
 
@@ -76,6 +77,38 @@ const COLUMN_DEFS = [
 type ColKey = typeof COLUMN_DEFS[number]['key']
 type SortCol = Exclude<typeof COLUMN_DEFS[number]['sortCol'], null>
 type SortDir = 'asc' | 'desc'
+
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
+// chips de filtro (fPriority/fStatus/fAssignee/fProject) já existentes, não os
+// substitui. Só usa campos planos do próprio TaskRecord (sem depender dos mapas
+// de resolução employees/projects/statuses, que são de escopo do componente).
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+  { key: 'title', label: 'Nome', type: 'text' },
+  { key: 'status', label: 'Status', type: 'text' },
+  { key: 'priority', label: 'Prioridade', type: 'select', options: [
+      { value: '1', label: 'Urgente' }, { value: '2', label: 'Alta' },
+      { value: '3', label: 'Normal' }, { value: '4', label: 'Baixa' },
+  ] },
+  { key: 'source_module', label: 'Origem', type: 'select', options: [
+      { value: 'manual', label: 'Manual' }, { value: 'operacional', label: 'Operacional' },
+      { value: 'financeiro', label: 'Financeiro' }, { value: 'rh', label: 'RH' },
+      { value: 'compras', label: 'Compras' },
+  ] },
+  { key: 'start_date', label: 'Data Inicial', type: 'date' },
+  { key: 'due_date', label: 'Vencimento', type: 'date' },
+]
+
+function getAdvancedFilterValue(t: TaskRecord, key: string): unknown {
+  switch (key) {
+    case 'title': return t.title
+    case 'status': return t.status
+    case 'priority': return String(t.priority)
+    case 'source_module': return t.source_module
+    case 'start_date': return t.start_date
+    case 'due_date': return t.due_date
+    default: return null
+  }
+}
 
 const DEFAULT_COL_ORDER: ColKey[] = COLUMN_DEFS.map(c => c.key)
 const COL_DEF_MAP = Object.fromEntries(COLUMN_DEFS.map(c => [c.key, c])) as Record<ColKey, typeof COLUMN_DEFS[number]>
@@ -163,6 +196,7 @@ const TasksList: React.FC<Props> = ({
 
   // Visibility via TableUtils (sort handled by existing sortCol/sortDir state)
   const taskVisibility = useTableColumns(TASKS_LIST_COLUMNS, 'tasksListColumns')
+  const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'tasksListFilters:advanced')
   // Filter colOrder by visible columns
   const visibleColOrder = useMemo(
     () => colOrder.filter(k => taskVisibility.visibleColumns.includes(k)),
@@ -210,6 +244,7 @@ const TasksList: React.FC<Props> = ({
       if (fProject  && t.project_id !== fProject) return false
       return true
     })
+    rows = applyFilterRules(rows, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue)
     if (sortCol) {
       rows = [...rows].sort((a, b) => {
         let av: string | number = '', bv: string | number = ''
@@ -225,7 +260,7 @@ const TasksList: React.FC<Props> = ({
       })
     }
     return rows
-  }, [parents, q, fPriority, fStatus, fAssignee, fProject, sortCol, sortDir, empMap, projMap, statuses])
+  }, [parents, q, fPriority, fStatus, fAssignee, fProject, sortCol, sortDir, empMap, projMap, statuses, advancedFilters.rules])
 
   const clearFilters = () => { setFPriority(''); setFStatus(''); setFAssignee(''); setFProject(''); setSearch('') }
 
@@ -845,6 +880,7 @@ const TasksList: React.FC<Props> = ({
           </button>
         )}
         <span className="ml-auto text-xs font-bold text-slate-400">{filtered.length} tarefa{filtered.length !== 1 ? 's' : ''}</span>
+        <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
         <ColumnConfigButton
           columns={TASKS_LIST_COLUMNS}
           visibleColumns={taskVisibility.visibleColumns}

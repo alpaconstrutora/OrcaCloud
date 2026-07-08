@@ -2,6 +2,7 @@ import React from 'react';
 import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, Pencil, FileCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import Button from './ui/Button';
 import { formatMoney, formatDateBR } from './ui/Format';
 
@@ -16,6 +17,31 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'items', label: 'Itens', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
+// busca/filtro "Sem NF-e" já existentes, não os substitui.
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'number', label: 'Número', type: 'text' },
+    { key: 'supplier', label: 'Fornecedor', type: 'text' },
+    { key: 'obra', label: 'Obra', type: 'text' },
+    { key: 'status', label: 'Status', type: 'select', options: [
+        'Rascunho', 'Enviado', 'Confirmado', 'Separação', 'Em Trânsito', 'Entregue', 'Recebido', 'Divergência', 'Cancelado',
+    ].map(s => ({ value: s, label: s })) },
+    { key: 'value', label: 'Valor Total', type: 'number' },
+    { key: 'date', label: 'Data do Pedido', type: 'date' },
+];
+
+function getAdvancedFilterValue(order: any, key: string): unknown {
+    switch (key) {
+        case 'number': return order.number ?? '';
+        case 'supplier': return order.supplierName ?? '';
+        case 'obra': return order.projectClassification === 'ORCAMENTO' ? (order.linkedProjectName || '') : (order.projectName || '');
+        case 'status': return order.status;
+        case 'value': return order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0;
+        case 'date': return order.created_at ? String(order.created_at).slice(0, 10) : null;
+        default: return null;
+    }
+}
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Copy01Icon } from '@hugeicons/core-free-icons';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
@@ -38,6 +64,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     const [searchTerm, setSearchTerm] = usePersistedState<string>('supplyChainOrderFilters:search', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplyChainOrderFilters:viewMode', 'list');
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainOrderColumns');
+    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplyChainOrderFilters:advanced');
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
     const [linkedNfeOrderIds, setLinkedNfeOrderIds] = React.useState<Set<string>>(new Set());
@@ -152,7 +179,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     const filteredOrders = React.useMemo(() => {
         const calculateTotal = (order: any) => order.items?.reduce((sum: number, item: any) => sum + (item.total || 0), 0) || 0;
 
-        const filtered = (orders || []).filter(order => {
+        let filtered = (orders || []).filter(order => {
             const matchSearch =
                 order.number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 order.supplierName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -161,6 +188,8 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             const matchNf = nfFilter === 'all' || !linkedNfeOrderIds.has(order.id);
             return matchSearch && matchNf;
         });
+
+        filtered = applyFilterRules(filtered, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
 
         // TableUtils sort takes priority when set
         if (tableColumns.sortColumn) {
@@ -196,7 +225,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
         }
 
         return filtered;
-    }, [orders, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, nfFilter, linkedNfeOrderIds]);
+    }, [orders, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, nfFilter, linkedNfeOrderIds, advancedFilters.rules]);
 
     const selectableVisible = React.useMemo(
         () => filteredOrders.filter(o => canDeleteOrder(o.status)),
@@ -443,6 +472,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     </button>
                 </div>
 
+                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
                     <ColumnConfigButton
                         columns={COLUMNS.filter(c => c.key !== 'actions')}

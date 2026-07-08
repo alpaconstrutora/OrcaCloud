@@ -8,6 +8,7 @@ import { invoiceService } from '../services/invoiceService';
 import { Invoice } from '../types/financial';
 import type { Organization } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { Money, formatMoney, formatDateBR } from './ui/Format';
 import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
 import { KpiCard } from './ui/KpiCard';
@@ -35,6 +36,30 @@ const CONTAS_COLUMNS: ColumnConfig[] = [
     { key: 'vencimento', label: 'Vencimento', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
 ];
+
+// F6.2 (piloto do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
+// chips rápidos/campos de período já existentes, não os substitui.
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'supplier', label: 'Fornecedor', type: 'text' },
+    { key: 'origem', label: 'Origem', type: 'select', options: [{ value: 'Boleto', label: 'Boleto' }, { value: 'Manual', label: 'Manual' }] },
+    { key: 'status', label: 'Status', type: 'select', options: [
+        { value: 'pending', label: 'Pendente' }, { value: 'approved', label: 'Aprovado' },
+        { value: 'paid', label: 'Pago' }, { value: 'rejected', label: 'Rejeitado' },
+    ] },
+    { key: 'valor', label: 'Valor', type: 'number' },
+    { key: 'vencimento', label: 'Vencimento', type: 'date' },
+];
+
+function getAdvancedFilterValue(inv: InvoiceRow, key: string): unknown {
+    switch (key) {
+        case 'supplier': return inv.supplierName ?? '';
+        case 'origem': return (inv.notes ?? '').includes('[boleto:') ? 'Boleto' : 'Manual';
+        case 'status': return inv.status;
+        case 'valor': return inv.amount ?? null;
+        case 'vencimento': return inv.dueDate ?? null;
+        default: return null;
+    }
+}
 
 const today = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 
@@ -85,6 +110,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     const [vencAte, setVencAte] = usePersistedState('contasPagarManagerFilters:vencAte', '');
     const [showFilters, setShowFilters] = useState(false);
     const tableColumns = useTableColumns(CONTAS_COLUMNS, 'contasPagarManagerColumns');
+    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'contasPagarManagerFilters:advanced');
 
     // Toast de Notificação — Seção 13 do guia
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -145,6 +171,8 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
             return true;
         });
 
+        result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+
         // Ordenação
         if (tableColumns.sortColumn) {
             result.sort((a, b) => {
@@ -179,7 +207,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
             });
         }
         return result;
-    }, [invoices, statusFilter, vencDe, vencAte, search, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [invoices, statusFilter, vencDe, vencAte, search, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     /** Só linhas ainda pagáveis (não pagas/rejeitadas) podem entrar em ação em massa. */
     const isSelectable = (inv: InvoiceRow) => !['paid', 'rejected'].includes(inv.status);
@@ -391,6 +419,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 {showFilters ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                                 Filtros
                             </button>
+                            <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                             <ColumnConfigButton
                                 columns={CONTAS_COLUMNS}
                                 visibleColumns={tableColumns.visibleColumns}

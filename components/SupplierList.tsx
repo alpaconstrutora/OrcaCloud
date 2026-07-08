@@ -4,6 +4,7 @@ import { Supplier } from '../types';
 import { supplierService } from '../services/supplierService';
 import { SupplierModal } from './SupplierModal';
 import { ColumnConfigButton, SortableHeader, usePersistedState, ColumnConfig, useTableColumns } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 
 const SUPPLIER_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Fornecedor', sortable: true },
@@ -12,6 +13,29 @@ const SUPPLIER_COLUMNS: ColumnConfig[] = [
     { key: 'contact', label: 'Contato', sortable: false },
     { key: 'document', label: 'Documento', sortable: true },
 ];
+
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
+// busca/ordenação já existentes, não os substitui.
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'name', label: 'Fornecedor', type: 'text' },
+    { key: 'category', label: 'Categoria', type: 'text' },
+    { key: 'organization', label: 'Organização', type: 'text' },
+    { key: 'document', label: 'Documento', type: 'text' },
+    { key: 'type', label: 'Tipo', type: 'select', options: [
+        { value: 'PJ', label: 'Pessoa Jurídica' }, { value: 'PF', label: 'Pessoa Física' },
+    ] },
+];
+
+function getAdvancedFilterValue(supplier: Supplier, key: string): unknown {
+    switch (key) {
+        case 'name': return supplier.name;
+        case 'category': return supplier.category ?? '';
+        case 'organization': return supplier.organization_name ?? '';
+        case 'document': return supplier.document ?? '';
+        case 'type': return supplier.type ?? '';
+        default: return null;
+    }
+}
 
 interface SupplierListProps {
     organizationId?: string;
@@ -86,16 +110,20 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     };
 
     const tableColumns = useTableColumns(SUPPLIER_COLUMNS, 'supplierListColumns');
+    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplierListFilters:advanced');
 
     const filteredSuppliers = React.useMemo(() => {
-        return suppliers
+        let result = suppliers
             .filter(s =>
                 s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 s.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 s.document?.includes(searchTerm) ||
                 s.category?.toLowerCase().includes(searchTerm.toLowerCase())
-            )
-            .sort((a, b) => {
+            );
+
+        result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+
+        return result.sort((a, b) => {
                 // TableUtils sort takes priority over dropdown sort
                 if (tableColumns.sortColumn) {
                     const col = tableColumns.sortColumn;
@@ -111,7 +139,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 if (sortBy === 'recent') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
                 return 0;
             });
-    }, [suppliers, searchTerm, sortBy, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [suppliers, searchTerm, sortBy, tableColumns.sortColumn, tableColumns.sortDirection, advancedFilters.rules]);
 
     return (
         <div className="space-y-6">
@@ -156,6 +184,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         <option value="recent">Mais Recentes</option>
                     </select>
                 </div>
+                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
                     <button
                         onClick={() => setViewMode('grid')}

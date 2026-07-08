@@ -6,6 +6,7 @@ import {
     TrendingUp, HandCoins, Filter, Truck, Settings, Send
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import Button from './ui/Button';
 
 const ORG_LIST_COLUMNS: ColumnConfig[] = [
@@ -14,6 +15,25 @@ const ORG_LIST_COLUMNS: ColumnConfig[] = [
     { key: 'cnpj', label: 'CNPJ', sortable: true },
     { key: 'actions', label: 'Ações', sortable: false },
 ];
+
+// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
+// busca já existente, não a substitui.
+const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'name', label: 'Organização', type: 'text' },
+    { key: 'email', label: 'E-mail', type: 'text' },
+    { key: 'cnpj', label: 'CNPJ', type: 'text' },
+    { key: 'website', label: 'Website', type: 'text' },
+];
+
+function getAdvancedFilterValue(org: Organization, key: string): unknown {
+    switch (key) {
+        case 'name': return org.name ?? '';
+        case 'email': return org.email ?? '';
+        case 'cnpj': return org.cnpj ?? '';
+        case 'website': return org.website ?? '';
+        default: return null;
+    }
+}
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Organization, BudgetEntry } from '../types';
 import { supabase } from '../lib/supabase';
@@ -76,6 +96,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     const [sortBy, setSortBy] = usePersistedState<string>('organizationListFilters:sortBy', 'name-asc');
     const [managingOrgId, setManagingOrgId] = useState<string | null>(null);
     const tableColumns = useTableColumns(ORG_LIST_COLUMNS, 'organizationListColumns');
+    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'organizationListFilters:advanced');
     const { activeOrganizationId, setActiveOrganizationId } = useStore();
 
     const handleResendInviteFromList = async (orgId: string, email: string, name: string, role: string) => {
@@ -142,13 +163,16 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
 
     const filteredOrganizations = React.useMemo(() => {
         const orgs = organizations || [];
-        return orgs
+        let result = orgs
             .filter(org =>
                 org.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 org.cnpj?.includes(searchTerm) ||
                 org.website?.toLowerCase().includes(searchTerm.toLowerCase())
-            )
-            .sort((a, b) => {
+            );
+
+        result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+
+        return result.sort((a, b) => {
                 // tableColumns sort takes priority over the legacy sortBy dropdown
                 if (tableColumns.sortColumn) {
                     const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
@@ -164,7 +188,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                 if (sortBy === 'recent') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
                 return 0;
             });
-    }, [organizations, searchTerm, sortBy, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [organizations, searchTerm, sortBy, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     return (
         <div className="space-y-8">
@@ -267,6 +291,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                     <Table2 className="w-5 h-5" />
                                 </button>
                             </div>
+                            <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                             {viewMode === 'list' && (
                                 <ColumnConfigButton
                                     columns={ORG_LIST_COLUMNS}

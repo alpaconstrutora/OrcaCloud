@@ -147,10 +147,12 @@ const Layout: React.FC<LayoutProps> = ({
   isNotificationOpen = false,
   setIsNotificationOpen = () => { }
 }) => {
-  const { logout, companies, activeEmpresaId, setActiveEmpresaId } = useStore();
+  const { logout, companies, activeEmpresaId, setActiveEmpresaId, setManagementTab } = useStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isEmpresaDropdownOpen, setIsEmpresaDropdownOpen] = React.useState(false);
   const [isHeaderEmpresaDropdownOpen, setIsHeaderEmpresaDropdownOpen] = React.useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = React.useState(false);
+  const profileMenuRef = React.useRef<HTMLDivElement>(null);
   const activeEmpresa = companies.find(c => c.id === activeEmpresaId) ?? null;
 
   // Obter organização e membros para calcular permissões dinâmicas
@@ -161,14 +163,32 @@ const Layout: React.FC<LayoutProps> = ({
     if (!activeOrg?.members || !profile.email) return null;
     return activeOrg.members.find(m => m.email.toLowerCase() === profile.email?.toLowerCase()) || null;
   }, [activeOrg, profile.email]);
+  const userName = React.useMemo(() => {
+    const localPart = profile.email?.split('@')[0];
+    if (!localPart) return 'Usuario';
+    return localPart
+      .replace(/[._-]+/g, ' ')
+      .replace(/\b\w/g, char => char.toUpperCase());
+  }, [profile.email]);
+  const userInitial = (profile.email?.[0] ?? userName[0] ?? 'U').toUpperCase();
+  const DEV_EMAIL = 'altair.rosa@alpaconstrutora.com.br';
+  const isDevEmail = profile.email?.toLowerCase() === DEV_EMAIL;
+  const activeContextLabel = activeEmpresa?.nome_fantasia ?? activeEmpresa?.razao_social ?? activeOrg?.name ?? projectName ?? 'Contexto atual';
+  const roleLabel = currentMember?.role === 'admin'
+    ? 'Admin da organizacao'
+    : profile.group === 'DESENVOLVEDOR'
+      ? 'Desenvolvedor'
+      : profile.role;
+  const canManageOrganization = profile.group === 'DESENVOLVEDOR'
+    || currentMember?.role === 'admin'
+    || currentMember?.permissions?.canManageUsers
+    || currentMember?.permissions?.canViewSettings;
 
   // Módulos habilitados e visibilidade calculada por cargo/usuário
   const allowedMods = React.useMemo(() => {
     const baseMods = activeEmpresa?.modulos_habilitados || {
       obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: false, offices: false, reformas: false
     };
-
-    const isDevEmail = profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br';
 
     if (profile.group === 'DESENVOLVEDOR' || isDevEmail) {
       return {
@@ -251,10 +271,9 @@ const Layout: React.FC<LayoutProps> = ({
       estoque: baseMods.estoque !== false,
       broker_portal: baseMods.broker_portal !== false
     };
-  }, [activeEmpresa, profile.group, currentMember, activeOrg, activeOrganizationId]);
+  }, [activeEmpresa, profile.group, currentMember, activeOrg, activeOrganizationId, isDevEmail]);
 
   const mod = allowedMods;
-  const isDevEmail = profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br';
   const isDev = profile.group === 'DESENVOLVEDOR' || isDevEmail;
   // Tema do sidebar: 'light' | 'dark' (sidebar escuro, janelas claras) |
   // 'midnight' (Escuro Total: sidebar + janelas escuros).
@@ -491,6 +510,9 @@ const Layout: React.FC<LayoutProps> = ({
       } else if (event.key === 'Escape') {
         setIsCommandOpen(false);
         setIsMobileMenuOpen(false);
+        setIsProfileMenuOpen(false);
+        setIsHeaderEmpresaDropdownOpen(false);
+        setIsEmpresaDropdownOpen(false);
       } else if (!isTyping && event.key.toLowerCase() === 'n') {
         const quick = commandItems.find(item => item.id === 'action-new-record');
         if (quick) runCommand(quick);
@@ -505,6 +527,34 @@ const Layout: React.FC<LayoutProps> = ({
   const [toast, setToast] = React.useState<{ title: string; message: string } | null>(null);
   const toastTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const showMenuToast = React.useCallback((title: string, message: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast({ title, message });
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 4500);
+    setIsProfileMenuOpen(false);
+  }, []);
+
+  const handleProfileNavigate = React.useCallback((view: string, tab?: 'organizations' | 'settings' | 'users') => {
+    if (tab) setManagementTab(tab);
+    onChangeView(view);
+    setIsProfileMenuOpen(false);
+  }, [onChangeView, setManagementTab]);
+
+  const handleSignOut = React.useCallback(() => {
+    setIsProfileMenuOpen(false);
+    supabase.auth.signOut().finally(() => logout());
+  }, [logout]);
+
+  React.useEffect(() => {
+    if (!isProfileMenuOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isProfileMenuOpen]);
   React.useEffect(() => {
     taskService.openCount().then(setOpenTaskCount).catch(() => {});
     // Atualiza ao navegar para manter o badge sincronizado
@@ -670,7 +720,7 @@ const Layout: React.FC<LayoutProps> = ({
         )}
         {/* Navigation */}
         <nav ref={navRef} onScroll={handleNavScroll} className={`flex-1 overflow-y-auto scrollbar-hide ${isCollapsed ? 'px-2' : 'px-3'} py-2`}>
-          {(profile.group === 'USUARIO' || profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br')) && (
+          {(profile.group === 'USUARIO' || profile.group === 'DESENVOLVEDOR' || isDevEmail) && (
             <>
               <NavItem id="central" icon={LayoutDashboard} label="Central de Controle" forceFull />
 
@@ -1072,68 +1122,24 @@ const Layout: React.FC<LayoutProps> = ({
           </NavDropdown>
         </nav>
 
-        {/* Footer - User profile */}
-        <div className={`border-t ${t.footerBorder} ${isCollapsed ? 'p-2' : 'px-3 py-3'}`}>
-          {isCollapsed ? (
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-200 to-amber-500" />
-              <button
-                onClick={cycleTheme}
-                className={`p-2 rounded-lg transition-colors ${t.signOut}`}
-                title={`${themeLabel} — clique para alternar`}
-              >
-                {themeMode === 'light' ? <Sun className="w-4 h-4" /> : themeMode === 'dark' ? <Moon className="w-4 h-4" /> : <MoonStar className="w-4 h-4" />}
-              </button>
-              <button
-                onClick={() => supabase.auth.signOut().finally(() => logout())}
-                className={`p-2 rounded-lg transition-colors ${t.signOut}`}
-                title="Sair"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-200 to-amber-500 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-semibold truncate ${t.userName}`}>
-                      {profile.email?.split('@')[0] ?? 'Usuário'}
-                    </span>
-                    <span className="text-xs font-bold uppercase tracking-wider bg-orange-500 text-white px-1.5 py-0.5 rounded">PRO</span>
-                  </div>
-                  <div className={`text-xs truncate ${t.userEmail}`}>{profile.email ?? profile.role}</div>
-                </div>
-                <button
-                  onClick={() => supabase.auth.signOut().finally(() => logout())}
-                  className={`p-2 rounded-lg transition-colors shrink-0 ${t.signOut}`}
-                  title="Sair"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
+        {/* Footer discreto: contexto ativo + alternância de tema */}
+        <div className={`border-t px-3 py-2.5 ${t.footerBorder}`}>
+          <div className="flex items-center justify-between gap-2">
+            {!isCollapsed && (
+              <div className="min-w-0 flex-1" title={activeContextLabel}>
+                <div className={`truncate text-xs font-medium ${t.itemText}`}>{activeContextLabel}</div>
               </div>
-              <button
-                onClick={cycleTheme}
-                className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition-colors ${t.signOut}`}
-                title="Alternar tema (claro → escuro → escuro total)"
-              >
-                <span className="flex items-center gap-2 text-button font-medium">
-                  {themeMode === 'light' ? <Sun className="w-4 h-4" /> : themeMode === 'dark' ? <Moon className="w-4 h-4" /> : <MoonStar className="w-4 h-4" />}
-                  {themeLabel}
-                </span>
-                {/* indicador de 3 posições */}
-                <span className="flex items-center gap-1">
-                  {THEME_ORDER.map(m => (
-                    <span
-                      key={m}
-                      className={`w-1.5 h-1.5 rounded-full transition-colors ${m === themeMode ? t.toggleTrack : 'bg-current opacity-30'}`}
-                    />
-                  ))}
-                </span>
-              </button>
-            </>
-          )}
+            )}
+            <button
+              type="button"
+              onClick={cycleTheme}
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${t.itemHover} ${t.itemIcon} ${isCollapsed ? 'mx-auto' : ''}`}
+              title={themeLabel}
+              aria-label={themeLabel}
+            >
+              {themeMode === 'light' ? <Sun className="h-4 w-4" /> : themeMode === 'dark' ? <Moon className="h-4 w-4" /> : <MoonStar className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -1154,6 +1160,7 @@ const Layout: React.FC<LayoutProps> = ({
               <button
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`p-2 transition-colors ${t.signOut}`}
+                aria-label="Fechar menu"
               >
                 <X className="w-6 h-6" />
               </button>
@@ -1172,7 +1179,7 @@ const Layout: React.FC<LayoutProps> = ({
 
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               <NavItem id="notifications-center" icon={Bell} label="Central de Notificações" badge={unreadCount > 0 ? unreadCount : undefined} forceFull />
-              {profile.group === 'DESENVOLVEDOR' || (profile.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br') ? (
+              {profile.group === 'DESENVOLVEDOR' || isDevEmail ? (
                 <div className="space-y-1 mb-4">
                   <div className="px-4 py-2 text-xs font-black text-gray-500 uppercase tracking-widest">Portais</div>
                   <NavItem id="client-properties" icon={Building2} label="Meus Imóveis" forceFull />
@@ -1235,7 +1242,7 @@ const Layout: React.FC<LayoutProps> = ({
             <div className="relative hidden min-w-[180px] max-w-[320px] flex-1 lg:block">
               <button
                 type="button"
-                onClick={() => setIsHeaderEmpresaDropdownOpen(o => !o)}
+                onClick={() => { setIsHeaderEmpresaDropdownOpen(o => !o); setIsProfileMenuOpen(false); }}
                 className="flex h-10 w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-sm text-slate-700 hover:bg-slate-50"
                 title="Empresa ou obra ativa"
               >
@@ -1314,8 +1321,134 @@ const Layout: React.FC<LayoutProps> = ({
               </button>
             )}
 
-            <div className="hidden h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white sm:flex" title={profile.email ?? profile.role}>
-              {(profile.email?.[0] ?? 'U').toUpperCase()}
+            <div className="relative" ref={profileMenuRef}>
+              <button
+                type="button"
+                onClick={() => { setIsProfileMenuOpen(o => !o); setIsHeaderEmpresaDropdownOpen(false); }}
+                className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 text-left hover:bg-slate-50"
+                title={profile.email ?? profile.role}
+                aria-haspopup="menu"
+                aria-expanded={isProfileMenuOpen}
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  {userInitial}
+                </span>
+                <span className="hidden min-w-0 lg:block">
+                  <span className="block max-w-[140px] truncate text-sm font-semibold text-slate-900">{userName}</span>
+                  <span className="block max-w-[140px] truncate text-xs text-slate-500">{roleLabel}</span>
+                </span>
+                <ChevronRight className={`hidden h-4 w-4 shrink-0 text-slate-400 transition-transform sm:block ${isProfileMenuOpen ? 'rotate-90' : ''}`} />
+              </button>
+
+              {isProfileMenuOpen && (
+                <div className="absolute right-0 top-full z-[1000] mt-2 w-[300px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl" role="menu">
+                  <div className="border-b border-slate-100 px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                        {userInitial}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold text-slate-900">{userName}</div>
+                        <div className="truncate text-xs text-slate-500">{profile.email ?? roleLabel}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-slate-100 p-2">
+                    <button
+                      type="button"
+                      onClick={() => showMenuToast('Minha conta', 'Tela dedicada de conta ainda nao esta disponivel.')}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                      role="menuitem"
+                    >
+                      <User className="h-4 w-4 text-slate-400" />
+                      <span className="flex-1">Minha conta</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { cycleTheme(); setIsProfileMenuOpen(false); }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                      role="menuitem"
+                    >
+                      {themeMode === 'light' ? <Sun className="h-4 w-4 text-slate-400" /> : themeMode === 'dark' ? <Moon className="h-4 w-4 text-slate-400" /> : <MoonStar className="h-4 w-4 text-slate-400" />}
+                      <span className="flex-1">Preferencias</span>
+                      <span className="text-xs text-slate-400">{themeLabel}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => showMenuToast('Seguranca', 'Tela de senha e seguranca sera conectada ao perfil do usuario.')}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                      role="menuitem"
+                    >
+                      <Shield className="h-4 w-4 text-slate-400" />
+                      <span className="flex-1">Seguranca</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleProfileNavigate('notifications-center')}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                      role="menuitem"
+                    >
+                      <Bell className="h-4 w-4 text-slate-400" />
+                      <span className="flex-1">Notificacoes</span>
+                      {unreadCount > 0 && <span className="rounded-md bg-red-500 px-1.5 py-0.5 text-xs font-semibold text-white">{unreadCount}</span>}
+                    </button>
+                  </div>
+
+                  <div className="border-b border-slate-100 p-2">
+                    <div className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Contexto</div>
+                    <div className="mx-3 mb-1 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700" title={activeContextLabel}>
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: activeEmpresa?.cor_sistema ?? '#2563EB' }} />
+                      <span className="min-w-0 flex-1 truncate">{activeContextLabel}</span>
+                    </div>
+                    {companies.length > 1 && companies.map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => { setActiveEmpresaId(c.id); setIsProfileMenuOpen(false); }}
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50 ${c.id === activeEmpresaId ? 'text-slate-950' : 'text-slate-600'}`}
+                        role="menuitem"
+                      >
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.cor_sistema ?? '#2563EB' }} />
+                        <span className="min-w-0 flex-1 truncate">{c.nome_fantasia ?? c.razao_social}</span>
+                        {c.id === activeEmpresaId && <span className="text-xs font-semibold text-slate-400">Atual</span>}
+                      </button>
+                    ))}
+                    {canManageOrganization && (
+                      <button
+                        type="button"
+                        onClick={() => handleProfileNavigate('organization', 'settings')}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                        role="menuitem"
+                      >
+                        <Building2 className="h-4 w-4 text-slate-400" />
+                        <span className="flex-1">Configuracoes da organizacao</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="p-2">
+                    <button
+                      type="button"
+                      onClick={() => { setIsProfileMenuOpen(false); openCommandPalette(); }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                      role="menuitem"
+                    >
+                      <HelpCircle className="h-4 w-4 text-slate-400" />
+                      <span className="flex-1">Ajuda e comandos</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50"
+                      role="menuitem"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span className="flex-1">Sair</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -1343,6 +1476,7 @@ const Layout: React.FC<LayoutProps> = ({
                 onClick={() => setIsCommandOpen(false)}
                 className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                 title="Fechar"
+                aria-label="Fechar"
               >
                 <X className="h-4 w-4" />
               </button>

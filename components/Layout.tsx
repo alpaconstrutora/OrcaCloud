@@ -269,6 +269,14 @@ const Layout: React.FC<LayoutProps> = ({
   React.useEffect(() => {
     localStorage.setItem('sidebar_theme', themeMode);
   }, [themeMode]);
+  // "Escuro total": aplica .theme-midnight na raiz do documento para que o
+  // override global de conteúdo (index.css) alcance TODAS as telas, inclusive
+  // modais/toasts renderizados em portal fora da árvore do Layout.
+  React.useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('theme-midnight', themeMode === 'midnight');
+    return () => { root.classList.remove('theme-midnight'); };
+  }, [themeMode]);
   const cycleTheme = React.useCallback(() => {
     setThemeMode(prev => THEME_ORDER[(THEME_ORDER.indexOf(prev) + 1) % THEME_ORDER.length]);
   }, []);

@@ -98,6 +98,116 @@
   }
 }
 
+/* =====================================================================
+   ESCURO TOTAL (midnight) — override global de conteúdo
+   ---------------------------------------------------------------------
+   O tema "Escuro total" só escurecia a casca/sidebar/topo (ver
+   components/Layout.tsx). Todo o conteúdo (dashboards, KPI cards, tabelas,
+   modais) usa classes claras fixas (bg-white, text-gray-900, border-gray-*)
+   sem variante dark, então permanecia claro.
+
+   Estratégia (pass rápido, ver decisão do usuário 2026-07-08): remapear as
+   famílias de cor NEUTRAS mais usadas quando a raiz tem `.theme-midnight`.
+   Regras ficam FORA de @layer (não-camadas) → vencem qualquer utilitário do
+   Tailwind independente de especificidade. Só afeta cinzas/slate: cores de
+   marca (blue/emerald/red/… e badges bg-*-100) permanecem intactas de
+   propósito, mantendo os acentos coloridos legíveis sobre o escuro.
+
+   A classe `.theme-midnight` é aplicada em document.documentElement, então
+   o remap também alcança conteúdo renderizado em portal (modais, toasts).
+   ===================================================================== */
+.theme-midnight {
+  --opura-mid-surface: #171a22;   /* cartão / painel branco */
+  --opura-mid-recess:  #1c2029;   /* fundo recuado / cabeçalho de tabela */
+  --opura-mid-raised:  #232733;   /* chips / hover base */
+  --opura-mid-raised2: #2b3040;   /* hover mais forte */
+  --opura-mid-border:  rgba(255, 255, 255, 0.10);
+  --opura-mid-border-soft: rgba(255, 255, 255, 0.06);
+}
+
+/* --- Superfícies ---------------------------------------------------- */
+.theme-midnight .bg-white,
+.theme-midnight .bg-white\/95,
+.theme-midnight .bg-white\/90,
+.theme-midnight .bg-white\/80,
+.theme-midnight .bg-white\/70,
+.theme-midnight .bg-white\/60 { background-color: var(--opura-mid-surface); }
+
+.theme-midnight .bg-gray-50,
+.theme-midnight .bg-slate-50,
+.theme-midnight .bg-zinc-50,
+.theme-midnight .bg-neutral-50 { background-color: var(--opura-mid-recess); }
+
+.theme-midnight .bg-gray-100,
+.theme-midnight .bg-slate-100,
+.theme-midnight .bg-zinc-100,
+.theme-midnight .bg-neutral-100 { background-color: var(--opura-mid-raised); }
+
+/* Hover de linhas/itens */
+.theme-midnight .hover\:bg-gray-50:hover,
+.theme-midnight .hover\:bg-slate-50:hover,
+.theme-midnight .hover\:bg-zinc-50:hover { background-color: var(--opura-mid-raised); }
+
+.theme-midnight .hover\:bg-gray-100:hover,
+.theme-midnight .hover\:bg-slate-100:hover,
+.theme-midnight .hover\:bg-zinc-100:hover { background-color: var(--opura-mid-raised2); }
+
+/* --- Bordas --------------------------------------------------------- */
+.theme-midnight .border-gray-100,
+.theme-midnight .border-slate-100,
+.theme-midnight .border-zinc-100,
+.theme-midnight .border-neutral-100 { border-color: var(--opura-mid-border-soft); }
+
+.theme-midnight .border-gray-200,
+.theme-midnight .border-slate-200,
+.theme-midnight .border-zinc-200,
+.theme-midnight .border-neutral-200,
+.theme-midnight .border-gray-300,
+.theme-midnight .border-slate-300 { border-color: var(--opura-mid-border); }
+
+/* Divisores (divide-*) — Tailwind aplica border-color aos filhos */
+.theme-midnight .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+.theme-midnight .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: var(--opura-mid-border-soft); }
+.theme-midnight .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+.theme-midnight .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--opura-mid-border); }
+
+/* --- Texto ---------------------------------------------------------- */
+.theme-midnight .text-black,
+.theme-midnight .text-gray-900,
+.theme-midnight .text-slate-900,
+.theme-midnight .text-zinc-900,
+.theme-midnight .text-neutral-900 { color: #e6e8ee; }
+
+.theme-midnight .text-gray-800,
+.theme-midnight .text-slate-800,
+.theme-midnight .text-zinc-800 { color: #d7dbe3; }
+
+.theme-midnight .text-gray-700,
+.theme-midnight .text-slate-700,
+.theme-midnight .text-zinc-700 { color: #c4c9d4; }
+
+.theme-midnight .text-gray-600,
+.theme-midnight .text-slate-600,
+.theme-midnight .text-zinc-600 { color: #a7aebc; }
+
+.theme-midnight .text-gray-500,
+.theme-midnight .text-slate-500,
+.theme-midnight .text-zinc-500 { color: #949bab; }
+
+.theme-midnight .text-gray-400,
+.theme-midnight .text-slate-400,
+.theme-midnight .text-zinc-400 { color: #7d8595; }
+
+/* Glass / sticky headers translúcidos */
+.theme-midnight .glass-effect {
+  background: rgba(23, 26, 34, 0.72);
+  border-color: var(--opura-mid-border);
+}
+
+/* Placeholders em inputs escurecidos */
+.theme-midnight input::placeholder,
+.theme-midnight textarea::placeholder { color: #6b7280; }
+
 @layer components {
   .opura-page {
     @apply mx-auto flex w-full max-w-[1440px] flex-col gap-6;

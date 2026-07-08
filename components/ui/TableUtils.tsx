@@ -280,3 +280,109 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
     </th>
   );
 };
+
+/**
+ * Redimensionamento de colunas por arraste (arrastar a borda direita do
+ * cabeçalho; duplo clique restaura a largura padrão). Larguras persistidas em
+ * localStorage por `storageKey`. Extraído do mecanismo original de
+ * `BankReconciliation.tsx` (tabela de Extrato) para virar padrão reutilizável.
+ *
+ * Uso:
+ *   const cols = useResizableColumns(DEFAULT_WIDTHS, 'minhaTelaColWidths');
+ *   <table ref={cols.tableRef} style={{ tableLayout: 'fixed' }}>
+ *     <colgroup>
+ *       <col data-col-key="nome" style={{ width: `${cols.getWidth('nome')}px` }} />
+ *     </colgroup>
+ *     <thead><tr>
+ *       <SortableHeader colKey="nome" label="Nome" ...>
+ *         <cols.ResizeHandle colKey="nome" />
+ *       </SortableHeader>
+ *     </tr></thead>
+ */
+export function useResizableColumns(
+  defaultWidths: Record<string, number>,
+  storageKey: string,
+  opts?: { min?: number; max?: number },
+) {
+  const min = opts?.min ?? 80;
+  const max = opts?.max ?? 500;
+
+  const [widths, setWidths] = React.useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  const resizeRef = React.useRef<{ colKey: string; startX: number; startW: number } | null>(null);
+  const tableRef = React.useRef<HTMLTableElement>(null);
+
+  const getWidth = React.useCallback(
+    (key: string) => widths[key] ?? defaultWidths[key] ?? 150,
+    [widths, defaultWidths],
+  );
+
+  const handleResizeStart = React.useCallback((colKey: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeRef.current = { colKey, startX: e.clientX, startW: getWidth(colKey) };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [getWidth]);
+
+  const handleDblClick = React.useCallback((colKey: string) => {
+    setWidths(prev => {
+      const next = { ...prev };
+      delete next[colKey];
+      try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, [storageKey]);
+
+  React.useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      const ref = resizeRef.current;
+      if (!ref) return;
+      const delta = e.clientX - ref.startX;
+      const newW = Math.max(min, Math.min(max, ref.startW + delta));
+      const col = tableRef.current?.querySelector(`col[data-col-key="${ref.colKey}"]`) as HTMLElement | null;
+      if (col) col.style.width = `${newW}px`;
+    };
+    const onMouseUp = () => {
+      const ref = resizeRef.current;
+      if (!ref) return;
+      let finalW = ref.startW;
+      const col = tableRef.current?.querySelector(`col[data-col-key="${ref.colKey}"]`) as HTMLElement | null;
+      if (col) finalW = parseInt(col.style.width, 10) || ref.startW;
+      resizeRef.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      setWidths(prev => {
+        const next = { ...prev, [ref.colKey]: finalW };
+        try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* ignore */ }
+        return next;
+      });
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [min, max, storageKey]);
+
+  const ResizeHandle = React.useCallback(({ colKey }: { colKey: string }) => (
+    <div
+      onMouseDown={(e) => handleResizeStart(colKey, e)}
+      onDoubleClick={() => handleDblClick(colKey)}
+      onClick={(e) => e.stopPropagation()}
+      className="absolute right-0 top-0 bottom-0 w-[7px] cursor-col-resize z-20 group/resize hover:bg-blue-400/40 active:bg-blue-500/60 transition-colors"
+      title="Arraste para redimensionar (duplo clique para restaurar o padrão)"
+    >
+      <div className="absolute right-0 top-1/4 bottom-1/4 w-px bg-gray-200 group-hover/resize:bg-blue-400" />
+    </div>
+  ), [handleResizeStart, handleDblClick]);
+
+  return { tableRef, getWidth, ResizeHandle };
+}

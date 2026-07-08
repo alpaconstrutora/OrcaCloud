@@ -256,6 +256,50 @@ Copiar integralmente e substituir apenas os filtros específicos:
 
 ---
 
+## 6.1 REDIMENSIONAMENTO DE COLUNAS (opcional)
+
+Quando a tela tem muitas colunas ou o usuário precisa ajustar a largura para
+ler melhor um dado específico, use o hook `useResizableColumns` (também em
+`./ui/TableUtils`) — arrastar a borda direita do cabeçalho redimensiona;
+duplo clique restaura a largura padrão. Larguras persistidas em localStorage
+por tela. Extraído de `components/BankReconciliation.tsx` (tabela de Extrato)
+para virar padrão reutilizável — não é obrigatório em toda tabela, só onde
+fizer sentido (tabelas com muitas colunas/dado variável).
+
+```tsx
+import { useResizableColumns } from './ui/TableUtils';
+
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+  nome: 220, categoria: 140, obra: 140, data: 100, valor: 130,
+};
+const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'minhaTelaColWidths');
+
+<table ref={cols.tableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+  <colgroup>
+    <col style={{ width: '40px' }} /> {/* checkbox */}
+    {COLUMNS.filter(c => c.key !== 'actions').map(c => (
+      tableColumns.visibleColumns.includes(c.key) && (
+        <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />
+      )
+    ))}
+    {tableColumns.visibleColumns.includes('actions') && <col style={{ width: '160px' }} />}
+  </colgroup>
+  <thead>
+    <tr>
+      {/* ... */}
+      <SortableHeader colKey="nome" label="Nome" sortColumn={...} sortDirection={...} onSort={...} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+        <cols.ResizeHandle colKey="nome" />
+      </SortableHeader>
+    </tr>
+  </thead>
+```
+
+> ✅ `table-layout: fixed` no `<table>` é obrigatório para o `<colgroup>` controlar a largura de fato.
+> ✅ `SortableHeader` precisa da classe `overflow-hidden` quando tem `ResizeHandle` como filho (evita que o texto do rótulo vaze sobre a alça).
+> ℹ️ Se uma coluna não tem campo de ordenação correspondente no estado da tela, use `sortable={false}` nela — ela ainda ganha a alça de redimensionar, só não fica clicável para ordenar.
+
+---
+
 ## 7. TABELA — `<tbody>` e TDs
 
 ### Linha (`<tr>`)

@@ -23,7 +23,7 @@ import { financialRegistryService } from '../services/financialRegistryService';
 import { useStore } from '../store/useStore';
 import { useConfirm } from './ui/confirm';
 import { formatMoney, formatDateBR } from './ui/Format';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
 import ReconciliationDashboardView from './ReconciliationDashboard';
 import DivergencesPanel from './DivergencesPanel';
@@ -55,28 +55,50 @@ const STATEMENT_COLUMNS: ColumnConfig[] = [
     { key: 'actions',      label: 'Ações',              sortable: false },
 ];
 
-// Colunas da tabela de Extrato Bancário na aba Pendentes (visualização em linha)
+// Colunas da tabela de Extrato Bancário na aba Pendentes (visualização em linha).
+// sortable:true só nas colunas que o campo de ordenação da toolbar (bankSortField) suporta.
 const PENDING_BANK_COLUMNS: ColumnConfig[] = [
-    { key: 'counterparty', label: 'Contraparte',     sortable: false },
-    { key: 'category',     label: 'Categoria',       sortable: false },
+    { key: 'counterparty', label: 'Contraparte',     sortable: true  },
+    { key: 'category',     label: 'Categoria',       sortable: true  },
     { key: 'project',      label: 'Obra',            sortable: false },
     { key: 'costCenter',   label: 'Centro de Custo', sortable: false },
-    { key: 'date',         label: 'Data',            sortable: false },
-    { key: 'amount',       label: 'Valor',           sortable: false },
+    { key: 'date',         label: 'Data',            sortable: true  },
+    { key: 'amount',       label: 'Valor',           sortable: true  },
     { key: 'actions',      label: 'Ações',           sortable: false },
 ];
 
-// Colunas da tabela de Lançamentos Internos na aba Pendentes (visualização em linha)
+// Larguras padrão — arraste a borda direita do cabeçalho para ajustar; duplo clique restaura.
+const DEFAULT_PENDING_BANK_COL_WIDTHS: Record<string, number> = {
+    counterparty: 160,
+    category: 140,
+    project: 140,
+    costCenter: 150,
+    date: 100,
+    amount: 130,
+};
+
+// Colunas da tabela de Lançamentos Internos na aba Pendentes (visualização em linha).
+// sortable:true só nas colunas que o campo de ordenação da toolbar (internalSortField) suporta.
 const PENDING_INTERNAL_COLUMNS: ColumnConfig[] = [
-    { key: 'description',  label: 'Descrição',            sortable: false },
-    { key: 'party',        label: 'Cliente/Fornecedor',   sortable: false },
-    { key: 'category',     label: 'Categoria',            sortable: false },
+    { key: 'description',  label: 'Descrição',            sortable: true  },
+    { key: 'party',        label: 'Cliente/Fornecedor',   sortable: true  },
+    { key: 'category',     label: 'Categoria',            sortable: true  },
     { key: 'project',      label: 'Obra',                 sortable: false },
     { key: 'costCenter',   label: 'Centro de Custo',      sortable: false },
-    { key: 'date',         label: 'Data',                 sortable: false },
-    { key: 'amount',       label: 'Valor',                sortable: false },
+    { key: 'date',         label: 'Data',                 sortable: true  },
+    { key: 'amount',       label: 'Valor',                sortable: true  },
     { key: 'actions',      label: 'Ações',                sortable: false },
 ];
+
+const DEFAULT_PENDING_INTERNAL_COL_WIDTHS: Record<string, number> = {
+    description: 220,
+    party: 150,
+    category: 140,
+    project: 120,
+    costCenter: 140,
+    date: 100,
+    amount: 130,
+};
 
 // Larguras de coluna da tabela de Extrato — ajustáveis pelo usuário (arraste a borda
 // direita do cabeçalho); persistidas em localStorage. Duplo clique restaura o padrão.
@@ -237,6 +259,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const tableColumns = useTableColumns(STATEMENT_COLUMNS, 'extratoBancarioColumns');
     const pendingBankColumns = useTableColumns(PENDING_BANK_COLUMNS, 'conciliacaoPendentesBankColumns');
     const pendingInternalColumns = useTableColumns(PENDING_INTERNAL_COLUMNS, 'conciliacaoPendentesInternalColumns');
+    const pendingBankResize = useResizableColumns(DEFAULT_PENDING_BANK_COL_WIDTHS, 'conciliacaoPendentesBankColWidths');
+    const pendingInternalResize = useResizableColumns(DEFAULT_PENDING_INTERNAL_COL_WIDTHS, 'conciliacaoPendentesInternalColWidths');
 
     // ── Redimensionamento de colunas da tabela de Extrato (arrastar borda do cabeçalho) ──
     const [statementColWidths, setStatementColWidths] = useState<Record<string, number>>(() => {
@@ -4522,7 +4546,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             ) : (
                                 <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
                                     <div className="overflow-y-auto reconc-scroll" style={{ maxHeight: 'calc(100vh - 300px)' }}>
-                                        <table className="w-full text-left border-collapse">
+                                        <table ref={pendingBankResize.tableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+                                            <colgroup>
+                                                <col style={{ width: '40px' }} />
+                                                {PENDING_BANK_COLUMNS.filter(c => c.key !== 'actions').map(c => (
+                                                    pendingBankColumns.visibleColumns.includes(c.key) && (
+                                                        <col key={c.key} data-col-key={c.key} style={{ width: `${pendingBankResize.getWidth(c.key)}px` }} />
+                                                    )
+                                                ))}
+                                                {pendingBankColumns.visibleColumns.includes('actions') && <col style={{ width: '160px' }} />}
+                                            </colgroup>
                                             <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200 sticky top-0 z-10">
                                                 <tr>
                                                     <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
@@ -4542,22 +4575,54 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         />
                                                     </th>
                                                     {pendingBankColumns.visibleColumns.includes('counterparty') && (
-                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[140px]">Contraparte</th>
+                                                        <SortableHeader
+                                                            colKey="counterparty" label="Contraparte"
+                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
+                                                            onSort={() => bankSortField === 'counterparty' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('counterparty'), setBankSortOrder('asc'))}
+                                                            className="px-4 py-2 border-r border-gray-100 overflow-hidden"
+                                                        >
+                                                            <pendingBankResize.ResizeHandle colKey="counterparty" />
+                                                        </SortableHeader>
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('category') && (
-                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Categoria</th>
+                                                        <SortableHeader
+                                                            colKey="category" label="Categoria"
+                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
+                                                            onSort={() => bankSortField === 'category' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('category'), setBankSortOrder('asc'))}
+                                                            className="px-4 py-2 border-r border-gray-100 overflow-hidden"
+                                                        >
+                                                            <pendingBankResize.ResizeHandle colKey="category" />
+                                                        </SortableHeader>
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('project') && (
-                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Obra</th>
+                                                        <SortableHeader colKey="project" label="Obra" sortable={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                            <pendingBankResize.ResizeHandle colKey="project" />
+                                                        </SortableHeader>
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('costCenter') && (
-                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[150px]">Centro de Custo</th>
+                                                        <SortableHeader colKey="costCenter" label="Centro de Custo" sortable={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                            <pendingBankResize.ResizeHandle colKey="costCenter" />
+                                                        </SortableHeader>
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('date') && (
-                                                        <th className="px-4 py-2 border-r border-gray-100 text-center whitespace-nowrap">Data</th>
+                                                        <SortableHeader
+                                                            colKey="date" label="Data"
+                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
+                                                            onSort={() => bankSortField === 'date' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('date'), setBankSortOrder('asc'))}
+                                                            className="px-4 py-2 border-r border-gray-100 text-center overflow-hidden"
+                                                        >
+                                                            <pendingBankResize.ResizeHandle colKey="date" />
+                                                        </SortableHeader>
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('amount') && (
-                                                        <th className="px-4 py-2 border-r border-gray-100 text-right whitespace-nowrap">Valor</th>
+                                                        <SortableHeader
+                                                            colKey="amount" label="Valor"
+                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
+                                                            onSort={() => bankSortField === 'amount' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('amount'), setBankSortOrder('asc'))}
+                                                            className="px-4 py-2 border-r border-gray-100 text-right overflow-hidden"
+                                                        >
+                                                            <pendingBankResize.ResizeHandle colKey="amount" />
+                                                        </SortableHeader>
                                                     )}
                                                     {pendingBankColumns.visibleColumns.includes('actions') && (
                                                         <th className="px-4 py-2 text-right whitespace-nowrap">Ações</th>
@@ -5006,7 +5071,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             ) : (
                                 <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
                                     <div className="overflow-y-auto reconc-scroll" style={{ maxHeight: 'calc(100vh - 300px)' }}>
-                                        <table className="w-full text-left border-collapse">
+                                        <table ref={pendingInternalResize.tableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+                                            <colgroup>
+                                                <col style={{ width: '40px' }} />
+                                                {PENDING_INTERNAL_COLUMNS.filter(c => c.key !== 'actions').map(c => (
+                                                    pendingInternalColumns.visibleColumns.includes(c.key) && (
+                                                        <col key={c.key} data-col-key={c.key} style={{ width: `${pendingInternalResize.getWidth(c.key)}px` }} />
+                                                    )
+                                                ))}
+                                                {pendingInternalColumns.visibleColumns.includes('actions') && <col style={{ width: '160px' }} />}
+                                            </colgroup>
                                             <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200 sticky top-0 z-10">
                                                 <tr>
                                                     <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
@@ -5026,25 +5100,64 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         />
                                                     </th>
                                                     {pendingInternalColumns.visibleColumns.includes('description') && (
-                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[200px]">Descrição</th>
+                                                        <SortableHeader
+                                                            colKey="description" label="Descrição"
+                                                            sortColumn={internalSortField} sortDirection={internalSortOrder}
+                                                            onSort={() => internalSortField === 'description' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('description'), setInternalSortOrder('asc'))}
+                                                            className="px-4 py-2 border-r border-gray-100 overflow-hidden"
+                                                        >
+                                                            <pendingInternalResize.ResizeHandle colKey="description" />
+                                                        </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('party') && (
-                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[140px]">Cliente/Fornecedor</th>
+                                                        <SortableHeader
+                                                            colKey="party" label="Cliente/Fornecedor"
+                                                            sortColumn={internalSortField === 'entity' ? 'party' : internalSortField} sortDirection={internalSortOrder}
+                                                            onSort={() => internalSortField === 'entity' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('entity'), setInternalSortOrder('asc'))}
+                                                            className="px-4 py-2 border-r border-gray-100 overflow-hidden"
+                                                        >
+                                                            <pendingInternalResize.ResizeHandle colKey="party" />
+                                                        </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('category') && (
-                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Categoria</th>
+                                                        <SortableHeader
+                                                            colKey="category" label="Categoria"
+                                                            sortColumn={internalSortField} sortDirection={internalSortOrder}
+                                                            onSort={() => internalSortField === 'category' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('category'), setInternalSortOrder('asc'))}
+                                                            className="px-4 py-2 border-r border-gray-100 overflow-hidden"
+                                                        >
+                                                            <pendingInternalResize.ResizeHandle colKey="category" />
+                                                        </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('project') && (
-                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[110px]">Obra</th>
+                                                        <SortableHeader colKey="project" label="Obra" sortable={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                            <pendingInternalResize.ResizeHandle colKey="project" />
+                                                        </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('costCenter') && (
-                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Centro de Custo</th>
+                                                        <SortableHeader colKey="costCenter" label="Centro de Custo" sortable={false} className="px-4 py-2 border-r border-gray-100 overflow-hidden">
+                                                            <pendingInternalResize.ResizeHandle colKey="costCenter" />
+                                                        </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('date') && (
-                                                        <th className="px-4 py-2 border-r border-gray-100 text-center whitespace-nowrap">Data</th>
+                                                        <SortableHeader
+                                                            colKey="date" label="Data"
+                                                            sortColumn={internalSortField} sortDirection={internalSortOrder}
+                                                            onSort={() => internalSortField === 'date' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('date'), setInternalSortOrder('asc'))}
+                                                            className="px-4 py-2 border-r border-gray-100 text-center overflow-hidden"
+                                                        >
+                                                            <pendingInternalResize.ResizeHandle colKey="date" />
+                                                        </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('amount') && (
-                                                        <th className="px-4 py-2 border-r border-gray-100 text-right whitespace-nowrap">Valor</th>
+                                                        <SortableHeader
+                                                            colKey="amount" label="Valor"
+                                                            sortColumn={internalSortField} sortDirection={internalSortOrder}
+                                                            onSort={() => internalSortField === 'amount' ? setInternalSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setInternalSortField('amount'), setInternalSortOrder('asc'))}
+                                                            className="px-4 py-2 border-r border-gray-100 text-right overflow-hidden"
+                                                        >
+                                                            <pendingInternalResize.ResizeHandle colKey="amount" />
+                                                        </SortableHeader>
                                                     )}
                                                     {pendingInternalColumns.visibleColumns.includes('actions') && (
                                                         <th className="px-4 py-2 text-right whitespace-nowrap">Ações</th>

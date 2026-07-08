@@ -110,14 +110,37 @@ Todos os `fn_*` da Central **já estão no remoto**: `fn_financial_alerts` (`202
 - Drill-down: cada card chama `onNavigate(view, filtro)` para o `*Dashboard`/módulo correspondente.
 - **Entrega valor sem depender da Fase 0.**
 
-### Fase 2 — Ligar as filas (depende da Fase 0)
-- Faixa 1 recebe divergências de conciliação, aprovações pendentes e gargalos de processo.
-- Faixa 2 recebe `fn_approval_action_queue` (aprovar/liberar direto da fila, respeitando
-  que ações que exigem conferência **só linkam**, não resolvem inline).
+### Fase 2 — Ligar as filas (IMPLEMENTADO, junto com a Fase 1)
+Na prática Fase 1 e Fase 2 foram entregues juntas — o backend já estava 100% pronto (ver Fase 0),
+então não fez sentido faseá-las: Faixa 1 já nasceu recebendo `fn_financial_alerts` +
+`fn_reconciliation_divergences` + `fn_approval_pending_summary` + `fn_process_bottlenecks`; Faixa 2
+já nasceu com `fn_approval_action_queue` + `MyTasksWidget`.
+**Pendente real da Fase 2**: aprovar/liberar item **direto da fila**, sem sair da Central. Hoje todo
+clique na fila de aprovação apenas navega para `financial-approval` (nenhuma tela de destino consome
+`viewFocus` ainda — ver §4b). Candidato a painel lateral (`Sheet`, ver `UI_PATTERNS.md`) numa próxima
+iteração; não implementado.
 
-### Fase 3 — Perfilamento
-- Filtro por papel: diretor entra e o botão do BI Executivo ganha destaque; operador vê Faixa 2 (mesa) em destaque.
-- Filtros simples: período, empresa, obra, responsável.
+### Fase 3 — Perfilamento e filtros (IMPLEMENTADO com escopo revisado — 2026-07-08)
+O texto original prevendo "diretor vs. operador" não sobrevive ao confronto com o modelo de dados real:
+`UserProfile` (`ADMIN`/`USER`/...) é controle de acesso, não hierarquia de negócio; "diretor" só existe
+na granularidade de `org_roles` (Governance/Cargos), pesado demais para decidir qual bloco de uma home
+fica em destaque. **Decisão (validada com o usuário): sem perfilamento por papel.**
+
+Dos 4 filtros propostos ("período, empresa, obra, responsável"), só um é honesto de implementar sem
+mudança de backend:
+- **Obra**: ✅ implementado, client-side, a partir dos `project_id`/`project_name` que os próprios
+  itens de Faixa 1 (`FinancialAlert.project_name`) e Faixa 2 (`ActionQueueItem.project_name`) já
+  carregam. Itens sem obra associada (divergência agregada, aprovação agregada, gargalo de processo)
+  continuam sempre visíveis — o filtro nunca os esconde silenciosamente.
+- **Período**: ✅ implementado, mas **só onde existe suporte real**: `fn_cashflow_projection` é o único
+  RPC da Central que aceita parâmetro de dias. Virou um toggle 30/60/90 escopado à Faixa 3 (Caixa
+  Projetado), não um filtro global — um período global mentiria para as outras 5 fontes, que só
+  recebem `p_organization_id`.
+- **Empresa**: ❌ fora de escopo — a app já tem um seletor global de organização no chrome (`Layout`);
+  duplicar dentro da Central seria redundante, e nenhum RPC aceita `company_id` de qualquer forma.
+- **Responsável**: ❌ fora de escopo — nenhuma das fontes de Faixa 1/2 carrega um campo de usuário
+  responsável (a fila de aprovação já é resolvida por nível/alçada no backend, não por atribuição
+  nominal); só `MyTasksWidget` é user-scoped, e já é implicitamente "meu" por natureza.
 
 ---
 

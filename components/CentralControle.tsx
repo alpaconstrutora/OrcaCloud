@@ -1,13 +1,14 @@
 import React from 'react';
 import {
-    AlertTriangle, CheckSquare, ChevronRight, RefreshCw, Loader2, ShieldCheck,
+    AlertTriangle, CheckSquare, ChevronRight, RefreshCw, Loader2, ShieldCheck, BarChart3, ArrowRight,
 } from 'lucide-react';
 import { financialIntelligenceService } from '../services/financialIntelligenceService';
-import type { FinancialAlert } from '../services/financialIntelligenceService';
+import type { FinancialAlert, ProjectScorecard, CashflowProjectionPoint } from '../services/financialIntelligenceService';
 import { divergenceService } from '../services/divergenceService';
 import { approvalService } from '../services/approvalService';
 import type { ActionQueueItem, ApprovalEntity, ApprovalPendingSummary } from '../services/approvalService';
 import { processService } from '../services/processService';
+import { KpiCard } from './ui/KpiCard';
 import MyTasksWidget from './MyTasksWidget';
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
 }
 
 type Severity = FinancialAlert['severity'];
+type CashflowDays = 30 | 60 | 90;
 
 /** Item unificado da Faixa 1 — origem apagada, só resta o que importa: prioridade e para onde ir. */
 interface AlertItem {
@@ -25,6 +27,8 @@ interface AlertItem {
     description: string;
     amount?: number | null;
     view: string;
+    /** Só presente quando a fonte associa o item a uma obra — usado no filtro de Obra. */
+    projectName?: string | null;
 }
 
 const SEVERITY_ORDER: Record<Severity, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
@@ -57,8 +61,17 @@ function fBRL(v: number | null | undefined): string {
 const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
     const [alerts, setAlerts]           = React.useState<AlertItem[]>([]);
     const [actionQueue, setActionQueue] = React.useState<ActionQueueItem[]>([]);
+    const [scorecards, setScorecards]   = React.useState<ProjectScorecard[]>([]);
     const [loading, setLoading]         = React.useState(true);
     const [sourceErrors, setSourceErrors] = React.useState<string[]>([]);
+    const [selectedObra, setSelectedObra] = React.useState<string>('all');
+
+    // Faixa 3 — caixa projetado. Único filtro de período honesto: é o único
+    // dos serviços que de fato aceita um parâmetro de dias (os demais RPCs
+    // só recebem p_organization_id, então um "período" global seria enganoso).
+    const [cashflowDays, setCashflowDays] = React.useState<CashflowDays>(90);
+    const [cashflow, setCashflow] = React.useState<CashflowProjectionPoint[]>([]);
+    const [cashflowLoading, setCashflowLoading] = React.useState(false);
 
     const load = React.useCallback(async () => {
         if (!organizationId) {
@@ -69,12 +82,13 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
 
         // Cada fonte é independente — uma RPC fora do ar não pode apagar as outras
         // (ao contrário do padrão de try/catch único usado no BIDashboard).
-        const [financialR, divergenceR, approvalSummaryR, bottlenecksR, actionQueueR] = await Promise.allSettled([
+        const [financialR, divergenceR, approvalSummaryR, bottlenecksR, actionQueueR, scorecardR] = await Promise.allSettled([
             financialIntelligenceService.getAlerts(organizationId),
             divergenceService.getDivergences(organizationId),
             approvalService.getPendingSummary(organizationId),
             processService.getBottlenecks(organizationId),
             approvalService.listActionQueue(organizationId),
+            financialIntelligenceService.getProjectScorecards(organizationId),
         ]);
 
         const errs: string[] = [];
@@ -88,6 +102,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
                 description: a.project_name ? `${a.description} · ${a.project_name}` : a.description,
                 amount: a.amount,
                 view: 'financial-dashboard',
+                projectName: a.project_name,
             }));
         } else {
             errs.push('Alertas financeiros');
@@ -163,11 +178,63 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
             console.error('[CentralControle] action queue:', actionQueueR.reason);
         }
 
+        if (scorecardR.status === 'fulfilled') {
+            setScorecards(scorecardR.value);
+        } else {
+            errs.push('Resultado por obra');
+            console.error('[CentralControle] scorecards:', scorecardR.reason);
+        }
+
         setSourceErrors(errs);
         setLoading(false);
     }, [organizationId]);
 
     React.useEffect(() => { load(); }, [load]);
+
+    // Faixa 3 — recarrega só o caixa projetado ao trocar o período (30/60/90 dias),
+    // sem re-buscar as demais 5 fontes.
+    React.useEffect(() => {
+        if (!organizationId) return;
+        let cancelled = false;
+        setCashflowLoading(true);
+        financialIntelligenceService.getCashflowProjection(organizationId, cashflowDays)
+            .then(points => { if (!cancelled) setCashflow(points); })
+            .catch(err => { console.error('[CentralControle] cashflow:', err); if (!cancelled) setCashflow([]); })
+            .finally(() => { if (!cancelled) setCashflowLoading(false); });
+        return () => { cancelled = true; };
+    }, [organizationId, cashflowDays]);
+
+    // Opções do filtro de Obra — só entram obras que de fato têm algo pendente
+    // visível agora (alerta financeiro ou item na fila de aprovação).
+    const obraOptions = React.useMemo(() => {
+        const names = new Set<string>();
+        alerts.forEach(a => { if (a.projectName) names.add(a.projectName); });
+        actionQueue.forEach(i => { if (i.project_name) names.add(i.project_name); });
+        return Array.from(names).sort();
+    }, [alerts, actionQueue]);
+
+    // Itens sem obra associada (divergência agregada, aprovação agregada, gargalo de
+    // processo) permanecem sempre visíveis — filtrar por obra não pode escondê-los
+    // silenciosamente, já que não têm essa dimensão.
+    const filteredAlerts = React.useMemo(() => {
+        if (selectedObra === 'all') return alerts;
+        return alerts.filter(a => !a.projectName || a.projectName === selectedObra);
+    }, [alerts, selectedObra]);
+
+    const filteredActionQueue = React.useMemo(() => {
+        if (selectedObra === 'all') return actionQueue;
+        return actionQueue.filter(i => !i.project_name || i.project_name === selectedObra);
+    }, [actionQueue, selectedObra]);
+
+    const obrasEmRisco = React.useMemo(
+        () => scorecards.filter(s => s.risco === 'HIGH').length,
+        [scorecards],
+    );
+    const obrasEmAtencao = React.useMemo(
+        () => scorecards.filter(s => s.risco === 'MEDIUM').length,
+        [scorecards],
+    );
+    const caixaProjetado = cashflow.length > 0 ? cashflow[cashflow.length - 1].saldo_acum : null;
 
     if (!organizationId) {
         return (
@@ -185,14 +252,27 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Central de Controle</h1>
                     <p className="text-gray-400 text-sm mt-1 font-medium">O que precisa da sua atenção agora</p>
                 </div>
-                <button
-                    onClick={load}
-                    disabled={loading}
-                    className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all active:scale-95"
-                    title="Atualizar"
-                >
-                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                </button>
+                <div className="flex items-center gap-2">
+                    {obraOptions.length > 0 && (
+                        <select
+                            value={selectedObra}
+                            onChange={e => setSelectedObra(e.target.value)}
+                            className="text-sm font-normal px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 focus:outline-none focus:border-blue-400"
+                            title="Filtrar por obra"
+                        >
+                            <option value="all">Todas as obras</option>
+                            {obraOptions.map(name => <option key={name} value={name}>{name}</option>)}
+                        </select>
+                    )}
+                    <button
+                        onClick={load}
+                        disabled={loading}
+                        className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                        title="Atualizar"
+                    >
+                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                    </button>
+                </div>
             </div>
 
             {sourceErrors.length > 0 && (
@@ -211,7 +291,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
                         <div>
                             <h3 className="text-sm font-black text-gray-900">Alertas &amp; Exceções</h3>
                             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider leading-none mt-0.5">
-                                {loading ? 'Carregando...' : alerts.length > 0 ? `${alerts.length} pendência(s)` : 'Tudo em dia'}
+                                {loading ? 'Carregando...' : filteredAlerts.length > 0 ? `${filteredAlerts.length} pendência(s)` : 'Tudo em dia'}
                             </p>
                         </div>
                     </div>
@@ -221,14 +301,14 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
                     <div className="flex justify-center items-center py-8">
                         <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
                     </div>
-                ) : alerts.length === 0 ? (
+                ) : filteredAlerts.length === 0 ? (
                     <div className="py-8 px-5 text-center">
                         <ShieldCheck className="w-8 h-8 text-emerald-300 mx-auto mb-2" />
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nenhuma exceção encontrada</p>
                     </div>
                 ) : (
                     <ul className="divide-y divide-gray-50">
-                        {alerts.map(a => (
+                        {filteredAlerts.map(a => (
                             <li key={a.id}>
                                 <button
                                     onClick={() => onNavigate(a.view)}
@@ -262,7 +342,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
                             <div>
                                 <h3 className="text-sm font-black text-gray-900">Fila de Aprovação</h3>
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider leading-none mt-0.5">
-                                    {loading ? 'Carregando...' : actionQueue.length > 0 ? `${actionQueue.length} aguardando você` : 'Nada pendente'}
+                                    {loading ? 'Carregando...' : filteredActionQueue.length > 0 ? `${filteredActionQueue.length} aguardando você` : 'Nada pendente'}
                                 </p>
                             </div>
                         </div>
@@ -278,14 +358,14 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
                         <div className="flex justify-center items-center py-8">
                             <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
                         </div>
-                    ) : actionQueue.length === 0 ? (
+                    ) : filteredActionQueue.length === 0 ? (
                         <div className="py-8 px-5 text-center">
                             <CheckSquare className="w-8 h-8 text-gray-200 mx-auto mb-2" />
                             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nenhuma aprovação pendente</p>
                         </div>
                     ) : (
                         <ul className="divide-y divide-gray-50">
-                            {actionQueue.slice(0, 5).map(item => (
+                            {filteredActionQueue.slice(0, 5).map(item => (
                                 <li key={`${item.entity}-${item.id}`}>
                                     <button
                                         onClick={() => onNavigate('financial-approval')}
@@ -305,13 +385,13 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
                         </ul>
                     )}
 
-                    {actionQueue.length > 5 && (
+                    {filteredActionQueue.length > 5 && (
                         <div className="px-5 py-2.5 border-t border-gray-50 text-center">
                             <button
                                 onClick={() => onNavigate('financial-approval')}
                                 className="text-xs font-black text-blue-600 uppercase tracking-wider hover:text-blue-800 transition-colors"
                             >
-                                Ver todos os {actionQueue.length} itens →
+                                Ver todos os {filteredActionQueue.length} itens →
                             </button>
                         </div>
                     )}
@@ -320,6 +400,59 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
                 {/* Minhas Tarefas — movido de dentro do BIDashboard */}
                 <MyTasksWidget orgId={organizationId} onNavigate={onNavigate} />
             </div>
+
+            {/* Faixa 3 — Resumo macro. Só 2 âncoras + link; o BI Executivo (BIDashboard)
+                continua sendo o destino de análise, não é duplicado aqui. */}
+            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center">
+                            <BarChart3 className="w-4 h-4 text-white" />
+                        </div>
+                        <h3 className="text-sm font-black text-gray-900">Resumo Macro</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100">
+                            {([30, 60, 90] as CashflowDays[]).map(d => (
+                                <button
+                                    key={d}
+                                    onClick={() => setCashflowDays(d)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                        cashflowDays === d ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-800'
+                                    }`}
+                                >
+                                    {d}d
+                                </button>
+                            ))}
+                        </div>
+                        <button
+                            onClick={() => onNavigate('bi-executivo')}
+                            className="flex items-center gap-1.5 text-xs font-black text-blue-600 uppercase tracking-wider hover:text-blue-800 transition-colors px-3 py-2"
+                        >
+                            BI Executivo <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <KpiCard
+                        label="Caixa Projetado"
+                        value={cashflowLoading ? '...' : fBRL(caixaProjetado)}
+                        sub={`Saldo acumulado em ${cashflowDays} dias`}
+                        icon={<BarChart3 className="w-5 h-5" />}
+                        color={caixaProjetado != null && caixaProjetado < 0 ? 'red' : 'emerald'}
+                        onClick={() => onNavigate('bi-executivo')}
+                    />
+                    <KpiCard
+                        label="Obras em Risco"
+                        value={loading ? '...' : obrasEmRisco}
+                        sub={obrasEmAtencao > 0 ? `+ ${obrasEmAtencao} em atenção` : 'Nenhuma em atenção'}
+                        icon={<AlertTriangle className="w-5 h-5" />}
+                        color={obrasEmRisco > 0 ? 'red' : 'emerald'}
+                        onClick={() => onNavigate('bi-executivo')}
+                    />
+                </div>
+            </section>
         </div>
     );
 };

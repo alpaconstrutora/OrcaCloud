@@ -6,6 +6,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { STALE } from '../lib/queryClient';
+import { financialRegistryService } from '../services/financialRegistryService';
 
 // ── Service inline (simples — só 3 colunas) ───────────────────────────────────
 
@@ -25,10 +26,7 @@ const catService = {
     },
 
     async create(name: string): Promise<void> {
-        const { error } = await supabase
-            .from('financial_categories')
-            .insert({ name: name.trim() });
-        if (error) throw error;
+        await financialRegistryService.getOrCreateChartOfAccountByName(name);
     },
 
     async rename(id: string, name: string): Promise<void> {

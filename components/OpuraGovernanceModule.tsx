@@ -23,6 +23,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import { orgGovernanceService } from '../services/orgGovernanceService';
+import { companyService } from '../services/companyService';
 import { laborService, Employee } from '../services/laborService';
 import { useConfirm } from './ui/confirm';
 import {
@@ -39,7 +40,8 @@ import {
   AuthorityFlowType,
   ReadinessLevel,
   RiskLevel,
-  RaciRoleType
+  RaciRoleType,
+  CompanyInsert
 } from '../types';
 
 interface OpuraGovernanceModuleProps {
@@ -89,11 +91,7 @@ export default function OpuraGovernanceModule({
     async function loadCompanies() {
       if (!activeOrganizationId) return;
       try {
-        const { data, error } = await supabase
-          .from('companies')
-          .select('id, org_id, razao_social, tipo')
-          .eq('org_id', activeOrganizationId);
-        if (error) throw error;
+        const data = await companyService.list(activeOrganizationId);
         setCompanies(data || []);
         if (data && data.length > 0) {
           setSelectedCompanyId(data[0].id);
@@ -118,37 +116,28 @@ export default function OpuraGovernanceModule({
 
       const orgName = orgData?.name || 'Empresa Principal';
 
-      const { data, error } = await supabase
-        .from('companies')
-        .insert({
-          org_id: activeOrganizationId,
-          razao_social: orgName,
-          nome_fantasia: orgName,
-          tipo: 'construtora',
-          is_headquarters: true,
-          status: 'ativa',
-          modulos_habilitados: {
-            obras: true,
-            compras: true,
-            financeiro: true,
-            fiscal: true,
-            rh: true,
-            incorporacao: true,
-            crm: true,
-            estoque: true,
-            broker_portal: true
-          }
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const data = await companyService.create({
+        org_id: activeOrganizationId,
+        razao_social: orgName,
+        nome_fantasia: orgName,
+        tipo: 'construtora',
+        is_headquarters: true,
+        status: 'ativa',
+        modulos_habilitados: {
+          obras: true,
+          compras: true,
+          financeiro: true,
+          fiscal: true,
+          rh: true,
+          incorporacao: true,
+          crm: true,
+          estoque: true,
+          broker_portal: true
+        }
+      } as CompanyInsert);
 
       // Recarrega as empresas
-      const { data: newCompanies } = await supabase
-        .from('companies')
-        .select('id, razao_social, tipo')
-        .eq('org_id', activeOrganizationId);
+      const newCompanies = await companyService.list(activeOrganizationId);
 
       setCompanies(newCompanies || []);
       if (data) {

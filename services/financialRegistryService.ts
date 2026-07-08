@@ -150,6 +150,22 @@ export const financialRegistryService = {
         return data as ChartOfAccount;
     },
 
+    // Fonte única para quick-add de categoria a partir de qualquer tela
+    // (ex: conciliação bancária). Evita duplicata por nome (case-insensitive).
+    async getOrCreateChartOfAccountByName(name: string): Promise<ChartOfAccount> {
+        const trimmed = name.trim();
+        const { data: existing, error: findError } = await supabase
+            .from('financial_categories')
+            .select('id, name, parent_id, dre_group, nature, sort_order')
+            .ilike('name', trimmed)
+            .maybeSingle();
+
+        if (findError) throw findError;
+        if (existing) return existing as ChartOfAccount;
+
+        return financialRegistryService.createChartOfAccount({ name: trimmed });
+    },
+
     async updateChartOfAccount(id: string, account: Partial<ChartOfAccount>): Promise<ChartOfAccount> {
         const payload: Record<string, unknown> = {};
         if (account.name       !== undefined) payload.name       = account.name;

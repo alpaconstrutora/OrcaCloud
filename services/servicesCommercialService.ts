@@ -1,4 +1,6 @@
 import { supabase } from '../lib/supabase';
+import { clientService } from './clientService';
+import { Client } from '../types';
 
 export type OpportunityStage = 'lead' | 'visit' | 'budget' | 'proposal' | 'won' | 'lost';
 export type Priority = 'low' | 'medium' | 'high';
@@ -545,19 +547,14 @@ export const servicesCommercialService = {
 
     let clientId = existingId;
     if (!clientId) {
-      const { data: client, error } = await supabase
-        .from('clients')
-        .insert({
-          organization_id: opp.organization_id,
-          name: opp.contact_name,
-          email: opp.contact_email,
-          phone: opp.contact_phone,
-          city: opp.city,
-          category: 'Serviços',
-        })
-        .select('id')
-        .single();
-      if (error) throw error;
+      const client = await clientService.saveClient({
+        organization_id: opp.organization_id,
+        name: opp.contact_name,
+        email: opp.contact_email,
+        phone: opp.contact_phone,
+        city: opp.city,
+        category: 'Serviços',
+      } as Partial<Client>);
       clientId = client.id;
     }
 

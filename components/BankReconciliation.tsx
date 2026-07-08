@@ -2358,10 +2358,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const handleAddCategory = async (name: string) => {
         if (!name.trim()) return;
         try {
-            const { error } = await supabase
-                .from('financial_categories')
-                .insert({ name: name.trim() });
-            if (error) throw error;
+            await financialRegistryService.getOrCreateChartOfAccountByName(name);
             setManagedCategories(prev => [...prev, name.trim()].sort());
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : (err as { message?: string })?.message ?? String(err);

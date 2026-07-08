@@ -1,9 +1,10 @@
 import { supabase } from '../lib/supabase';
-import { Supplier } from '../types';
+import { Supplier, SupplierCnaeActivity, SupplierPartner, SupplierStateRegistration } from '../types';
 import { isRealEstateBrokerCategory, REAL_ESTATE_BROKER_CATEGORY } from '../constants/supplierCategories';
 
-const SUPPLIER_SELECT = 'id, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at';
-const SUPPLIER_LIST_SELECT = 'id, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, organizations:organization_id(name)';
+const CNPJA_COLUMNS = 'cnpj_status, cnpj_status_date, cnpj_updated_at, cnpj_founded_at, cnpj_legal_nature, cnpj_company_size, cnpj_main_activity_code, cnpj_main_activity_text, cnpj_side_activities, cnpj_partners, cnpj_simples_optant, cnpj_simples_since, cnpj_simei_optant, cnpj_simei_since, cnpj_state_registrations';
+const SUPPLIER_SELECT = `id, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}`;
+const SUPPLIER_LIST_SELECT = `id, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}, organizations:organization_id(name)`;
 const CNPJA_PUBLIC_API_BASE = 'https://open.cnpja.com/office';
 const CNPJA_PUBLIC_LIMIT = 5;
 const CNPJA_PUBLIC_WINDOW_MS = 60_000;
@@ -31,19 +32,42 @@ export interface CnpjaSupplierUpdate {
     zip_code?: string | null;
     cnpjUpdatedAt?: string | null;
     cnpjStatus?: string | null;
-    cnpjMainActivity?: string | null;
+    cnpjStatusDate?: string | null;
+    cnpjFoundedAt?: string | null;
+    cnpjLegalNature?: string | null;
+    cnpjCompanySize?: string | null;
+    cnpjMainActivityCode?: string | null;
+    cnpjMainActivityText?: string | null;
+    cnpjSideActivities?: SupplierCnaeActivity[] | null;
+    cnpjPartners?: SupplierPartner[] | null;
+    cnpjSimplesOptant?: boolean | null;
+    cnpjSimplesSince?: string | null;
+    cnpjSimeiOptant?: boolean | null;
+    cnpjSimeiSince?: string | null;
+    cnpjStateRegistrations?: SupplierStateRegistration[] | null;
 }
 
 interface CnpjaOfficeResponse {
     updated?: string | null;
     taxId?: string | null;
     alias?: string | null;
+    founded?: string | null;
     company?: {
         name?: string | null;
+        nature?: { text?: string | null } | null;
+        size?: { text?: string | null } | null;
+        simples?: { optant?: boolean | null; since?: string | null } | null;
+        simei?: { optant?: boolean | null; since?: string | null } | null;
+        members?: Array<{
+            since?: string | null;
+            role?: { text?: string | null } | null;
+            person?: { name?: string | null } | null;
+        }> | null;
     } | null;
     status?: {
         text?: string | null;
     } | null;
+    statusDate?: string | null;
     address?: {
         street?: string | null;
         number?: string | null;
@@ -53,8 +77,19 @@ interface CnpjaOfficeResponse {
         zip?: string | null;
     } | null;
     mainActivity?: {
+        id?: string | null;
         text?: string | null;
     } | null;
+    sideActivities?: Array<{
+        id?: string | null;
+        text?: string | null;
+    }> | null;
+    registrations?: Array<{
+        number?: string | null;
+        state?: string | null;
+        enabled?: boolean | null;
+        status?: { text?: string | null } | null;
+    }> | null;
     phones?: Array<{
         area?: string | null;
         number?: string | null;
@@ -93,6 +128,27 @@ function mapCnpjaOfficeToSupplier(office: CnpjaOfficeResponse): CnpjaSupplierUpd
     const number = address?.number || null;
     const neighborhood = address?.district || null;
 
+    const sideActivities: SupplierCnaeActivity[] | null = office.sideActivities?.length
+        ? office.sideActivities.map(item => ({ code: item.id || null, text: item.text || null }))
+        : null;
+
+    const partners: SupplierPartner[] | null = office.company?.members?.length
+        ? office.company.members.map(member => ({
+            name: member.person?.name || null,
+            role: member.role?.text || null,
+            since: member.since || null,
+        }))
+        : null;
+
+    const stateRegistrations: SupplierStateRegistration[] | null = office.registrations?.length
+        ? office.registrations.map(reg => ({
+            number: reg.number || null,
+            state: reg.state || null,
+            enabled: reg.enabled ?? null,
+            status: reg.status?.text || null,
+        }))
+        : null;
+
     return {
         name: office.company?.name || office.alias || '',
         document: office.taxId || '',
@@ -108,7 +164,19 @@ function mapCnpjaOfficeToSupplier(office: CnpjaOfficeResponse): CnpjaSupplierUpd
         zip_code: address?.zip || null,
         cnpjUpdatedAt: office.updated || null,
         cnpjStatus: office.status?.text || null,
-        cnpjMainActivity: office.mainActivity?.text || null,
+        cnpjStatusDate: office.statusDate || null,
+        cnpjFoundedAt: office.founded || null,
+        cnpjLegalNature: office.company?.nature?.text || null,
+        cnpjCompanySize: office.company?.size?.text || null,
+        cnpjMainActivityCode: office.mainActivity?.id || null,
+        cnpjMainActivityText: office.mainActivity?.text || null,
+        cnpjSideActivities: sideActivities,
+        cnpjPartners: partners,
+        cnpjSimplesOptant: office.company?.simples?.optant ?? null,
+        cnpjSimplesSince: office.company?.simples?.since || null,
+        cnpjSimeiOptant: office.company?.simei?.optant ?? null,
+        cnpjSimeiSince: office.company?.simei?.since || null,
+        cnpjStateRegistrations: stateRegistrations,
     };
 }
 

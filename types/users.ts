@@ -60,6 +60,24 @@ export interface Investor {
     created_at?: string;
 }
 
+export interface SupplierCnaeActivity {
+    code?: string | null;
+    text?: string | null;
+}
+
+export interface SupplierPartner {
+    name?: string | null;
+    role?: string | null;
+    since?: string | null;
+}
+
+export interface SupplierStateRegistration {
+    number?: string | null;
+    state?: string | null;
+    enabled?: boolean | null;
+    status?: string | null;
+}
+
 export interface Supplier {
     id: string;
     name: string;
@@ -79,6 +97,22 @@ export interface Supplier {
     organization_id?: string | null;
     organization_name?: string;
     created_at?: string;
+    // Dados oficiais trazidos pela consulta CNPJa (Receita Federal / Simples / Cadastro de Contribuintes)
+    cnpj_status?: string | null;
+    cnpj_status_date?: string | null;
+    cnpj_updated_at?: string | null;
+    cnpj_founded_at?: string | null;
+    cnpj_legal_nature?: string | null;
+    cnpj_company_size?: string | null;
+    cnpj_main_activity_code?: string | null;
+    cnpj_main_activity_text?: string | null;
+    cnpj_side_activities?: SupplierCnaeActivity[] | null;
+    cnpj_partners?: SupplierPartner[] | null;
+    cnpj_simples_optant?: boolean | null;
+    cnpj_simples_since?: string | null;
+    cnpj_simei_optant?: boolean | null;
+    cnpj_simei_since?: string | null;
+    cnpj_state_registrations?: SupplierStateRegistration[] | null;
 }
 
 export interface SupplierCategory {

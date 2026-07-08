@@ -51,7 +51,14 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         name: '', contact_name: '', email: '', phone: '', document: '',
         type: 'PJ', category: DEFAULT_CATEGORIES[0],
         street: '', number: '', neighborhood: '', address: '', city: '', state: '', zip_code: '',
-        organization_id: activeOrganizationId || null
+        organization_id: activeOrganizationId || null,
+        cnpj_status: null, cnpj_status_date: null, cnpj_updated_at: null, cnpj_founded_at: null,
+        cnpj_legal_nature: null, cnpj_company_size: null,
+        cnpj_main_activity_code: null, cnpj_main_activity_text: null,
+        cnpj_side_activities: null, cnpj_partners: null,
+        cnpj_simples_optant: null, cnpj_simples_since: null,
+        cnpj_simei_optant: null, cnpj_simei_since: null,
+        cnpj_state_registrations: null,
     });
 
     const [formData, setFormData] = React.useState(emptyForm());
@@ -97,7 +104,22 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                 city: initialData.city || '',
                 state: initialData.state || '',
                 zip_code: initialData.zip_code || '',
-                organization_id: initialData.organization_id || null
+                organization_id: initialData.organization_id || null,
+                cnpj_status: initialData.cnpj_status || null,
+                cnpj_status_date: initialData.cnpj_status_date || null,
+                cnpj_updated_at: initialData.cnpj_updated_at || null,
+                cnpj_founded_at: initialData.cnpj_founded_at || null,
+                cnpj_legal_nature: initialData.cnpj_legal_nature || null,
+                cnpj_company_size: initialData.cnpj_company_size || null,
+                cnpj_main_activity_code: initialData.cnpj_main_activity_code || null,
+                cnpj_main_activity_text: initialData.cnpj_main_activity_text || null,
+                cnpj_side_activities: initialData.cnpj_side_activities || null,
+                cnpj_partners: initialData.cnpj_partners || null,
+                cnpj_simples_optant: initialData.cnpj_simples_optant ?? null,
+                cnpj_simples_since: initialData.cnpj_simples_since || null,
+                cnpj_simei_optant: initialData.cnpj_simei_optant ?? null,
+                cnpj_simei_since: initialData.cnpj_simei_since || null,
+                cnpj_state_registrations: initialData.cnpj_state_registrations || null,
             });
         } else {
             setFormData(emptyForm());
@@ -136,6 +158,22 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
             if (registration.state) patch.state = registration.state;
             if (registration.zip_code) patch.zip_code = registration.zip_code;
 
+            patch.cnpj_status = registration.cnpjStatus || null;
+            patch.cnpj_status_date = registration.cnpjStatusDate || null;
+            patch.cnpj_updated_at = registration.cnpjUpdatedAt || null;
+            patch.cnpj_founded_at = registration.cnpjFoundedAt || null;
+            patch.cnpj_legal_nature = registration.cnpjLegalNature || null;
+            patch.cnpj_company_size = registration.cnpjCompanySize || null;
+            patch.cnpj_main_activity_code = registration.cnpjMainActivityCode || null;
+            patch.cnpj_main_activity_text = registration.cnpjMainActivityText || null;
+            patch.cnpj_side_activities = registration.cnpjSideActivities || null;
+            patch.cnpj_partners = registration.cnpjPartners || null;
+            patch.cnpj_simples_optant = registration.cnpjSimplesOptant ?? null;
+            patch.cnpj_simples_since = registration.cnpjSimplesSince || null;
+            patch.cnpj_simei_optant = registration.cnpjSimeiOptant ?? null;
+            patch.cnpj_simei_since = registration.cnpjSimeiSince || null;
+            patch.cnpj_state_registrations = registration.cnpjStateRegistrations || null;
+
             setFormData(current => ({ ...current, ...patch }));
             setDirty(true);
 
@@ -145,7 +183,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
             const statusBits = [
                 registration.cnpjStatus ? `situacao ${registration.cnpjStatus}` : null,
                 updatedAt ? `base atualizada em ${updatedAt}` : null,
-                registration.cnpjMainActivity ? `CNAE: ${registration.cnpjMainActivity}` : null,
+                registration.cnpjMainActivityText ? `CNAE: ${registration.cnpjMainActivityText}` : null,
             ].filter(Boolean).join(' | ');
 
             setCnpjaLookupStatus({
@@ -457,6 +495,106 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                         labelCls={labelCls}
                         inputCls={inputCls}
                     />
+
+                    {(formData.cnpj_status || formData.cnpj_partners?.length || formData.cnpj_state_registrations?.length) && (
+                        <>
+                            <div className="flex items-center gap-2 pt-1">
+                                <FileText className="w-3.5 h-3.5 text-gray-300" />
+                                <span className="text-xs font-black text-gray-300 uppercase tracking-widest">Dados Oficiais (CNPJa)</span>
+                                <div className="flex-1 h-px bg-gray-100" />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                {formData.cnpj_status && (
+                                    <div>
+                                        <span className={labelCls}>Situação Cadastral</span>
+                                        <p className="font-bold text-gray-700">
+                                            {formData.cnpj_status}
+                                            {formData.cnpj_status_date ? ` desde ${new Date(formData.cnpj_status_date).toLocaleDateString('pt-BR')}` : ''}
+                                        </p>
+                                    </div>
+                                )}
+                                {formData.cnpj_founded_at && (
+                                    <div>
+                                        <span className={labelCls}>Data de Fundação</span>
+                                        <p className="font-bold text-gray-700">{new Date(formData.cnpj_founded_at).toLocaleDateString('pt-BR')}</p>
+                                    </div>
+                                )}
+                                {formData.cnpj_legal_nature && (
+                                    <div>
+                                        <span className={labelCls}>Natureza Jurídica</span>
+                                        <p className="font-bold text-gray-700">{formData.cnpj_legal_nature}</p>
+                                    </div>
+                                )}
+                                {formData.cnpj_company_size && (
+                                    <div>
+                                        <span className={labelCls}>Porte</span>
+                                        <p className="font-bold text-gray-700">{formData.cnpj_company_size}</p>
+                                    </div>
+                                )}
+                                {formData.cnpj_main_activity_text && (
+                                    <div className="col-span-2">
+                                        <span className={labelCls}>CNAE Principal</span>
+                                        <p className="font-bold text-gray-700">
+                                            {formData.cnpj_main_activity_code ? `${formData.cnpj_main_activity_code} — ` : ''}
+                                            {formData.cnpj_main_activity_text}
+                                        </p>
+                                    </div>
+                                )}
+                                <div>
+                                    <span className={labelCls}>Simples Nacional</span>
+                                    <p className="font-bold text-gray-700">
+                                        {formData.cnpj_simples_optant
+                                            ? `Optante desde ${formData.cnpj_simples_since ? new Date(formData.cnpj_simples_since).toLocaleDateString('pt-BR') : '—'}`
+                                            : 'Não optante'}
+                                    </p>
+                                </div>
+                                <div>
+                                    <span className={labelCls}>MEI</span>
+                                    <p className="font-bold text-gray-700">
+                                        {formData.cnpj_simei_optant
+                                            ? `Optante desde ${formData.cnpj_simei_since ? new Date(formData.cnpj_simei_since).toLocaleDateString('pt-BR') : '—'}`
+                                            : 'Não optante'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {!!formData.cnpj_side_activities?.length && (
+                                <div>
+                                    <span className={labelCls}>CNAEs Secundários</span>
+                                    <ul className="text-xs text-gray-600 space-y-0.5">
+                                        {formData.cnpj_side_activities.map((a, i) => (
+                                            <li key={i}>{a.code ? `${a.code} — ` : ''}{a.text}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {!!formData.cnpj_partners?.length && (
+                                <div>
+                                    <span className={labelCls}>Sócios / QSA</span>
+                                    <ul className="text-xs text-gray-600 space-y-0.5">
+                                        {formData.cnpj_partners.map((p, i) => (
+                                            <li key={i}>{p.name}{p.role ? ` — ${p.role}` : ''}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
+                            {!!formData.cnpj_state_registrations?.length && (
+                                <div>
+                                    <span className={labelCls}>Inscrições Estaduais</span>
+                                    <ul className="text-xs text-gray-600 space-y-0.5">
+                                        {formData.cnpj_state_registrations.map((r, i) => (
+                                            <li key={i}>
+                                                {r.number} ({r.state}) — {r.enabled ? 'Habilitada' : 'Não habilitada'}{r.status ? ` — ${r.status}` : ''}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </>
+                    )}
                 </form>
                 )}
 

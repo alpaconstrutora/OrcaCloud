@@ -1,8 +1,9 @@
 import React from 'react';
-import { Truck, Mail, Phone, FileText, MapPin, Tag, Building2, User, Briefcase } from 'lucide-react';
+import { Truck, Mail, Phone, FileText, MapPin, Tag, Building2, User, Briefcase, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Supplier, Organization } from '../types';
 import { supplierCategoryService } from '../services/supplierCategoryService';
 import { organizationService } from '../services/organizationService';
+import { supplierService } from '../services/supplierService';
 import { useStore } from '../store/useStore';
 import SupplierBankAccountsTab from './SupplierBankAccountsTab';
 import CityStateSelect from './CityStateSelect';
@@ -43,11 +44,13 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     const [dynamicCategories, setDynamicCategories] = React.useState<string[]>(DEFAULT_CATEGORIES);
     const [organizations, setOrganizations] = React.useState<Organization[]>([]);
     const [modalTab, setModalTab] = React.useState<'cadastro' | 'bancario'>('cadastro');
+    const [isLookingUpCnpj, setIsLookingUpCnpj] = React.useState(false);
+    const [cnpjaLookupStatus, setCnpjaLookupStatus] = React.useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     const emptyForm = (): Omit<Supplier, 'id' | 'created_at'> => ({
         name: '', contact_name: '', email: '', phone: '', document: '',
         type: 'PJ', category: DEFAULT_CATEGORIES[0],
-        street: '', number: '', neighborhood: '', address: '', city: '', state: '',
+        street: '', number: '', neighborhood: '', address: '', city: '', state: '', zip_code: '',
         organization_id: activeOrganizationId || null
     });
 
@@ -59,6 +62,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     };
 
     const handleDocumentChange = (value: string) => {
+        setCnpjaLookupStatus(null);
         set({ document: formData.type === 'PJ' ? maskCNPJ(value) : maskCPF(value) });
     };
 
@@ -76,6 +80,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         // Sempre volta para a aba de cadastro ao abrir/fechar
         setModalTab('cadastro');
         setDirty(false);
+        setCnpjaLookupStatus(null);
         if (initialData) {
             setFormData({
                 name: initialData.name,
@@ -91,6 +96,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                 address: initialData.address || '',
                 city: initialData.city || '',
                 state: initialData.state || '',
+                zip_code: initialData.zip_code || '',
                 organization_id: initialData.organization_id || null
             });
         } else {
@@ -99,6 +105,60 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     }, [initialData, isOpen, activeOrganizationId]);
 
     const isBroker = isRealEstateBrokerCategory(formData.category);
+    const handleLookupCnpj = async () => {
+        const digits = (formData.document || '').replace(/\D/g, '');
+        if (formData.type !== 'PJ') {
+            setCnpjaLookupStatus({ type: 'error', message: 'A consulta CNPJa esta disponivel apenas para pessoa juridica.' });
+            return;
+        }
+        if (digits.length !== 14) {
+            setCnpjaLookupStatus({ type: 'error', message: 'Informe um CNPJ valido com 14 digitos.' });
+            return;
+        }
+
+        setIsLookingUpCnpj(true);
+        setCnpjaLookupStatus(null);
+        try {
+            const registration = await supplierService.lookupCnpjRegistration(digits);
+            const patch: Partial<typeof formData> = {
+                type: 'PJ',
+                document: maskCNPJ(registration.document),
+            };
+
+            if (registration.name) patch.name = registration.name;
+            if (registration.email) patch.email = registration.email;
+            if (registration.phone) patch.phone = registration.phone;
+            if (registration.street) patch.street = registration.street;
+            if (registration.number) patch.number = registration.number;
+            if (registration.neighborhood) patch.neighborhood = registration.neighborhood;
+            if (registration.address) patch.address = registration.address;
+            if (registration.city) patch.city = registration.city;
+            if (registration.state) patch.state = registration.state;
+            if (registration.zip_code) patch.zip_code = registration.zip_code;
+
+            setFormData(current => ({ ...current, ...patch }));
+            setDirty(true);
+
+            const updatedAt = registration.cnpjUpdatedAt
+                ? new Date(registration.cnpjUpdatedAt).toLocaleDateString('pt-BR')
+                : null;
+            const statusBits = [
+                registration.cnpjStatus ? `situacao ${registration.cnpjStatus}` : null,
+                updatedAt ? `base atualizada em ${updatedAt}` : null,
+                registration.cnpjMainActivity ? `CNAE: ${registration.cnpjMainActivity}` : null,
+            ].filter(Boolean).join(' | ');
+
+            setCnpjaLookupStatus({
+                type: 'success',
+                message: statusBits ? `Cadastro atualizado pela CNPJa (${statusBits}).` : 'Cadastro atualizado pela CNPJa.',
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Erro ao consultar CNPJa.';
+            setCnpjaLookupStatus({ type: 'error', message });
+        } finally {
+            setIsLookingUpCnpj(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -217,7 +277,10 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                             <select
                                 className={inputCls + ' cursor-pointer'}
                                 value={formData.type}
-                                onChange={e => set({ type: e.target.value as 'PF' | 'PJ', document: '' })}
+                                onChange={e => {
+                                    setCnpjaLookupStatus(null);
+                                    set({ type: e.target.value as 'PF' | 'PJ', document: '' });
+                                }}
                             >
                                 <option value="PJ">🏢 Pessoa Jurídica</option>
                                 <option value="PF">👤 Pessoa Física</option>
@@ -237,6 +300,32 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                             </div>
                         </div>
                     </div>
+
+                    {formData.type === 'PJ' && (
+                        <button
+                            type="button"
+                            onClick={handleLookupCnpj}
+                            disabled={isLookingUpCnpj}
+                            className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black uppercase tracking-wider text-blue-700 transition-all hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            title="Atualizar cadastro via CNPJa"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${isLookingUpCnpj ? 'animate-spin' : ''}`} />
+                            {isLookingUpCnpj ? 'Consultando CNPJa...' : 'Consultar CNPJ na CNPJa'}
+                        </button>
+                    )}
+
+                    {cnpjaLookupStatus && (
+                        <div className={`flex items-start gap-2 rounded-xl border px-3 py-2.5 ${
+                            cnpjaLookupStatus.type === 'success'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : 'border-rose-200 bg-rose-50 text-rose-700'
+                        }`}>
+                            {cnpjaLookupStatus.type === 'success'
+                                ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                                : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />}
+                            <p className="text-xs font-bold leading-snug">{cnpjaLookupStatus.message}</p>
+                        </div>
+                    )}
 
                     {/* E-mail + Telefone */}
                     <div className="grid grid-cols-2 gap-3">

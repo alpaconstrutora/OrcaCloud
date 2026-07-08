@@ -78,7 +78,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
             loadSuppliers();
         } catch (error) {
             console.error("Erro ao adicionar fornecedor:", error);
-            alert("Erro ao adicionar o fornecedor.");
+            alert(`Erro ao adicionar o fornecedor: ${error instanceof Error ? error.message : String(error)}`);
         }
     };
 
@@ -93,7 +93,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
             loadSuppliers();
         } catch (error) {
             console.error("Erro ao editar fornecedor:", error);
-            alert("Erro ao editar o fornecedor.");
+            alert(`Erro ao editar o fornecedor: ${error instanceof Error ? error.message : String(error)}`);
         }
     };
 

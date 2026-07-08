@@ -66,6 +66,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     };
 
     const clearSelection = () => setSelectedIds(new Set());
+    const [lastCheckedIndex, setLastCheckedIndex] = React.useState<number | null>(null);
 
     const toggleSelected = (id: string) => {
         setSelectedIds(prev => {
@@ -73,6 +74,20 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
             if (next.has(id)) next.delete(id); else next.add(id);
             return next;
         });
+    };
+
+    // Seleção em lote com Shift: seleciona do último item clicado (âncora) até o
+    // item atual, marcando todos os intermediários — não previsto no guia, mas é o
+    // padrão universal de seleção de intervalo (Explorer/Gmail/Planilhas).
+    const handleRowCheck = (id: string, index: number, shiftKey: boolean, visibleRows: Supplier[]) => {
+        if (shiftKey && lastCheckedIndex !== null) {
+            const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
+            const rangeIds = visibleRows.slice(start, end + 1).map(s => s.id);
+            setSelectedIds(prev => new Set([...prev, ...rangeIds]));
+        } else {
+            toggleSelected(id);
+            setLastCheckedIndex(index);
+        }
     };
 
     const loadSuppliers = async () => {
@@ -367,7 +382,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {filteredSuppliers.length > 0 ? (
-                                    filteredSuppliers.map(supplier => (
+                                    filteredSuppliers.map((supplier, rowIndex) => (
                                         <tr
                                             key={supplier.id}
                                             onClick={() => { setEditingSupplier(supplier); setIsModalOpen(true); }}
@@ -376,9 +391,10 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                                                 <input
                                                     type="checkbox"
+                                                    title="Dica: segure Shift e clique para selecionar um intervalo"
                                                     className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                     checked={selectedIds.has(supplier.id)}
-                                                    onChange={() => toggleSelected(supplier.id)}
+                                                    onChange={(e) => handleRowCheck(supplier.id, rowIndex, (e.nativeEvent as MouseEvent).shiftKey, filteredSuppliers)}
                                                 />
                                             </td>
                                             {tableColumns.visibleColumns.includes('name') && (

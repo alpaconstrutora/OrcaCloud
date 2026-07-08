@@ -485,6 +485,46 @@ Modal de Confirmação da seção 14), não para o estado de seleção em si.
 > ℹ️ Checkboxes SÓ aparecem nas linhas que permitem ações em lote.
 > Verificar permissão: `{canDelete(item.status) ? <input type="checkbox" ... /> : null}`
 
+### 10.1 Seleção de intervalo com Shift+clique
+
+Além do clique individual, o checkbox de cada linha deve suportar **seleção de
+intervalo**: clicar num item define uma âncora; segurar **Shift** e clicar em
+outro item seleciona automaticamente todos os itens entre os dois (para cima
+ou para baixo na lista) — padrão universal de Explorer/Gmail/planilhas.
+Extraído de `components/SupplierList.tsx` (F4).
+
+```tsx
+const [lastCheckedIndex, setLastCheckedIndex] = React.useState<number | null>(null);
+
+const handleRowCheck = (id: string, index: number, shiftKey: boolean, visibleRows: Item[]) => {
+  if (shiftKey && lastCheckedIndex !== null) {
+    const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
+    const rangeIds = visibleRows.slice(start, end + 1).map(r => r.id);
+    setSelectedIds(prev => new Set([...prev, ...rangeIds]));
+  } else {
+    toggleSelected(id);
+    setLastCheckedIndex(index);
+  }
+};
+
+// No <input type="checkbox"> de cada linha:
+<input
+  type="checkbox"
+  title="Dica: segure Shift e clique para selecionar um intervalo"
+  checked={selectedIds.has(item.id)}
+  onChange={(e) => handleRowCheck(item.id, rowIndex, (e.nativeEvent as MouseEvent).shiftKey, visibleRows)}
+/>
+```
+
+> ✅ A âncora (`lastCheckedIndex`) só é atualizada em cliques **sem** Shift —
+> um Shift+clique repetido continua estendendo o intervalo a partir do mesmo
+> ponto de partida, e nunca desmarca itens já selecionados fora do intervalo.
+> ✅ `(e.nativeEvent as MouseEvent).shiftKey` funciona porque o evento `onChange`
+> de um checkbox clicado com o mouse carrega o `MouseEvent` original em
+> `nativeEvent` — não precisa trocar para `onClick`/`preventDefault`.
+> ℹ️ Adicionar `title` no checkbox com a dica — a interação não é descobrível
+> visualmente.
+
 ---
 
 ## 11. LOADING STATE

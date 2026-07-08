@@ -3,7 +3,7 @@ import { Supplier } from '../types';
 import { isRealEstateBrokerCategory, REAL_ESTATE_BROKER_CATEGORY } from '../constants/supplierCategories';
 
 const SUPPLIER_SELECT = 'id, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at';
-const SUPPLIER_LIST_SELECT = 'id, name, contact_name, email, phone, document, type, category, city, state, organization_id, created_at, organizations:organization_id(name)';
+const SUPPLIER_LIST_SELECT = 'id, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, organizations:organization_id(name)';
 const CNPJA_PUBLIC_API_BASE = 'https://open.cnpja.com/office';
 const CNPJA_PUBLIC_LIMIT = 5;
 const CNPJA_PUBLIC_WINDOW_MS = 60_000;

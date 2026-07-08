@@ -55,6 +55,29 @@ const STATEMENT_COLUMNS: ColumnConfig[] = [
     { key: 'actions',      label: 'Ações',              sortable: false },
 ];
 
+// Colunas da tabela de Extrato Bancário na aba Pendentes (visualização em linha)
+const PENDING_BANK_COLUMNS: ColumnConfig[] = [
+    { key: 'counterparty', label: 'Contraparte',     sortable: false },
+    { key: 'category',     label: 'Categoria',       sortable: false },
+    { key: 'project',      label: 'Obra',            sortable: false },
+    { key: 'costCenter',   label: 'Centro de Custo', sortable: false },
+    { key: 'date',         label: 'Data',            sortable: false },
+    { key: 'amount',       label: 'Valor',           sortable: false },
+    { key: 'actions',      label: 'Ações',           sortable: false },
+];
+
+// Colunas da tabela de Lançamentos Internos na aba Pendentes (visualização em linha)
+const PENDING_INTERNAL_COLUMNS: ColumnConfig[] = [
+    { key: 'description',  label: 'Descrição',            sortable: false },
+    { key: 'party',        label: 'Cliente/Fornecedor',   sortable: false },
+    { key: 'category',     label: 'Categoria',            sortable: false },
+    { key: 'project',      label: 'Obra',                 sortable: false },
+    { key: 'costCenter',   label: 'Centro de Custo',      sortable: false },
+    { key: 'date',         label: 'Data',                 sortable: false },
+    { key: 'amount',       label: 'Valor',                sortable: false },
+    { key: 'actions',      label: 'Ações',                sortable: false },
+];
+
 // Larguras de coluna da tabela de Extrato — ajustáveis pelo usuário (arraste a borda
 // direita do cabeçalho); persistidas em localStorage. Duplo clique restaura o padrão.
 const DEFAULT_STATEMENT_COL_WIDTHS: Record<string, number> = {
@@ -212,6 +235,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     }, [defaultView]);
 
     const tableColumns = useTableColumns(STATEMENT_COLUMNS, 'extratoBancarioColumns');
+    const pendingBankColumns = useTableColumns(PENDING_BANK_COLUMNS, 'conciliacaoPendentesBankColumns');
+    const pendingInternalColumns = useTableColumns(PENDING_INTERNAL_COLUMNS, 'conciliacaoPendentesInternalColumns');
 
     // ── Redimensionamento de colunas da tabela de Extrato (arrastar borda do cabeçalho) ──
     const [statementColWidths, setStatementColWidths] = useState<Record<string, number>>(() => {
@@ -4078,6 +4103,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         <div className="w-px bg-gray-200 mx-1 my-1"></div>
                                     </div>
                                 )}
+                                {activeView === 'pending' && pendentesViewMode === 'list' && (
+                                    <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                                        <ColumnConfigButton
+                                            columns={PENDING_BANK_COLUMNS.filter(c => c.key !== 'actions')}
+                                            visibleColumns={pendingBankColumns.visibleColumns}
+                                            showColumnConfig={pendingBankColumns.showColumnConfig}
+                                            onToggleShow={() => pendingBankColumns.setShowColumnConfig(!pendingBankColumns.showColumnConfig)}
+                                            onToggleColumn={pendingBankColumns.toggleColumn}
+                                            onReset={pendingBankColumns.resetColumns}
+                                        />
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -4504,13 +4541,27 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             }}
                                                         />
                                                     </th>
-                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[140px]">Contraparte</th>
-                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Categoria</th>
-                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Obra</th>
-                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[150px]">Centro de Custo</th>
-                                                    <th className="px-4 py-2 border-r border-gray-100 text-center whitespace-nowrap">Data</th>
-                                                    <th className="px-4 py-2 border-r border-gray-100 text-right whitespace-nowrap">Valor</th>
-                                                    <th className="px-4 py-2 text-right whitespace-nowrap">Ações</th>
+                                                    {pendingBankColumns.visibleColumns.includes('counterparty') && (
+                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[140px]">Contraparte</th>
+                                                    )}
+                                                    {pendingBankColumns.visibleColumns.includes('category') && (
+                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Categoria</th>
+                                                    )}
+                                                    {pendingBankColumns.visibleColumns.includes('project') && (
+                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Obra</th>
+                                                    )}
+                                                    {pendingBankColumns.visibleColumns.includes('costCenter') && (
+                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[150px]">Centro de Custo</th>
+                                                    )}
+                                                    {pendingBankColumns.visibleColumns.includes('date') && (
+                                                        <th className="px-4 py-2 border-r border-gray-100 text-center whitespace-nowrap">Data</th>
+                                                    )}
+                                                    {pendingBankColumns.visibleColumns.includes('amount') && (
+                                                        <th className="px-4 py-2 border-r border-gray-100 text-right whitespace-nowrap">Valor</th>
+                                                    )}
+                                                    {pendingBankColumns.visibleColumns.includes('actions') && (
+                                                        <th className="px-4 py-2 text-right whitespace-nowrap">Ações</th>
+                                                    )}
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
@@ -4518,6 +4569,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     const suggestion = topSuggestionByBankTxId.get(tx.id);
                                                     const cand = suggestion?.candidate_internal_transaction;
                                                     const cellPad = pendentesCompact ? 'py-1' : 'py-2.5';
+                                                    const visibleColCount = 1 + PENDING_BANK_COLUMNS.filter(c => pendingBankColumns.visibleColumns.includes(c.key)).length;
                                                     return (
                                                         <React.Fragment key={tx.id}>
                                                             <tr
@@ -4537,6 +4589,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                         }}
                                                                     />
                                                                 </td>
+                                                                {pendingBankColumns.visibleColumns.includes('counterparty') && (
                                                                 <td className={`px-4 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
                                                                     <LazySelect
                                                                         value={tx.counterparty_name || ''}
@@ -4547,6 +4600,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                         className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.counterparty_name ? 'text-gray-700' : 'text-gray-400'}`}
                                                                     />
                                                                 </td>
+                                                                )}
+                                                                {pendingBankColumns.visibleColumns.includes('category') && (
                                                                 <td className={`px-4 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
                                                                     <LazySelect
                                                                         value={tx.category || ''}
@@ -4557,6 +4612,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                         className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.category ? 'text-gray-700' : 'text-gray-400'}`}
                                                                     />
                                                                 </td>
+                                                                )}
+                                                                {pendingBankColumns.visibleColumns.includes('project') && (
                                                                 <td className={`px-4 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
                                                                     <LazySelect
                                                                         value={tx.project_id || ''}
@@ -4567,6 +4624,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                         className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.project_id ? 'text-gray-700' : 'text-gray-400'}`}
                                                                     />
                                                                 </td>
+                                                                )}
+                                                                {pendingBankColumns.visibleColumns.includes('costCenter') && (
                                                                 <td className={`px-4 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
                                                                     <LazySelect
                                                                         value={tx.cost_center_id || ''}
@@ -4577,12 +4636,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                         className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.cost_center_id ? 'text-gray-700' : 'text-gray-400'}`}
                                                                     />
                                                                 </td>
+                                                                )}
+                                                                {pendingBankColumns.visibleColumns.includes('date') && (
                                                                 <td className={`px-4 ${cellPad} border-r border-gray-100 text-center text-sm font-normal text-gray-500 whitespace-nowrap`}>
                                                                     {formatDateBR(tx.transaction_date)}
                                                                 </td>
+                                                                )}
+                                                                {pendingBankColumns.visibleColumns.includes('amount') && (
                                                                 <td className={`px-4 ${cellPad} border-r border-gray-100 text-right text-sm font-medium whitespace-nowrap ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
                                                                     {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
                                                                 </td>
+                                                                )}
+                                                                {pendingBankColumns.visibleColumns.includes('actions') && (
                                                                 <td className={`px-4 ${cellPad} text-right whitespace-nowrap`} onClick={(e) => e.stopPropagation()}>
                                                                     <div className="flex items-center justify-end gap-1.5">
                                                                         {tx.status === 'RULE_APPLIED' ? (
@@ -4616,10 +4681,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                         </button>
                                                                     </div>
                                                                 </td>
+                                                                )}
                                                             </tr>
                                                             {suggestion && cand && (
                                                                 <tr className="bg-gradient-to-r from-purple-50 to-indigo-50">
-                                                                    <td colSpan={8} className="px-4 py-2">
+                                                                    <td colSpan={visibleColCount} className="px-4 py-2">
                                                                         <div className="flex items-center justify-between gap-3">
                                                                             <div className="flex items-center gap-3 min-w-0">
                                                                                 <Zap className="w-3.5 h-3.5 text-purple-600 shrink-0" />
@@ -4781,6 +4847,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             </button>
                                         )}
                                     </div>
+                                    {pendentesViewMode === 'list' && (
+                                        <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                                            <ColumnConfigButton
+                                                columns={PENDING_INTERNAL_COLUMNS.filter(c => c.key !== 'actions')}
+                                                visibleColumns={pendingInternalColumns.visibleColumns}
+                                                showColumnConfig={pendingInternalColumns.showColumnConfig}
+                                                onToggleShow={() => pendingInternalColumns.setShowColumnConfig(!pendingInternalColumns.showColumnConfig)}
+                                                onToggleColumn={pendingInternalColumns.toggleColumn}
+                                                onReset={pendingInternalColumns.resetColumns}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                                 <div className="flex items-center gap-3">
@@ -4947,14 +5025,30 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             }}
                                                         />
                                                     </th>
-                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[200px]">Descrição</th>
-                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[140px]">Cliente/Fornecedor</th>
-                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Categoria</th>
-                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[110px]">Obra</th>
-                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Centro de Custo</th>
-                                                    <th className="px-4 py-2 border-r border-gray-100 text-center whitespace-nowrap">Data</th>
-                                                    <th className="px-4 py-2 border-r border-gray-100 text-right whitespace-nowrap">Valor</th>
-                                                    <th className="px-4 py-2 text-right whitespace-nowrap">Ações</th>
+                                                    {pendingInternalColumns.visibleColumns.includes('description') && (
+                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[200px]">Descrição</th>
+                                                    )}
+                                                    {pendingInternalColumns.visibleColumns.includes('party') && (
+                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[140px]">Cliente/Fornecedor</th>
+                                                    )}
+                                                    {pendingInternalColumns.visibleColumns.includes('category') && (
+                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Categoria</th>
+                                                    )}
+                                                    {pendingInternalColumns.visibleColumns.includes('project') && (
+                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[110px]">Obra</th>
+                                                    )}
+                                                    {pendingInternalColumns.visibleColumns.includes('costCenter') && (
+                                                        <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Centro de Custo</th>
+                                                    )}
+                                                    {pendingInternalColumns.visibleColumns.includes('date') && (
+                                                        <th className="px-4 py-2 border-r border-gray-100 text-center whitespace-nowrap">Data</th>
+                                                    )}
+                                                    {pendingInternalColumns.visibleColumns.includes('amount') && (
+                                                        <th className="px-4 py-2 border-r border-gray-100 text-right whitespace-nowrap">Valor</th>
+                                                    )}
+                                                    {pendingInternalColumns.visibleColumns.includes('actions') && (
+                                                        <th className="px-4 py-2 text-right whitespace-nowrap">Ações</th>
+                                                    )}
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
@@ -4978,6 +5072,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     }}
                                                                 />
                                                             </td>
+                                                            {pendingInternalColumns.visibleColumns.includes('description') && (
                                                             <td className={`px-4 ${cellPad} border-r border-gray-100`}>
                                                                 <div className="flex items-center gap-2 min-w-0">
                                                                     <p className="text-sm font-normal text-gray-900 truncate" title={displayTitle(tx)}>
@@ -5004,9 +5099,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     )}
                                                                 </div>
                                                             </td>
+                                                            )}
+                                                            {pendingInternalColumns.visibleColumns.includes('party') && (
                                                             <td className={`px-4 ${cellPad} border-r border-gray-100 text-sm font-normal text-gray-700 truncate max-w-[160px]`}>
                                                                 {displayPartyName(tx) || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>}
                                                             </td>
+                                                            )}
+                                                            {pendingInternalColumns.visibleColumns.includes('category') && (
                                                             <td className={`px-4 ${cellPad} border-r border-gray-100`}>
                                                                 <LazySelect
                                                                     value={tx.category || ''}
@@ -5017,18 +5116,28 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.category ? 'text-gray-700' : 'text-gray-400'}`}
                                                                 />
                                                             </td>
+                                                            )}
+                                                            {pendingInternalColumns.visibleColumns.includes('project') && (
                                                             <td className={`px-4 ${cellPad} border-r border-gray-100 text-sm font-normal text-sky-700 truncate max-w-[110px]`}>
                                                                 {projectName(tx.project_id) || <span className="text-gray-300">—</span>}
                                                             </td>
+                                                            )}
+                                                            {pendingInternalColumns.visibleColumns.includes('costCenter') && (
                                                             <td className={`px-4 ${cellPad} border-r border-gray-100 text-sm font-normal text-violet-700 truncate max-w-[130px]`}>
                                                                 {costCenterName(tx.cost_center_id) || <span className="text-gray-300">—</span>}
                                                             </td>
+                                                            )}
+                                                            {pendingInternalColumns.visibleColumns.includes('date') && (
                                                             <td className={`px-4 ${cellPad} border-r border-gray-100 text-center text-sm font-normal text-gray-500 whitespace-nowrap`}>
                                                                 {formatDateBR(displayDate(tx))}
                                                             </td>
+                                                            )}
+                                                            {pendingInternalColumns.visibleColumns.includes('amount') && (
                                                             <td className={`px-4 ${cellPad} border-r border-gray-100 text-right text-sm font-medium text-gray-900 whitespace-nowrap`}>
                                                                 {formatMoney(tx.amount)}
                                                             </td>
+                                                            )}
+                                                            {pendingInternalColumns.visibleColumns.includes('actions') && (
                                                             <td className={`px-4 ${cellPad} text-right whitespace-nowrap`}>
                                                                 <div className="flex items-center justify-end gap-1">
                                                                     {tx.source_system === 'MANUAL' && (
@@ -5064,6 +5173,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     </button>
                                                                 </div>
                                                             </td>
+                                                            )}
                                                         </tr>
                                                     );
                                                 })}

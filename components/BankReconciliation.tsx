@@ -4342,311 +4342,309 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     <h5 className="text-sm font-black text-gray-400 uppercase mb-2">Sem extrato importado</h5>
                                     <p className="text-xs text-gray-400 max-w-[200px]">Importe um arquivo OFX, CSV, CNAB ou Excel (XLSX) para iniciar a conciliação.</p>
                                 </div>
-                            ) : (
-                                <div
-                                    className={pendentesViewMode === 'grid' ? "grid grid-cols-1 gap-4" : "flex flex-col gap-3 p-3 overflow-y-auto reconc-scroll"}
-                                    style={pendentesViewMode === 'list' ? { maxHeight: 'calc(100vh - 300px)' } : undefined}
-                                >
-
-                                    {pendentesViewMode === 'list' && sortedBankTransactions.length > 0 && (
-                                        <div className="flex items-center gap-3 px-4 py-2">
-                                            <input
-                                                type="checkbox"
-                                                className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                checked={sortedBankTransactions.every(tx => selectedBankTxIds.has(tx.id))}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) {
-                                                        setSelectedBankTxIds(new Set([...selectedBankTxIds, ...sortedBankTransactions.map(tx => tx.id)]));
-                                                    } else {
-                                                        const next = new Set(selectedBankTxIds);
-                                                        sortedBankTransactions.forEach(tx => next.delete(tx.id));
-                                                        setSelectedBankTxIds(next);
-                                                    }
-                                                }}
-                                            />
-                                            <span className="text-sm font-normal text-gray-500">
-                                                {sortedBankTransactions.every(tx => selectedBankTxIds.has(tx.id))
-                                                    ? `${sortedBankTransactions.length} selecionados`
-                                                    : `Selecionar todos visíveis (${sortedBankTransactions.length})`}
-                                            </span>
-                                        </div>
-                                    )}
-
+                            ) : pendentesViewMode === 'grid' ? (
+                                <div className="grid grid-cols-1 gap-4">
                                     {sortedBankTransactions.map(tx => (
-                                        <div
-                                            key={tx.id}
-                                            className="group relative"
-                                            style={pendentesViewMode === 'list' ? ({ contentVisibility: 'auto', containIntrinsicSize: pendentesCompact ? 'auto 80px' : 'auto 140px' } as React.CSSProperties) : undefined}
-                                        >
-                                            {pendentesViewMode === 'grid' ? (
-                                                <div 
-                                                    onClick={() => setSelectedBankTxId(selectedBankTxId === tx.id ? null : tx.id)}
-                                                    className={`p-5 bg-white rounded-[2rem] border transition-all cursor-pointer relative overflow-hidden group hover:shadow-lg ${selectedBankTxIds.has(tx.id) ? 'border-blue-500 ring-2 ring-blue-500/10 shadow-xl scale-[1.02]' : 'border-gray-100 shadow-sm'} ${selectedBankTxId === tx.id ? 'bg-blue-50/30' : ''}`}
-                                                >
-                                                    <div className="absolute top-4 left-4 z-20" onClick={(e) => e.stopPropagation()}>
-                                                        <input 
-                                                            type="checkbox"
-                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer shadow-sm transition-transform hover:scale-110"
-                                                            checked={selectedBankTxIds.has(tx.id)}
-                                                            onChange={(e) => {
-                                                                const next = new Set(selectedBankTxIds);
-                                                                if (e.target.checked) next.add(tx.id);
-                                                                else next.delete(tx.id);
-                                                                setSelectedBankTxIds(next);
-                                                            }}
-                                                        />
-                                                    </div>
-                                                    <div className="flex justify-between items-start mb-4 pl-8">
-                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                                            {tx.direction === 'DEBIT' ? <ArrowRightLeft className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <p className={`text-sm font-black ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                                {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
-                                                            </p>
-                                                            <span className="text-[8px] font-black text-gray-400">{formatDateBR(tx.transaction_date)}</span>
-                                                        </div>
-                                                    </div>
-
-                                                    <h6 className="text-xs font-bold text-gray-900 mb-3 truncate" title={tx.description_normalized || tx.description_raw}>
-                                                        {tx.description_normalized || tx.description_raw}
-                                                    </h6>
-
-                                                    <div className="flex flex-col gap-3 mt-auto pt-3 border-t border-gray-50">
-                                                        <div className="flex gap-2">
-                                                            <LazySelect
-                                                                value={tx.category || ''}
-                                                                currentLabel={tx.category || ''}
-                                                                onChange={(v) => handleUpdateBankCategory(tx.id, v)}
-                                                                options={categoryOptions}
-                                                                placeholder="Categoria"
-                                                                className={`flex-1 text-[8px] font-black px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
-                                                                    tx.category
-                                                                        ? 'text-gray-900 bg-gray-50 border-gray-100 hover:bg-gray-100'
-                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-300 hover:text-blue-500'
-                                                                }`}
-                                                            />
-                                                            <LazySelect
-                                                                value={tx.project_id || ''}
-                                                                currentLabel={projectName(tx.project_id) || ''}
-                                                                onChange={(v) => handleUpdateBankProject(tx.id, v)}
-                                                                options={projectOptions}
-                                                                placeholder="Obra"
-                                                                className={`flex-1 text-[8px] font-black px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${
-                                                                    tx.project_id
-                                                                        ? 'text-gray-900 bg-blue-50 border-blue-100 hover:bg-blue-100'
-                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-300 hover:text-blue-500'
-                                                                }`}
-                                                            />
-                                                        </div>
-
-                                                        <div className="flex items-center justify-between">
-                                                            {tx.status === 'RULE_APPLIED' ? (
-                                                            <div className="flex gap-1.5 shrink-0">
-                                                                <button 
-                                                                    className="text-[8px] font-black text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 px-2 py-1 rounded-lg uppercase tracking-widest transition-all"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleRejectRule(tx.id);
-                                                                    }}
-                                                                    title="Rejeitar Automático"
-                                                                >
-                                                                    <X className="w-3 h-3" />
-                                                                </button>
-                                                                <button 
-                                                                    className="text-[8px] font-black text-white bg-purple-600 px-3 py-1 rounded-lg uppercase tracking-widest hover:bg-purple-700 transition-all shadow-sm"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleConfirmMatch(tx.id);
-                                                                    }}
-                                                                >
-                                                                    Conciliar
-                                                                </button>
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-sm font-normal text-gray-400">{tx.status}</span>
-                                                        )}
-                                                        </div>
-                                                    </div>
-
-                                                    {tx.status === 'RULE_APPLIED' && (
-                                                        <div className="absolute top-0 right-0 w-16 h-16 pointer-events-none overflow-hidden">
-                                                            <div className="absolute top-0 right-0 bg-purple-600 text-xs font-black text-white px-8 py-1 rotate-45 translate-x-[35%] translate-y-[20%] uppercase tracking-widest">
-                                                                Regra
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                        <div key={tx.id} className="group relative">
+                                            <div
+                                                onClick={() => setSelectedBankTxId(selectedBankTxId === tx.id ? null : tx.id)}
+                                                className={`p-5 bg-white rounded-[2rem] border transition-all cursor-pointer relative overflow-hidden group hover:shadow-lg ${selectedBankTxIds.has(tx.id) ? 'border-blue-500 ring-2 ring-blue-500/10 shadow-xl scale-[1.02]' : 'border-gray-100 shadow-sm'} ${selectedBankTxId === tx.id ? 'bg-blue-50/30' : ''}`}
+                                            >
+                                                <div className="absolute top-4 left-4 z-20" onClick={(e) => e.stopPropagation()}>
+                                                    <input
+                                                        type="checkbox"
+                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer shadow-sm transition-transform hover:scale-110"
+                                                        checked={selectedBankTxIds.has(tx.id)}
+                                                        onChange={(e) => {
+                                                            const next = new Set(selectedBankTxIds);
+                                                            if (e.target.checked) next.add(tx.id);
+                                                            else next.delete(tx.id);
+                                                            setSelectedBankTxIds(next);
+                                                        }}
+                                                    />
                                                 </div>
-                                            ) : (
-                                                <div
-                                                    onClick={() => setSelectedBankTxId(selectedBankTxId === tx.id ? null : tx.id)}
-                                                    className={`${pendentesCompact ? 'p-2 rounded-xl gap-2' : 'p-3 rounded-2xl gap-3'} border transition-all cursor-pointer flex items-center z-10 relative hover:shadow-md ${selectedBankTxId === tx.id ? 'bg-blue-50 border-blue-400 shadow-lg ring-2 ring-blue-500/10 scale-[1.01]' : 'bg-white border-gray-100 shadow-sm'}`}
-                                                >
-                                                    <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-                                                        <input
-                                                            type="checkbox"
-                                                            className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                            checked={selectedBankTxIds.has(tx.id)}
-                                                            onChange={(e) => {
-                                                                const next = new Set(selectedBankTxIds);
-                                                                if (e.target.checked) next.add(tx.id);
-                                                                else next.delete(tx.id);
-                                                                setSelectedBankTxIds(next);
-                                                            }}
-                                                        />
+                                                <div className="flex justify-between items-start mb-4 pl-8">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                        {tx.direction === 'DEBIT' ? <ArrowRightLeft className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
                                                     </div>
-                                                    <div className={`${pendentesCompact ? 'w-6 h-6' : 'w-8 h-8'} rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
-                                                        {tx.direction === 'DEBIT' ? <ArrowRightLeft className={pendentesCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> : <Plus className={pendentesCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />}
-                                                    </div>
-
-                                                    {/* Linha única: Fornecedor/Cliente / Categoria / Obra / Centro de Custo / Data / Valor / Ações */}
-                                                    <div className="flex items-center flex-wrap flex-1 min-w-0 gap-3">
-                                                        {/* Seletor de Cliente / Fornecedor */}
-                                                        <div onClick={(e) => e.stopPropagation()}>
-                                                            <LazySelect
-                                                                value={tx.counterparty_name || ''}
-                                                                currentLabel={tx.counterparty_name || ''}
-                                                                onChange={(v) => handleUpdateBankCounterparty(tx.id, v)}
-                                                                options={tx.direction === 'DEBIT' ? credorOptions : clienteOptions}
-                                                                placeholder={tx.direction === 'DEBIT' ? 'Credor' : 'Cliente'}
-                                                                className={`text-sm font-normal border-b border-dashed bg-transparent focus:outline-none cursor-pointer transition-colors max-w-[130px] ${
-                                                                    tx.counterparty_name
-                                                                        ? 'text-gray-700 border-gray-300'
-                                                                        : 'text-gray-400 border-gray-200'
-                                                                }`}
-                                                            />
-                                                        </div>
-
-                                                        <div onClick={(e) => e.stopPropagation()}>
-                                                            <LazySelect
-                                                                value={tx.category || ''}
-                                                                currentLabel={tx.category || ''}
-                                                                onChange={(v) => handleUpdateBankCategory(tx.id, v)}
-                                                                options={categoryOptions}
-                                                                placeholder="Categoria"
-                                                                className={`text-sm font-normal rounded-lg border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
-                                                                    tx.category
-                                                                        ? 'text-gray-900 bg-gray-100 border-gray-200/50 hover:bg-gray-200'
-                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
-                                                                }`}
-                                                            />
-                                                        </div>
-
-                                                        <div onClick={(e) => e.stopPropagation()}>
-                                                            <LazySelect
-                                                                value={tx.project_id || ''}
-                                                                currentLabel={projectName(tx.project_id) || ''}
-                                                                onChange={(v) => handleUpdateBankProject(tx.id, v)}
-                                                                options={projectOptions}
-                                                                placeholder="Obra"
-                                                                className={`text-sm font-normal rounded-lg border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
-                                                                    tx.project_id
-                                                                        ? 'text-gray-900 bg-blue-100 border-blue-200/50 hover:bg-blue-200'
-                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
-                                                                }`}
-                                                            />
-                                                        </div>
-
-                                                        <div onClick={(e) => e.stopPropagation()}>
-                                                            <LazySelect
-                                                                value={tx.cost_center_id || ''}
-                                                                currentLabel={costCenterName(tx.cost_center_id) || ''}
-                                                                onChange={(v) => handleUpdateBankCostCenter(tx.id, v)}
-                                                                options={costCenterOptions}
-                                                                placeholder="Centro de Custo"
-                                                                className={`text-sm font-normal rounded-lg border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
-                                                                    tx.cost_center_id
-                                                                        ? 'text-gray-900 bg-violet-100 border-violet-200/50 hover:bg-violet-200'
-                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
-                                                                }`}
-                                                            />
-                                                        </div>
-
-                                                        <div className="flex items-center gap-1 ml-auto shrink-0">
-                                                            <Calendar className="w-3 h-3 text-gray-300 shrink-0" />
-                                                            <span className="text-sm font-normal text-gray-500">
-                                                                {formatDateBR(tx.transaction_date)}
-                                                            </span>
-                                                        </div>
-
-                                                        <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-medium shrink-0 ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                    <div className="text-right">
+                                                        <p className={`text-sm font-medium ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
                                                             {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
                                                         </p>
-
-                                                        {tx.status === 'RULE_APPLIED' && (
-                                                            <span className="shrink-0 flex items-center gap-1 text-sm font-normal text-purple-600">
-                                                                <Zap className="w-3 h-3" /> Automático
-                                                            </span>
-                                                        )}
-
-                                                        <div className="flex items-center gap-1.5 shrink-0">
-                                                            {tx.status === 'RULE_APPLIED' ? (
-                                                                <>
-                                                                    <button
-                                                                        className={`text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-lg uppercase tracking-widest transition-all ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
-                                                                        onClick={(e) => { e.stopPropagation(); handleRejectRule(tx.id); }}
-                                                                        title="Rejeitar Automático"
-                                                                    >
-                                                                        <X className="w-3 h-3" />
-                                                                    </button>
-                                                                    <button
-                                                                        className={`text-xs font-semibold text-white bg-purple-600 rounded-lg uppercase tracking-widest hover:bg-purple-700 transition-all ${pendentesCompact ? 'px-2 py-0.5' : 'px-3 py-1'}`}
-                                                                        onClick={(e) => { e.stopPropagation(); handleConfirmMatch(tx.id); }}
-                                                                    >
-                                                                        Aceitar
-                                                                    </button>
-                                                                </>
-                                                            ) : (
-                                                                <span className="text-sm font-normal text-gray-400">{tx.status}</span>
-                                                            )}
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleDeleteBankTransactions([tx.id]); }}
-                                                                className="p-1 text-gray-200 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                                                title="Excluir extrato"
-                                                            >
-                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        </div>
+                                                        <span className="text-xs font-normal text-gray-400">{formatDateBR(tx.transaction_date)}</span>
                                                     </div>
                                                 </div>
-                                            )}
+
+                                                <h6 className="text-sm font-normal text-gray-900 mb-3 truncate" title={tx.description_normalized || tx.description_raw}>
+                                                    {tx.description_normalized || tx.description_raw}
+                                                </h6>
+
+                                                <div className="flex flex-col gap-3 mt-auto pt-3 border-t border-gray-50">
+                                                    <div className="flex gap-2">
+                                                        <LazySelect
+                                                            value={tx.category || ''}
+                                                            currentLabel={tx.category || ''}
+                                                            onChange={(v) => handleUpdateBankCategory(tx.id, v)}
+                                                            options={categoryOptions}
+                                                            placeholder="Categoria"
+                                                            className={`flex-1 text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer text-center ${
+                                                                tx.category
+                                                                    ? 'text-gray-900 bg-gray-50 border-gray-100 hover:bg-gray-100'
+                                                                    : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-300 hover:text-blue-500'
+                                                            }`}
+                                                        />
+                                                        <LazySelect
+                                                            value={tx.project_id || ''}
+                                                            currentLabel={projectName(tx.project_id) || ''}
+                                                            onChange={(v) => handleUpdateBankProject(tx.id, v)}
+                                                            options={projectOptions}
+                                                            placeholder="Obra"
+                                                            className={`flex-1 text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer text-center ${
+                                                                tx.project_id
+                                                                    ? 'text-gray-900 bg-blue-50 border-blue-100 hover:bg-blue-100'
+                                                                    : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-300 hover:text-blue-500'
+                                                            }`}
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex items-center justify-between">
+                                                        {tx.status === 'RULE_APPLIED' ? (
+                                                        <div className="flex gap-1.5 shrink-0">
+                                                            <button
+                                                                className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 px-2 py-1 rounded-lg uppercase tracking-widest transition-all"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleRejectRule(tx.id);
+                                                                }}
+                                                                title="Rejeitar Automático"
+                                                            >
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                            <button
+                                                                className="text-xs font-semibold text-white bg-purple-600 px-3 py-1 rounded-lg uppercase tracking-widest hover:bg-purple-700 transition-all shadow-sm"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleConfirmMatch(tx.id);
+                                                                }}
+                                                            >
+                                                                Conciliar
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-sm font-normal text-gray-400">{tx.status}</span>
+                                                    )}
+                                                    </div>
+                                                </div>
+
+                                                {tx.status === 'RULE_APPLIED' && (
+                                                    <div className="absolute top-0 right-0 w-16 h-16 pointer-events-none overflow-hidden">
+                                                        <div className="absolute top-0 right-0 bg-purple-600 text-xs font-semibold text-white px-8 py-1 rotate-45 translate-x-[35%] translate-y-[20%] uppercase tracking-widest">
+                                                            Regra
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                             {/* AI Suggestions Panel */}
                                             {(() => {
                                                 const suggestion = topSuggestionByBankTxId.get(tx.id);
                                                 const cand = suggestion?.candidate_internal_transaction;
                                                 if (!suggestion || !cand) return null;
                                                 return (
-                                                    <div key={suggestion.id} className={`${pendentesCompact ? 'mx-2 mb-1 -mt-1 p-1.5' : 'mx-4 mb-2 -mt-2 p-3'} bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100 rounded-b-xl flex items-center justify-between shadow-inner`}>
+                                                    <div key={suggestion.id} className="mx-4 mb-2 -mt-2 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100 rounded-b-xl flex items-center justify-between shadow-inner">
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-6 h-6 rounded-full bg-purple-100/50 flex items-center justify-center text-purple-600">
                                                                 <Zap className="w-3 h-3" />
                                                             </div>
                                                             <div>
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="text-[9px] font-black text-purple-600 uppercase tracking-widest">Sugestão Inteligente</span>
-                                                                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-white text-purple-500">{suggestion.confidence}% Match</span>
+                                                                    <span className="text-xs font-semibold text-purple-600 uppercase tracking-widest">Sugestão Inteligente</span>
+                                                                    <span className="text-xs font-normal text-purple-500">{suggestion.confidence}% Match</span>
                                                                 </div>
-                                                                <p className="text-xs font-bold text-gray-700 mt-0.5 max-w-[220px] truncate" title={cand.description}>
+                                                                <p className="text-sm font-normal text-gray-700 mt-0.5 max-w-[220px] truncate" title={cand.description}>
                                                                     {cand.description}
                                                                 </p>
                                                                 {typeof suggestion.reason === 'string' && suggestion.reason && (
-                                                                    <p className="text-[9px] text-gray-500 mt-0.5 max-w-[260px] leading-snug" title={suggestion.reason}>
+                                                                    <p className="text-xs text-gray-500 mt-0.5 max-w-[260px] leading-snug" title={suggestion.reason}>
                                                                         {suggestion.reason}
                                                                     </p>
                                                                 )}
                                                             </div>
                                                         </div>
-                                                            <button
-                                                                onClick={() => handleConfirmMatch(tx.id, cand.id)}
-                                                                className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-purple-700 transition-colors shadow-sm"
-                                                            >
-                                                                Conciliar Agora
-                                                            </button>
+                                                        <button
+                                                            onClick={() => handleConfirmMatch(tx.id, cand.id)}
+                                                            className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-semibold uppercase tracking-widest hover:bg-purple-700 transition-colors shadow-sm"
+                                                        >
+                                                            Conciliar Agora
+                                                        </button>
                                                     </div>
                                                 );
                                             })()}
                                         </div>
                                     ))}
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
+                                    <div className="overflow-y-auto reconc-scroll" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+                                        <table className="w-full text-left border-collapse">
+                                            <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200 sticky top-0 z-10">
+                                                <tr>
+                                                    <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                            checked={sortedBankTransactions.length > 0 && sortedBankTransactions.every(tx => selectedBankTxIds.has(tx.id))}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setSelectedBankTxIds(new Set([...selectedBankTxIds, ...sortedBankTransactions.map(tx => tx.id)]));
+                                                                } else {
+                                                                    const next = new Set(selectedBankTxIds);
+                                                                    sortedBankTransactions.forEach(tx => next.delete(tx.id));
+                                                                    setSelectedBankTxIds(next);
+                                                                }
+                                                            }}
+                                                        />
+                                                    </th>
+                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[140px]">Contraparte</th>
+                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Categoria</th>
+                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Obra</th>
+                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[150px]">Centro de Custo</th>
+                                                    <th className="px-4 py-2 border-r border-gray-100 text-center whitespace-nowrap">Data</th>
+                                                    <th className="px-4 py-2 border-r border-gray-100 text-right whitespace-nowrap">Valor</th>
+                                                    <th className="px-4 py-2 text-right whitespace-nowrap">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {sortedBankTransactions.map(tx => {
+                                                    const suggestion = topSuggestionByBankTxId.get(tx.id);
+                                                    const cand = suggestion?.candidate_internal_transaction;
+                                                    const cellPad = pendentesCompact ? 'py-1' : 'py-2.5';
+                                                    return (
+                                                        <React.Fragment key={tx.id}>
+                                                            <tr
+                                                                onClick={() => setSelectedBankTxId(selectedBankTxId === tx.id ? null : tx.id)}
+                                                                className={`cursor-pointer transition-colors ${selectedBankTxId === tx.id ? 'bg-blue-50/60' : selectedBankTxIds.has(tx.id) ? 'bg-blue-50/30' : 'hover:bg-gray-50'}`}
+                                                            >
+                                                                <td className={`px-4 ${cellPad} border-r border-gray-100 text-center`} onClick={(e) => e.stopPropagation()}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                        checked={selectedBankTxIds.has(tx.id)}
+                                                                        onChange={(e) => {
+                                                                            const next = new Set(selectedBankTxIds);
+                                                                            if (e.target.checked) next.add(tx.id);
+                                                                            else next.delete(tx.id);
+                                                                            setSelectedBankTxIds(next);
+                                                                        }}
+                                                                    />
+                                                                </td>
+                                                                <td className={`px-4 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
+                                                                    <LazySelect
+                                                                        value={tx.counterparty_name || ''}
+                                                                        currentLabel={tx.counterparty_name || ''}
+                                                                        onChange={(v) => handleUpdateBankCounterparty(tx.id, v)}
+                                                                        options={tx.direction === 'DEBIT' ? credorOptions : clienteOptions}
+                                                                        placeholder={tx.direction === 'DEBIT' ? 'Credor' : 'Cliente'}
+                                                                        className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.counterparty_name ? 'text-gray-700' : 'text-gray-400'}`}
+                                                                    />
+                                                                </td>
+                                                                <td className={`px-4 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
+                                                                    <LazySelect
+                                                                        value={tx.category || ''}
+                                                                        currentLabel={tx.category || ''}
+                                                                        onChange={(v) => handleUpdateBankCategory(tx.id, v)}
+                                                                        options={categoryOptions}
+                                                                        placeholder="—"
+                                                                        className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.category ? 'text-gray-700' : 'text-gray-400'}`}
+                                                                    />
+                                                                </td>
+                                                                <td className={`px-4 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
+                                                                    <LazySelect
+                                                                        value={tx.project_id || ''}
+                                                                        currentLabel={projectName(tx.project_id) || ''}
+                                                                        onChange={(v) => handleUpdateBankProject(tx.id, v)}
+                                                                        options={projectOptions}
+                                                                        placeholder="—"
+                                                                        className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.project_id ? 'text-gray-700' : 'text-gray-400'}`}
+                                                                    />
+                                                                </td>
+                                                                <td className={`px-4 ${cellPad} border-r border-gray-100`} onClick={(e) => e.stopPropagation()}>
+                                                                    <LazySelect
+                                                                        value={tx.cost_center_id || ''}
+                                                                        currentLabel={costCenterName(tx.cost_center_id) || ''}
+                                                                        onChange={(v) => handleUpdateBankCostCenter(tx.id, v)}
+                                                                        options={costCenterOptions}
+                                                                        placeholder="—"
+                                                                        className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.cost_center_id ? 'text-gray-700' : 'text-gray-400'}`}
+                                                                    />
+                                                                </td>
+                                                                <td className={`px-4 ${cellPad} border-r border-gray-100 text-center text-sm font-normal text-gray-500 whitespace-nowrap`}>
+                                                                    {formatDateBR(tx.transaction_date)}
+                                                                </td>
+                                                                <td className={`px-4 ${cellPad} border-r border-gray-100 text-right text-sm font-medium whitespace-nowrap ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                                    {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
+                                                                </td>
+                                                                <td className={`px-4 ${cellPad} text-right whitespace-nowrap`} onClick={(e) => e.stopPropagation()}>
+                                                                    <div className="flex items-center justify-end gap-1.5">
+                                                                        {tx.status === 'RULE_APPLIED' ? (
+                                                                            <>
+                                                                                <span className="text-xs font-normal text-purple-600 flex items-center gap-1 mr-1">
+                                                                                    <Zap className="w-3 h-3" /> Automático
+                                                                                </span>
+                                                                                <button
+                                                                                    className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-lg uppercase tracking-widest transition-all px-2 py-1"
+                                                                                    onClick={() => handleRejectRule(tx.id)}
+                                                                                    title="Rejeitar Automático"
+                                                                                >
+                                                                                    <X className="w-3 h-3" />
+                                                                                </button>
+                                                                                <button
+                                                                                    className="text-xs font-semibold text-white bg-purple-600 rounded-lg uppercase tracking-widest hover:bg-purple-700 transition-all px-3 py-1"
+                                                                                    onClick={() => handleConfirmMatch(tx.id)}
+                                                                                >
+                                                                                    Aceitar
+                                                                                </button>
+                                                                            </>
+                                                                        ) : (
+                                                                            <span className="text-sm font-normal text-gray-400">{tx.status}</span>
+                                                                        )}
+                                                                        <button
+                                                                            onClick={() => handleDeleteBankTransactions([tx.id])}
+                                                                            className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                                            title="Excluir extrato"
+                                                                        >
+                                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                            {suggestion && cand && (
+                                                                <tr className="bg-gradient-to-r from-purple-50 to-indigo-50">
+                                                                    <td colSpan={8} className="px-4 py-2">
+                                                                        <div className="flex items-center justify-between gap-3">
+                                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                                <Zap className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                                                                <span className="text-xs font-semibold text-purple-600 uppercase tracking-widest shrink-0">Sugestão</span>
+                                                                                <span className="text-xs font-normal text-purple-500 shrink-0">{suggestion.confidence}% Match</span>
+                                                                                <p className="text-sm font-normal text-gray-700 truncate" title={cand.description}>
+                                                                                    {cand.description}
+                                                                                </p>
+                                                                            </div>
+                                                                            <button
+                                                                                onClick={() => handleConfirmMatch(tx.id, cand.id)}
+                                                                                className="shrink-0 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-semibold uppercase tracking-widest hover:bg-purple-700 transition-colors shadow-sm"
+                                                                            >
+                                                                                Conciliar Agora
+                                                                            </button>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            )}
+                                                        </React.Fragment>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -4821,41 +4819,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         Tudo certo! Não há transações pendentes de conciliação no sistema.
                                     </p>
                                 </div>
-                            ) : (
-                                <div
-                                    className={pendentesViewMode === 'grid' ? "grid grid-cols-1 gap-4" : "flex flex-col gap-3 p-3 overflow-y-auto reconc-scroll"}
-                                    style={pendentesViewMode === 'list' ? { maxHeight: 'calc(100vh - 300px)' } : undefined}
-                                >
-
-                                    {pendentesViewMode === 'list' && sortedInternalTransactions.length > 0 && (
-                                        <div className="flex items-center gap-3 px-4 py-2">
-                                            <input
-                                                type="checkbox"
-                                                className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                                                checked={sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id))}
-                                                onChange={(e) => {
-                                                    if (e.target.checked) {
-                                                        setSelectedInternalTxIds(new Set([...selectedInternalTxIds, ...sortedInternalTransactions.map(tx => tx.id)]));
-                                                    } else {
-                                                        const next = new Set(selectedInternalTxIds);
-                                                        sortedInternalTransactions.forEach(tx => next.delete(tx.id));
-                                                        setSelectedInternalTxIds(next);
-                                                    }
-                                                }}
-                                            />
-                                            <span className="text-sm font-normal text-gray-500">
-                                                {sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id))
-                                                    ? `${sortedInternalTransactions.length} selecionados`
-                                                    : `Selecionar todos visíveis (${sortedInternalTransactions.length})`}
-                                            </span>
-                                        </div>
-                                    )}
-
+                            ) : pendentesViewMode === 'grid' ? (
+                                <div className="grid grid-cols-1 gap-4">
                                     {sortedInternalTransactions.map(tx => (
-                                        pendentesViewMode === 'grid' ? (
                                         <div key={tx.id} className={`p-5 bg-white rounded-[2rem] border transition-all group hover:shadow-lg relative overflow-hidden ${selectedInternalTxIds.has(tx.id) ? 'border-emerald-500 ring-2 ring-emerald-500/10 shadow-xl scale-[1.02]' : 'border-gray-100 shadow-sm'}`}>
                                             <div className="absolute top-4 left-4 z-20">
-                                                <input 
+                                                <input
                                                     type="checkbox"
                                                     className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer shadow-sm transition-transform hover:scale-110"
                                                     checked={selectedInternalTxIds.has(tx.id)}
@@ -4872,37 +4841,38 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         <DollarSign className="w-5 h-5" />
                                                     </div>
                                                     <div className="text-right">
-                                                        <p className="text-sm font-black text-gray-900 leading-none">
+                                                        <p className="text-sm font-medium text-gray-900 leading-none">
                                                             {formatMoney(tx.amount)}
                                                         </p>
                                                         {(() => {
                                                             const m = getSourceMeta(tx.source_system);
                                                             if (!m) return null;
                                                             const link = getOriginLink(tx);
+                                                            const textColor = m.color.split(' ').find(c => c.startsWith('text-')) ?? 'text-gray-600';
                                                             return link ? (
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); goToOrigin(tx); }}
                                                                     title={`Abrir em ${m.label}`}
-                                                                    className={`inline-flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wide transition-all hover:brightness-95 hover:ring-1 hover:ring-current cursor-pointer ${m.color}`}
+                                                                    className={`inline-flex items-center gap-1 text-xs font-normal transition-all hover:underline cursor-pointer ${textColor}`}
                                                                 >
                                                                     {m.label}
-                                                                    <ExternalLink className="w-2.5 h-2.5" />
+                                                                    <ExternalLink className="w-3 h-3" />
                                                                 </button>
                                                             ) : (
-                                                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wide ${m.color}`}>{m.label}</span>
+                                                                <span className={`text-xs font-normal ${textColor}`}>{m.label}</span>
                                                             );
                                                         })()}
                                                     </div>
                                                 </div>
 
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <h6 className="text-xs font-bold text-gray-900 truncate flex-1" title={displayTitle(tx)}>
+                                                    <h6 className="text-sm font-normal text-gray-900 truncate flex-1" title={displayTitle(tx)}>
                                                         {displayTitle(tx)}
                                                     </h6>
                                                     {txCode(tx) && (
                                                         <span
                                                             title="Código de origem"
-                                                            className="shrink-0 text-[9px] font-mono font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200"
+                                                            className="shrink-0 text-xs font-normal text-gray-500"
                                                         >
                                                             Nº {txCode(tx)}
                                                         </span>
@@ -4910,7 +4880,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 </div>
 
                                                 {displayPartyName(tx) && (
-                                                    <p className="text-xs font-bold text-gray-500 uppercase truncate mb-2" title={displayPartyName(tx) ?? ''}>
+                                                    <p className="text-sm font-normal text-gray-500 truncate mb-2" title={displayPartyName(tx) ?? ''}>
                                                         <span className="text-gray-300 mr-1">
                                                             {tx.party_type === 'CLIENT' || tx.direction === 'CREDIT' ? 'Cliente:' : 'Fornecedor:'}
                                                         </span>
@@ -4919,14 +4889,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 )}
 
                                                 {(projectName(tx.project_id) || costCenterName(tx.cost_center_id)) && (
-                                                    <div className="flex flex-wrap gap-1.5 mb-3">
+                                                    <div className="flex flex-wrap gap-3 mb-3">
                                                         {projectName(tx.project_id) && (
-                                                            <span className="text-[8px] font-black bg-sky-50 text-sky-700 px-2 py-0.5 rounded-full uppercase truncate max-w-[45%]">
+                                                            <span className="text-sm font-normal text-sky-700 truncate max-w-[45%]">
                                                                 {projectName(tx.project_id)}
                                                             </span>
                                                         )}
                                                         {costCenterName(tx.cost_center_id) && (
-                                                            <span className="text-[8px] font-black bg-violet-50 text-violet-700 px-2 py-0.5 rounded-full uppercase truncate max-w-[45%]">
+                                                            <span className="text-sm font-normal text-violet-700 truncate max-w-[45%]">
                                                                 {costCenterName(tx.cost_center_id)}
                                                             </span>
                                                         )}
@@ -4936,16 +4906,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-50">
                                                     <div className="flex items-center gap-2">
                                                         <Calendar className="w-3 h-3 text-gray-300" />
-                                                        <span className="text-[8px] font-black text-gray-400 uppercase">{formatDateBR(displayDate(tx))}</span>
+                                                        <span className="text-xs font-normal text-gray-400">{formatDateBR(displayDate(tx))}</span>
                                                     </div>
-                                                    
+
                                                     <LazySelect
                                                         value={tx.category || ''}
                                                         currentLabel={tx.category || ''}
                                                         onChange={(v) => handleUpdateInternalCategory(tx.id, v)}
                                                         options={categoryOptions}
                                                         placeholder="Pendente"
-                                                        className={`text-[8px] font-black px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center min-w-[80px] ${
+                                                        className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer text-center min-w-[80px] ${
                                                             tx.category
                                                                 ? 'text-gray-900 bg-gray-50 border-gray-100 hover:bg-gray-100'
                                                                 : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-300 hover:text-blue-500'
@@ -4953,149 +4923,153 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     />
                                                 </div>
                                             </div>
-                                        ) : (
-                                            <div key={tx.id} className={`bg-white border border-gray-100 shadow-sm flex flex-col hover:shadow-md transition-all group ${pendentesCompact ? 'p-2 rounded-xl gap-1' : 'p-4 rounded-2xl gap-3'}`} style={{ contentVisibility: 'auto', containIntrinsicSize: pendentesCompact ? 'auto 70px' : 'auto 120px' } as React.CSSProperties}>
-                                                {/* Linha 1: checkbox + ícone + descrição */}
-                                                <div className={`flex items-center min-w-0 ${pendentesCompact ? 'gap-2' : 'gap-3'}`}>
-                                                    <input
-                                                        type="checkbox"
-                                                        className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
-                                                        checked={selectedInternalTxIds.has(tx.id)}
-                                                        onChange={(e) => {
-                                                            const next = new Set(selectedInternalTxIds);
-                                                            if (e.target.checked) next.add(tx.id);
-                                                            else next.delete(tx.id);
-                                                            setSelectedInternalTxIds(next);
-                                                        }}
-                                                    />
-                                                    <div className={`${pendentesCompact ? 'w-6 h-6' : 'w-8 h-8'} rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
-                                                        <Briefcase className={pendentesCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
-                                                    </div>
-                                                    <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-normal text-gray-900 truncate flex-1`} title={displayTitle(tx)}>
-                                                        {displayTitle(tx)}
-                                                    </p>
-                                                    {txCode(tx) && (
-                                                        <span
-                                                            title="Código de origem"
-                                                            className="shrink-0 text-xs font-normal text-gray-500"
-                                                        >
-                                                            Nº {txCode(tx)}
-                                                        </span>
-                                                    )}
-                                                    {(() => {
-                                                        const m = getSourceMeta(tx.source_system);
-                                                        if (!m) return null;
-                                                        const link = getOriginLink(tx);
-                                                        const textColor = m.color.split(' ').find(c => c.startsWith('text-')) ?? 'text-gray-600';
-                                                        return link ? (
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); goToOrigin(tx); }}
-                                                                title={`Abrir em ${m.label}`}
-                                                                className={`shrink-0 flex items-center gap-1 text-sm font-normal transition-all hover:underline cursor-pointer ${textColor}`}
-                                                            >
-                                                                {m.label}
-                                                                <ExternalLink className="w-3 h-3" />
-                                                            </button>
-                                                        ) : (
-                                                            <span className={`shrink-0 text-sm font-normal ${textColor}`}>{m.label}</span>
-                                                        );
-                                                    })()}
-                                                </div>
-
-                                                {/* Linha 2: Entidade / Categoria / Data / Valor / Ações */}
-                                                <div className={`flex items-center flex-wrap ${pendentesCompact ? 'gap-2 pl-8' : 'gap-3 pl-10'}`}>
-                                                    <div className="flex flex-col min-w-[80px]">
-                                                        <span className={`text-xs font-semibold text-gray-400 uppercase tracking-wider ${pendentesCompact ? 'hidden' : ''}`}>
-                                                            {displayPartyName(tx)
-                                                                ? (tx.party_type === 'CLIENT' || tx.direction === 'CREDIT' ? 'Cliente' : 'Fornecedor')
-                                                                : 'Origem'}
-                                                        </span>
-                                                        <p className="text-sm font-normal text-gray-700 truncate max-w-[140px]">
-                                                            {displayPartyName(tx) || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>}
-                                                        </p>
-                                                    </div>
-
-                                                    {projectName(tx.project_id) && (
-                                                        <div className="flex flex-col min-w-[80px]">
-                                                            <span className={`text-xs font-semibold text-gray-400 uppercase tracking-wider ${pendentesCompact ? 'hidden' : ''}`}>Obra</span>
-                                                            <p className="text-sm font-normal text-sky-700 truncate max-w-[130px]">
-                                                                {projectName(tx.project_id)}
-                                                            </p>
-                                                        </div>
-                                                    )}
-
-                                                    {costCenterName(tx.cost_center_id) && (
-                                                        <div className="flex flex-col min-w-[80px]">
-                                                            <span className={`text-xs font-semibold text-gray-400 uppercase tracking-wider ${pendentesCompact ? 'hidden' : ''}`}>Centro de Custo</span>
-                                                            <p className="text-sm font-normal text-violet-700 truncate max-w-[130px]">
-                                                                {costCenterName(tx.cost_center_id)}
-                                                            </p>
-                                                        </div>
-                                                    )}
-
-                                                    <LazySelect
-                                                        value={tx.category || ''}
-                                                        currentLabel={tx.category || ''}
-                                                        onChange={(v) => handleUpdateInternalCategory(tx.id, v)}
-                                                        options={categoryOptions}
-                                                        placeholder="Categoria"
-                                                        className={`text-sm font-normal rounded-lg border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
-                                                            tx.category
-                                                                ? 'text-gray-900 bg-gray-100 border-gray-200/50 hover:bg-gray-200'
-                                                                : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
-                                                        }`}
-                                                    />
-
-                                                    <div className="flex items-center gap-1 ml-auto">
-                                                        <Calendar className="w-3 h-3 text-gray-300 shrink-0" />
-                                                        <span className="text-sm font-normal text-gray-500">
-                                                            {formatDateBR(displayDate(tx))}
-                                                        </span>
-                                                    </div>
-
-                                                    <div className="flex flex-col items-end gap-1">
-                                                        <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-medium text-gray-900 leading-none`}>
-                                                            {formatMoney(tx.amount)}
-                                                        </p>
-                                                        <div className="flex items-center gap-1.5">
-                                                            {tx.source_system === 'MANUAL' && (
-                                                                <>
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); handleEditInternalTx(tx); }}
-                                                                        className={`text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all ${pendentesCompact ? 'p-1' : 'p-1.5'}`}
-                                                                        title="Editar"
-                                                                    >
-                                                                        <Settings2 className="w-3.5 h-3.5" />
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={(e) => { e.stopPropagation(); handleDeleteInternalTx(tx.id); }}
-                                                                        className={`text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all ${pendentesCompact ? 'p-1' : 'p-1.5'}`}
-                                                                        title="Excluir"
-                                                                    >
-                                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    if (!selectedBankTxId) {
-                                                                        setActionFeedback({ message: 'Selecione primeiro uma transação no Extrato Bancário (lado esquerdo) para vincular.', type: 'error' });
-                                                                        setTimeout(() => setActionFeedback(null), 3000);
-                                                                        return;
-                                                                    }
-                                                                    handleConfirmMatch(selectedBankTxId, tx.id);
-                                                                }}
-                                                                className={`text-xs font-semibold uppercase tracking-widest rounded-lg transition-all ${pendentesCompact ? 'py-1 px-2' : 'py-1.5 px-3'} ${selectedBankTxId ? 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 active:scale-95' : 'text-emerald-600 bg-emerald-50/50 hover:bg-emerald-100'}`}
-                                                            >
-                                                                {selectedBankTxId ? 'Confirmar Vínculo' : 'Vincular'}
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )
                                     ))}
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
+                                    <div className="overflow-y-auto reconc-scroll" style={{ maxHeight: 'calc(100vh - 300px)' }}>
+                                        <table className="w-full text-left border-collapse">
+                                            <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200 sticky top-0 z-10">
+                                                <tr>
+                                                    <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                                            checked={sortedInternalTransactions.length > 0 && sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id))}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setSelectedInternalTxIds(new Set([...selectedInternalTxIds, ...sortedInternalTransactions.map(tx => tx.id)]));
+                                                                } else {
+                                                                    const next = new Set(selectedInternalTxIds);
+                                                                    sortedInternalTransactions.forEach(tx => next.delete(tx.id));
+                                                                    setSelectedInternalTxIds(next);
+                                                                }
+                                                            }}
+                                                        />
+                                                    </th>
+                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[200px]">Descrição</th>
+                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[140px]">Cliente/Fornecedor</th>
+                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Categoria</th>
+                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[110px]">Obra</th>
+                                                    <th className="px-4 py-2 border-r border-gray-100 text-left min-w-[130px]">Centro de Custo</th>
+                                                    <th className="px-4 py-2 border-r border-gray-100 text-center whitespace-nowrap">Data</th>
+                                                    <th className="px-4 py-2 border-r border-gray-100 text-right whitespace-nowrap">Valor</th>
+                                                    <th className="px-4 py-2 text-right whitespace-nowrap">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {sortedInternalTransactions.map(tx => {
+                                                    const cellPad = pendentesCompact ? 'py-1' : 'py-2.5';
+                                                    const originMeta = getSourceMeta(tx.source_system);
+                                                    const originLink = getOriginLink(tx);
+                                                    const originTextColor = originMeta?.color.split(' ').find(c => c.startsWith('text-')) ?? 'text-gray-600';
+                                                    return (
+                                                        <tr key={tx.id} className={`transition-colors ${selectedInternalTxIds.has(tx.id) ? 'bg-emerald-50/40' : 'hover:bg-gray-50'}`}>
+                                                            <td className={`px-4 ${cellPad} border-r border-gray-100 text-center`}>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                                                    checked={selectedInternalTxIds.has(tx.id)}
+                                                                    onChange={(e) => {
+                                                                        const next = new Set(selectedInternalTxIds);
+                                                                        if (e.target.checked) next.add(tx.id);
+                                                                        else next.delete(tx.id);
+                                                                        setSelectedInternalTxIds(next);
+                                                                    }}
+                                                                />
+                                                            </td>
+                                                            <td className={`px-4 ${cellPad} border-r border-gray-100`}>
+                                                                <div className="flex items-center gap-2 min-w-0">
+                                                                    <p className="text-sm font-normal text-gray-900 truncate" title={displayTitle(tx)}>
+                                                                        {displayTitle(tx)}
+                                                                    </p>
+                                                                    {txCode(tx) && (
+                                                                        <span title="Código de origem" className="shrink-0 text-xs font-normal text-gray-400">
+                                                                            Nº {txCode(tx)}
+                                                                        </span>
+                                                                    )}
+                                                                    {originMeta && (
+                                                                        originLink ? (
+                                                                            <button
+                                                                                onClick={() => goToOrigin(tx)}
+                                                                                title={`Abrir em ${originMeta.label}`}
+                                                                                className={`shrink-0 flex items-center gap-1 text-xs font-normal hover:underline cursor-pointer ${originTextColor}`}
+                                                                            >
+                                                                                {originMeta.label}
+                                                                                <ExternalLink className="w-3 h-3" />
+                                                                            </button>
+                                                                        ) : (
+                                                                            <span className={`shrink-0 text-xs font-normal ${originTextColor}`}>{originMeta.label}</span>
+                                                                        )
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td className={`px-4 ${cellPad} border-r border-gray-100 text-sm font-normal text-gray-700 truncate max-w-[160px]`}>
+                                                                {displayPartyName(tx) || getSourceMeta(tx.source_system)?.label || <span className="text-gray-300">—</span>}
+                                                            </td>
+                                                            <td className={`px-4 ${cellPad} border-r border-gray-100`}>
+                                                                <LazySelect
+                                                                    value={tx.category || ''}
+                                                                    currentLabel={tx.category || ''}
+                                                                    onChange={(v) => handleUpdateInternalCategory(tx.id, v)}
+                                                                    options={categoryOptions}
+                                                                    placeholder="—"
+                                                                    className={`text-sm font-normal bg-transparent focus:outline-none cursor-pointer w-full ${tx.category ? 'text-gray-700' : 'text-gray-400'}`}
+                                                                />
+                                                            </td>
+                                                            <td className={`px-4 ${cellPad} border-r border-gray-100 text-sm font-normal text-sky-700 truncate max-w-[110px]`}>
+                                                                {projectName(tx.project_id) || <span className="text-gray-300">—</span>}
+                                                            </td>
+                                                            <td className={`px-4 ${cellPad} border-r border-gray-100 text-sm font-normal text-violet-700 truncate max-w-[130px]`}>
+                                                                {costCenterName(tx.cost_center_id) || <span className="text-gray-300">—</span>}
+                                                            </td>
+                                                            <td className={`px-4 ${cellPad} border-r border-gray-100 text-center text-sm font-normal text-gray-500 whitespace-nowrap`}>
+                                                                {formatDateBR(displayDate(tx))}
+                                                            </td>
+                                                            <td className={`px-4 ${cellPad} border-r border-gray-100 text-right text-sm font-medium text-gray-900 whitespace-nowrap`}>
+                                                                {formatMoney(tx.amount)}
+                                                            </td>
+                                                            <td className={`px-4 ${cellPad} text-right whitespace-nowrap`}>
+                                                                <div className="flex items-center justify-end gap-1">
+                                                                    {tx.source_system === 'MANUAL' && (
+                                                                        <>
+                                                                            <button
+                                                                                onClick={() => handleEditInternalTx(tx)}
+                                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                                                title="Editar"
+                                                                            >
+                                                                                <Settings2 className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleDeleteInternalTx(tx.id)}
+                                                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                                                title="Excluir"
+                                                                            >
+                                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            if (!selectedBankTxId) {
+                                                                                setActionFeedback({ message: 'Selecione primeiro uma transação no Extrato Bancário (lado esquerdo) para vincular.', type: 'error' });
+                                                                                setTimeout(() => setActionFeedback(null), 3000);
+                                                                                return;
+                                                                            }
+                                                                            handleConfirmMatch(selectedBankTxId, tx.id);
+                                                                        }}
+                                                                        className={`text-xs font-semibold uppercase tracking-widest rounded-lg transition-all px-3 py-1 ${selectedBankTxId ? 'bg-blue-600 text-white shadow-lg hover:bg-blue-700 active:scale-95' : 'text-emerald-600 bg-emerald-50/50 hover:bg-emerald-100'}`}
+                                                                    >
+                                                                        {selectedBankTxId ? 'Confirmar Vínculo' : 'Vincular'}
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             )}
                         </div>

@@ -1,10 +1,14 @@
 import React from 'react';
-import { Search, Plus, Edit2, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, Table2, Loader2 } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, Table2, Loader2, AlertCircle, Building2, Users, Pencil, X } from 'lucide-react';
 import { Supplier } from '../types';
 import { supplierService } from '../services/supplierService';
 import { SupplierModal } from './SupplierModal';
 import { ColumnConfigButton, SortableHeader, usePersistedState, ColumnConfig, useTableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
+import { useConfirm } from './ui/confirm';
+import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
+import { KpiCard } from './ui/KpiCard';
+import Button from './ui/Button';
 
 const SUPPLIER_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Fornecedor', sortable: true },
@@ -51,6 +55,25 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     const [editingSupplier, setEditingSupplier] = React.useState<Supplier | undefined>();
     const [sortBy, setSortBy] = usePersistedState<string>('supplierListFilters:sortBy', 'name-asc');
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('supplierListFilters:viewMode', 'list');
+    const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+    const [isBulkEditOpen, setIsBulkEditOpen] = React.useState(false);
+    const confirm = useConfirm();
+
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
+
+    const clearSelection = () => setSelectedIds(new Set());
+
+    const toggleSelected = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
 
     const loadSuppliers = async () => {
         setIsLoading(true);
@@ -76,9 +99,10 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
             await supplierService.addSupplier(sanitizedData as Omit<Supplier, 'id' | 'created_at'>);
             setIsModalOpen(false);
             loadSuppliers();
+            notify('Fornecedor cadastrado com sucesso.');
         } catch (error) {
             console.error("Erro ao adicionar fornecedor:", error);
-            alert(`Erro ao adicionar o fornecedor: ${error instanceof Error ? error.message : String(error)}`);
+            notify(`Erro ao adicionar o fornecedor: ${error instanceof Error ? error.message : String(error)}`, 'error');
         }
     };
 
@@ -91,22 +115,63 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
             await supplierService.updateSupplier(editingSupplier.id, sanitizedData);
             setIsModalOpen(false);
             loadSuppliers();
+            notify('Fornecedor atualizado com sucesso.');
         } catch (error) {
             console.error("Erro ao editar fornecedor:", error);
-            alert(`Erro ao editar o fornecedor: ${error instanceof Error ? error.message : String(error)}`);
+            notify(`Erro ao editar o fornecedor: ${error instanceof Error ? error.message : String(error)}`, 'error');
         }
     };
 
-    const handleDelete = async (id: string, name: string) => {
-        if (confirm(`Tem certeza que deseja excluir o fornecedor "${name}"?`)) {
-            try {
-                await supplierService.deleteSupplier(id);
-                setSuppliers(suppliers.filter(s => s.id !== id));
-            } catch (error) {
-                console.error("Erro ao excluir fornecedor:", error);
-                alert("Erro ao excluir o fornecedor.");
-            }
+    const performDelete = async (id: string) => {
+        try {
+            await supplierService.deleteSupplier(id);
+            setSuppliers(prev => prev.filter(s => s.id !== id));
+            notify('Fornecedor excluído com sucesso.');
+        } catch (error) {
+            console.error("Erro ao excluir fornecedor:", error);
+            notify('Erro ao excluir o fornecedor.', 'error');
         }
+    };
+
+    // Excluir fora da tabela (grid view): pede confirmação via useConfirm.
+    // Dentro da tabela, o InlineDisclosureMenu já tem confirmação embutida (performDelete direto).
+    const handleDelete = async (id: string, name: string) => {
+        const ok = await confirm({
+            title: 'Excluir fornecedor?',
+            message: `Tem certeza que deseja excluir o fornecedor "${name}"? Essa ação não pode ser desfeita.`,
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        await performDelete(id);
+    };
+
+    const handleBulkDelete = async () => {
+        const ids = [...selectedIds];
+        const ok = await confirm({
+            title: `Excluir ${ids.length} fornecedor${ids.length !== 1 ? 'es' : ''}?`,
+            message: 'Essa ação não pode ser desfeita.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        for (const id of ids) {
+            await supplierService.deleteSupplier(id).catch(err => console.error('Erro ao excluir fornecedor em lote:', err));
+        }
+        setSuppliers(prev => prev.filter(s => !selectedIds.has(s.id)));
+        clearSelection();
+        notify(`${ids.length} fornecedor${ids.length !== 1 ? 'es excluídos' : ' excluído'} com sucesso.`);
+    };
+
+    const handleBulkCategoryChange = async (category: string) => {
+        const ids = [...selectedIds];
+        for (const id of ids) {
+            await supplierService.updateSupplier(id, { category }).catch(err => console.error('Erro ao editar fornecedor em lote:', err));
+        }
+        setIsBulkEditOpen(false);
+        clearSelection();
+        await loadSuppliers();
+        notify(`Categoria atualizada em ${ids.length} fornecedor${ids.length !== 1 ? 'es' : ''}.`);
     };
 
     const tableColumns = useTableColumns(SUPPLIER_COLUMNS, 'supplierListColumns');
@@ -141,6 +206,31 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
             });
     }, [suppliers, searchTerm, sortBy, tableColumns.sortColumn, tableColumns.sortDirection, advancedFilters.rules]);
 
+    const distinctCategories = React.useMemo(
+        () => [...new Set(suppliers.map(s => s.category).filter((c): c is string => !!c))].sort(),
+        [suppliers]
+    );
+
+    const kpis = React.useMemo(() => ({
+        total: suppliers.length,
+        pj: suppliers.filter(s => s.type === 'PJ').length,
+        pf: suppliers.filter(s => s.type === 'PF').length,
+        categorias: distinctCategories.length,
+    }), [suppliers, distinctCategories]);
+
+    const visibleIds = filteredSuppliers.map(s => s.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
+    const toggleAllVisible = () => {
+        setSelectedIds(prev => {
+            if (allVisibleSelected) {
+                const next = new Set(prev);
+                visibleIds.forEach(id => next.delete(id));
+                return next;
+            }
+            return new Set([...prev, ...visibleIds]);
+        });
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -158,6 +248,13 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         Novo Fornecedor
                     </button>
                 </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <KpiCard label="Total de Fornecedores" value={kpis.total} sub="Cadastrados na organização" icon={<Truck className="w-5 h-5" />} color="blue" />
+                <KpiCard label="Pessoa Jurídica" value={kpis.pj} sub="Fornecedores PJ" icon={<Building2 className="w-5 h-5" />} color="indigo" />
+                <KpiCard label="Pessoa Física" value={kpis.pf} sub="Fornecedores PF" icon={<Users className="w-5 h-5" />} color="purple" />
+                <KpiCard label="Categorias" value={kpis.categorias} sub="Categorias distintas em uso" icon={<Tag className="w-5 h-5" />} color="amber" />
             </div>
 
             <div className="bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
@@ -229,6 +326,15 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-gray-50 text-gray-400 text-xs font-black uppercase tracking-[0.2em] border-b border-gray-100">
+                                    <th className="w-10 px-4 py-5 text-center">
+                                        <input
+                                            type="checkbox"
+                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                            checked={allVisibleSelected}
+                                            disabled={visibleIds.length === 0}
+                                            onChange={toggleAllVisible}
+                                        />
+                                    </th>
                                     {tableColumns.visibleColumns.includes('name') && (
                                         <SortableHeader label="Fornecedor" colKey="name" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
                                     )}
@@ -253,8 +359,16 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                         <tr
                                             key={supplier.id}
                                             onClick={() => { setEditingSupplier(supplier); setIsModalOpen(true); }}
-                                            className="hover:bg-blue-50/30 transition-all duration-200 group cursor-pointer"
+                                            className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedIds.has(supplier.id) ? 'bg-blue-50/60' : ''}`}
                                         >
+                                            <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                    checked={selectedIds.has(supplier.id)}
+                                                    onChange={() => toggleSelected(supplier.id)}
+                                                />
+                                            </td>
                                             {tableColumns.visibleColumns.includes('name') && (
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-3">
@@ -301,34 +415,30 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             )}
                                             {tableColumns.visibleColumns.includes('document') && (
                                                 <td className="px-6 py-4">
-                                                    <span className="text-xs font-bold text-gray-600 font-mono bg-gray-100/50 px-2 py-1 rounded-md border border-gray-100">
+                                                    <span className="text-sm font-normal text-gray-600">
                                                         {supplier.document || '---'}
                                                     </span>
                                                 </td>
                                             )}
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center justify-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); setEditingSupplier(supplier); setIsModalOpen(true); }}
-                                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white hover:shadow-sm border border-transparent hover:border-blue-100 rounded-xl transition-all"
-                                                        title="Editar"
+                                                        onClick={() => { setEditingSupplier(supplier); setIsModalOpen(true); }}
+                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
                                                     >
-                                                        <Edit2 className="w-4 h-4" />
+                                                        Editar
                                                     </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleDelete(supplier.id, supplier.name); }}
-                                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-white hover:shadow-sm border border-transparent hover:border-red-100 rounded-xl transition-all"
-                                                        title="Excluir"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    <InlineDisclosureMenu
+                                                        showDelete
+                                                        onDelete={() => performDelete(supplier.id)}
+                                                    />
                                                 </div>
                                             </td>
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-20 text-center">
+                                        <td colSpan={tableColumns.visibleColumns.length + 2} className="px-6 py-20 text-center">
                                             <div className="flex flex-col items-center justify-center space-y-4 max-w-xs mx-auto">
                                                 <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center animate-pulse">
                                                     <Truck className="w-10 h-10 text-blue-200" />
@@ -437,12 +547,145 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 </div>
             )}
 
+            {selectedIds.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                    <span className="flex-1 text-sm font-bold whitespace-nowrap">
+                        {selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}
+                    </span>
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setIsBulkEditOpen(true)}
+                        className="text-blue-700 border-none hover:bg-blue-50"
+                    >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Editar Categoria em Lote
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleBulkDelete}
+                        className="text-red-600 border-none hover:bg-red-50"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Excluir
+                    </Button>
+                    <button
+                        onClick={clearSelection}
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-400 transition-colors"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                        Desmarcar
+                    </button>
+                </div>
+            )}
+
+            {isBulkEditOpen && (
+                <SupplierBulkCategoryModal
+                    count={selectedIds.size}
+                    categories={distinctCategories}
+                    onClose={() => setIsBulkEditOpen(false)}
+                    onSave={handleBulkCategoryChange}
+                />
+            )}
+
             <SupplierModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSubmit={editingSupplier ? handleEdit : handleAdd}
                 initialData={editingSupplier}
             />
+
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
+                </div>
+            )}
+        </div>
+    );
+};
+
+interface SupplierBulkCategoryModalProps {
+    count: number;
+    categories: string[];
+    onClose: () => void;
+    onSave: (category: string) => Promise<void>;
+}
+
+// Modal dedicado de edição em lote — categoria dos fornecedores selecionados.
+// Ver docs/ui_ux_standard_guide.md § 10: edição em lote deve abrir modal, não
+// empilhar selects inline na barra fixa.
+const SupplierBulkCategoryModal: React.FC<SupplierBulkCategoryModalProps> = ({ count, categories, onClose, onSave }) => {
+    const [category, setCategory] = React.useState('');
+    const [saving, setSaving] = React.useState(false);
+
+    const handleSave = async () => {
+        if (!category.trim()) return;
+        setSaving(true);
+        try {
+            await onSave(category.trim());
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col">
+                <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+                    <div>
+                        <h2 className="text-lg font-black text-gray-900">Editar Categoria em Lote</h2>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                            {count} fornecedor{count !== 1 ? 'es' : ''} selecionado{count !== 1 ? 's' : ''}
+                        </p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        disabled={saving}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+
+                <div className="px-6 py-5 space-y-3">
+                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400 block">Nova categoria</label>
+                    <input
+                        type="text"
+                        list="supplier-bulk-categories"
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        disabled={saving}
+                        placeholder="Digite ou selecione uma categoria"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:bg-white focus:border-blue-400 disabled:opacity-50"
+                    />
+                    <datalist id="supplier-bulk-categories">
+                        {categories.map(c => <option key={c} value={c} />)}
+                    </datalist>
+                    <p className="text-xs text-gray-400">Todos os fornecedores selecionados passarão a ter essa categoria.</p>
+                </div>
+
+                <div className="px-6 pb-6 pt-2 flex items-center gap-3">
+                    <button
+                        onClick={onClose}
+                        disabled={saving}
+                        className="flex-1 px-4 py-3 rounded-2xl bg-gray-100 text-gray-700 font-bold text-sm uppercase tracking-widest hover:bg-gray-200 transition-colors disabled:opacity-50"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={handleSave}
+                        disabled={saving || !category.trim()}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-blue-600 text-white font-bold text-sm uppercase tracking-widest hover:bg-blue-700 transition-colors disabled:opacity-40 shadow-lg shadow-blue-900/20"
+                    >
+                        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                        Aplicar
+                    </button>
+                </div>
+            </div>
         </div>
     );
 };

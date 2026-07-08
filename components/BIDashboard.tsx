@@ -10,7 +10,6 @@ import {
 import { biService } from '../services/biService';
 import { useToast } from '../hooks/useToast';
 import type { BIExecutiveSummary, KPIvsTarget } from '../types/bi';
-import MyTasksWidget from './MyTasksWidget';
 import BINarrativeCard from './BINarrativeCard';
 import BIReportScheduler from './BIReportScheduler';
 import Button from './ui/Button';
@@ -495,8 +494,6 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
                 </>
             )}
 
-            {/* Widget de tarefas — sempre visível, não depende de kpis */}
-            <MyTasksWidget orgId={organizationId} onNavigate={onNavigate} />
         </div>
     );
 };

@@ -69,6 +69,7 @@ const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplate
 const AreaEngineModule = React.lazy(() => import('./AreaEngineModule'));
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
+const CentralControle       = React.lazy(() => import('./CentralControle'));
 const OpuraReports          = React.lazy(() => import('./OpuraReports'));
 const CentralObra           = React.lazy(() => import('./CentralObra'));
 const CentralCliente        = React.lazy(() => import('./CentralCliente'));
@@ -1162,6 +1163,15 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
           projects={typedProjects
             .filter(p => p.settings?.classification === 'OBRA')
             .map(p => ({ id: p.id, name: p.name }))}
+        />
+      );
+
+    // ── Central de Controle ─────────────────────────────────────────────────────
+    case 'central':
+      return (
+        <CentralControle
+          organizationId={activeOrganizationId || organizations[0]?.id || ''}
+          onNavigate={setActiveView}
         />
       );
 

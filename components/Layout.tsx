@@ -435,7 +435,7 @@ const Layout: React.FC<LayoutProps> = ({
     const items: CommandItem[] = [
       { id: 'dashboard', label: 'Dashboard', group: 'Geral', icon: LayoutDashboard },
       { id: 'tarefas', label: 'Minhas tarefas', group: 'Geral', icon: CheckSquare, shortcut: 'N' },
-      { id: 'notifications-center', label: 'Central de notificações', group: 'Geral', icon: Bell },
+      { id: 'notifications-center', label: 'Notificações', group: 'Geral', icon: Bell },
       { id: 'eng-obras', label: 'Obras', group: 'Engenharia', icon: Building2 },
       { id: 'eng-orcamentos', label: 'Orcamentos', group: 'Engenharia', icon: FolderOpen },
       { id: 'eng-planejamento', label: 'Planejamento', group: 'Engenharia', icon: Calendar },
@@ -742,7 +742,7 @@ const Layout: React.FC<LayoutProps> = ({
               </NavDropdown>
 
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
-              <NavItem id="notifications-center" icon={Bell} label="Central de Notificações" badge={unreadCount > 0 ? unreadCount : undefined} />
+              <NavItem id="notifications-center" icon={Bell} label="Notificações" badge={unreadCount > 0 ? unreadCount : undefined} />
 
               <NavGroup label="Inteligência de Negócios" />
               <NavDropdown
@@ -1178,7 +1178,7 @@ const Layout: React.FC<LayoutProps> = ({
               </div>
 
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
-              <NavItem id="notifications-center" icon={Bell} label="Central de Notificações" badge={unreadCount > 0 ? unreadCount : undefined} forceFull />
+              <NavItem id="notifications-center" icon={Bell} label="Notificações" badge={unreadCount > 0 ? unreadCount : undefined} forceFull />
               {profile.group === 'DESENVOLVEDOR' || isDevEmail ? (
                 <div className="space-y-1 mb-4">
                   <div className="px-4 py-2 text-xs font-black text-gray-500 uppercase tracking-widest">Portais</div>

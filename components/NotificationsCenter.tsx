@@ -346,7 +346,7 @@ const NotificationsCenter: React.FC<NotificationsCenterProps> = ({ profile, onNa
                         <Bell className="w-5 h-5" />
                     </div>
                     <div>
-                        <h1 className="text-sm font-black text-gray-900 uppercase tracking-widest">Central de Notificações</h1>
+                        <h1 className="text-sm font-black text-gray-900 uppercase tracking-widest">Notificações</h1>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Alertas, envios e preferências</p>
                     </div>
                 </div>

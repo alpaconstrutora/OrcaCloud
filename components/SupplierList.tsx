@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Plus, Edit2, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, Table2, Loader2, AlertCircle, Building2, Users, Pencil, X } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, Table2, Loader2, AlertCircle, Building2, Users, Pencil, X, Filter } from 'lucide-react';
 import { Supplier } from '../types';
 import { supplierService } from '../services/supplierService';
 import { SupplierModal } from './SupplierModal';
@@ -282,7 +282,29 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     </select>
                 </div>
                 <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
+
+                <button
+                    onClick={loadSuppliers}
+                    className="p-4 bg-blue-50 text-blue-600 rounded-[1.25rem] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shadow-sm"
+                    title="Atualizar"
+                >
+                    <Filter className="w-4 h-4" />
+                </button>
+
+                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                    {viewMode === 'list' && (
+                        <>
+                            <ColumnConfigButton
+                                columns={SUPPLIER_COLUMNS}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                            <div className="w-px bg-gray-200 mx-1 my-1"></div>
+                        </>
+                    )}
                     <button
                         onClick={() => setViewMode('grid')}
                         className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid'
@@ -304,16 +326,6 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         <Table2 className="w-5 h-5" />
                     </button>
                 </div>
-                {viewMode === 'list' && (
-                    <ColumnConfigButton
-                        columns={SUPPLIER_COLUMNS}
-                        visibleColumns={tableColumns.visibleColumns}
-                        showColumnConfig={tableColumns.showColumnConfig}
-                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                        onToggleColumn={tableColumns.toggleColumn}
-                        onReset={tableColumns.resetColumns}
-                    />
-                )}
             </div>
 
             {isLoading ? (
@@ -325,7 +337,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-gray-50 text-gray-400 text-xs font-black uppercase tracking-[0.2em] border-b border-gray-100">
+                                <tr className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
                                     <th className="w-10 px-4 py-5 text-center">
                                         <input
                                             type="checkbox"
@@ -376,7 +388,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                             <Truck className="w-5 h-5 text-blue-600" />
                                                         </div>
                                                         <div>
-                                                            <p className="font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{supplier.name}</p>
+                                                            <p className="text-sm font-normal text-gray-700 group-hover:text-blue-700 transition-colors">{supplier.name}</p>
                                                             <p className="text-xs font-medium text-gray-400 uppercase tracking-tight">{supplier.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}</p>
                                                         </div>
                                                     </div>
@@ -384,15 +396,12 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             )}
                                             {tableColumns.visibleColumns.includes('category') && (
                                                 <td className="px-6 py-4">
-                                                    <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-gray-50 text-gray-600 rounded-lg border border-gray-100 group-hover:bg-white group-hover:border-blue-100 transition-all">
-                                                        <Tag className="w-3.5 h-3.5 text-gray-400" />
-                                                        <span className="text-xs font-semibold">{supplier.category}</span>
-                                                    </div>
+                                                    <span className="text-sm font-normal text-gray-700">{supplier.category}</span>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('organization') && (
                                                 <td className="px-6 py-4">
-                                                    <span className="text-xs font-semibold text-gray-700">{supplier.organization_name}</span>
+                                                    <span className="text-sm font-normal text-gray-700">{supplier.organization_name}</span>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('contact') && (
@@ -475,10 +484,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                         <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
                                             <Truck className="w-6 h-6" />
                                         </div>
-                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 text-gray-600 rounded-lg border border-gray-100 group-hover:bg-white transition-all">
-                                            <Tag className="w-3.5 h-3.5 text-gray-400" />
-                                            <span className="text-xs font-bold uppercase tracking-wider">{supplier.category}</span>
-                                        </div>
+                                        <span className="text-sm font-normal text-gray-600">{supplier.category}</span>
                                     </div>
                                     <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-700 transition-colors mb-1 line-clamp-1">
                                         {supplier.name}
@@ -506,7 +512,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                         )}
                                         <div className="flex items-center justify-between text-xs pt-2">
                                             <span className="text-gray-400 font-bold uppercase tracking-widest">Documento</span>
-                                            <span className="text-gray-900 font-mono font-bold bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
+                                            <span className="text-sm font-normal text-gray-700">
                                                 {supplier.document || '---'}
                                             </span>
                                         </div>

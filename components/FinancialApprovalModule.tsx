@@ -17,7 +17,7 @@ import { useConfirm } from './ui/confirm';
 // ─── dispatch por entidade ───────────────────────────────────
 // A fila é unificada; cada ação vai ao serviço de domínio correto.
 
-const ENTITY_TAG: Record<ActionQueueItem['entity'], string> = {
+export const ENTITY_TAG: Record<ActionQueueItem['entity'], string> = {
     transaction:    'Transação',
     contract:       'Contrato',
     purchase_order: 'Compra',
@@ -74,7 +74,7 @@ function ApprovalTrail({ chain, required }: { chain: ApprovalStep[]; required: n
 
 // ─── ApproveRejectModal ──────────────────────────────────────
 
-interface ApproveRejectModalProps {
+export interface ApproveRejectModalProps {
     item: ActionQueueItem;
     mode: 'approve' | 'reject';
     userEmail: string;
@@ -82,7 +82,7 @@ interface ApproveRejectModalProps {
     onDone: () => void;
     onClose: () => void;
 }
-function ApproveRejectModal({ item, mode, userEmail, config, onDone, onClose }: ApproveRejectModalProps) {
+export function ApproveRejectModal({ item, mode, userEmail, config, onDone, onClose }: ApproveRejectModalProps) {
     const [notes, setNotes] = useState('');
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState<string | null>(null);

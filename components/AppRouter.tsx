@@ -1171,6 +1171,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <CentralControle
           organizationId={activeOrganizationId || organizations[0]?.id || ''}
+          userEmail={session?.user?.email}
           onNavigate={setActiveView}
         />
       );

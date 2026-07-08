@@ -1,18 +1,22 @@
 import React from 'react';
 import {
-    AlertTriangle, CheckSquare, ChevronRight, RefreshCw, Loader2, ShieldCheck, BarChart3, ArrowRight,
+    AlertTriangle, CheckSquare, ChevronRight, RefreshCw, Loader2, ShieldCheck, BarChart3, ArrowRight, Check, X,
 } from 'lucide-react';
 import { financialIntelligenceService } from '../services/financialIntelligenceService';
 import type { FinancialAlert, ProjectScorecard, CashflowProjectionPoint } from '../services/financialIntelligenceService';
 import { divergenceService } from '../services/divergenceService';
 import { approvalService } from '../services/approvalService';
 import type { ActionQueueItem, ApprovalEntity, ApprovalPendingSummary } from '../services/approvalService';
+import { financialApprovalService } from '../services/financialApprovalService';
+import type { FinancialApprovalConfig } from '../types/financial';
 import { processService } from '../services/processService';
 import { KpiCard } from './ui/KpiCard';
 import MyTasksWidget from './MyTasksWidget';
+import { ApproveRejectModal, ENTITY_TAG } from './FinancialApprovalModule';
 
 interface Props {
     organizationId: string;
+    userEmail?: string;
     onNavigate: (view: string) => void;
 }
 
@@ -58,10 +62,12 @@ function fBRL(v: number | null | undefined): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 }
 
-const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
+const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNavigate }) => {
     const [alerts, setAlerts]           = React.useState<AlertItem[]>([]);
     const [actionQueue, setActionQueue] = React.useState<ActionQueueItem[]>([]);
     const [scorecards, setScorecards]   = React.useState<ProjectScorecard[]>([]);
+    const [approvalConfig, setApprovalConfig] = React.useState<FinancialApprovalConfig[]>([]);
+    const [approvalModal, setApprovalModal] = React.useState<{ item: ActionQueueItem; mode: 'approve' | 'reject' } | null>(null);
     const [loading, setLoading]         = React.useState(true);
     const [sourceErrors, setSourceErrors] = React.useState<string[]>([]);
     const [selectedObra, setSelectedObra] = React.useState<string>('all');
@@ -82,13 +88,14 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
 
         // Cada fonte é independente — uma RPC fora do ar não pode apagar as outras
         // (ao contrário do padrão de try/catch único usado no BIDashboard).
-        const [financialR, divergenceR, approvalSummaryR, bottlenecksR, actionQueueR, scorecardR] = await Promise.allSettled([
+        const [financialR, divergenceR, approvalSummaryR, bottlenecksR, actionQueueR, scorecardR, approvalConfigR] = await Promise.allSettled([
             financialIntelligenceService.getAlerts(organizationId),
             divergenceService.getDivergences(organizationId),
             approvalService.getPendingSummary(organizationId),
             processService.getBottlenecks(organizationId),
             approvalService.listActionQueue(organizationId),
             financialIntelligenceService.getProjectScorecards(organizationId),
+            financialApprovalService.listConfig(organizationId),
         ]);
 
         const errs: string[] = [];
@@ -183,6 +190,14 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
         } else {
             errs.push('Resultado por obra');
             console.error('[CentralControle] scorecards:', scorecardR.reason);
+        }
+
+        // Config de alçadas — não crítica: sem ela o modal só usa rótulos padrão
+        // (Gestor / Financeiro-Diretoria), então uma falha aqui não vira banner de erro.
+        if (approvalConfigR.status === 'fulfilled') {
+            setApprovalConfig(approvalConfigR.value);
+        } else {
+            console.error('[CentralControle] approval config:', approvalConfigR.reason);
         }
 
         setSourceErrors(errs);
@@ -365,23 +380,45 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
                         </div>
                     ) : (
                         <ul className="divide-y divide-gray-50">
-                            {filteredActionQueue.slice(0, 5).map(item => (
-                                <li key={`${item.entity}-${item.id}`}>
-                                    <button
+                            {filteredActionQueue.slice(0, 5).map(item => {
+                                const isDraft = item.approval_status === 'RASCUNHO';
+                                return (
+                                    <li
+                                        key={`${item.entity}-${item.id}`}
                                         onClick={() => onNavigate('financial-approval')}
-                                        className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50/60 transition-colors text-left group"
+                                        className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50/60 transition-colors cursor-pointer group"
                                     >
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-bold text-gray-800 truncate leading-tight">{item.title}</p>
                                             <p className="text-xs text-gray-400 mt-0.5 truncate">
                                                 {item.party_name ?? item.project_name ?? ENTITY_LABEL_SINGULAR[item.entity]}
+                                                {isDraft ? ' · Rascunho' : ''}
                                             </p>
                                         </div>
                                         <span className="text-sm font-medium text-gray-700 tabular-nums flex-shrink-0">{fBRL(item.amount)}</span>
-                                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0" />
-                                    </button>
-                                </li>
-                            ))}
+                                        {isDraft ? (
+                                            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0" />
+                                        ) : (
+                                            <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                                                <button
+                                                    onClick={() => setApprovalModal({ item, mode: 'approve' })}
+                                                    className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                                    title={`Aprovar ${ENTITY_TAG[item.entity]}`}
+                                                >
+                                                    <Check className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => setApprovalModal({ item, mode: 'reject' })}
+                                                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                    title={`Rejeitar ${ENTITY_TAG[item.entity]}`}
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </li>
+                                );
+                            })}
                         </ul>
                     )}
 
@@ -453,6 +490,19 @@ const CentralControle: React.FC<Props> = ({ organizationId, onNavigate }) => {
                     />
                 </div>
             </section>
+
+            {/* Aprovar/rejeitar direto da fila — reaproveita o modal do FinancialApprovalModule,
+                não duplica a lógica de dispatch por entidade nem os rótulos de alçada. */}
+            {approvalModal && (
+                <ApproveRejectModal
+                    item={approvalModal.item}
+                    mode={approvalModal.mode}
+                    userEmail={userEmail}
+                    config={approvalConfig}
+                    onDone={() => { setApprovalModal(null); load(); }}
+                    onClose={() => setApprovalModal(null)}
+                />
+            )}
         </div>
     );
 };

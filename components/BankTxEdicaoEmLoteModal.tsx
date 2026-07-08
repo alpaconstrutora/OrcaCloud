@@ -3,12 +3,6 @@ import { X, AlertTriangle, Loader2, Tag } from 'lucide-react';
 import { formatMoney } from './ui/Format';
 import type { BankTransaction } from '../types';
 
-interface SelectOption {
-    value: string;
-    label: string;
-    group?: string;
-}
-
 interface ItemOption {
     id: string;
     name: string;
@@ -17,7 +11,8 @@ interface ItemOption {
 interface BankTxEdicaoEmLoteModalProps {
     transactions: BankTransaction[];
     categories: string[];
-    entityOptions: SelectOption[];
+    clientOptions: string[];
+    supplierOptions: string[];
     projects: ItemOption[];
     costCenters: ItemOption[];
     onClose: () => void;
@@ -25,10 +20,11 @@ interface BankTxEdicaoEmLoteModalProps {
 }
 
 const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
-    transactions, categories, entityOptions, projects, costCenters, onClose, onSave,
+    transactions, categories, clientOptions, supplierOptions, projects, costCenters, onClose, onSave,
 }) => {
     const [category, setCategory] = useState('');
-    const [entityName, setEntityName] = useState('');
+    const [clientName, setClientName] = useState('');
+    const [supplierName, setSupplierName] = useState('');
     const [projectId, setProjectId] = useState('');
     const [costCenterId, setCostCenterId] = useState('');
     const [saving, setSaving] = useState(false);
@@ -39,13 +35,8 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
     const contrapartes = [...new Set(transactions.map(t => t.counterparty_name ?? ''))];
     const mixedContraparte = contrapartes.length > 1;
 
+    const entityName = clientName || supplierName;
     const noneChanged = !category && !entityName && !projectId && !costCenterId;
-
-    const entityGroups = entityOptions.reduce<Record<string, SelectOption[]>>((acc, opt) => {
-        const g = opt.group ?? '';
-        (acc[g] ??= []).push(opt);
-        return acc;
-    }, {});
 
     async function handleSalvar() {
         setSaving(true);
@@ -140,21 +131,31 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                             </select>
                         </div>
 
-                        <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Cliente / Fornecedor</label>
-                            <select
-                                value={entityName}
-                                onChange={e => setEntityName(e.target.value)}
-                                disabled={saving}
-                                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
-                            >
-                                <option value="">— Não alterar —</option>
-                                {Object.entries(entityGroups).map(([group, opts]) => (
-                                    group
-                                        ? <optgroup key={group} label={group}>{opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</optgroup>
-                                        : opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)
-                                ))}
-                            </select>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Cliente</label>
+                                <select
+                                    value={clientName}
+                                    onChange={e => { setClientName(e.target.value); if (e.target.value) setSupplierName(''); }}
+                                    disabled={saving || !!supplierName}
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
+                                >
+                                    <option value="">— Não alterar —</option>
+                                    {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Fornecedor</label>
+                                <select
+                                    value={supplierName}
+                                    onChange={e => { setSupplierName(e.target.value); if (e.target.value) setClientName(''); }}
+                                    disabled={saving || !!clientName}
+                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
+                                >
+                                    <option value="">— Não alterar —</option>
+                                    {supplierOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
                         </div>
 
                         <div>

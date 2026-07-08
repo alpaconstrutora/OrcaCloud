@@ -17,6 +17,7 @@ import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { formatDateBR } from './ui/Format';
 import Button from './ui/Button';
+import { KpiCard } from './ui/KpiCard';
 
 interface BoletoManagerProps {
     organizationId: string;
@@ -33,15 +34,6 @@ const STATUS_LABELS: Record<BoletoStatus, string> = {
     programado: 'Programado',
     pago: 'Pago',
     cancelado: 'Cancelado',
-};
-
-const STATUS_COLORS: Record<BoletoStatus, string> = {
-    rascunho: 'bg-gray-100 text-gray-700',
-    revisao: 'bg-amber-100 text-amber-700',
-    aprovado: 'bg-blue-100 text-blue-700',
-    programado: 'bg-indigo-100 text-indigo-700',
-    pago: 'bg-emerald-100 text-emerald-700',
-    cancelado: 'bg-red-100 text-red-700',
 };
 
 // Padrão guia seção 8 — texto simples, sem pílula
@@ -62,6 +54,7 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'valor', label: 'Valor', sortable: true },
     { key: 'vencimento', label: 'Vencimento', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
 ];
 
 interface BoletoItemBaseProps {
@@ -120,7 +113,7 @@ const BoletoCardItem = React.memo(function BoletoCardItem({
                                 #{String(b.numero).padStart(4, '0')}
                             </span>
                         )}
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-widest ${STATUS_COLORS[b.status]}`}>
+                        <span className={`text-sm font-normal ${STATUS_TEXT_COLORS[b.status]}`}>
                             {STATUS_LABELS[b.status]}
                         </span>
                     </div>
@@ -233,6 +226,16 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
                     )}
                 </td>
             )}
+            {visibleColumns.includes('actions') && (
+                <td className="px-6 py-2.5 text-right" onClick={e => e.stopPropagation()}>
+                    <button
+                        onClick={() => onOpen(b)}
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                    >
+                        Ver Detalhes
+                    </button>
+                </td>
+            )}
         </tr>
     );
 });
@@ -260,10 +263,6 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 4500);
     };
-
-    // Modal de Confirmação — Seção 14 do guia
-    const [pendingConfirm, setPendingConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
-    const askConfirm = (message: string, onConfirm: () => void) => setPendingConfirm({ message, onConfirm });
 
     // Raw arrays kept alongside maps for the bulk-edit modal dropdowns
     const [supplierList, setSupplierList] = useState<{ id: string; name: string }[]>([]);
@@ -514,8 +513,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             const nome = `boletos${selectedOrgId !== 'ALL' ? `_${selectedOrgId.slice(0,8)}` : ''}`;
             if (tipo === 'excel') await boletoService.exportarExcel(filtered, nome);
             else await boletoService.exportarPDF(filtered, nome);
+            notify(`Exportação para ${tipo === 'excel' ? 'Excel' : 'PDF'} concluída.`);
         } catch (err: unknown) {
             console.error('[export]', err);
+            notify('Falha ao exportar. Tente novamente.', 'error');
         } finally {
             setExporting(false);
         }
@@ -606,77 +607,37 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             </div>
 
-            {/* Cards de resumo */}
+            {/* Cards de resumo — padrão guia seção 4 (componente KpiCard) */}
             {!loading && boletos.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-
-                    {/* A Pagar — padrão guia seção 4 */}
-                    <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-blue-100 transition-all">
-                        <div className="p-3.5 bg-blue-50 text-blue-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                            <Wallet className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">A Pagar</p>
-                            <p className="text-2xl font-bold text-gray-900">{formatBRL(summary.totalPendente)}</p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></span>
-                                <p className="text-xs text-gray-400 font-medium truncate">{summary.countPendente} boleto{summary.countPendente !== 1 ? 's' : ''} pendente{summary.countPendente !== 1 ? 's' : ''}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Vencem em 7 dias */}
-                    <div className={`p-5 rounded-[1.5rem] shadow-sm border flex items-center gap-5 group hover:shadow-lg transition-all ${
-                        summary.countAVencer7 > 0 ? 'bg-amber-50 border-amber-200 hover:border-amber-300' : 'bg-white border-gray-100 hover:border-amber-100'
-                    }`}>
-                        <div className={`p-3.5 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform ${
-                            summary.countAVencer7 > 0 ? 'bg-amber-100 text-amber-600' : 'bg-amber-50 text-amber-600'
-                        }`}>
-                            <Clock className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Vencem em 7 dias</p>
-                            <p className={`text-2xl font-bold ${summary.countAVencer7 > 0 ? 'text-amber-700' : 'text-gray-900'}`}>{formatBRL(summary.totalAVencer7)}</p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${summary.countAVencer7 > 0 ? 'bg-amber-500' : 'bg-gray-300'}`}></span>
-                                <p className="text-xs text-gray-400 font-medium truncate">{summary.countAVencer7} boleto{summary.countAVencer7 !== 1 ? 's' : ''}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Em atraso */}
-                    <div className={`p-5 rounded-[1.5rem] shadow-sm border flex items-center gap-5 group hover:shadow-lg transition-all ${
-                        summary.countAtrasado > 0 ? 'bg-red-50 border-red-200 hover:border-red-300' : 'bg-white border-gray-100 hover:border-red-100'
-                    }`}>
-                        <div className={`p-3.5 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform ${
-                            summary.countAtrasado > 0 ? 'bg-red-100 text-red-600' : 'bg-red-50 text-red-600'
-                        }`}>
-                            <AlertTriangle className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Em Atraso</p>
-                            <p className={`text-2xl font-bold ${summary.countAtrasado > 0 ? 'text-red-700' : 'text-gray-900'}`}>{formatBRL(summary.totalAtrasado)}</p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 animate-pulse ${summary.countAtrasado > 0 ? 'bg-red-500' : 'bg-gray-300'}`}></span>
-                                <p className="text-xs text-gray-400 font-medium truncate">{summary.countAtrasado} boleto{summary.countAtrasado !== 1 ? 's' : ''}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Pagos no mês */}
-                    <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-emerald-100 transition-all">
-                        <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                            <CheckCircle2 className="w-5 h-5" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Pagos no Mês</p>
-                            <p className="text-2xl font-bold text-gray-900">{formatBRL(summary.totalPagoMes)}</p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0"></span>
-                                <p className="text-xs text-gray-400 font-medium truncate">{summary.countPagoMes} boleto{summary.countPagoMes !== 1 ? 's' : ''}</p>
-                            </div>
-                        </div>
-                    </div>
+                    <KpiCard
+                        label="A Pagar"
+                        value={formatBRL(summary.totalPendente)}
+                        sub={`${summary.countPendente} boleto${summary.countPendente !== 1 ? 's' : ''} pendente${summary.countPendente !== 1 ? 's' : ''}`}
+                        icon={<Wallet className="w-5 h-5" />}
+                        color="blue"
+                    />
+                    <KpiCard
+                        label="Vencem em 7 dias"
+                        value={formatBRL(summary.totalAVencer7)}
+                        sub={`${summary.countAVencer7} boleto${summary.countAVencer7 !== 1 ? 's' : ''}`}
+                        icon={<Clock className="w-5 h-5" />}
+                        color="amber"
+                    />
+                    <KpiCard
+                        label="Em Atraso"
+                        value={formatBRL(summary.totalAtrasado)}
+                        sub={`${summary.countAtrasado} boleto${summary.countAtrasado !== 1 ? 's' : ''}`}
+                        icon={<AlertTriangle className="w-5 h-5" />}
+                        color="red"
+                    />
+                    <KpiCard
+                        label="Pagos no Mês"
+                        value={formatBRL(summary.totalPagoMes)}
+                        sub={`${summary.countPagoMes} boleto${summary.countPagoMes !== 1 ? 's' : ''}`}
+                        icon={<CheckCircle2 className="w-5 h-5" />}
+                        color="emerald"
+                    />
                 </div>
             )}
 
@@ -698,8 +659,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 ))}
             </div>
 
-            {/* Busca + botão filtros + toggle view */}
-            <div className="flex gap-2">
+            {/* Busca + botão filtros + toggle view — padrão guia seção 5 */}
+            <div className="bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
                 {/* Search — padrão guia seção 5 */}
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -744,7 +705,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
                 {viewMode === 'list' && (
                     <ColumnConfigButton
-                        columns={BOLETO_COLUMNS}
+                        columns={BOLETO_COLUMNS.filter(c => c.key !== 'actions')}
                         visibleColumns={tableColumns.visibleColumns}
                         showColumnConfig={tableColumns.showColumnConfig}
                         onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
@@ -1011,6 +972,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         className="px-6 py-2 border-r border-gray-100 text-center"
                                     />
                                 )}
+                                {tableColumns.visibleColumns.includes('actions') && (
+                                    <th className="px-6 py-2 text-right">Ações</th>
+                                )}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
@@ -1039,10 +1003,10 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         <tfoot>
                             <tr className="bg-gray-50 border-t border-gray-100">
                                 <td colSpan={5} className="px-4 py-2 text-table-body text-gray-400">{filtered.length} boleto{filtered.length !== 1 ? 's' : ''}</td>
-                                <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
+                                <td className="px-4 py-2 text-right text-sm font-medium text-gray-900">
                                     {formatBRL(filtered.filter(b => !['pago','cancelado'].includes(b.status)).reduce((s, b) => s + (b.valor ?? 0), 0))}
                                 </td>
-                                <td colSpan={2} className="px-4 py-2 text-table-body text-gray-400 text-right">total pendente</td>
+                                <td colSpan={3} className="px-4 py-2 text-table-body text-gray-400 text-right">total pendente</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -1095,29 +1059,6 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             )}
 
-            {/* Modal de Confirmação — padrão guia seção 14 */}
-            {pendingConfirm && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
-                    <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 border border-gray-100 animate-in zoom-in-95 duration-200">
-                        <p className="text-sm font-normal text-gray-700 mb-6 leading-relaxed">{pendingConfirm.message}</p>
-                        <div className="flex justify-end gap-3">
-                            <button
-                                onClick={() => setPendingConfirm(null)}
-                                className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-semibold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-all"
-                            >
-                                Cancelar
-                            </button>
-                            <Button
-                                variant="danger"
-                                onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }}
-                                className="rounded-2xl"
-                            >
-                                Confirmar
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

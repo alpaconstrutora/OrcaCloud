@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Building2, Check, ChevronDown, ChevronUp,
     Loader2, Plus, RefreshCw, Search, TrendingUp, X, Filter,
-    FileText, QrCode, Copy, ExternalLink,
+    FileText, QrCode, Copy, ExternalLink, DollarSign, AlertTriangle,
 } from 'lucide-react';
 import { receivableService } from '../services/receivableService';
 import { clientChargeService } from '../services/clientChargeService';
@@ -13,6 +13,7 @@ import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '
 import type { Organization } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
+import { KpiCard } from './ui/KpiCard';
 
 // ─── helpers ────────────────────────────────────────────────
 
@@ -27,29 +28,32 @@ const STATUS_LABEL: Record<string, string> = {
     CANCELADO:   'Cancelado',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-    PREVISTO:    'bg-gray-100 text-gray-600 border-gray-200',
-    EMITIDO:     'bg-blue-50 text-blue-700 border-blue-100',
-    ENVIADO:     'bg-purple-50 text-purple-700 border-purple-100',
-    RECEBIDO:    'bg-green-50 text-green-700 border-green-100',
-    PARCIAL:     'bg-orange-50 text-orange-700 border-orange-100',
-    VENCIDO:     'bg-red-50 text-red-700 border-red-100',
-    RENEGOCIADO: 'bg-yellow-50 text-yellow-700 border-yellow-100',
-    CANCELADO:   'bg-gray-50 text-gray-400 border-gray-100',
+// Padrão guia seção 8 — texto simples, sem pílula
+const STATUS_TEXT_COLORS: Record<string, string> = {
+    PREVISTO:    'text-gray-600',
+    EMITIDO:     'text-blue-700',
+    ENVIADO:     'text-purple-700',
+    RECEBIDO:    'text-green-700',
+    PARCIAL:     'text-orange-700',
+    VENCIDO:     'text-red-600',
+    RENEGOCIADO: 'text-yellow-700',
+    CANCELADO:   'text-gray-400',
 };
 
 const RECEBER_COLUMNS: ColumnConfig[] = [
-    { key: 'party_name', label: 'Cliente / Descrição', sortable: true },
-    { key: 'amount', label: 'Valor', sortable: true },
+    { key: 'party_name', label: 'Cliente / Parte', sortable: true },
+    { key: 'description', label: 'Descrição', sortable: true },
+    { key: 'project_name', label: 'Obra', sortable: true },
     { key: 'due_date', label: 'Vencimento', sortable: true },
+    { key: 'amount', label: 'Valor', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
-    { key: 'partial_amount', label: 'Recebido', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
 ];
 
 function StatusBadge({ status }: { status: string }) {
     return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-widest border ${STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-            {status === 'VENCIDO' && <AlertCircle className="w-2.5 h-2.5 mr-1" />}
+        <span className={`inline-flex items-center gap-1 text-sm font-normal ${STATUS_TEXT_COLORS[status] ?? 'text-gray-600'}`}>
+            {status === 'VENCIDO' && <AlertCircle className="w-3 h-3" />}
             {STATUS_LABEL[status] ?? status}
         </span>
     );
@@ -60,8 +64,6 @@ function today() { return new Date().toISOString().slice(0, 10); }
 // ─── types ──────────────────────────────────────────────────
 
 type StatusFilter = 'all' | ReceivableEffectiveStatus;
-
-interface SortConfig { key: keyof Receivable; dir: 'asc' | 'desc' }
 
 // ─── NovoLancamentoModal ─────────────────────────────────────
 
@@ -622,10 +624,16 @@ export default function ContasReceberManager({ organizationId, organizations, on
     const [dueTo, setDueTo]             = usePersistedState('contasReceberManagerFilters:dueTo', '');
     const [showFilters, setShowFilters]  = useState(false);
     const [showInad, setShowInad]        = useState(false);
-    const [sort, setSort]               = usePersistedState<SortConfig>('contasReceberManagerFilters:sort', { key: 'due_date', dir: 'asc' });
     // storageKey explícito — antes usava o default 'tableColumns' e colidia com
     // qualquer outro componente que também não passasse a chave.
     const tableColumns = useTableColumns(RECEBER_COLUMNS, 'contasReceberManagerColumns');
+
+    // Toast de Notificação — Seção 13 do guia
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
 
     const [showNovo, setShowNovo]         = useState(false);
     const [baixando, setBaixando]         = useState<Receivable | null>(null);
@@ -668,10 +676,6 @@ export default function ContasReceberManager({ organizationId, organizations, on
         if (id !== 'ALL') onOrgChange?.(id);
     }
 
-    function handleSort(key: keyof Receivable) {
-        setSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
-    }
-
     async function handleBaixa() {
         if (!baixando) return;
         setSavingBaixa(true);
@@ -679,8 +683,9 @@ export default function ContasReceberManager({ organizationId, organizations, on
             await receivableService.updateStatus(baixando.id, 'RECEBIDO');
             setBaixando(null);
             await load();
+            notify('Recebível baixado com sucesso.');
         } catch (e) {
-            alert('Erro: ' + (e instanceof Error ? e.message : 'Falha ao baixar'));
+            notify('Erro: ' + (e instanceof Error ? e.message : 'Falha ao baixar'), 'error');
         } finally {
             setSavingBaixa(false);
         }
@@ -692,22 +697,33 @@ export default function ContasReceberManager({ organizationId, organizations, on
             await receivableService.updateStatus(id, newStatus as Parameters<typeof receivableService.updateStatus>[1]);
             await load();
         } catch (e) {
-            alert('Erro: ' + (e instanceof Error ? e.message : 'Falha'));
+            notify('Erro: ' + (e instanceof Error ? e.message : 'Falha'), 'error');
         } finally {
             setChangingStatus(null);
         }
     }
 
     const sorted = useMemo(() => {
-        const copy = [...rows];
-        copy.sort((a, b) => {
-            const va = (a[sort.key] ?? '') as string;
-            const vb = (b[sort.key] ?? '') as string;
-            const cmp = String(va).localeCompare(String(vb), 'pt-BR', { numeric: true });
-            return sort.dir === 'asc' ? cmp : -cmp;
-        });
-        return copy;
-    }, [rows, sort]);
+        const result = [...rows];
+        if (tableColumns.sortColumn) {
+            result.sort((a, b) => {
+                let va: string | number, vb: string | number;
+                switch (tableColumns.sortColumn) {
+                    case 'party_name':    va = (a.party_name ?? '').toLowerCase();    vb = (b.party_name ?? '').toLowerCase();    break;
+                    case 'description':   va = (a.description ?? '').toLowerCase();   vb = (b.description ?? '').toLowerCase();   break;
+                    case 'project_name':  va = (a.project_name ?? '').toLowerCase();  vb = (b.project_name ?? '').toLowerCase();  break;
+                    case 'due_date':      va = a.due_date ?? '';                      vb = b.due_date ?? '';                      break;
+                    case 'amount':        va = a.amount ?? 0;                         vb = b.amount ?? 0;                         break;
+                    case 'status':        va = a.effective_status;                    vb = b.effective_status;                    break;
+                    default:              return 0;
+                }
+                if (va < vb) return tableColumns.sortDirection === 'asc' ? -1 : 1;
+                if (va > vb) return tableColumns.sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return result;
+    }, [rows, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     /** Mesmo critério do botão "Baixar" por linha: só não-RECEBIDO pode ser baixado. */
     const isSelectable = (r: Receivable) => r.effective_status !== 'RECEBIDO';
@@ -758,7 +774,9 @@ export default function ContasReceberManager({ organizationId, organizations, on
         setBulkLoading(false);
         if (okIds.length) await load();
         if (falhas.length) {
-            alert(`${okIds.length} baixado(s). Falha em ${falhas.length}: ${falhas.join(', ')}`);
+            notify(`${okIds.length} baixado(s). Falha em ${falhas.length}: ${falhas.join(', ')}`, 'error');
+        } else if (okIds.length) {
+            notify(`${okIds.length} ${okIds.length !== 1 ? 'recebíveis baixados' : 'recebível baixado'}.`);
         }
     }
 
@@ -777,11 +795,6 @@ export default function ContasReceberManager({ organizationId, organizations, on
         });
         return { aReceber, vencidos, recebidoMes };
     }, [rows]);
-
-    const SortIcon = ({ k }: { k: keyof Receivable }) =>
-        sort.key === k
-            ? sort.dir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-            : null;
 
     const STATUS_OPTIONS: StatusFilter[] = ['all','PREVISTO','EMITIDO','ENVIADO','RECEBIDO','PARCIAL','VENCIDO','RENEGOCIADO'];
 
@@ -831,18 +844,32 @@ export default function ContasReceberManager({ organizationId, organizations, on
                     </div>
                 </div>
 
-                {/* KPI summary */}
-                <div className="grid grid-cols-3 gap-4 mt-4">
-                    {[
-                        { label: 'A Receber', value: summary.aReceber,    color: 'text-blue-700' },
-                        { label: 'Vencidos',  value: summary.vencidos,    color: summary.vencidos > 0 ? 'text-red-600' : 'text-gray-700' },
-                        { label: 'Recebido (mês)', value: summary.recebidoMes, color: 'text-green-700' },
-                    ].map(k => (
-                        <div key={k.label} className="bg-gray-50 rounded-xl p-3">
-                            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-0.5">{k.label}</p>
-                            <p className={`text-base font-black ${k.color}`}>{fmt(k.value)}</p>
-                        </div>
-                    ))}
+                {/* KPI summary - fora do header, no padrão global */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                    <KpiCard
+                        label="A Receber"
+                        value={fmt(summary.aReceber)}
+                        sub={`${rows.filter(r => !['CANCELADO','RECEBIDO'].includes(r.effective_status)).length} títulos em aberto`}
+                        icon={<DollarSign className="w-5 h-5" />}
+                        color="blue"
+                        onClick={() => setStatusFilter('all')}
+                    />
+                    <KpiCard
+                        label="Vencidos"
+                        value={fmt(summary.vencidos)}
+                        sub={`${rows.filter(r => r.effective_status === 'VENCIDO').length} títulos vencidos`}
+                        icon={<AlertTriangle className="w-5 h-5" />}
+                        color={summary.vencidos > 0 ? 'red' : 'gray'}
+                        onClick={() => setStatusFilter('VENCIDO')}
+                    />
+                    <KpiCard
+                        label="Recebido (mês)"
+                        value={fmt(summary.recebidoMes)}
+                        sub={`${rows.filter(r => r.effective_status === 'RECEBIDO').length} títulos quitados`}
+                        icon={<Check className="w-5 h-5" />}
+                        color="emerald"
+                        onClick={() => setStatusFilter('RECEBIDO')}
+                    />
                 </div>
             </div>
 
@@ -908,6 +935,14 @@ export default function ContasReceberManager({ organizationId, organizations, on
                     >
                         <Filter className="w-3.5 h-3.5" /> Filtros
                     </button>
+                    <ColumnConfigButton
+                        columns={RECEBER_COLUMNS.filter(c => c.key !== 'actions')}
+                        visibleColumns={tableColumns.visibleColumns}
+                        showColumnConfig={tableColumns.showColumnConfig}
+                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                        onToggleColumn={tableColumns.toggleColumn}
+                        onReset={tableColumns.resetColumns}
+                    />
                 </div>
 
                 {showFilters && (
@@ -963,18 +998,19 @@ export default function ContasReceberManager({ organizationId, organizations, on
                     <div className="m-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold">{error}</div>
                 )}
                 {loading ? (
-                    <div className="flex items-center justify-center py-20">
-                        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="mt-2 text-gray-500">Carregando recebíveis...</p>
                     </div>
                 ) : sorted.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                        <TrendingUp className="w-10 h-10 mb-3 opacity-30" />
-                        <p className="text-sm font-semibold">Nenhum recebível encontrado</p>
-                        <p className="text-xs mt-1">Ajuste os filtros ou crie um novo lançamento</p>
+                    <div className="text-center py-12 bg-white rounded-[2.5rem] shadow-sm border border-gray-100 mx-6">
+                        <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum recebível encontrado</h3>
+                        <p className="text-sm text-gray-500">Ajuste os filtros ou crie um novo lançamento.</p>
                     </div>
                 ) : (
                     <table className="w-full text-sm">
-                        <thead className="bg-gray-50 border-b border-gray-100 sticky top-0 z-10">
+                        <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-100 sticky top-0 z-10">
                             <tr>
                                 <th className="w-10 px-4 py-3 text-center">
                                     <input
@@ -986,26 +1022,39 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                         title="Selecionar todos (não recebidos)"
                                     />
                                 </th>
-                                {[
-                                    { label: 'Cliente / Parte',  key: 'party_name'       },
-                                    { label: 'Descrição',        key: 'description'      },
-                                    { label: 'Obra',             key: 'project_name'     },
-                                    { label: 'Vencimento',       key: 'due_date'         },
-                                    { label: 'Valor',            key: 'amount'           },
-                                    { label: 'Status',           key: 'effective_status' },
-                                    { label: 'Ações',            key: null               },
-                                ].map(col => (
-                                    <th
-                                        key={col.label}
-                                        onClick={() => col.key && handleSort(col.key as keyof Receivable)}
-                                        className={`px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-gray-500 whitespace-nowrap ${col.key ? 'cursor-pointer hover:text-gray-800 select-none' : ''}`}
-                                    >
-                                        <span className="flex items-center gap-1">
-                                            {col.label}
-                                            {col.key && <SortIcon k={col.key as keyof Receivable} />}
-                                        </span>
-                                    </th>
-                                ))}
+                                {tableColumns.visibleColumns.includes('party_name') && (
+                                    <SortableHeader label="Cliente / Parte" colKey="party_name"
+                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort} className="px-4 py-3 text-left whitespace-nowrap" />
+                                )}
+                                {tableColumns.visibleColumns.includes('description') && (
+                                    <SortableHeader label="Descrição" colKey="description"
+                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort} className="px-4 py-3 text-left whitespace-nowrap" />
+                                )}
+                                {tableColumns.visibleColumns.includes('project_name') && (
+                                    <SortableHeader label="Obra" colKey="project_name"
+                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort} className="px-4 py-3 text-left whitespace-nowrap" />
+                                )}
+                                {tableColumns.visibleColumns.includes('due_date') && (
+                                    <SortableHeader label="Vencimento" colKey="due_date"
+                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort} className="px-4 py-3 text-left whitespace-nowrap" />
+                                )}
+                                {tableColumns.visibleColumns.includes('amount') && (
+                                    <SortableHeader label="Valor" colKey="amount"
+                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort} className="px-4 py-3 text-left whitespace-nowrap" />
+                                )}
+                                {tableColumns.visibleColumns.includes('status') && (
+                                    <SortableHeader label="Status" colKey="status"
+                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort} className="px-4 py-3 text-left whitespace-nowrap" />
+                                )}
+                                {tableColumns.visibleColumns.includes('actions') && (
+                                    <th className="px-4 py-3 text-right">Ações</th>
+                                )}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -1024,24 +1073,37 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                                 />
                                             ) : null}
                                         </td>
-                                        <td className="px-4 py-3 font-semibold text-gray-900 max-w-[160px] truncate">
-                                            {r.party_name ?? <span className="text-gray-400 italic">—</span>}
-                                        </td>
-                                        <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">
-                                            {r.description ?? '—'}
-                                        </td>
-                                        <td className="px-4 py-3 text-gray-500 text-table-body max-w-[140px] truncate">
-                                            {r.project_name ?? '—'}
-                                        </td>
-                                        <td className={`px-4 py-3 font-mono text-table-body whitespace-nowrap ${isVencido ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
-                                            {fmtDate(r.due_date)}
-                                        </td>
-                                        <td className="px-4 py-3 font-black text-gray-900 whitespace-nowrap">
-                                            {fmt(r.amount)}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <StatusBadge status={r.effective_status} />
-                                        </td>
+                                        {tableColumns.visibleColumns.includes('party_name') && (
+                                            <td className="px-4 py-3 text-sm font-normal text-gray-900 max-w-[160px] truncate">
+                                                {r.party_name ?? <span className="text-gray-400 italic">—</span>}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('description') && (
+                                            <td className="px-4 py-3 text-sm font-normal text-gray-700 max-w-[200px] truncate">
+                                                {r.description ?? '—'}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('project_name') && (
+                                            <td className="px-4 py-3 text-sm font-normal text-gray-600 max-w-[140px] truncate">
+                                                {r.project_name ?? '—'}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('due_date') && (
+                                            <td className={`px-4 py-3 text-sm font-normal whitespace-nowrap ${isVencido ? 'text-red-600' : 'text-gray-600'}`}>
+                                                {fmtDate(r.due_date)}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('amount') && (
+                                            <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
+                                                {fmt(r.amount)}
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('status') && (
+                                            <td className="px-4 py-3">
+                                                <StatusBadge status={r.effective_status} />
+                                            </td>
+                                        )}
+                                        {tableColumns.visibleColumns.includes('actions') && (
                                         <td className="px-4 py-3">
                                             <div className="flex items-center gap-2">
                                                 {!isRecebido && (
@@ -1076,7 +1138,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                                         value={r.business_status}
                                                         disabled={changingStatus === r.id}
                                                         onChange={e => handleChangeStatus(r.id, e.target.value)}
-                                                        className="text-xs font-bold border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none cursor-pointer"
+                                                        className="text-sm font-normal border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none cursor-pointer"
                                                     >
                                                         {(['PREVISTO','EMITIDO','ENVIADO','PARCIAL','RENEGOCIADO','CANCELADO'] as const).map(s => (
                                                             <option key={s} value={s}>{STATUS_LABEL[s]}</option>
@@ -1085,6 +1147,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                                 )}
                                             </div>
                                         </td>
+                                        )}
                                     </tr>
                                 );
                             })}
@@ -1126,6 +1189,16 @@ export default function ContasReceberManager({ organizationId, organizations, on
                     onDone={load}
                     onClose={() => setEmitindo(null)}
                 />
+            )}
+
+            {/* Toast de Notificação — padrão guia seção 13 */}
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
+                </div>
             )}
         </div>
     );

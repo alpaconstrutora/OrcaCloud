@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Building2, Check, ChevronDown, ChevronUp,
     Clock, ExternalLink, FileText, Landmark, Loader2, RefreshCw,
-    Search, TrendingDown, X,
+    Search, TrendingDown, X, DollarSign, AlertTriangle,
 } from 'lucide-react';
 import { invoiceService } from '../services/invoiceService';
 import { Invoice } from '../types/financial';
@@ -10,6 +10,7 @@ import type { Organization } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { Money, formatMoney, formatDateBR } from './ui/Format';
 import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
+import { KpiCard } from './ui/KpiCard';
 
 type InvoiceRow = Invoice & { supplierName?: string; supplierOrganizationId?: string };
 
@@ -43,22 +44,19 @@ function isOverdue(inv: InvoiceRow) {
     return new Date(inv.dueDate + 'T00:00:00') < today();
 }
 
+// Padrão guia seção 8 — texto simples, sem pílula
 function StatusBadge({ inv }: { inv: InvoiceRow }) {
     if (isOverdue(inv)) {
-        return (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-widest bg-red-50 text-red-700 border border-red-100">
-                <AlertCircle className="w-2.5 h-2.5" /> Atrasado
-            </span>
-        );
+        return <span className="text-sm font-normal text-red-600">Atrasado</span>;
     }
-    const map: Record<string, string> = {
-        paid: 'bg-green-50 text-green-700 border-green-100',
-        approved: 'bg-blue-50 text-blue-700 border-blue-100',
-        pending: 'bg-yellow-50 text-yellow-700 border-yellow-100',
-        rejected: 'bg-gray-50 text-gray-500 border-gray-100',
+    const colors: Record<string, string> = {
+        paid: 'text-green-700',
+        approved: 'text-blue-700',
+        pending: 'text-yellow-700',
+        rejected: 'text-gray-500',
     };
     return (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-widest border ${map[inv.status] ?? 'bg-gray-50 text-gray-500 border-gray-100'}`}>
+        <span className={`text-sm font-normal ${colors[inv.status] ?? 'text-gray-500'}`}>
             {STATUS_PT[inv.status] ?? inv.status}
         </span>
     );
@@ -88,6 +86,13 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     const [showFilters, setShowFilters] = useState(false);
     const tableColumns = useTableColumns(CONTAS_COLUMNS, 'contasPagarManagerColumns');
 
+    // Toast de Notificação — Seção 13 do guia
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
+
     const effectiveOrgId = selectedOrgId === 'ALL' ? undefined : selectedOrgId;
 
     async function carregar(orgId?: string) {
@@ -116,8 +121,9 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
         try {
             await invoiceService.marcarPago(inv.id);
             setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, status: 'paid' } : i));
+            notify('Conta marcada como paga.');
         } catch (e: any) {
-            alert('Erro: ' + (e.message ?? 'Falha ao marcar como pago'));
+            notify('Erro: ' + (e.message ?? 'Falha ao marcar como pago'), 'error');
         } finally {
             setMarcandoPago(null);
         }
@@ -232,7 +238,9 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
         });
         setBulkLoading(false);
         if (falhas.length) {
-            alert(`${okIds.length} marcada(s) como paga(s). Falha em ${falhas.length}: ${falhas.join(', ')}`);
+            notify(`${okIds.length} marcada(s) como paga(s). Falha em ${falhas.length}: ${falhas.join(', ')}`, 'error');
+        } else if (okIds.length) {
+            notify(`${okIds.length} conta${okIds.length !== 1 ? 's' : ''} marcada${okIds.length !== 1 ? 's' : ''} como paga${okIds.length !== 1 ? 's' : ''}.`);
         }
     }
 
@@ -310,27 +318,39 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                 <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
 
                     {/* KPI Cards */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        {[
-                            { label: 'A Pagar', value: summary.aPagar, qtd: summary.qtdAPagar, color: 'blue', onClick: () => setStatusFilter('all') },
-                            { label: 'Vence em 7d', value: summary.venc7, qtd: summary.qtdVenc7, color: 'yellow', onClick: () => { setStatusFilter('all'); const d = new Date(); d.setDate(d.getDate() + 7); setVencAte(d.toISOString().slice(0, 10)); setVencDe(new Date().toISOString().slice(0, 10)); } },
-                            { label: 'Em Atraso', value: summary.atrasado, qtd: summary.qtdAtrasado, color: 'red', onClick: () => setStatusFilter('overdue') },
-                            { label: 'Pago no Mês', value: summary.pagoMes, qtd: summary.qtdPagoMes, color: 'green', onClick: () => setStatusFilter('paid') },
-                        ].map(card => (
-                            <button
-                                key={card.label}
-                                onClick={card.onClick}
-                                className={`bg-white rounded-xl border border-gray-200 p-4 text-left hover:border-${card.color}-300 hover:shadow-sm transition-all`}
-                            >
-                                <div className="flex justify-between items-start mb-1">
-                                    <p className="text-button font-semibold text-gray-500 uppercase tracking-wide">{card.label}</p>
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full bg-${card.color}-50 text-${card.color}-600 border border-${card.color}-100`}>
-                                        {card.qtd}
-                                    </span>
-                                </div>
-                                <p className={`text-xl font-bold text-${card.color}-600`}>{formatMoney(card.value)}</p>
-                            </button>
-                        ))}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <KpiCard
+                            label="A Pagar"
+                            value={formatMoney(summary.aPagar)}
+                            sub={`${summary.qtdAPagar} conta${summary.qtdAPagar !== 1 ? 's' : ''} em aberto`}
+                            icon={<DollarSign className="w-5 h-5" />}
+                            color="blue"
+                            onClick={() => setStatusFilter('all')}
+                        />
+                        <KpiCard
+                            label="Vence em 7 dias"
+                            value={formatMoney(summary.venc7)}
+                            sub={`${summary.qtdVenc7} conta${summary.qtdVenc7 !== 1 ? 's' : ''} próximas`}
+                            icon={<Clock className="w-5 h-5" />}
+                            color="amber"
+                            onClick={() => { setStatusFilter('all'); const d = new Date(); d.setDate(d.getDate() + 7); setVencAte(d.toISOString().slice(0, 10)); setVencDe(new Date().toISOString().slice(0, 10)); }}
+                        />
+                        <KpiCard
+                            label="Em Atraso"
+                            value={formatMoney(summary.atrasado)}
+                            sub={`${summary.qtdAtrasado} conta${summary.qtdAtrasado !== 1 ? 's' : ''} vencidas`}
+                            icon={<AlertTriangle className="w-5 h-5" />}
+                            color="red"
+                            onClick={() => setStatusFilter('overdue')}
+                        />
+                        <KpiCard
+                            label="Pago no Mês"
+                            value={formatMoney(summary.pagoMes)}
+                            sub={`${summary.qtdPagoMes} conta${summary.qtdPagoMes !== 1 ? 's' : ''} quitadas`}
+                            icon={<Check className="w-5 h-5" />}
+                            color="emerald"
+                            onClick={() => setStatusFilter('paid')}
+                        />
                     </div>
 
                     {/* Barra de busca e filtros */}
@@ -535,30 +555,24 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 </td>
                                                 {tableColumns.visibleColumns.includes('supplier') && (
                                                     <td className="px-4 py-3">
-                                                        <p className="font-medium text-gray-900 truncate max-w-xs">{inv.supplierName ?? '—'}</p>
+                                                        <p className="text-sm font-normal text-gray-900 truncate max-w-xs">{inv.supplierName ?? '—'}</p>
                                                         <p className="text-xs text-gray-400 truncate max-w-xs">{inv.fileName}</p>
                                                     </td>
                                                 )}
                                                 {tableColumns.visibleColumns.includes('origem') && (
                                                     <td className="px-4 py-3">
-                                                        {fromBoleto ? (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-widest bg-indigo-50 text-indigo-700 border border-indigo-100">
-                                                                <FileText className="w-2.5 h-2.5" /> Boleto
-                                                            </span>
-                                                        ) : (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-widest bg-gray-50 text-gray-500 border border-gray-100">
-                                                                Manual
-                                                            </span>
-                                                        )}
+                                                        <span className={`text-sm font-normal ${fromBoleto ? 'text-indigo-700' : 'text-gray-500'}`}>
+                                                            {fromBoleto ? 'Boleto' : 'Manual'}
+                                                        </span>
                                                     </td>
                                                 )}
                                                 {tableColumns.visibleColumns.includes('valor') && (
-                                                    <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                                                    <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">
                                                         <Money value={inv.amount} />
                                                     </td>
                                                 )}
                                                 {tableColumns.visibleColumns.includes('vencimento') && (
-                                                    <td className={`px-4 py-3 text-center text-table-body font-medium ${overdue ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+                                                    <td className={`px-4 py-3 text-center text-sm font-normal ${overdue ? 'text-red-600' : 'text-gray-600'}`}>
                                                         {formatDateBR(inv.dueDate)}
                                                         {overdue && dueDate && (
                                                             <div className="text-xs text-red-500">
@@ -631,7 +645,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                         <td colSpan={3} className="px-4 py-2 text-table-body text-gray-500">
                                             {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
                                         </td>
-                                        <td className="px-4 py-2 text-right text-sm font-bold text-gray-900">
+                                        <td className="px-4 py-2 text-right text-sm font-medium text-gray-900">
                                             {formatMoney(filtered.filter(i => !['paid', 'rejected'].includes(i.status)).reduce((s, i) => s + (i.amount ?? 0), 0))}
                                         </td>
                                         <td colSpan={3} className="px-4 py-2 text-table-body text-gray-400 text-right">total a pagar (filtrado)</td>
@@ -657,12 +671,22 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                         onClose={() => setPagandoAsaas(null)}
                         onPaid={() => {
                             setPagandoAsaas(null);
-                            alert('Pagamento enviado à Asaas. O status será atualizado automaticamente assim que o banco confirmar.');
+                            notify('Pagamento enviado à Asaas. O status será atualizado automaticamente assim que o banco confirmar.');
                             carregar(effectiveOrgId);
                         }}
                     />
                 );
             })()}
+
+            {/* Toast de Notificação — padrão guia seção 13 */}
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
+                </div>
+            )}
         </div>
     );
 }

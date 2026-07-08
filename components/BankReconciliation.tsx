@@ -336,7 +336,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
     // Filtros e Ordenação
     const [bankSearch, setBankSearch] = usePersistedState<string>('extratoBancario:search', '');
-    const [internalSearch, setInternalSearch] = useState('');
+    const [internalSearch, setInternalSearch] = usePersistedState<string>('extratoBancario:internalSearch', '');
     const [bankCategoryFilter, setBankCategoryFilter] = useState<string[]>(() => {
         try { return JSON.parse(localStorage.getItem('reconciliation_bank_cat_filter') || '[]'); } catch { return []; }
     });
@@ -358,7 +358,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [internalSortOrder, setInternalSortOrder] = useState<'desc' | 'asc'>('desc');
     const [internalSortField, setInternalSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'entity'>('date');
     const [matchSortOrder, setMatchSortOrder] = useState<'desc' | 'asc'>('desc');
-    const [flowFilter, setFlowFilter] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
+    const [flowFilter, setFlowFilter] = usePersistedState<'ALL' | 'INCOME' | 'EXPENSE'>('extratoBancario:flowFilter', 'ALL');
     const [importingMessage, setImportingMessage] = useState<string | null>(null);
 
     const sortedBankTransactions = useMemo(() => {
@@ -2447,8 +2447,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{ruleCount} {ruleCount === 1 ? 'Regra ativa' : 'Regras ativas'}</span>
                                 </div>
 
-                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button 
+                                <div className="flex items-center gap-1">
+                                    <button
                                         onClick={() => {
                                             const newName = prompt('Novo nome para a categoria:', cat);
                                             if (newName) handleRenameCategory(cat, newName);
@@ -2630,8 +2630,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         }}
                                     />
                                 </div>
-                                <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                                    <button 
+                                <div className="absolute top-0 right-0 p-4 flex gap-2">
+                                    <button
                                         onClick={() => handleEditRule(rule)}
                                         className="text-gray-300 hover:text-blue-500 transition-colors"
                                         title="Editar Regra"
@@ -2702,8 +2702,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button 
+                                <div className="flex items-center gap-1">
+                                    <button
                                         onClick={() => handleEditRule(rule)}
                                         className="p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
                                         title="Editar"
@@ -3059,20 +3059,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 multiple
             />
 
+            {/* Toast de Notificação — padrão guia seção 13 */}
+            {actionFeedback && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    actionFeedback.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    {actionFeedback.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                    {actionFeedback.message}
+                </div>
+            )}
+
             {/* Header / Stats */}
             <div className="relative">
-                {actionFeedback && (
-                    <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
-                        <div className={`px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3 border ${
-                            actionFeedback.type === 'success' 
-                                ? 'bg-emerald-500 border-emerald-400 text-white' 
-                                : 'bg-red-500 border-red-400 text-white'
-                        }`}>
-                            {actionFeedback.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-100" /> : <AlertCircle className="w-5 h-5 text-red-100" />}
-                            <span className="text-sm font-black uppercase tracking-widest">{actionFeedback.message}</span>
-                        </div>
-                    </div>
-                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <KpiCard
                         label="Pendentes"
@@ -3357,10 +3355,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 <BankTxEdicaoEmLoteModal
                     transactions={sortedBankTransactions.filter(tx => selectedBankTxIds.has(tx.id))}
                     categories={uniqueCategories}
-                    entityOptions={[
-                        ...uniqueClients.map(c => ({ value: c, label: c, group: 'Clientes' })),
-                        ...uniqueCredores.map(s => ({ value: s, label: s, group: 'Credores' })),
-                    ]}
+                    clientOptions={uniqueClients}
+                    supplierOptions={uniqueCredores}
                     projects={masterProjects}
                     costCenters={masterCostCenters}
                     onClose={() => setIsLoteEditOpen(false)}
@@ -4087,7 +4083,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
                         <div className={activeView === 'statement' ? '' : `min-h-[400px] ${pendentesViewMode === 'grid' ? 'bg-transparent border-none shadow-none' : 'bg-transparent'}`}>
                             {activeView === 'statement' ? (
-                                bankTransactions.length === 0 ? (
+                                isLoading && bankTransactions.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                                        <p className="mt-2 text-gray-500">Carregando extrato...</p>
+                                    </div>
+                                ) : bankTransactions.length === 0 ? (
                                     <div className="text-center py-12 bg-white rounded-[2.5rem] shadow-sm border border-gray-100">
                                         <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                         <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum extrato importado</h3>
@@ -4463,7 +4464,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 </button>
                                                             </div>
                                                         ) : (
-                                                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">{tx.status}</span>
+                                                            <span className="text-sm font-normal text-gray-400">{tx.status}</span>
                                                         )}
                                                         </div>
                                                     </div>
@@ -4479,49 +4480,35 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             ) : (
                                                 <div
                                                     onClick={() => setSelectedBankTxId(selectedBankTxId === tx.id ? null : tx.id)}
-                                                    className={`${pendentesCompact ? 'p-2 rounded-xl gap-1' : 'p-4 rounded-2xl gap-3'} border transition-all cursor-pointer flex flex-col z-10 relative hover:shadow-md ${selectedBankTxId === tx.id ? 'bg-blue-50 border-blue-400 shadow-lg ring-2 ring-blue-500/10 scale-[1.01]' : 'bg-white border-gray-100 shadow-sm'}`}
+                                                    className={`${pendentesCompact ? 'p-2 rounded-xl gap-2' : 'p-3 rounded-2xl gap-3'} border transition-all cursor-pointer flex items-center z-10 relative hover:shadow-md ${selectedBankTxId === tx.id ? 'bg-blue-50 border-blue-400 shadow-lg ring-2 ring-blue-500/10 scale-[1.01]' : 'bg-white border-gray-100 shadow-sm'}`}
                                                 >
-                                                    {/* Linha 1: checkbox + ícone + descrição */}
-                                                    <div className={`flex items-center min-w-0 ${pendentesCompact ? 'gap-2' : 'gap-3'}`}>
-                                                        <div onClick={(e) => e.stopPropagation()}>
-                                                            <input
-                                                                type="checkbox"
-                                                                className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                                checked={selectedBankTxIds.has(tx.id)}
-                                                                onChange={(e) => {
-                                                                    const next = new Set(selectedBankTxIds);
-                                                                    if (e.target.checked) next.add(tx.id);
-                                                                    else next.delete(tx.id);
-                                                                    setSelectedBankTxIds(next);
-                                                                }}
-                                                            />
-                                                        </div>
-                                                        <div className={`${pendentesCompact ? 'w-6 h-6' : 'w-8 h-8'} rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
-                                                            {tx.direction === 'DEBIT' ? <ArrowRightLeft className={pendentesCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> : <Plus className={pendentesCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />}
-                                                        </div>
-                                                        <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-bold text-gray-900 group-hover:text-blue-600 transition-colors uppercase truncate flex-1`} title={tx.description_normalized || tx.description_raw}>
-                                                            {tx.description_normalized || tx.description_raw}
-                                                        </p>
-                                                        {tx.status === 'RULE_APPLIED' && (
-                                                            <span className="shrink-0 flex items-center gap-1 text-[8px] font-black text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full uppercase">
-                                                                <Zap className="w-2 h-2" /> Automático
-                                                            </span>
-                                                        )}
+                                                    <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                            checked={selectedBankTxIds.has(tx.id)}
+                                                            onChange={(e) => {
+                                                                const next = new Set(selectedBankTxIds);
+                                                                if (e.target.checked) next.add(tx.id);
+                                                                else next.delete(tx.id);
+                                                                setSelectedBankTxIds(next);
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <div className={`${pendentesCompact ? 'w-6 h-6' : 'w-8 h-8'} rounded-xl flex items-center justify-center shrink-0 ${tx.direction === 'DEBIT' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                                                        {tx.direction === 'DEBIT' ? <ArrowRightLeft className={pendentesCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} /> : <Plus className={pendentesCompact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />}
                                                     </div>
 
-                                                    {/* Linha 2: Fornecedor/Cliente / Categoria / Data / Valor */}
-                                                    <div className={`flex items-center flex-wrap ${pendentesCompact ? 'gap-2 pl-8' : 'gap-3 pl-10'}`}>
+                                                    {/* Linha única: Fornecedor/Cliente / Categoria / Obra / Centro de Custo / Data / Valor / Ações */}
+                                                    <div className="flex items-center flex-wrap flex-1 min-w-0 gap-3">
                                                         {/* Seletor de Cliente / Fornecedor */}
-                                                        <div className="flex flex-col" onClick={(e) => e.stopPropagation()}>
-                                                            <span className={`text-[8px] font-black text-gray-300 uppercase tracking-widest mb-0.5 ${pendentesCompact ? 'hidden' : ''}`}>
-                                                                {tx.direction === 'DEBIT' ? 'Credor' : 'Cliente'}
-                                                            </span>
+                                                        <div onClick={(e) => e.stopPropagation()}>
                                                             <LazySelect
                                                                 value={tx.counterparty_name || ''}
                                                                 currentLabel={tx.counterparty_name || ''}
                                                                 onChange={(v) => handleUpdateBankCounterparty(tx.id, v)}
                                                                 options={tx.direction === 'DEBIT' ? credorOptions : clienteOptions}
-                                                                placeholder="— selecionar"
+                                                                placeholder={tx.direction === 'DEBIT' ? 'Credor' : 'Cliente'}
                                                                 className={`text-xs font-black uppercase border-b border-dashed bg-transparent focus:outline-none cursor-pointer transition-colors max-w-[130px] ${
                                                                     tx.counterparty_name
                                                                         ? 'text-gray-700 border-gray-300'
@@ -4529,25 +4516,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 }`}
                                                             />
                                                         </div>
-
-                                                        {/* Cadastro rápido quando o cliente/fornecedor do extrato ainda não existe */}
-                                                        {(() => {
-                                                            const cp = (tx.counterparty_name || '').trim().toLowerCase();
-                                                            const registered = tx.direction === 'DEBIT'
-                                                                ? masterSuppliersLower.has(cp)
-                                                                : masterClientsLower.has(cp);
-                                                            if (registered) return null;
-                                                            return (
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); openRegisterEntity(tx); }}
-                                                                    className={`items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-lg border border-dashed border-blue-200 text-blue-500 hover:bg-blue-50 hover:border-blue-400 transition-all self-end ${pendentesCompact ? 'hidden' : 'flex'}`}
-                                                                    title={`Cadastrar ${tx.direction === 'DEBIT' ? 'fornecedor' : 'cliente'} a partir do extrato`}
-                                                                >
-                                                                    <UserPlus className="w-3 h-3" />
-                                                                    Cadastrar {tx.direction === 'DEBIT' ? 'fornecedor' : 'cliente'}
-                                                                </button>
-                                                            );
-                                                        })()}
 
                                                         <div onClick={(e) => e.stopPropagation()}>
                                                             <LazySelect
@@ -4579,19 +4547,41 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             />
                                                         </div>
 
-                                                        <div className="flex items-center gap-1 ml-auto">
+                                                        <div onClick={(e) => e.stopPropagation()}>
+                                                            <LazySelect
+                                                                value={tx.cost_center_id || ''}
+                                                                currentLabel={costCenterName(tx.cost_center_id) || ''}
+                                                                onChange={(v) => handleUpdateBankCostCenter(tx.id, v)}
+                                                                options={costCenterOptions}
+                                                                placeholder="Centro de Custo"
+                                                                className={`text-[9px] font-black rounded-lg uppercase tracking-wider border transition-all appearance-none cursor-pointer text-center ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'} ${
+                                                                    tx.cost_center_id
+                                                                        ? 'text-gray-900 bg-violet-100 border-violet-200/50 hover:bg-violet-200'
+                                                                        : 'text-gray-400 bg-white border-dashed border-gray-200 hover:border-blue-400 hover:text-blue-500'
+                                                                }`}
+                                                            />
+                                                        </div>
+
+                                                        <div className="flex items-center gap-1 ml-auto shrink-0">
                                                             <Calendar className="w-3 h-3 text-gray-300 shrink-0" />
                                                             <span className="text-xs font-black text-gray-400 uppercase">
                                                                 {formatDateBR(tx.transaction_date)}
                                                             </span>
                                                         </div>
 
-                                                        <div className="flex flex-col items-end gap-1">
-                                                            <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-black ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                                {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
-                                                            </p>
+                                                        <p className={`${pendentesCompact ? 'text-xs' : 'text-sm'} font-black shrink-0 ${tx.direction === 'DEBIT' ? 'text-red-600' : 'text-emerald-600'}`}>
+                                                            {tx.direction === 'DEBIT' ? '-' : '+'} {formatMoney(tx.amount)}
+                                                        </p>
+
+                                                        {tx.status === 'RULE_APPLIED' && (
+                                                            <span className="shrink-0 flex items-center gap-1 text-[8px] font-black text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full uppercase">
+                                                                <Zap className="w-2 h-2" /> Automático
+                                                            </span>
+                                                        )}
+
+                                                        <div className="flex items-center gap-1.5 shrink-0">
                                                             {tx.status === 'RULE_APPLIED' ? (
-                                                                <div className="flex gap-1.5">
+                                                                <>
                                                                     <button
                                                                         className={`text-[9px] font-black text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-lg uppercase tracking-widest transition-all ${pendentesCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
                                                                         onClick={(e) => { e.stopPropagation(); handleRejectRule(tx.id); }}
@@ -4605,13 +4595,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     >
                                                                         Aceitar
                                                                     </button>
-                                                                </div>
+                                                                </>
                                                             ) : (
-                                                                <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">{tx.status}</span>
+                                                                <span className="text-[10px] font-normal text-gray-300">{tx.status}</span>
                                                             )}
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleDeleteBankTransactions([tx.id]); }}
-                                                                className={`${pendentesCompact ? '' : 'mt-1'} p-1 text-gray-200 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all`}
+                                                                className="p-1 text-gray-200 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                                                                 title="Excluir extrato"
                                                             >
                                                                 <Trash2 className="w-3.5 h-3.5" />

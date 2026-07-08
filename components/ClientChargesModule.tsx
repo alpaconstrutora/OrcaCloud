@@ -7,24 +7,26 @@ import { clientChargeService } from '../services/clientChargeService';
 import type { ClientCharge } from '../services/clientChargeService';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import KpiCard from './ui/KpiCard';
+import { usePersistedState } from './ui/TableUtils';
+import { useConfirm } from './ui/confirm';
 
-// Asaas status → rótulo + cor
+// Asaas status → rótulo + cor. Padrão guia seção 8 — texto simples, sem pílula.
 const STATUS_META: Record<string, { label: string; cls: string }> = {
-    PENDING:   { label: 'Pendente',   cls: 'bg-blue-50 text-blue-600 border-blue-200' },
-    RECEIVED:  { label: 'Recebido',   cls: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-    CONFIRMED: { label: 'Confirmado', cls: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-    OVERDUE:   { label: 'Vencido',    cls: 'bg-red-50 text-red-600 border-red-200' },
-    REFUNDED:  { label: 'Estornado',  cls: 'bg-amber-50 text-amber-600 border-amber-200' },
-    CANCELLED: { label: 'Cancelado',  cls: 'bg-gray-50 text-gray-500 border-gray-200' },
+    PENDING:   { label: 'Pendente',   cls: 'text-blue-600' },
+    RECEIVED:  { label: 'Recebido',   cls: 'text-emerald-600' },
+    CONFIRMED: { label: 'Confirmado', cls: 'text-emerald-600' },
+    OVERDUE:   { label: 'Vencido',    cls: 'text-red-600' },
+    REFUNDED:  { label: 'Estornado',  cls: 'text-amber-600' },
+    CANCELLED: { label: 'Cancelado',  cls: 'text-gray-500' },
 };
 
 const PAID = ['RECEIVED', 'CONFIRMED'];
 
 function StatusBadge({ status }: { status: string }) {
-    const m = STATUS_META[status] ?? { label: status, cls: 'bg-gray-50 text-gray-500 border-gray-200' };
+    const m = STATUS_META[status] ?? { label: status, cls: 'text-gray-500' };
     return (
-        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider border ${m.cls}`}>
-            {status === 'OVERDUE' && <AlertCircle className="w-2.5 h-2.5 mr-1" />}
+        <span className={`inline-flex items-center gap-1 text-sm font-normal ${m.cls}`}>
+            {status === 'OVERDUE' && <AlertCircle className="w-3 h-3" />}
             {m.label}
         </span>
     );
@@ -46,11 +48,12 @@ interface Props {
 }
 
 export default function ClientChargesModule({ organizationId }: Props) {
+    const confirm = useConfirm();
     const [rows, setRows]         = useState<ClientCharge[]>([]);
     const [loading, setLoading]   = useState(true);
     const [error, setError]       = useState<string | null>(null);
-    const [search, setSearch]     = useState('');
-    const [filter, setFilter]     = useState<StatusFilter>('all');
+    const [search, setSearch]     = usePersistedState('clientChargesModuleFilters:search', '');
+    const [filter, setFilter]     = usePersistedState<StatusFilter>('clientChargesModuleFilters:status', 'all');
     const [expanded, setExpanded] = useState<string | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [cancelling, setCancelling]   = useState<string | null>(null);
@@ -58,6 +61,13 @@ export default function ClientChargesModule({ organizationId }: Props) {
     const [resentId, setResentId]       = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkLoading, setBulkLoading] = useState(false);
+
+    // Toast de Notificação — Seção 13 do guia
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
 
     const load = useCallback(async () => {
         if (!organizationId) return;
@@ -125,7 +135,13 @@ export default function ClientChargesModule({ organizationId }: Props) {
     async function handleBulkCancel() {
         const alvos = selectedVisible;
         if (alvos.length === 0) return;
-        if (!confirm(`Cancelar ${alvos.length} cobrança${alvos.length !== 1 ? 's' : ''} (${fmt(selectedTotal)})? O boleto/PIX será invalidado no Asaas.`)) return;
+        const ok = await confirm({
+            title: 'Cancelar cobranças?',
+            message: `Cancelar ${alvos.length} cobrança${alvos.length !== 1 ? 's' : ''} (${fmt(selectedTotal)})? O boleto/PIX será invalidado no Asaas.`,
+            variant: 'danger',
+            confirmLabel: 'Cancelar cobranças',
+        });
+        if (!ok) return;
         setBulkLoading(true);
         const falhas: string[] = [];
         let okCount = 0;
@@ -141,7 +157,9 @@ export default function ClientChargesModule({ organizationId }: Props) {
         setSelectedIds(new Set());
         await load();
         if (falhas.length) {
-            alert(`${okCount} cancelada(s). Falha em ${falhas.length}: ${falhas.join(', ')}`);
+            notify(`${okCount} cancelada(s). Falha em ${falhas.length}: ${falhas.join(', ')}`, 'error');
+        } else {
+            notify(`${okCount} cobrança${okCount !== 1 ? 's' : ''} cancelada${okCount !== 1 ? 's' : ''}.`);
         }
     }
 
@@ -170,9 +188,9 @@ export default function ClientChargesModule({ organizationId }: Props) {
             const r = await clientChargeService.resend(organizationId, c.id);
             setResentId(c.id);
             setTimeout(() => setResentId(null), 3000);
-            if (r.email) alert(`Boleto reenviado para ${r.email}`);
+            notify(r.email ? `Boleto reenviado para ${r.email}` : 'Boleto reenviado.');
         } catch (e) {
-            alert('Erro: ' + (e instanceof Error ? e.message : 'Falha ao reenviar'));
+            notify('Erro: ' + (e instanceof Error ? e.message : 'Falha ao reenviar'), 'error');
         } finally {
             setResending(null);
         }
@@ -180,16 +198,23 @@ export default function ClientChargesModule({ organizationId }: Props) {
 
     async function handleCancel(c: ClientCharge) {
         if (!c.transaction_id) {
-            alert('Esta cobrança não está vinculada a um recebível e não pode ser cancelada por aqui.');
+            notify('Esta cobrança não está vinculada a um recebível e não pode ser cancelada por aqui.', 'error');
             return;
         }
-        if (!confirm(`Cancelar a cobrança de ${fmt(c.value)} de ${c.party_name ?? 'cliente'}? O boleto/PIX será invalidado no Asaas.`)) return;
+        const ok = await confirm({
+            title: 'Cancelar cobrança?',
+            message: `Cancelar a cobrança de ${fmt(c.value)} de ${c.party_name ?? 'cliente'}? O boleto/PIX será invalidado no Asaas.`,
+            variant: 'danger',
+            confirmLabel: 'Cancelar cobrança',
+        });
+        if (!ok) return;
         setCancelling(c.id);
         try {
             await clientChargeService.cancel(organizationId, c.transaction_id);
             await load();
+            notify('Cobrança cancelada.');
         } catch (e) {
-            alert('Erro: ' + (e instanceof Error ? e.message : 'Falha ao cancelar'));
+            notify('Erro: ' + (e instanceof Error ? e.message : 'Falha ao cancelar'), 'error');
         } finally {
             setCancelling(null);
         }
@@ -333,10 +358,10 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                                         />
                                                     ) : null}
                                                 </td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-900 max-w-[160px] truncate">{c.party_name ?? '—'}</td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-900 max-w-[160px] truncate">{c.party_name ?? '—'}</td>
                                                 <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 max-w-[200px] truncate">{c.description ?? '—'}</td>
                                                 <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{c.billing_type === 'PIX' ? 'PIX' : c.billing_type === 'UNDEFINED' ? 'Boleto+PIX' : 'Boleto'}</td>
-                                                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm whitespace-nowrap ${isOverdue ? 'text-red-600 font-medium' : 'text-gray-700 font-normal'}`}>{fmtDate(c.due_date)}</td>
+                                                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal whitespace-nowrap ${isOverdue ? 'text-red-600' : 'text-gray-700'}`}>{fmtDate(c.due_date)}</td>
                                                 <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 whitespace-nowrap">{fmt(c.value)}</td>
                                                 <td className="px-6 py-2.5 border-r border-gray-100">
                                                     <StatusBadge status={c.status} />
@@ -419,6 +444,16 @@ export default function ClientChargesModule({ organizationId }: Props) {
                 </div>
             )}
             </div>
+
+            {/* Toast de Notificação — padrão guia seção 13 */}
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
+                </div>
+            )}
         </div>
     );
 }

@@ -15,6 +15,9 @@ import {
     reportScheduleService,
 } from '../services/reportScheduleService';
 import type { ReportSchedule, ReportFrequency, ReportType } from '../services/reportScheduleService';
+import { KpiCard } from './ui/KpiCard';
+import { usePersistedState } from './ui/TableUtils';
+import { useConfirm } from './ui/confirm';
 
 // ─── helpers ────────────────────────────────────────────────
 
@@ -71,7 +74,7 @@ function AlertCard({ alert }: { alert: FinancialAlert }) {
                         <span className="text-xs font-black uppercase tracking-widest opacity-60">
                             {ALERT_TYPE_LABELS[alert.alert_type] ?? alert.alert_type}
                         </span>
-                        <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${s.badge}`}>
+                        <span className={`text-sm font-normal ${s.icon}`}>
                             {s.label}
                         </span>
                     </div>
@@ -89,16 +92,6 @@ function AlertCard({ alert }: { alert: FinancialAlert }) {
                     {alert.description}
                 </div>
             )}
-        </div>
-    );
-}
-
-function KpiCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
-    return (
-        <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-xs font-black uppercase tracking-widest text-gray-400 mb-1">{label}</p>
-            <p className={`text-xl font-black ${color ?? 'text-gray-900'}`}>{value}</p>
-            {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
         </div>
     );
 }
@@ -411,11 +404,12 @@ interface Props {
 }
 
 export default function FinancialIntelligence({ organizationId, onNavigate }: Props) {
-    const [tab, setTab]               = useState<Tab>('alertas');
+    const confirm = useConfirm();
+    const [tab, setTab]               = usePersistedState<Tab>('financialIntelligence:tab', 'alertas');
     const [alerts, setAlerts]         = useState<FinancialAlert[]>([]);
     const [scorecards, setScorecards] = useState<ProjectScorecard[]>([]);
     const [projection, setProjection] = useState<CashflowProjectionPoint[]>([]);
-    const [horizon, setHorizon]       = useState(90);
+    const [horizon, setHorizon]       = usePersistedState('financialIntelligence:horizon', 90);
     const [loading, setLoading]       = useState(true);
     const [error, setError]           = useState<string | null>(null);
 
@@ -466,7 +460,8 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
     }
 
     async function handleDelete(id: string) {
-        if (!window.confirm('Excluir agendamento?')) return;
+        const ok = await confirm({ title: 'Excluir agendamento?', variant: 'danger', confirmLabel: 'Excluir' });
+        if (!ok) return;
         await reportScheduleService.remove(id);
         setSchedules(prev => prev.filter(s => s.id !== id));
     }
@@ -530,29 +525,33 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                 </div>
 
                 {/* KPI summary row */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <KpiCard
                         label="Alertas Críticos"
                         value={String(summary.high)}
                         sub={`${summary.medium} médios`}
-                        color={summary.high > 0 ? 'text-red-600' : 'text-gray-900'}
+                        icon={<ShieldAlert className="w-5 h-5" />}
+                        color={summary.high > 0 ? 'red' : 'gray'}
                     />
                     <KpiCard
                         label="Obras em Risco"
                         value={String(summary.obrasRisco)}
                         sub={`de ${scorecards.length} obras ativas`}
-                        color={summary.obrasRisco > 0 ? 'text-amber-600' : 'text-gray-900'}
+                        icon={<AlertTriangle className="w-5 h-5" />}
+                        color={summary.obrasRisco > 0 ? 'amber' : 'gray'}
                     />
                     <KpiCard
                         label="Margem Média"
                         value={`${summary.margemMedia.toFixed(1)}%`}
                         sub="média das obras ativas"
-                        color={summary.margemMedia < 10 ? 'text-red-600' : summary.margemMedia < 20 ? 'text-amber-600' : 'text-green-700'}
+                        icon={<BarChart2 className="w-5 h-5" />}
+                        color={summary.margemMedia < 10 ? 'red' : summary.margemMedia < 20 ? 'amber' : 'emerald'}
                     />
                     <KpiCard
                         label={`Saldo Projetado (${horizon}d)`}
                         value={fmt(summary.saldoFinal, true)}
-                        color={summary.saldoFinal < 0 ? 'text-red-600' : 'text-green-700'}
+                        icon={summary.saldoFinal < 0 ? <TrendingDown className="w-5 h-5" /> : <TrendingUp className="w-5 h-5" />}
+                        color={summary.saldoFinal < 0 ? 'red' : 'emerald'}
                     />
                 </div>
             </div>
@@ -662,10 +661,10 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                         {/* Tabela de scorecards */}
                                         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                                             <table className="w-full text-sm">
-                                                <thead className="bg-gray-50 border-b border-gray-100">
+                                                <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
                                                     <tr>
                                                         {['Obra', 'Receita Real.', 'Custo Real.', 'Margem', 'AR Pendente', 'AP Pendente', 'Saldo Proj.', 'Risco'].map(h => (
-                                                            <th key={h} className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-gray-500 whitespace-nowrap">
+                                                            <th key={h} className="px-4 py-3 text-left whitespace-nowrap">
                                                                 {h}
                                                             </th>
                                                         ))}
@@ -674,15 +673,15 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                                 <tbody className="divide-y divide-gray-50">
                                                     {scorecards.map(s => (
                                                         <tr key={s.project_id} className="hover:bg-gray-50 transition-colors">
-                                                            <td className="px-4 py-3 font-semibold text-gray-900 max-w-[180px] truncate">{s.project_name}</td>
-                                                            <td className="px-4 py-3 font-mono text-table-body text-gray-700 whitespace-nowrap">{fmt(s.receita_realizada, true)}</td>
-                                                            <td className="px-4 py-3 font-mono text-table-body text-gray-700 whitespace-nowrap">{fmt(s.custo_realizado, true)}</td>
-                                                            <td className={`px-4 py-3 font-black text-table-header whitespace-nowrap ${s.margem_pct < 0 ? 'text-red-600' : s.margem_pct < 10 ? 'text-amber-600' : 'text-green-700'}`}>
+                                                            <td className="px-4 py-3 text-sm font-normal text-gray-900 max-w-[180px] truncate">{s.project_name}</td>
+                                                            <td className="px-4 py-3 text-sm font-normal text-gray-700 whitespace-nowrap">{fmt(s.receita_realizada, true)}</td>
+                                                            <td className="px-4 py-3 text-sm font-normal text-gray-700 whitespace-nowrap">{fmt(s.custo_realizado, true)}</td>
+                                                            <td className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${s.margem_pct < 0 ? 'text-red-600' : s.margem_pct < 10 ? 'text-amber-600' : 'text-green-700'}`}>
                                                                 {s.margem_pct.toFixed(1)}%
                                                             </td>
-                                                            <td className="px-4 py-3 font-mono text-table-body text-blue-700 whitespace-nowrap">{fmt(s.ar_pendente, true)}</td>
-                                                            <td className="px-4 py-3 font-mono text-table-body text-orange-700 whitespace-nowrap">{fmt(s.ap_pendente, true)}</td>
-                                                            <td className={`px-4 py-3 font-black text-table-body whitespace-nowrap ${s.saldo_projetado < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                                                            <td className="px-4 py-3 text-sm font-normal text-blue-700 whitespace-nowrap">{fmt(s.ar_pendente, true)}</td>
+                                                            <td className="px-4 py-3 text-sm font-normal text-orange-700 whitespace-nowrap">{fmt(s.ap_pendente, true)}</td>
+                                                            <td className={`px-4 py-3 text-sm font-medium whitespace-nowrap ${s.saldo_projetado < 0 ? 'text-red-600' : 'text-green-700'}`}>
                                                                 {fmt(s.saldo_projetado, true)}
                                                             </td>
                                                             <td className="px-4 py-3">

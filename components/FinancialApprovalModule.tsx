@@ -12,6 +12,7 @@ import type {
 } from '../types/financial';
 import Button from './ui/Button';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
+import { useConfirm } from './ui/confirm';
 
 // ─── dispatch por entidade ───────────────────────────────────
 // A fila é unificada; cada ação vai ao serviço de domínio correto.
@@ -231,11 +232,11 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                                         </span>
                                         <p className="text-sm font-bold text-gray-900 truncate">{item.title}</p>
                                         {isDraft ? (
-                                            <span className="text-xs font-black text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
+                                            <span className="text-sm font-normal text-gray-500 flex-shrink-0">
                                                 Rascunho
                                             </span>
                                         ) : (
-                                            <span className="text-xs font-black text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full uppercase tracking-widest flex-shrink-0">
+                                            <span className="text-sm font-normal text-amber-700 flex-shrink-0">
                                                 Nível {approvedLevels.length + 1}/{item.approval_required_levels}
                                             </span>
                                         )}
@@ -310,6 +311,7 @@ interface ConfigPanelProps {
     organizationId: string;
 }
 function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
+    const confirm = useConfirm();
     const [items, setItems] = useState<FinancialApprovalConfig[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -353,7 +355,8 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
     }
 
     async function handleDelete(id: string) {
-        if (!window.confirm('Remover esta faixa?')) return;
+        const ok = await confirm({ title: 'Remover esta faixa?', variant: 'danger', confirmLabel: 'Remover' });
+        if (!ok) return;
         try {
             await financialApprovalService.deleteConfig(id);
             await load();
@@ -397,7 +400,7 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
                                         {fmt(item.faixa_min)} — {item.faixa_max != null ? fmt(item.faixa_max) : 'Sem limite'}
                                     </span>
                                     {!item.is_active && (
-                                        <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Inativa</span>
+                                        <span className="text-sm font-normal text-gray-400">Inativa</span>
                                     )}
                                 </div>
                                 <p className="text-xs text-gray-500">

@@ -69,26 +69,27 @@ function buildGrid(year: number, month: number): (number | null)[] {
 }
 
 // ─── Status chip ────────────────────────────────────────────
+// Padrão guia seção 8 — texto simples, sem pílula
 const STATUS_COLORS: Record<string, string> = {
-    PREVISTO: 'bg-gray-100 text-gray-700',
-    EMITIDO:  'bg-blue-100 text-blue-700',
-    ENVIADO:  'bg-purple-100 text-purple-700',
-    RECEBIDO: 'bg-green-100 text-green-700',
-    PAGO:     'bg-green-100 text-green-700',
-    VENCIDO:  'bg-red-100 text-red-700',
-    APROVADO: 'bg-green-100 text-green-700',
-    AGUARDANDO_APROVACAO: 'bg-yellow-100 text-yellow-700',
-    BLOQUEADO:'bg-red-100 text-red-700',
-    CONCILIATED: 'bg-green-100 text-green-700',
-    PENDING:     'bg-gray-100 text-gray-600',
-    CANCELLED:   'bg-gray-200 text-gray-500 line-through',
+    PREVISTO: 'text-gray-700',
+    EMITIDO:  'text-blue-700',
+    ENVIADO:  'text-purple-700',
+    RECEBIDO: 'text-green-700',
+    PAGO:     'text-green-700',
+    VENCIDO:  'text-red-700',
+    APROVADO: 'text-green-700',
+    AGUARDANDO_APROVACAO: 'text-yellow-700',
+    BLOQUEADO:'text-red-700',
+    CONCILIATED: 'text-green-700',
+    PENDING:     'text-gray-600',
+    CANCELLED:   'text-gray-500 line-through',
 };
 
 function StatusChip({ label }: { label?: string }) {
     if (!label) return null;
-    const cls = STATUS_COLORS[label] ?? 'bg-gray-100 text-gray-600';
+    const cls = STATUS_COLORS[label] ?? 'text-gray-600';
     return (
-        <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${cls}`}>
+        <span className={`text-sm font-normal ${cls}`}>
             {label}
         </span>
     );

@@ -21,6 +21,7 @@ import {
 import { dunningService, DunningRule, DunningEvent, DUNNING_VARS } from '../services/dunningService';
 import Button from './ui/Button';
 import { formatMoney, formatDateBR } from './ui/Format';
+import { useConfirm } from './ui/confirm';
 
 // ── helpers ──────────────────────────────────────────────────
 
@@ -33,17 +34,18 @@ const fmtOffset = (n: number) => {
 };
 
 const STATUS_CFG = {
-    sent:    { label: 'Enviado',  icon: CheckCircle2, cls: 'text-green-600 bg-green-50 border-green-200' },
-    failed:  { label: 'Falhou',   icon: XCircle,      cls: 'text-red-600   bg-red-50   border-red-200'   },
-    skipped: { label: 'Pulado',   icon: AlertTriangle,cls: 'text-gray-500  bg-gray-50  border-gray-200'  },
+    sent:    { label: 'Enviado',  icon: CheckCircle2, cls: 'text-green-600' },
+    failed:  { label: 'Falhou',   icon: XCircle,      cls: 'text-red-600'   },
+    skipped: { label: 'Pulado',   icon: AlertTriangle,cls: 'text-gray-500'  },
 };
 
+// Padrão guia seção 8 — texto simples, sem pílula
 function StatusBadge({ status }: { status: 'sent' | 'failed' | 'skipped' }) {
     const cfg = STATUS_CFG[status];
     const Icon = cfg.icon;
     return (
-        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.cls}`}>
-            <Icon className="w-3 h-3" />
+        <span className={`inline-flex items-center gap-1 text-sm font-normal ${cfg.cls}`}>
+            <Icon className="w-3.5 h-3.5" />
             {cfg.label}
         </span>
     );
@@ -265,6 +267,7 @@ function RuleModal({
 // ── Régua Tab ─────────────────────────────────────────────────
 
 function ReguaTab({ organizationId }: { organizationId: string }) {
+    const confirm = useConfirm();
     const [rules, setRules]     = useState<DunningRule[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError]     = useState<string | null>(null);
@@ -293,7 +296,8 @@ function ReguaTab({ organizationId }: { organizationId: string }) {
     useEffect(() => { load(); }, [load]);
 
     const handleDelete = async (id: string) => {
-        if (!window.confirm('Excluir esta regra?')) return;
+        const ok = await confirm({ title: 'Excluir esta regra?', variant: 'danger', confirmLabel: 'Excluir' });
+        if (!ok) return;
         try {
             await dunningService.deleteRule(id);
             await load();
@@ -325,7 +329,8 @@ function ReguaTab({ organizationId }: { organizationId: string }) {
     };
 
     const handleSeed = async () => {
-        if (!window.confirm('Isso criará 6 regras padrão. Continuar?')) return;
+        const ok = await confirm({ title: 'Criar regras padrão?', message: 'Isso criará 6 regras padrão.', variant: 'warning', confirmLabel: 'Criar' });
+        if (!ok) return;
         setSeeding(true);
         try {
             await dunningService.seedDefaults(organizationId);
@@ -427,11 +432,11 @@ function ReguaTab({ organizationId }: { organizationId: string }) {
                                     rule.is_active ? 'translate-x-4' : 'translate-x-0.5'].join(' ')} />
                             </button>
 
-                            {/* Offset badge */}
-                            <span className={['shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full',
-                                rule.days_offset < 0 ? 'bg-blue-100 text-blue-700' :
-                                rule.days_offset === 0 ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-red-100 text-red-700'].join(' ')}>
+                            {/* Offset */}
+                            <span className={['shrink-0 text-sm font-normal',
+                                rule.days_offset < 0 ? 'text-blue-700' :
+                                rule.days_offset === 0 ? 'text-yellow-700' :
+                                'text-red-700'].join(' ')}>
                                 {rule.days_offset > 0 ? '+' : ''}{rule.days_offset}d
                             </span>
 

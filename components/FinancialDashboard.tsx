@@ -11,6 +11,7 @@ import {
 import { financialOverviewService } from '../services/financialOverviewService';
 import { approvalService } from '../services/approvalService';
 import type { FinancialKPIs, FinancialTopSupplier, DREProjectSummary } from '../types/financial';
+import { KpiCard } from './ui/KpiCard';
 
 // ─── helpers ────────────────────────────────────────────────
 function formatBRL(v: number): string {
@@ -61,36 +62,6 @@ function getPeriodBounds(preset: PeriodPreset, offset: number): { from: Date; to
 }
 
 // ─── sub-components ──────────────────────────────────────────
-
-interface KPICardProps {
-    label: string;
-    value: number;
-    sub?: string;
-    icon: React.ElementType;
-    iconBg: string;
-    iconColor: string;
-    valueColor?: string;
-    onClick?: () => void;
-}
-function KPICard({ label, value, sub, icon: Icon, iconBg, iconColor, valueColor, onClick }: KPICardProps) {
-    return (
-        <button
-            onClick={onClick}
-            className={`text-left bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all w-full ${onClick ? 'cursor-pointer hover:border-gray-200' : 'cursor-default'}`}
-        >
-            <div className="flex items-start justify-between mb-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconBg}`}>
-                    <Icon className={`w-5 h-5 ${iconColor}`} />
-                </div>
-            </div>
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">{label}</p>
-            <p className={`text-2xl font-black ${valueColor ?? 'text-gray-900'}`}>
-                {formatBRLShort(value)}
-            </p>
-            {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
-        </button>
-    );
-}
 
 const CustomBarTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) => {
     if (!active || !payload?.length) return null;
@@ -173,8 +144,9 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ organizationId,
     }));
 
     const Spinner = () => (
-        <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-gray-500">Carregando...</p>
         </div>
     );
 
@@ -250,48 +222,41 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ organizationId,
             {loading ? <Spinner /> : (
                 <>
                     {/* ── KPI Cards ── */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                        <KPICard
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <KpiCard
                             label="A Receber"
-                            value={kpis?.a_receber ?? 0}
-                            icon={TrendingUp}
-                            iconBg="bg-blue-50"
-                            iconColor="text-blue-600"
+                            value={formatBRLShort(kpis?.a_receber ?? 0)}
+                            icon={<TrendingUp className="w-5 h-5" />}
+                            color="blue"
                             onClick={() => onNavigate?.('project-financial')}
                         />
-                        <KPICard
+                        <KpiCard
                             label="Recebido"
-                            value={kpis?.recebido ?? 0}
-                            icon={ArrowUpRight}
-                            iconBg="bg-green-50"
-                            iconColor="text-green-600"
-                            valueColor="text-green-700"
+                            value={formatBRLShort(kpis?.recebido ?? 0)}
+                            icon={<ArrowUpRight className="w-5 h-5" />}
+                            color="emerald"
                             onClick={() => onNavigate?.('project-financial')}
                         />
-                        <KPICard
+                        <KpiCard
                             label="A Pagar"
-                            value={kpis?.a_pagar ?? 0}
-                            icon={CreditCard}
-                            iconBg="bg-orange-50"
-                            iconColor="text-orange-500"
+                            value={formatBRLShort(kpis?.a_pagar ?? 0)}
+                            icon={<CreditCard className="w-5 h-5" />}
+                            color="orange"
                             onClick={() => onNavigate?.('contas-a-pagar')}
                         />
-                        <KPICard
+                        <KpiCard
                             label="Pago"
-                            value={kpis?.pago ?? 0}
-                            icon={ArrowDownRight}
-                            iconBg="bg-gray-100"
-                            iconColor="text-gray-500"
+                            value={formatBRLShort(kpis?.pago ?? 0)}
+                            icon={<ArrowDownRight className="w-5 h-5" />}
+                            color="gray"
                             onClick={() => onNavigate?.('contas-a-pagar')}
                         />
-                        <KPICard
+                        <KpiCard
                             label="Boletos Vencidos"
-                            value={kpis?.boletos_vencidos_valor ?? 0}
+                            value={formatBRLShort(kpis?.boletos_vencidos_valor ?? 0)}
                             sub={kpis?.boletos_vencidos_count ? `${kpis.boletos_vencidos_count} boleto${kpis.boletos_vencidos_count !== 1 ? 's' : ''}` : undefined}
-                            icon={AlertTriangle}
-                            iconBg="bg-red-50"
-                            iconColor="text-red-500"
-                            valueColor={(kpis?.boletos_vencidos_valor ?? 0) > 0 ? 'text-red-600' : 'text-gray-900'}
+                            icon={<AlertTriangle className="w-5 h-5" />}
+                            color={(kpis?.boletos_vencidos_valor ?? 0) > 0 ? 'red' : 'gray'}
                             onClick={() => onNavigate?.('financial-boletos')}
                         />
                     </div>

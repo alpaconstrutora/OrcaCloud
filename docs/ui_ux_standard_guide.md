@@ -15,7 +15,7 @@ Ao aplicar o padrão em uma nova tela, marque cada item:
 - [ ] **IMPORTS** — `ColumnConfig`, `useTableColumns`, `ColumnConfigButton`, `SortableHeader`, `usePersistedState` de `./ui/TableUtils`
 - [ ] **COLUMNS const** — array `ColumnConfig[]` definido fora do componente
 - [ ] **State** — `usePersistedState` para search/filtros, `useTableColumns` para colunas
-- [ ] **KPI Cards** — layout `flex items-center gap-5` com ícone à esquerda
+- [ ] **KPI Cards** — usar o componente `components/ui/KpiCard.tsx` (não reimplementar à mão)
 - [ ] **Toolbar** — search + filtros + `ColumnConfigButton` + botões grid/lista
 - [ ] **`<thead>`** — `SortableHeader` em cada coluna (exceto a de ações)
 - [ ] **`<tbody>` TDs** — classes de fonte corretas por tipo de dado
@@ -25,7 +25,7 @@ Ao aplicar o padrão em uma nova tela, marque cada item:
 - [ ] **Loading State** — spinner centralizado, `text-center py-12`
 - [ ] **Empty State** — ícone grande + título + subtítulo
 - [ ] **Toast de Notificação** — fixo `bottom-6 right-6`, verde=sucesso/vermelho=erro
-- [ ] **Modal de Confirmação** — backdrop blur, card `rounded-3xl`, botões Cancelar + Confirmar
+- [ ] **Modal de Confirmação** — usar `useConfirm()` de `./ui/confirm` (nunca `window.confirm()`/`confirm()` nativo)
 
 ---
 
@@ -78,28 +78,48 @@ const tableColumns = useTableColumns(COLUMNS, 'nomeTelaColumns');
 
 ## 4. KPI CARDS (Dashboards)
 
-Grid de cards — copiar e adaptar ícone, cor e dados:
+**Não reimplemente este card à mão.** Existe um componente canônico —
+`components/ui/KpiCard.tsx` — que já aplica exatamente o snippet abaixo,
+incluindo as 12 cores de paleta disponíveis. Toda tela nova (ou corrigida) deve
+importar e usar `<KpiCard>`, não copiar o JSX.
 
 ```tsx
+import { KpiCard } from './ui/KpiCard';
+
 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-
-  {/* Card KPI — adaptar: cor (blue/yellow/green/red/purple), ícone, label, valor, legenda */}
-  <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-blue-100 transition-all">
-    <div className="p-3.5 bg-blue-50 text-blue-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-      <IconName className="w-5 h-5" />
-    </div>
-    <div className="min-w-0">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">LABEL DO KPI</p>
-      <p className="text-2xl font-bold text-gray-900">{valor}</p>
-      <div className="flex items-center gap-1.5 mt-0.5">
-        <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></span>
-        <p className="text-xs text-gray-400 font-medium truncate">Legenda de apoio</p>
-      </div>
-    </div>
-  </div>
-
+  <KpiCard
+    label="LABEL DO KPI"
+    value={valor}
+    sub="Legenda de apoio"
+    icon={<IconName className="w-5 h-5" />}
+    color="blue" // blue | emerald | amber | red | purple | gray | violet | orange | indigo | rose | teal | cyan
+  />
 </div>
 ```
+
+Snippet de referência (o que `KpiCard.tsx` renderiza por baixo — só para
+entender a estrutura, não para copiar):
+
+```tsx
+<div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-blue-100 transition-all">
+  <div className="p-3.5 bg-blue-50 text-blue-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
+    <IconName className="w-5 h-5" />
+  </div>
+  <div className="min-w-0">
+    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">LABEL DO KPI</p>
+    <p className="text-2xl font-bold text-gray-900">{valor}</p>
+    <div className="flex items-center gap-1.5 mt-0.5">
+      <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></span>
+      <p className="text-xs text-gray-400 font-medium truncate">Legenda de apoio</p>
+    </div>
+  </div>
+</div>
+```
+
+> ❌ Nunca reimplementar o card manualmente numa tela nova — isso é como o
+> valor de um KPI já apareceu com `font-normal` em vez de `font-bold` em
+> `ProjectFinancialManager.tsx`: um "conserto" manual que só troca um erro por
+> outro. Use o componente.
 
 ---
 
@@ -200,7 +220,7 @@ Copiar integralmente e substituir apenas os filtros específicos:
         <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
           <input
             type="checkbox"
-            className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer disabled:opacity-40"
+            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
             checked={allVisibleSelected}
             disabled={selectableVisible.length === 0}
             onChange={toggleAllVisible}
@@ -245,7 +265,7 @@ Copiar integralmente e substituir apenas os filtros específicos:
   {filteredItems.map(item => (
     <tr
       key={item.id}
-      className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedIds.has(item.id) ? 'bg-red-50/60' : ''}`}
+      className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedIds.has(item.id) ? 'bg-blue-50/60' : ''}`}
       onClick={() => onViewDetails(item.id)}
     >
 ```
@@ -378,29 +398,46 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 ## 10. BARRA DE AÇÕES EM LOTE (F3)
 
-Só aparece quando há itens selecionados:
+**Fixa no rodapé, fora do fluxo normal da lista** (`position: fixed`), não
+inline no topo da tabela. Isso é deliberado: colocar a barra dentro do fluxo
+normal forçaria reflow de toda a lista a cada seleção/desmarcação (fica visível
+em listas grandes — foi assim que o padrão abaixo nasceu, em
+`components/BoletoManager.tsx`). Paleta **azul**, não vermelha — vermelho fica
+reservado para ações destrutivas específicas (botão Excluir dentro da barra,
+Modal de Confirmação da seção 14), não para o estado de seleção em si.
 
 ```tsx
-{selectedVisible.length > 0 && (
-  <div className="flex items-center gap-4 bg-red-600 text-white px-6 py-3 rounded-[1.5rem] shadow-sm">
-    <span className="text-sm font-semibold">
-      {selectedVisible.length} selecionado{selectedVisible.length !== 1 ? 's' : ''}
+{selectedIds.size > 0 && (
+  <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+    <span className="flex-1 text-sm font-bold whitespace-nowrap">
+      {selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}
+      <span className="ml-2 font-normal opacity-75">· {formatMoney(totalSelecionado)}</span>
     </span>
-    <div className="flex-1" />
-    <button
-      onClick={handleBulkDelete}
-      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-red-700 text-sm font-semibold hover:bg-red-50 transition-colors"
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={() => setIsLoteEditOpen(true)}
+      className="text-blue-700 border-none hover:bg-blue-50"
     >
-      <Trash2 className="w-3.5 h-3.5" />
-      Excluir
-    </button>
-    <button onClick={clearSelection} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium text-red-100 hover:text-white hover:bg-red-500 transition-colors">
-      Limpar
+      <Pencil className="w-3.5 h-3.5" />
+      Editar em Lote
+    </Button>
+    <button
+      onClick={clearSelection}
+      className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-400 transition-colors"
+    >
+      <X className="w-3.5 h-3.5" />
+      Desmarcar
     </button>
   </div>
 )}
 ```
 
+> ✅ A edição em lote (categoria, obra, fornecedor/cliente, centro de custo etc.)
+> deve abrir um **modal dedicado** ("Editar em Lote") a partir do botão acima —
+> não empilhar múltiplos `<select>` inline dentro da própria barra. Ver
+> `components/BoletoEdicaoEmLoteModal.tsx` e `components/BankTxEdicaoEmLoteModal.tsx`
+> como referência de modal de edição em lote.
 > ℹ️ Checkboxes SÓ aparecem nas linhas que permitem ações em lote.
 > Verificar permissão: `{canDelete(item.status) ? <input type="checkbox" ... /> : null}`
 
@@ -457,34 +494,35 @@ Só aparece quando há itens selecionados:
 
 ## 14. MODAL DE CONFIRMAÇÃO (Destrutivo)
 
-```tsx
-// Copiado de SupplyChainOrderList.tsx L811
-// State: const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
-// Helper: const askConfirm = (message: string, onConfirm: () => void) => setPendingConfirm({ message, onConfirm });
+**Padrão oficial: `useConfirm()`** (`components/ui/confirm.tsx`), não um estado
+`pendingConfirm` local por componente. `useConfirm()` já é um hook global
+Promise-based, substitui `window.confirm()`/`confirm()` nativo, e evita
+reimplementar o modal (backdrop-blur, ícone por variante, botões) em cada tela
+— ver uso real em `components/BankReconciliation.tsx`.
 
-{pendingConfirm && (
-  <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
-    <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 border border-gray-100 animate-in zoom-in-95 duration-200">
-      <p className="text-sm font-normal text-gray-700 mb-6 leading-relaxed">{pendingConfirm.message}</p>
-      <div className="flex justify-end gap-3">
-        <button
-          onClick={() => setPendingConfirm(null)}
-          className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-semibold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-all"
-        >
-          Cancelar
-        </button>
-        <Button
-          variant="danger"
-          onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }}
-          className="rounded-2xl"
-        >
-          Confirmar
-        </Button>
-      </div>
-    </div>
-  </div>
-)}
+```tsx
+import { useConfirm } from './ui/confirm';
+
+const confirm = useConfirm();
+
+async function handleDelete(id: string) {
+  const ok = await confirm({
+    title: 'Excluir item?',
+    message: 'Essa ação não pode ser desfeita.',
+    variant: 'danger', // 'danger' | 'warning' | 'default'
+    confirmLabel: 'Excluir',
+  });
+  if (!ok) return;
+  await deleteItem(id);
+}
 ```
+
+> ❌ **NUNCA usar `window.confirm()`/`confirm()` nativo do browser** para
+> confirmar ações destrutivas — quebra a identidade visual e não é acessível.
+> ❌ Não reimplementar um modal de confirmação local (`pendingConfirm`/`askConfirm`)
+> — isso duplica o que `useConfirm()` já resolve globalmente.
+> ✅ `variant="danger"` para exclusão, `"warning"` para ações reversíveis mas
+> sensíveis, `"default"` para confirmações neutras.
 
 ---
 

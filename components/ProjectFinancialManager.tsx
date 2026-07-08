@@ -59,14 +59,6 @@ type ConciliacaoEntry = {
 
 type MonthFlow = { inc: number; exp: number; projInc?: number };
 
-interface KPICardProps {
-    title: string;
-    value: string | number;
-    icon: React.ComponentType<{ className?: string }>;
-    color: string;
-    subtitle?: string;
-    trend?: 'over' | 'under';
-}
 import { projectService } from '../services/projectService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { orderService } from '../services/orderService';
@@ -80,6 +72,8 @@ import BankReconciliation from './BankReconciliation';
 import BoletoManager from './BoletoManager';
 import ContasPagarManager from './ContasPagarManager';
 import { financialSyncService } from '../services/financialSyncService';
+import { KpiCard } from './ui/KpiCard';
+import { useConfirm } from './ui/confirm';
 
 interface ProjectFinancialManagerProps {
     settings: ProjectSettings;
@@ -117,25 +111,14 @@ const fmtShort = (v: unknown): string => {
 
 type TabKey = 'resumo' | 'receitas' | 'despesas' | 'fluxo' | 'rentabilidade' | 'extrato' | 'conciliacao' | 'boletos' | 'contas_pagar';
 
-const KPICard = ({ title, value, icon: Icon, color, subtitle, trend }: KPICardProps) => (
-    <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 transition-all hover:shadow-md group">
-        <div className="flex justify-between items-start mb-3">
-            <div className={`p-2.5 rounded-xl transition-colors ${color} group-hover:bg-opacity-80`}>
-                <Icon className="w-5 h-5" />
-            </div>
-            {trend && (
-                <span className={`text-sm font-normal px-2 py-0.5 rounded-full uppercase tracking-tighter ${trend === 'over' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                    {trend === 'over' ? 'Acima' : 'Abaixo'}
-                </span>
-            )}
-        </div>
-        <h3 className="text-sm font-normal text-gray-400 uppercase tracking-widest mb-1">{title}</h3>
-        <p className="text-sm font-normal text-gray-900 tracking-tight">{value}</p>
-        {subtitle && <p className="text-sm text-gray-500 mt-2 font-normal uppercase truncate">{subtitle}</p>}
-    </div>
-);
-
 const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ settings, projectId, organizationId, organizations = [], userEmail, onOrgChange, onUpdateSettings, budget = [], dealTypeFilter }) => {
+    const confirm = useConfirm();
+    // Toast de Notificação — Seção 13 do guia
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
     const [activeTab, setActiveTab] = useState<TabKey>(
         (localStorage.getItem('financial_active_tab') as TabKey) || 'resumo'
     );
@@ -602,7 +585,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 }, 800);
             } catch (e) {
                 console.error("[FINANCIAL] CRITICAL SAVE ERROR:", e);
-                alert("Falha crítica ao gravar no banco de dados.");
+                notify("Falha crítica ao gravar no banco de dados.", 'error');
                 setIsSaving(false);
             }
         } else if (projectId || settings.id) {
@@ -628,7 +611,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     };
 
     const handleSaveInstallment = () => {
-        if (!installmentForm.description || !installmentForm.value || installmentForm.value <= 0) return alert('Obrigatório.');
+        if (!installmentForm.description || !installmentForm.value || installmentForm.value <= 0) return notify('Descrição e valor são obrigatórios.', 'error');
         let newList = [...financialInfo.installments];
         if (editingId) newList = newList.map(i => i.id === editingId ? { ...i, ...installmentForm } as PaymentInstallment : i);
         else newList.push({ ...installmentForm, id: crypto.randomUUID() } as PaymentInstallment);
@@ -639,7 +622,10 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     };
 
     const handleEditInstallment = (inst: PaymentInstallment) => { setInstallmentForm(inst); setEditingId(inst.id); setIsAdding(true); };
-    const handleDeleteInstallment = (id: string) => { if (confirm('Excluir?')) handleSaveMultiple({ installments: financialInfo.installments.filter(i => i.id !== id) }); };
+    const handleDeleteInstallment = async (id: string) => {
+        const ok = await confirm({ title: 'Excluir parcela?', variant: 'danger', confirmLabel: 'Excluir' });
+        if (ok) handleSaveMultiple({ installments: financialInfo.installments.filter(i => i.id !== id) });
+    };
 
     const handleWhatsAppCharge = (inst: PaymentInstallment) => {
         const deal = commercialDeals.find(d => d.id === inst.dealId);
@@ -800,7 +786,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     };
 
     const handleSaveTransaction = () => {
-        if (!txForm.description || !txForm.value || txForm.value <= 0) return alert('Obrigatório.');
+        if (!txForm.description || !txForm.value || txForm.value <= 0) return notify('Descrição e valor são obrigatórios.', 'error');
         let newList = [...localTransactions];
         if (editingTransactionId) newList = newList.map(t => t.id === editingTransactionId ? { ...t, ...txForm } as FinancialTransaction : t);
         else newList.push({ ...txForm, id: crypto.randomUUID(), status_updated_at: new Date().toISOString() } as FinancialTransaction);
@@ -810,7 +796,10 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         setTxForm({ date: new Date().toISOString().split('T')[0], type: 'EXPENSE', category: 'Material', description: '', value: 0, status: 'PENDING' });
     };
 
-    const handleDeleteTransaction = (id: string) => { if (confirm('Excluir?')) handleSaveMultiple({ transactions: localTransactions.filter(t => t.id !== id) }); };
+    const handleDeleteTransaction = async (id: string) => {
+        const ok = await confirm({ title: 'Excluir lançamento?', variant: 'danger', confirmLabel: 'Excluir' });
+        if (ok) handleSaveMultiple({ transactions: localTransactions.filter(t => t.id !== id) });
+    };
 
 
 
@@ -1064,10 +1053,34 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
 
             {/* KPI Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <KPICard title="Receita Total" value={fmt(totalRevenue)} icon={TrendingUp} color="bg-emerald-50 text-emerald-600" subtitle={`${receitasCount} Parcelas Registradas`} />
-                <KPICard title="Custo Direto" value={fmt(totalExpenses)} icon={DollarSign} color="bg-red-50 text-red-600" subtitle={`${despesasCount} Itens de Custo`} trend={totalExpenses > totalRevenue ? 'over' : undefined} />
-                <KPICard title="Saldo em Aberto" value={fmt(pendingTotal)} icon={Wallet} color="bg-blue-50 text-blue-600" subtitle={`${pendingCount} Receitas Pendentes`} />
-                <KPICard title="Rentabilidade" value={`${profitability.toFixed(1)}%`} icon={BarChart3} color="bg-indigo-50 text-indigo-600" subtitle={`ROI do Projeto`} trend={profitability < 15 ? 'over' : undefined} />
+                <KpiCard
+                    label="Receita Total"
+                    value={fmt(totalRevenue)}
+                    sub={`${receitasCount} Parcelas Registradas`}
+                    icon={<TrendingUp className="w-5 h-5" />}
+                    color="emerald"
+                />
+                <KpiCard
+                    label="Custo Direto"
+                    value={fmt(totalExpenses)}
+                    sub={totalExpenses > totalRevenue ? `${despesasCount} Itens de Custo · Acima da receita` : `${despesasCount} Itens de Custo`}
+                    icon={<DollarSign className="w-5 h-5" />}
+                    color={totalExpenses > totalRevenue ? 'red' : 'gray'}
+                />
+                <KpiCard
+                    label="Saldo em Aberto"
+                    value={fmt(pendingTotal)}
+                    sub={`${pendingCount} Receitas Pendentes`}
+                    icon={<Wallet className="w-5 h-5" />}
+                    color="blue"
+                />
+                <KpiCard
+                    label="Rentabilidade"
+                    value={`${profitability.toFixed(1)}%`}
+                    sub={profitability < 15 ? 'ROI do Projeto · Abaixo do esperado' : 'ROI do Projeto'}
+                    icon={<BarChart3 className="w-5 h-5" />}
+                    color={profitability < 15 ? 'amber' : 'indigo'}
+                />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1186,7 +1199,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     </div>
                 )}
                 <table className="w-full text-left border-collapse">
-                    <thead className="bg-gray-50 text-gray-500 font-normal uppercase text-sm tracking-widest border-b border-gray-200">
+                    <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
                         <tr>
                             <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">DESCRIÇÃO</th>
                             <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">VENCIMENTO</th>
@@ -1211,16 +1224,16 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                         </td>
                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{new Date(i.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 uppercase tracking-tight">{i.clientName || '-'}</td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-mono font-normal text-gray-400 uppercase tracking-tighter">{(i.dealId || '').substring(0, 8)}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400">{(i.dealId || '').substring(0, 8)}</td>
                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                             <span className={`px-1.5 py-0.5 rounded-[4px] text-xs font-normal uppercase ${i.dealType === 'SALE' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
                                                 {i.dealType === 'SALE' ? 'Venda' : 'Aluguel'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-normal text-indigo-600 text-sm">{fmt(i.value)}</td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 self-center"><button onClick={() => toggleInstallmentStatus(i)} className={`px-2 py-0.5 rounded text-sm font-normal uppercase ${i.status === 'PAID' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{i.status === 'PAID' ? 'Pago' : 'Pendente'}</button></td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-medium text-indigo-600 text-sm">{fmt(i.value)}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 self-center"><button onClick={() => toggleInstallmentStatus(i)} className={`text-sm font-normal hover:underline ${i.status === 'PAID' ? 'text-emerald-600' : 'text-amber-600'}`}>{i.status === 'PAID' ? 'Pago' : 'Pendente'}</button></td>
                                         <td className="px-6 py-2.5 text-right">
-                                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                            <div className="flex justify-end gap-1">
                                                 {i.status === 'PENDING' && new Date(i.dueDate) < new Date() && (
                                                     <button onClick={() => handleWhatsAppCharge(i)} className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg text-sm font-normal uppercase flex items-center gap-1 shadow-sm border border-emerald-100 hover:bg-emerald-100 transition-all" title="Cobrar WhatsApp">
                                                         Cobrar
@@ -1236,7 +1249,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                                         <FileText className="w-3.5 h-3.5" />
                                                     </button>
                                                 )}
-                                                <button onClick={() => alert('Anexar comprovante em breve...')} className="text-gray-400 hover:text-blue-600" title="Anexar Comprovante">
+                                                <button onClick={() => notify('Anexar comprovante: em breve.')} className="text-gray-400 hover:text-blue-600" title="Anexar Comprovante">
                                                     <Plus className="w-3.5 h-3.5 scale-75 border rounded-full" />
                                                 </button>
                                                 <button onClick={() => handleEditInstallment(i)} className="text-gray-400 hover:text-indigo-600"><Pencil className="w-3.5 h-3.5" /></button>
@@ -1255,14 +1268,14 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                 </td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{new Date(i.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 uppercase tracking-tight">{i.clientName || '-'}</td>
-                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-mono font-normal text-gray-400 uppercase tracking-tighter">{(i.dealId || '').substring(0, 8)}</td>
+                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400">{(i.dealId || '').substring(0, 8)}</td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                     <span className={`px-1.5 py-0.5 rounded-[4px] text-xs font-normal uppercase ${i.dealType === 'SALE' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
                                         {i.dealType === 'SALE' ? 'Venda' : 'Aluguel'}
                                     </span>
                                 </td>
-                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-normal text-indigo-600 text-sm">{fmt(i.value)}</td>
-                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 self-center"><button onClick={() => toggleInstallmentStatus(i)} className={`px-2 py-0.5 rounded text-sm font-normal uppercase ${i.status === 'PAID' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{i.status === 'PAID' ? 'Pago' : 'Pendente'}</button></td>
+                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-medium text-indigo-600 text-sm">{fmt(i.value)}</td>
+                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 self-center"><button onClick={() => toggleInstallmentStatus(i)} className={`text-sm font-normal hover:underline ${i.status === 'PAID' ? 'text-emerald-600' : 'text-amber-600'}`}>{i.status === 'PAID' ? 'Pago' : 'Pendente'}</button></td>
                                 <td className="px-6 py-2.5 text-right">
                                     <div className="flex justify-end gap-1 transition-all">
                                         {i.status === 'PENDING' && new Date(i.dueDate) < new Date() && (
@@ -1280,7 +1293,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                                 <FileText className="w-3.5 h-3.5" />
                                             </button>
                                         )}
-                                        <button onClick={() => alert('Anexar comprovante em breve...')} className="text-gray-400 hover:text-blue-600" title="Anexar Comprovante">
+                                        <button onClick={() => notify('Anexar comprovante: em breve.')} className="text-gray-400 hover:text-blue-600" title="Anexar Comprovante">
                                             <Plus className="w-3.5 h-3.5 scale-75 border rounded-full" />
                                         </button>
                                         <button onClick={() => handleEditInstallment(i)} className="text-gray-400 hover:text-indigo-600"><Pencil className="w-3.5 h-3.5" /></button>
@@ -1339,7 +1352,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             )}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <table className="w-full text-left border-collapse">
-                    <thead className="bg-gray-50 text-gray-500 font-normal uppercase text-sm tracking-widest border-b border-gray-200">
+                    <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
                         <tr>
                             <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">DESCRIÇÃO</th>
                             <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">FORNECEDOR</th>
@@ -1357,10 +1370,10 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         {filteredExpenses.map((exp: RichTransaction, idx: number) => (
                             <tr key={`${exp.id || 'new'}-${idx}`} className="hover:bg-blue-50/50 group transition-colors">
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-normal text-sm tracking-tight text-gray-700">
-                                    {exp.description.split(' ').map((word: string) => word.startsWith('#') ? <span className="text-blue-600 font-mono text-sm font-normal">{word} </span> : word + ' ')}
+                                    {exp.description.split(' ').map((word: string) => word.startsWith('#') ? <span className="text-blue-600 text-sm font-normal">{word} </span> : word + ' ')}
                                 </td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 uppercase tracking-tight">{exp.supplier}</td>
-                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-table-body font-mono font-normal text-gray-400">{exp.orderNumber || '-'}</td>
+                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400">{exp.orderNumber || '-'}</td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                     <span className={`px-1.5 py-0.5 rounded text-xs font-normal uppercase ${exp.isOrder ? 'bg-blue-50 text-blue-600' :
                                         (exp.measurementId || exp.description.toLowerCase().includes('medição') || exp.description.toLowerCase().includes('contrato:')) ? 'bg-purple-50 text-purple-600' :
@@ -1382,15 +1395,15 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                 </td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{new Date(exp.date + (exp.date.length === 10 ? 'T12:00:00' : '')).toLocaleDateString('pt-BR')}</td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0"><span className="px-2 py-0.5 rounded text-sm font-normal uppercase" style={{ backgroundColor: getCategoryColor(exp.category) + '18', color: getCategoryColor(exp.category) }}>{exp.category}</span></td>
-                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-normal text-red-600 text-sm">{fmt(exp.value)}</td>
+                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-medium text-red-600 text-sm">{fmt(exp.value)}</td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 self-center">
-                                    <button onClick={() => toggleExpenseStatus(exp)} className={`px-2 py-0.5 rounded text-xs font-normal uppercase ${exp.financialStatus === 'PAGO' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                                    <button onClick={() => toggleExpenseStatus(exp)} className={`text-sm font-normal hover:underline ${exp.financialStatus === 'PAGO' ? 'text-emerald-600' : 'text-amber-600'}`}>
                                         {exp.financialStatus === 'PAGO' ? 'Pago' : 'Pendente'}
                                     </button>
                                 </td>
                                 <td className="px-6 py-2.5 text-right">
-                                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                        <button onClick={() => alert('Anexar nota fiscal em breve...')} className="text-gray-400 hover:text-blue-600" title="Anexar Nota/Comprovante">
+                                    <div className="flex justify-end gap-1">
+                                        <button onClick={() => notify('Anexar nota fiscal: em breve.')} className="text-gray-400 hover:text-blue-600" title="Anexar Nota/Comprovante">
                                             <Plus className="w-3.5 h-3.5 scale-75 border rounded-full" />
                                         </button>
                                         {!exp.isOrder && (
@@ -1416,7 +1429,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 <ResponsiveContainer><AreaChart data={cashFlowData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis tickFormatter={fmtShort} /><Tooltip formatter={fmt} /><Area type="monotone" dataKey="saldo" stroke="#10b981" fill="#10b981" fillOpacity={0.1} /></AreaChart></ResponsiveContainer>
             </div>
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                <table className="w-full text-left text-sm"><thead className="bg-gray-50 text-gray-400 font-normal uppercase border-b border-gray-100"><tr><th className="px-4 py-2">MÊS</th><th className="px-4 py-2 text-right">RECEITA</th><th className="px-4 py-2 text-right">DESPESA</th><th className="px-4 py-2 text-right">SALDO ACUM.</th></tr></thead><tbody className="divide-y divide-gray-50">{cashFlowData.map((r, i: number) => <tr key={i} className="hover:bg-gray-50"><td className="px-4 py-2 font-normal">{r.name}</td><td className="px-4 py-2 text-right text-emerald-600 font-normal">{fmt(r.receita)}</td><td className="px-4 py-2 text-right text-red-500 font-normal">{fmt(r.despesa)}</td><td className={`px-4 py-2 text-right font-normal ${r.saldo >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{fmt(r.saldo)}</td></tr>)}</tbody></table>
+                <table className="w-full text-left text-sm"><thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200"><tr><th className="px-4 py-2">MÊS</th><th className="px-4 py-2 text-right">RECEITA</th><th className="px-4 py-2 text-right">DESPESA</th><th className="px-4 py-2 text-right">SALDO ACUM.</th></tr></thead><tbody className="divide-y divide-gray-50">{cashFlowData.map((r, i: number) => <tr key={i} className="hover:bg-gray-50"><td className="px-4 py-2 font-normal">{r.name}</td><td className="px-4 py-2 text-right text-emerald-600 font-normal">{fmt(r.receita)}</td><td className="px-4 py-2 text-right text-red-500 font-normal">{fmt(r.despesa)}</td><td className={`px-4 py-2 text-right font-normal ${r.saldo >= 0 ? 'text-blue-600' : 'text-red-600'}`}>{fmt(r.saldo)}</td></tr>)}</tbody></table>
             </div>
         </div>
     );
@@ -1431,7 +1444,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         <div className="p-1 px-3 bg-indigo-50 text-indigo-600 rounded-full text-sm font-normal uppercase">KPIs Consolidados</div>
                     </div>
                     <table className="w-full text-left text-sm">
-                        <thead className="bg-gray-50/50 text-gray-400 font-normal uppercase tracking-tighter border-b border-gray-100">
+                        <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
                             <tr>
                                 <th className="px-6 py-4">Imóvel</th>
                                 <th className="px-6 py-4 text-right">Receita Acum.</th>
@@ -1446,11 +1459,11 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                     <td className="px-6 py-4 font-normal text-gray-900">{p.name}</td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex flex-col items-end">
-                                            <span className="font-mono font-normal text-emerald-600">{fmt(p.revenue)}</span>
+                                            <span className="font-medium text-emerald-600">{fmt(p.revenue)}</span>
                                             <span className="text-sm text-gray-400 font-normal uppercase tracking-tighter">Líq: {fmt(p.netRevenue)}</span>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-right font-mono font-normal text-red-500">{fmt(p.expense)}</td>
+                                    <td className="px-6 py-4 text-right font-medium text-red-500">{fmt(p.expense)}</td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex flex-col items-end gap-1">
                                             <span className={`font-normal ${p.margin >= 30 ? 'text-blue-600' : p.margin >= 15 ? 'text-amber-600' : 'text-red-600'}`}>
@@ -1463,7 +1476,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <span className={`px-2 py-1 rounded-lg text-sm font-normal uppercase ${p.revenue > p.expense ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                                        <span className={`text-sm font-normal ${p.revenue > p.expense ? 'text-emerald-600' : 'text-red-600'}`}>
                                             {p.revenue > p.expense ? 'Lucro' : 'Déficit'}
                                         </span>
                                     </td>
@@ -1510,7 +1523,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-gray-50/50 text-gray-400 font-black uppercase text-xs tracking-[0.2em]">
+                        <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
                             <tr>
                                 <th className="px-8 py-5">Item</th>
                                 <th className="px-8 py-5">Data</th>
@@ -1527,20 +1540,19 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                                 {item.type === 'INCOME' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
                                             </div>
                                             <div>
-                                                <p className="text-xs font-bold text-gray-900">{item.description}</p>
+                                                <p className="text-sm font-normal text-gray-900">{item.description}</p>
                                                 <p className="text-xs text-gray-400 uppercase tracking-widest mt-0.5">{item.supplier_client}</p>
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-8 py-5 text-table-body font-bold text-gray-500">
+                                    <td className="px-8 py-5 text-sm font-normal text-gray-500">
                                         {item.date ? new Date(item.date).toLocaleDateString('pt-BR') : '-'}
                                     </td>
-                                    <td className={`px-8 py-5 text-sm font-black text-right ${item.type === 'INCOME' ? 'text-emerald-500' : 'text-red-500'}`}>
+                                    <td className={`px-8 py-5 text-sm font-medium text-right ${item.type === 'INCOME' ? 'text-emerald-500' : 'text-red-500'}`}>
                                         {item.type === 'INCOME' ? '+' : '-'} {fmt(item.value)}
                                     </td>
                                     <td className="px-8 py-5">
-                                        <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${item.status === 'PAGO' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'
-                                            }`}>
+                                        <span className={`text-sm font-normal ${item.status === 'PAGO' ? 'text-emerald-600' : 'text-orange-600'}`}>
                                             {item.status}
                                         </span>
                                     </td>
@@ -1737,6 +1749,15 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Toast de Notificação — padrão guia seção 13 */}
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    {notification.message}
                 </div>
             )}
         </div>

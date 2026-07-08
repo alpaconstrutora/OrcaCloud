@@ -12,10 +12,10 @@ export function parseHashView(hash: string): string | null {
 
 /** Read initial view from URL hash, falling back to localStorage. */
 export function getInitialView(): string {
-  if (typeof window === 'undefined') return 'eng-obras';
+  if (typeof window === 'undefined') return 'central';
   const fromHash = parseHashView(window.location.hash);
   if (fromHash) return fromHash;
-  return localStorage.getItem('orca_activeView') || 'eng-obras';
+  return localStorage.getItem('orca_activeView') || 'central';
 }
 
 /** Sync the current view to the URL hash without triggering hashchange. */

@@ -145,7 +145,7 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
     setActiveClientId: (activeClientId) => set({ activeClientId }),
 
     // UI State — activeView is sourced from the URL hash so each tab is independent
-    activeView: typeof window !== 'undefined' ? getInitialView() : 'eng-obras',
+    activeView: typeof window !== 'undefined' ? getInitialView() : 'central',
     managementTab: 'organizations',
     isProjectModalOpen: false,
     projectModalMode: 'create',

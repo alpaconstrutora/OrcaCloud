@@ -48,6 +48,8 @@ interface KpiCardProps {
     className?: string;
     /** Ao clicar no card (opcional) */
     onClick?: () => void;
+    /** Sombra de base + hover:shadow-lg. Default true (padrão histórico). Desligue em telas que preferem borda-só, sem elevação. */
+    shadow?: boolean;
 }
 
 /**
@@ -63,6 +65,7 @@ export function KpiCard({
     color = 'blue',
     className = '',
     onClick,
+    shadow = true,
 }: KpiCardProps) {
     const c = COLOR_MAP[color];
     const isClickable = !!onClick;
@@ -71,10 +74,11 @@ export function KpiCard({
         <div
             onClick={onClick}
             className={[
-                'bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100',
+                'bg-white p-5 rounded-[1.5rem] border border-gray-100',
+                shadow ? 'shadow-sm' : '',
                 'flex items-center gap-5 group transition-all',
                 c.hover,
-                'hover:shadow-lg',
+                shadow ? 'hover:shadow-lg' : '',
                 isClickable ? 'cursor-pointer active:scale-[0.98]' : '',
                 className,
             ].join(' ')}

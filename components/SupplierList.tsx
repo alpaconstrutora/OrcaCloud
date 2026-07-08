@@ -251,13 +251,13 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KpiCard label="Total de Fornecedores" value={kpis.total} sub="Cadastrados na organização" icon={<Truck className="w-5 h-5" />} color="blue" />
-                <KpiCard label="Pessoa Jurídica" value={kpis.pj} sub="Fornecedores PJ" icon={<Building2 className="w-5 h-5" />} color="indigo" />
-                <KpiCard label="Pessoa Física" value={kpis.pf} sub="Fornecedores PF" icon={<Users className="w-5 h-5" />} color="purple" />
-                <KpiCard label="Categorias" value={kpis.categorias} sub="Categorias distintas em uso" icon={<Tag className="w-5 h-5" />} color="amber" />
+                <KpiCard shadow={false} label="Total de Fornecedores" value={kpis.total} sub="Cadastrados na organização" icon={<Truck className="w-5 h-5" />} color="blue" />
+                <KpiCard shadow={false} label="Pessoa Jurídica" value={kpis.pj} sub="Fornecedores PJ" icon={<Building2 className="w-5 h-5" />} color="indigo" />
+                <KpiCard shadow={false} label="Pessoa Física" value={kpis.pf} sub="Fornecedores PF" icon={<Users className="w-5 h-5" />} color="purple" />
+                <KpiCard shadow={false} label="Categorias" value={kpis.categorias} sub="Categorias distintas em uso" icon={<Tag className="w-5 h-5" />} color="amber" />
             </div>
 
-            <div className="bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+            <div className="bg-white p-5 rounded-[2.5rem] border border-gray-100 flex flex-col md:flex-row gap-4 items-center">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -291,7 +291,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     <Filter className="w-4 h-4" />
                 </button>
 
-                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 gap-1.5 shrink-0">
                     {viewMode === 'list' && (
                         <>
                             <ColumnConfigButton
@@ -333,7 +333,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                 </div>
             ) : viewMode === 'list' ? (
-                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
@@ -477,7 +477,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                             <div
                                 key={supplier.id}
                                 onClick={() => { setEditingSupplier(supplier); setIsModalOpen(true); }}
-                                className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:border-blue-300 hover:shadow-md transition-all group flex flex-col overflow-hidden cursor-pointer"
+                                className="bg-white rounded-2xl border border-gray-100 hover:border-blue-300 hover:shadow-md transition-all group flex flex-col overflow-hidden cursor-pointer"
                             >
                                 <div className="p-6 flex-1">
                                     <div className="flex items-start justify-between mb-4">
@@ -538,7 +538,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                             </div>
                         ))
                     ) : (
-                        <div className="col-span-full py-20 text-center bg-white rounded-2xl border border-gray-100 shadow-sm">
+                        <div className="col-span-full py-20 text-center bg-white rounded-2xl border border-gray-100">
                             <div className="flex flex-col items-center justify-center space-y-4 max-w-xs mx-auto">
                                 <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center">
                                     <Truck className="w-10 h-10 text-blue-200" />

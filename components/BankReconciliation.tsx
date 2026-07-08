@@ -4717,21 +4717,22 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                     <div className="flex items-center justify-end gap-1.5">
                                                                         {tx.status === 'RULE_APPLIED' ? (
                                                                             <>
-                                                                                <span className="text-xs font-normal text-purple-600 flex items-center gap-1 mr-1">
-                                                                                    <Zap className="w-3 h-3" /> Automático
+                                                                                <span className="text-purple-600 mr-0.5" title="Automático">
+                                                                                    <Zap className="w-3.5 h-3.5" />
                                                                                 </span>
                                                                                 <button
-                                                                                    className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-lg uppercase tracking-widest transition-all px-2 py-1"
+                                                                                    className="text-gray-500 bg-gray-50 border border-gray-100 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-lg transition-all p-1"
                                                                                     onClick={() => handleRejectRule(tx.id)}
                                                                                     title="Rejeitar Automático"
                                                                                 >
-                                                                                    <X className="w-3 h-3" />
+                                                                                    <X className="w-3.5 h-3.5" />
                                                                                 </button>
                                                                                 <button
-                                                                                    className="text-xs font-semibold text-white bg-purple-600 rounded-lg uppercase tracking-widest hover:bg-purple-700 transition-all px-3 py-1"
+                                                                                    className="text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-all p-1"
                                                                                     onClick={() => handleConfirmMatch(tx.id)}
+                                                                                    title="Aceitar"
                                                                                 >
-                                                                                    Aceitar
+                                                                                    <Check className="w-3.5 h-3.5" />
                                                                                 </button>
                                                                             </>
                                                                         ) : (

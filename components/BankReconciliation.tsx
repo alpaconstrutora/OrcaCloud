@@ -3345,10 +3345,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 <BankTxEdicaoEmLoteModal
                     transactions={sortedBankTransactions.filter(tx => selectedBankTxIds.has(tx.id))}
                     categories={uniqueCategories}
-                    entityOptions={[
-                        ...uniqueClients.map(c => ({ value: c, label: c, group: 'Clientes' })),
-                        ...uniqueCredores.map(s => ({ value: s, label: s, group: 'Credores' })),
-                    ]}
+                    clientOptions={uniqueClients}
+                    supplierOptions={uniqueCredores}
                     projects={masterProjects}
                     costCenters={masterCostCenters}
                     onClose={() => setIsLoteEditOpen(false)}
@@ -4218,7 +4216,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                             onChange={(v) => handleUpdateBankCounterparty(tx.id, v)}
                                                                             options={tx.direction === 'DEBIT' ? credorOptions : clienteOptions}
                                                                             placeholder="— selecionar"
-                                                                            className={`text-xs font-bold uppercase border-b border-dashed bg-transparent focus:outline-none cursor-pointer flex-1 min-w-0 truncate ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
+                                                                            className={`text-sm font-normal border-b border-dashed bg-transparent focus:outline-none cursor-pointer flex-1 min-w-0 truncate ${tx.counterparty_name ? 'text-gray-700 border-gray-300' : 'text-gray-400 border-gray-200'}`}
                                                                         />
                                                                         {!cpRegistered && (
                                                                             <button
@@ -4240,7 +4238,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                         onChange={(v) => handleUpdateBankCategory(tx.id, v)}
                                                                         options={categoryOptions}
                                                                         placeholder="Categoria"
-                                                                        className={`text-xs font-bold px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer ${tx.category ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+                                                                        className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.category ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
                                                                     />
                                                                 </td>
                                                             )}
@@ -4252,7 +4250,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                         onChange={(v) => handleUpdateBankProject(tx.id, v)}
                                                                         options={projectOptions}
                                                                         placeholder="Obra"
-                                                                        className={`text-xs font-bold px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer ${tx.project_id ? 'text-gray-900 bg-blue-50 border-blue-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+                                                                        className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.project_id ? 'text-gray-900 bg-blue-50 border-blue-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
                                                                     />
                                                                 </td>
                                                             )}
@@ -4264,7 +4262,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                         onChange={(v) => handleUpdateBankCostCenter(tx.id, v)}
                                                                         options={costCenterOptions}
                                                                         placeholder="Centro de Custo"
-                                                                        className={`text-xs font-bold px-2 py-1 rounded uppercase tracking-wider border transition-all appearance-none cursor-pointer ${tx.cost_center_id ? 'text-gray-900 bg-violet-50 border-violet-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
+                                                                        className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${tx.cost_center_id ? 'text-gray-900 bg-violet-50 border-violet-100' : 'text-gray-400 bg-white border-dashed border-gray-200'}`}
                                                                     />
                                                                 </td>
                                                             )}

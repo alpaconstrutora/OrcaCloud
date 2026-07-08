@@ -19,6 +19,7 @@ Ao aplicar o padrão em uma nova tela, marque cada item:
 - [ ] **Toolbar** — search + filtros + `ColumnConfigButton` + botões grid/lista
 - [ ] **`<thead>`** — `SortableHeader` em cada coluna (exceto a de ações)
 - [ ] **`<tbody>` TDs** — classes de fonte corretas por tipo de dado
+- [ ] **Campos editáveis inline (select/dropdown/LazySelect dentro de TD)** — MESMA tipografia do TD (`text-sm font-normal`), nunca `text-xs`/`font-bold`/`uppercase` só porque "parece um chip"
 - [ ] **StatusBadge** — `text-sm font-normal` + cor de texto. ❌ sem pílula, fundo ou uppercase
 - [ ] **Coluna de Ações** — sempre visível, botão "Ver Detalhes" em texto azul + ícones secundários
 - [ ] **Loading State** — spinner centralizado, `text-center py-12`
@@ -275,6 +276,27 @@ Copiar integralmente e substituir apenas os filtros específicos:
 
 > ❌ **NUNCA usar `font-mono`, `font-bold` ou `font-black` em TDs de dados comuns.**
 > ✅ `font-medium` SOMENTE para valores financeiros.
+
+### 7.1 Campos editáveis inline dentro de TD (select / dropdown / LazySelect)
+
+Quando uma célula não é texto estático, e sim um campo editável (ex: `<select>` de categoria,
+combobox de fornecedor/cliente, `LazySelect`), a regra de tipografia é **a mesma do TD de texto
+comum**. O fato de o campo ser interativo não é motivo para usar `text-xs`, `font-bold` ou
+`uppercase` — isso quebra a leitura horizontal da linha (a célula fica com peso/tamanho diferente
+das demais na mesma linha).
+
+```tsx
+{/* Select/LazySelect dentro de TD — mesma tipografia do TD comum */}
+<select
+  className={`text-sm font-normal px-2 py-1 rounded border transition-all appearance-none cursor-pointer ${
+    value ? 'text-gray-900 bg-gray-50 border-gray-100' : 'text-gray-400 bg-white border-dashed border-gray-200'
+  }`}
+  ...
+/>
+```
+
+> ✅ Pode variar `bg-*`/`border-*` para indicar estado preenchido vs. vazio (isso é funcional, não tipográfico).
+> ❌ **NUNCA** `text-xs`, `font-bold`, `font-black` ou `uppercase tracking-wider` num campo editável dentro de TD — mesmo que pareça estilizado como "chip"/"pill". Se precisar de um badge visual de verdade, use o padrão da seção 8 (StatusBadge).
 
 ---
 

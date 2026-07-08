@@ -3345,8 +3345,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 <BankTxEdicaoEmLoteModal
                     transactions={sortedBankTransactions.filter(tx => selectedBankTxIds.has(tx.id))}
                     categories={uniqueCategories}
-                    clientOptions={uniqueClients}
-                    supplierOptions={uniqueCredores}
+                    entityOptions={[
+                        ...uniqueClients.map(c => ({ value: c, label: c, group: 'Clientes' })),
+                        ...uniqueCredores.map(s => ({ value: s, label: s, group: 'Credores' })),
+                    ]}
                     projects={masterProjects}
                     costCenters={masterCostCenters}
                     onClose={() => setIsLoteEditOpen(false)}

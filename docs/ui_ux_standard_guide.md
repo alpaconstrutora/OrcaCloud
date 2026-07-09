@@ -446,6 +446,24 @@ página, mais baixa e mais leve. Extraído de `components/SupplierList.tsx` (F5)
 > migraram pra sentence case (corrigido em todas em 2026-07-10). Cor/case da
 > classe acompanha a variante da tela: `text-gray-400 uppercase tracking-wider`
 > no padrão (acima), `text-gray-500` na variante sentence case (§6.2).
+>
+> 🔴 **Causa raiz mais profunda (corrigida em `index.css`, 2026-07-10):** o
+> aviso acima resolve o cabeçalho ficar menor *que as outras colunas do
+> mesmo thead*, mas havia um segundo bug embaixo dele — `text-table-header`
+> **em si nunca funcionou em lugar nenhum do app**. O `@theme` do
+> `index.css` declarava as variáveis de tamanho como `--font-size-table-header`
+> etc., mas o Tailwind v4 só reconhece o namespace `--text-*` pra gerar
+> classes `text-{nome}` (confirmado em `node_modules/tailwindcss/theme.css`,
+> que usa `--text-xs`/`--text-sm`, não `--font-size-xs`). Ou seja:
+> `text-table-header`, `text-table-body`, `text-button`, `text-form-label`,
+> `text-form-input`, `text-tooltip`, `text-modal-body`, `text-card-body` e
+> `text-menu` eram classes **inertes** — não geravam nenhum CSS — em ~285
+> arquivos do projeto, desde que foram criadas. Corrigido renomeando as 9
+> variáveis pra `--text-*` no `@theme` de `index.css`. Se algum elemento
+> ainda parecer com tamanho de fonte errado depois dessa correção, o
+> problema não é mais o namespace (já corrigido) — é a classe de tamanho
+> escolhida pro elemento (ex: `text-xs` onde deveria ser `text-sm`), aí sim
+> um caso normal de tipografia por tela, seção 7.
 
 ---
 

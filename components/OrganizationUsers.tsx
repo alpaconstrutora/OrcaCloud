@@ -6,6 +6,16 @@ import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
+import { ColumnConfig, useTableColumns, SortableHeader } from './ui/TableUtils';
+
+// §6.3: toda coluna de valor único é ordenável. "Função / Cargo" é composta
+// (papel + nome do cargo customizado opcional na mesma célula) — exceção
+// legítima documentada, igual ao padrão de "Contato" em SupplierList.tsx.
+const MEMBER_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Membro', sortable: true },
+    { key: 'role', label: 'Função / Cargo', sortable: false },
+    { key: 'joinedAt', label: 'Entrou em', sortable: true },
+];
 
 interface OrganizationUsersProps {
     organizationId?: string;
@@ -156,6 +166,17 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const isAdmin = memberSelf?.role === 'admin' || isDeveloper || isDevEmail;
 
     const [activeSubTab, setActiveSubTab] = useState<'members' | 'roles' | 'visibility'>('members');
+    const memberColumns = useTableColumns(MEMBER_COLUMNS, 'organizationUsersMembersColumns');
+    const sortedMembers = React.useMemo(() => {
+        const dir = memberColumns.sortDirection === 'asc' ? 1 : -1;
+        if (memberColumns.sortColumn === 'name') {
+            return [...members].sort((a, b) => a.name.localeCompare(b.name) * dir);
+        }
+        if (memberColumns.sortColumn === 'joinedAt') {
+            return [...members].sort((a, b) => (new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime()) * dir);
+        }
+        return members;
+    }, [members, memberColumns.sortColumn, memberColumns.sortDirection]);
     const confirm = useConfirm();
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -537,23 +558,24 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
             {activeSubTab === 'members' ? (
                 <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                            <tr>
-                                <th className="px-6 py-2 border-r border-gray-100">Membro</th>
-                                <th className="px-6 py-2 border-r border-gray-100">Função / Cargo</th>
-                                <th className="px-6 py-2 border-r border-gray-100">Entrou em</th>
-                                <th className="px-6 py-2 text-right">Ações</th>
+                        <thead>
+                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <SortableHeader label="Membro" colKey="name" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                {/* Função/Cargo composta (papel + nome do cargo customizado) — sem valor único pra ordenar (§6.3). */}
+                                <SortableHeader label="Função / Cargo" colKey="role" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100" />
+                                <SortableHeader label="Entrou em" colKey="joinedAt" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {members.length === 0 ? (
+                            {sortedMembers.length === 0 ? (
                                 <tr>
                                     <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-400">
                                         Nenhum membro encontrado.
                                     </td>
                                 </tr>
                             ) : (
-                                members.map((member) => (
+                                sortedMembers.map((member) => (
                                     <React.Fragment key={member.id}>
                                         <tr className="hover:bg-blue-50/50 transition-colors">
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">

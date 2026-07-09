@@ -575,6 +575,15 @@ porque "não pensei nisso" — a exceção tem que ser justificada, não omissã
 > ```
 > ❌ Não é exceção legítima: "a coluna raramente é usada pra ordenar" ou
 > "dava mais trabalho implementar" — se o dado é comparável, é ordenável.
+> ❌ **Também não é exceção legítima:** "esta é uma tela secundária/fallback/
+> consolidada, não a tela principal" — foi exatamente essa desculpa que
+> deixou passar duas tabelas sem nenhuma ordenação (`OrganizationUsers.tsx`
+> tabela de Membros, e a tabela "Todos os Usuários" de
+> `OrganizationList.tsx`, corrigidas em 2026-07-11). Uma tela ser menos usada
+> não muda se a coluna tem um valor único comparável — o critério do §6.3 é
+> sobre o **dado**, não sobre a importância da tela. Se uma tabela não usa
+> `useTableColumns`/`SortableHeader` nenhum, isso não a isenta da regra —
+> é sinal de que a auditoria não chegou até ela.
 > ℹ️ A coluna `actions` nunca é ordenável (seção 2) — isso não é uma exceção
 > no mesmo sentido, é estrutural (não existe "valor" numa coluna de botões).
 

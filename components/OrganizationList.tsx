@@ -11,6 +11,13 @@ import Button from './ui/Button';
 
 // Coluna 'actions' fica fora do array de propósito — sempre visível, não
 // aparece no ColumnConfigButton (mesmo padrão de ClientList/InvestorList/SupplierList).
+const ALL_USERS_FALLBACK_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Usuário', sortable: true },
+    { key: 'email', label: 'E-mail', sortable: true },
+    { key: 'organization', label: 'Organização', sortable: true },
+    { key: 'role', label: 'Função', sortable: true },
+];
+
 const ORG_LIST_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Organização', sortable: true },
     { key: 'contact', label: 'Contato', sortable: true },
@@ -193,6 +200,19 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
         total: organizations.length,
         comCnpj: organizations.filter(o => !!o.cnpj).length,
     }), [organizations]);
+
+    // Tabela fallback "Todos os Usuários" (só aparece sem organização selecionada).
+    const allUsersColumns = useTableColumns(ALL_USERS_FALLBACK_COLUMNS, 'organizationListAllUsersColumns');
+    const allUsersFlat = React.useMemo(() => {
+        const flat = organizations.flatMap(org => (org.members || []).map(member => ({ org, member })));
+        const dir = allUsersColumns.sortDirection === 'asc' ? 1 : -1;
+        const col = allUsersColumns.sortColumn;
+        if (col === 'name') return [...flat].sort((a, b) => a.member.name.localeCompare(b.member.name) * dir);
+        if (col === 'email') return [...flat].sort((a, b) => a.member.email.localeCompare(b.member.email) * dir);
+        if (col === 'organization') return [...flat].sort((a, b) => a.org.name.localeCompare(b.org.name) * dir);
+        if (col === 'role') return [...flat].sort((a, b) => a.member.role.localeCompare(b.member.role) * dir);
+        return flat;
+    }, [organizations, allUsersColumns.sortColumn, allUsersColumns.sortDirection]);
 
     return (
         <div className="space-y-8">
@@ -527,23 +547,19 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                 <h2 className="text-lg font-black text-gray-900 tracking-tight">Todos os usuários</h2>
                                 <p className="text-sm text-gray-400 font-medium mt-0.5">Visão consolidada de acessos do ecossistema</p>
                             </div>
-                            {/* Tabela sem ordenação/ColumnConfig de propósito — é uma visão de
-                                fallback consolidada (só aparece quando nenhuma organização está
-                                selecionada), não a tela principal de Usuários. Adicionar
-                                useTableColumns completo aqui seria desproporcional ao caso de uso. */}
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
-                                    <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                        <tr>
-                                            <th className="px-6 py-2 border-r border-gray-100">Usuário</th>
-                                            <th className="px-6 py-2 border-r border-gray-100">E-mail</th>
-                                            <th className="px-6 py-2 border-r border-gray-100">Organização</th>
-                                            <th className="px-6 py-2 border-r border-gray-100">Função</th>
-                                            <th className="px-6 py-2 text-right">Ações</th>
+                                    <thead>
+                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <SortableHeader label="Usuário" colKey="name" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            <SortableHeader label="E-mail" colKey="email" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            <SortableHeader label="Organização" colKey="organization" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            <SortableHeader label="Função" colKey="role" sortable={true} uppercase={false} sortColumn={allUsersColumns.sortColumn} sortDirection={allUsersColumns.sortDirection} onSort={allUsersColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
-                                        {organizations.flatMap(org => (org.members || []).map(member => (
+                                        {allUsersFlat.map(({ org, member }) => (
                                             <tr key={`${org.id}-${member.email}`} className="hover:bg-blue-50/50 transition-colors">
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900">{member.name}</td>
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{member.email}</td>
@@ -575,7 +591,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                     </div>
                                                 </td>
                                             </tr>
-                                        )))}
+                                        ))}
                                     </tbody>
                                 </table>
                             </div>

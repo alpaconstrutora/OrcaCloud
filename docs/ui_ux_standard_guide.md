@@ -29,6 +29,65 @@ Ao aplicar o padrão em uma nova tela, marque cada item:
 
 ---
 
+## CHECKLIST DE AUDITORIA COMPLETA
+
+> Este checklist é **diferente** do `CHECKLIST DE APLICAÇÃO` acima. Aquele é
+> pra quando você está construindo/corrigindo uma tela. Este é pra quando o
+> pedido é um **levantamento** — "liste o que está e o que não está
+> implementado", "audite 100% do padrão", "confere se bate com o guia" — e a
+> resposta precisa ser confiável o suficiente pra não precisar ser refeita.
+>
+> **Origem:** em 2026-07-09, uma auditoria de `ClientList.tsx` pediu "liste
+> 100% do padrão" e foi respondida por amostragem (focando nos problemas mais
+> visíveis), pulando as seções §6.1 e §17 inteiras. Quando perguntado
+> "auditou 100%?", o §17 foi corrigido mas o §6.1 e o §6.2 continuaram fora —
+> e mesmo assim a resposta declarou "18/18 seções auditadas". Isso não pode
+> se repetir: uma auditoria "completa" que na verdade é parcial é pior do que
+> nenhuma, porque é reportada com confiança de que é definitiva.
+
+**Regra mecânica:** toda seção numerada deste documento (a lista abaixo é a
+lista real, hoje — se o documento ganhar/perder seções, atualize a lista
+antes de rodar a auditoria) entra na saída para o usuário, **uma por uma,
+sem pular nenhuma**, com veredito + evidência (`arquivo:linha`) — inclusive
+as que estão OK, inclusive as que "obviamente não se aplicam" (a razão de
+não se aplicar também é evidência, e tem que ser específica da tela, não
+genérica: "é opcional" não é razão suficiente, "esta tela tem só 4 colunas e
+nenhuma com dado longo, então redimensionamento não agrega" é razão
+suficiente).
+
+- [ ] §1 Imports obrigatórios
+- [ ] §2 Columns — definição das colunas
+- [ ] §3 State — filtros persistidos e colunas
+- [ ] §4 KPI Cards (+ §4.1 `sub` opcional, §4.2 quebra de simetria, §4.3 uppercase por `size`)
+- [ ] §5 Toolbar (+ §5.1 variante desaninhada — qual das duas foi escolhida e por quê)
+- [ ] §6 Tabela — container e `<thead>`
+- [ ] §6.1 Redimensionamento de colunas — decisão explícita (tem ou não tem, por quê)
+- [ ] §6.2 `<thead>` sentence case vs uppercase — decisão explícita (qual escala, por quê)
+- [ ] §6.3 Toda coluna de valor único é ordenável — conferir cada coluna, exceções documentadas
+- [ ] §6.4 Sem dropdown de ordenação fora do `<thead>`
+- [ ] §6.5 Cabeçalho fixo (sticky) — decisão explícita
+- [ ] §7 Tabela — `<tbody>` e TDs (tipografia por tipo de dado)
+- [ ] §7.1 Campos editáveis inline dentro de TD
+- [ ] §8 Status Badge
+- [ ] §9 Coluna de Ações (+ §9.1 ação dominante via clique na linha, se aplicável)
+- [ ] §10 Barra de ações em lote (+ §10.1 seleção de intervalo Shift+clique) — decisão explícita se a tela tem seleção múltipla
+- [ ] §11 Loading State
+- [ ] §12 Empty State
+- [ ] §13 Toast de notificação
+- [ ] §14 Modal de confirmação (`useConfirm()`, nunca `confirm()`/`window.confirm()` nativo)
+- [ ] §15 Responsividade
+- [ ] §16 Escala de radius — padrão vs compacta (qual foi usada, consistente na tela toda?)
+- [ ] §17 Botão primário — variante compacta vs padrão (decisão explícita, não default herdado de componente compartilhado)
+- [ ] §18 Não duplicar contexto já visível no shell
+
+**Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
+na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
+ou "conforme" antes dessa lista existir por escrito, nem reaproveitar
+veredito de uma auditoria anterior na mesma conversa sem revisitar o item —
+o histórico já mostrou que "essa já tinha sido checada" às vezes não tinha.
+
+---
+
 ## 1. IMPORTS OBRIGATÓRIOS
 
 ```tsx

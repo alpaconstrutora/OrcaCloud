@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { OrganizationMember, OrganizationRole, UserPermissions, OrganizationCustomRole, ProductContext, ModuleVisibilityConfig, ProductModuleMap } from '../types';
-import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2, Send, Save, Building2, Palette } from 'lucide-react';
+import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2, Send, Save, Building2, Palette, AlertCircle } from 'lucide-react';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
 
 interface OrganizationUsersProps {
     organizationId?: string;
@@ -155,6 +156,12 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const isAdmin = memberSelf?.role === 'admin' || isDeveloper || isDevEmail;
 
     const [activeSubTab, setActiveSubTab] = useState<'members' | 'roles' | 'visibility'>('members');
+    const confirm = useConfirm();
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
     const [activeProductTab, setActiveProductTab] = useState<ProductContext>('platform');
 
     // Helper: normaliza module_visibility legado (flat) para a nova estrutura por produto
@@ -211,10 +218,10 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                 module_visibility: visibilitySettings as any
             };
             onUpdateAll({ settings: updatedSettings });
-            alert('Configurações de visibilidade de módulos atualizadas com sucesso!');
+            notify('Configurações de visibilidade de módulos atualizadas com sucesso!', 'success');
         } catch (error) {
             console.error('Erro ao salvar visibilidade de módulos:', error);
-            alert('Ocorreu um erro ao salvar as configurações.');
+            notify('Ocorreu um erro ao salvar as configurações.', 'error');
         }
     };
 
@@ -344,13 +351,13 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                 const body = ctx ? await ctx.json() : null;
                 if (body?.error) msg = body.error;
             } catch { /* ignore */ }
-            alert(`Não foi possível reenviar o convite: ${msg}`);
+            notify(`Não foi possível reenviar o convite: ${msg}`, 'error');
         } else if (data?.error) {
-            alert(`Não foi possível reenviar o convite: ${data.error}`);
+            notify(`Não foi possível reenviar o convite: ${data.error}`, 'error');
         } else if (data?.alreadyConfirmed) {
-            alert(`${member.email} já possui conta ativa no sistema.`);
+            notify(`${member.email} já possui conta ativa no sistema.`, 'error');
         } else {
-            alert(`Convite reenviado para ${member.email}`);
+            notify(`Convite reenviado para ${member.email}`, 'success');
         }
     };
 
@@ -365,10 +372,16 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         setEditingMember(null);
     };
 
-    const handleRemoveMember = (id: string) => {
-        if (confirm('Tem certeza que deseja remover este membro da organização?')) {
-            onUpdateMembers(members.filter(m => m.id !== id));
-        }
+    const handleRemoveMember = async (id: string) => {
+        const ok = await confirm({
+            title: 'Remover membro?',
+            message: 'Tem certeza que deseja remover este membro da organização?',
+            variant: 'danger',
+            confirmLabel: 'Remover',
+        });
+        if (!ok) return;
+        onUpdateMembers(members.filter(m => m.id !== id));
+        notify('Membro removido.', 'success');
     };
 
     const handleMemberRoleChange = (id: string, newRole: OrganizationRole) => {
@@ -425,22 +438,19 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         setIsRoleModalOpen(true);
     };
 
-    const handleDeleteRole = (id: string) => {
-        if (confirm('Tem certeza que deseja excluir este cargo? Usuários vinculados manterão suas permissões atuais mas perderão o vínculo.')) {
-            onUpdateCustomRoles(customRoles.filter(r => r.id !== id));
-            onUpdateMembers(members.map(m =>
-                m.customRoleId === id ? { ...m, customRoleId: undefined } : m
-            ));
-        }
-    };
-
-    const getRoleBadgeColor = (role: OrganizationRole) => {
-        switch (role) {
-            case 'admin': return 'bg-purple-100 text-purple-700 border-purple-200';
-            case 'member': return 'bg-blue-100 text-blue-700 border-blue-200';
-            case 'viewer': return 'bg-gray-100 text-gray-700 border-gray-200';
-            default: return 'bg-gray-100 text-gray-700';
-        }
+    const handleDeleteRole = async (id: string) => {
+        const ok = await confirm({
+            title: 'Excluir cargo?',
+            message: 'Usuários vinculados manterão suas permissões atuais mas perderão o vínculo com este cargo.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        onUpdateCustomRoles(customRoles.filter(r => r.id !== id));
+        onUpdateMembers(members.map(m =>
+            m.customRoleId === id ? { ...m, customRoleId: undefined } : m
+        ));
+        notify('Cargo excluído.', 'success');
     };
 
     const PermissionCheckbox = ({
@@ -494,124 +504,120 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     )}
                 </div>
                 {activeSubTab === 'members' ? (
-                    <Button
+                    <button
                         onClick={() => setIsInviteModalOpen(true)}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                     >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Convidar Membro
-                    </Button>
+                        <Plus className="w-[15px] h-[15px]" />
+                        Convidar membro
+                    </button>
                 ) : activeSubTab === 'roles' ? (
-                    <Button
+                    <button
                         onClick={() => {
                             setEditingRoleId(null);
                             setRoleFormData({ name: '', permissions: getDefaultPermissions('member') });
                             setIsRoleModalOpen(true);
                         }}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                     >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Novo Cargo
-                    </Button>
+                        <Plus className="w-[15px] h-[15px]" />
+                        Novo cargo
+                    </button>
                 ) : (
                     <button
                         onClick={handleSaveVisibility}
-                        className="flex items-center px-6 py-2 bg-emerald-600 text-white rounded-[1.2rem] hover:bg-emerald-700 transition-colors shadow-md text-sm font-bold active:scale-95"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 font-medium text-[13px] transition-all active:scale-95"
                     >
-                        <Save className="w-4 h-4 mr-2" />
-                        Salvar Configurações
+                        <Save className="w-4 h-4" />
+                        Salvar configurações
                     </button>
                 )}
             </div>
 
             {activeSubTab === 'members' ? (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50 border-b border-gray-200">
+                <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                             <tr>
-                                <th className="px-6 py-3 text-table-header font-semibold text-gray-500 uppercase tracking-wider">Membro</th>
-                                <th className="px-6 py-3 text-table-header font-semibold text-gray-500 uppercase tracking-wider">Função / Cargo</th>
-                                <th className="px-6 py-3 text-table-header font-semibold text-gray-500 uppercase tracking-wider">Entrou em</th>
-                                <th className="px-6 py-3 text-table-header font-semibold text-gray-500 uppercase tracking-wider text-right">Ações</th>
+                                <th className="px-6 py-2 border-r border-gray-100">Membro</th>
+                                <th className="px-6 py-2 border-r border-gray-100">Função / Cargo</th>
+                                <th className="px-6 py-2 border-r border-gray-100">Entrou em</th>
+                                <th className="px-6 py-2 text-right">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {members.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                                    <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-400">
                                         Nenhum membro encontrado.
                                     </td>
                                 </tr>
                             ) : (
                                 members.map((member) => (
                                     <React.Fragment key={member.id}>
-                                        <tr className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center">
-                                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm mr-3">
+                                        <tr className="hover:bg-blue-50/50 transition-colors">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-semibold text-xs shrink-0">
                                                         {member.name.charAt(0).toUpperCase()}
                                                     </div>
                                                     <div>
-                                                        <div className="font-medium text-gray-900">{member.name}</div>
-                                                        <div className="text-sm text-gray-500 flex items-center">
+                                                        <p className="text-sm font-normal text-gray-900">{member.name}</p>
+                                                        <div className="flex items-center text-xs font-medium text-gray-400">
                                                             <Mail className="w-3 h-3 mr-1" />
                                                             {member.email}
                                                         </div>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 <div className="flex flex-col gap-1">
+                                                    {/* Select editável inline — MESMA tipografia do TD comum (§7.1),
+                                                        nunca pílula/caixa-alta/peso pesado só porque parece um chip
+                                                        (era exatamente esse erro que já vazou em BankReconciliation.tsx). */}
                                                     <select
                                                         value={member.role}
                                                         onChange={(e) => handleMemberRoleChange(member.id, e.target.value as OrganizationRole)}
-                                                        className={`w-fit px-2 py-1 rounded-full text-xs font-bold border ${getRoleBadgeColor(member.role)} outline-none cursor-pointer`}
+                                                        className="w-fit text-sm font-normal text-gray-900 bg-gray-50 border border-gray-100 rounded px-2 py-1 outline-none cursor-pointer"
                                                     >
-                                                        <option value="admin">ADMIN</option>
-                                                        <option value="member">MEMBRO</option>
-                                                        <option value="viewer">VISITANTE</option>
+                                                        <option value="admin">Admin</option>
+                                                        <option value="member">Membro</option>
+                                                        <option value="viewer">Visitante</option>
                                                     </select>
                                                     {member.customRoleId && (
-                                                        <span className="text-xs text-gray-400 font-medium px-2 italic">
+                                                        <span className="text-xs font-medium text-gray-400">
                                                             Cargo: {customRoles.find(r => r.id === member.customRoleId)?.name || 'Customizado'}
                                                         </span>
                                                     )}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-gray-500">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                 {new Date(member.joinedAt).toLocaleDateString('pt-BR')}
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center justify-end gap-2">
+                                            <td className="px-6 py-2.5 text-right">
+                                                <div className="flex items-center justify-end gap-3">
                                                     <button
                                                         type="button"
                                                         onClick={() => handleOpenEditMember(member)}
-                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-button font-medium rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-colors"
+                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
                                                     >
-                                                        <Edit2 className="w-3.5 h-3.5" />
                                                         Editar
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        onClick={() => handleResendInvite(member)}
-                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-button font-medium rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 transition-colors"
-                                                    >
-                                                        <Send className="w-3.5 h-3.5" />
-                                                        Reenviar
-                                                    </button>
-                                                    <button
-                                                        type="button"
                                                         onClick={() => setEditingMemberId(editingMemberId === member.id ? null : member.id)}
-                                                        className={`flex items-center gap-1.5 px-2.5 py-1.5 text-table-body font-medium rounded-lg border transition-colors ${editingMemberId === member.id ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50 border-transparent hover:border-blue-100'}`}
+                                                        className={`p-1.5 rounded-lg transition-colors ${editingMemberId === member.id ? 'text-blue-600 bg-blue-50' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                                                        title="Permissões"
                                                     >
-                                                        <Shield className="w-3.5 h-3.5" />
-                                                        Permissões
+                                                        <Shield className="w-4 h-4" />
                                                     </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleRemoveMember(member.id)}
-                                                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-button font-medium rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    <InlineDisclosureMenu
+                                                        menuItems={[
+                                                            { icon: <Send className="w-[18px] h-[18px]" />, label: 'Reenviar convite', onClick: () => handleResendInvite(member) },
+                                                        ]}
+                                                        showDelete
+                                                        onDelete={() => handleRemoveMember(member.id)}
+                                                    />
                                                 </div>
                                             </td>
                                         </tr>
@@ -695,9 +701,9 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                         {Object.entries(role.permissions)
                                             .filter(([key, val]) => val && key.startsWith('canEdit'))
                                             .slice(0, 3)
-                                            .map(([key]) => (
-                                                <span key={key} className="px-1.5 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-bold rounded uppercase">
-                                                    {key.replace('canEdit', '')}
+                                            .map(([key], i, arr) => (
+                                                <span key={key} className="text-xs font-normal text-emerald-700">
+                                                    {key.replace('canEdit', '')}{i < arr.length - 1 ? ',' : ''}
                                                 </span>
                                             ))}
                                         {Object.values(role.permissions).filter(v => v).length > 3 && (
@@ -772,7 +778,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 {MODULES_BY_PRODUCT[activeProductTab].map(modItem => (
                                     <tr key={modItem.key} className="hover:bg-gray-50/40 transition-colors">
                                         <td className="px-6 py-4">
-                                            <div className="font-bold text-gray-900">{modItem.label}</div>
+                                            <div className="text-sm font-normal text-gray-900">{modItem.label}</div>
                                             <div className="text-xs text-gray-400 font-medium">{modItem.description}</div>
                                         </td>
                                         {/* Admin: sempre habilitado */}
@@ -1083,6 +1089,15 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                             </form>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
                 </div>
             )}
         </div>

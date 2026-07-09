@@ -9,11 +9,12 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import Button from './ui/Button';
 
+// Coluna 'actions' fica fora do array de propósito — sempre visível, não
+// aparece no ColumnConfigButton (mesmo padrão de ClientList/InvestorList/SupplierList).
 const ORG_LIST_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Organização', sortable: true },
     { key: 'contact', label: 'Contato', sortable: true },
     { key: 'cnpj', label: 'CNPJ', sortable: true },
-    { key: 'actions', label: 'Ações', sortable: false },
 ];
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
@@ -35,6 +36,7 @@ function getAdvancedFilterValue(org: Organization, key: string): unknown {
     }
 }
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
+import { KpiCard } from './ui/KpiCard';
 import { Organization, BudgetEntry } from '../types';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
@@ -93,7 +95,6 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('organizationListFilters:search', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('organizationListFilters:viewMode', 'list');
-    const [sortBy, setSortBy] = usePersistedState<string>('organizationListFilters:sortBy', 'name-asc');
     const [managingOrgId, setManagingOrgId] = useState<string | null>(null);
     const tableColumns = useTableColumns(ORG_LIST_COLUMNS, 'organizationListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'organizationListFilters:advanced');
@@ -173,7 +174,6 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
         result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
 
         return result.sort((a, b) => {
-                // tableColumns sort takes priority over the legacy sortBy dropdown
                 if (tableColumns.sortColumn) {
                     const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
                     switch (tableColumns.sortColumn) {
@@ -183,12 +183,16 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         default: return 0;
                     }
                 }
-                if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
-                if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
-                if (sortBy === 'recent') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
-                return 0;
+                // Sem coluna clicada, ordenação default é nome A-Z (ui_ux_standard_guide.md §6.4:
+                // toda coluna ordenável já ordena pelo próprio cabeçalho, sem dropdown redundante).
+                return a.name.localeCompare(b.name);
             });
-    }, [organizations, searchTerm, sortBy, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [organizations, searchTerm, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    const orgKpis = React.useMemo(() => ({
+        total: organizations.length,
+        comCnpj: organizations.filter(o => !!o.cnpj).length,
+    }), [organizations]);
 
     return (
         <div className="space-y-8">
@@ -234,243 +238,225 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
             {/* Organizations Tab Content */}
             {activeTab === 'organizations' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                        <div>
-                            <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight italic border-l-4 border-blue-600 pl-4">Empresas do Grupo</h2>
-                            <p className="text-gray-400 text-xs font-black uppercase tracking-widest mt-1">Gerencie os perfis e logotipos das suas empresas.</p>
-                        </div>
-                        <Button
-                            onClick={onCreate}
-                            size="lg"
-                        >
-                            <Plus className="w-5 h-5" />
-                            Nova Empresa
-                        </Button>
+                    <div>
+                        <h2 className="text-3xl font-black text-gray-900 tracking-tight">Empresas do Grupo</h2>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie os perfis e logotipos das suas empresas.</p>
                     </div>
 
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <div className="flex-1 relative group">
-                            <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    <div className="grid grid-cols-2 gap-4">
+                        <KpiCard shadow={false} size="lg" label="Total de Organizações" value={orgKpis.total} icon={<Building2 className="w-4 h-4" />} color="blue" />
+                        <KpiCard shadow={false} size="lg" label="Com CNPJ Cadastrado" value={orgKpis.comCnpj} icon={<Activity className="w-4 h-4" />} color="emerald" />
+                    </div>
+
+                    {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — mesma decisão já
+                        aplicada em Clientes/Investidores/Fornecedores, pra consistência dentro do
+                        módulo Organização (a barra de abas acima já está na escala compacta, §19). */}
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                                 type="text"
                                 placeholder="Buscar por nome, CNPJ ou website..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-14 pr-6 py-4 bg-white border border-gray-100 rounded-[1.5rem] focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-400 shadow-sm"
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             />
                         </div>
-                        <div className="flex gap-4">
-                            <div className="relative">
-                                <Filter className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <select
-                                    value={sortBy}
-                                    onChange={(e) => setSortBy(e.target.value)}
-                                    className="pl-11 pr-8 py-4 bg-white border border-gray-100 rounded-[1.5rem] focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 appearance-none shadow-sm cursor-pointer"
-                                >
-                                    <option value="name-asc">Nome (A-Z)</option>
-                                    <option value="name-desc">Nome (Z-A)</option>
-                                    <option value="recent">Mais Recentes</option>
-                                </select>
-                            </div>
-                            <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
-                                <button
-                                    onClick={() => setViewMode('grid')}
-                                    className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}
-                                >
-                                    <LayoutDashboard className="w-5 h-5" />
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('list')}
-                                    className={`p-2.5 rounded-xl transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}
-                                >
-                                    <Table2 className="w-5 h-5" />
-                                </button>
-                            </div>
+
+                        {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (ui_ux_standard_guide.md §6.4) */}
+                        <div className="flex items-center h-9">
                             <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-                            {viewMode === 'list' && (
-                                <ColumnConfigButton
-                                    columns={ORG_LIST_COLUMNS}
-                                    visibleColumns={tableColumns.visibleColumns}
-                                    showColumnConfig={tableColumns.showColumnConfig}
-                                    onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                                    onToggleColumn={tableColumns.toggleColumn}
-                                    onReset={tableColumns.resetColumns}
-                                />
-                            )}
                         </div>
+
+                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            {viewMode === 'list' && (
+                                <>
+                                    <ColumnConfigButton
+                                        columns={ORG_LIST_COLUMNS}
+                                        visibleColumns={tableColumns.visibleColumns}
+                                        showColumnConfig={tableColumns.showColumnConfig}
+                                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                        onToggleColumn={tableColumns.toggleColumn}
+                                        onReset={tableColumns.resetColumns}
+                                    />
+                                    <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                                </>
+                            )}
+                            <button
+                                onClick={() => setViewMode('grid')}
+                                className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                <LayoutDashboard className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => setViewMode('list')}
+                                className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                                <Table2 className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={onCreate}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                        >
+                            <Plus className="w-[15px] h-[15px]" />
+                            Nova empresa
+                        </button>
                     </div>
 
                     {viewMode === 'list' ? (
-                        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                             <div className="overflow-x-auto">
+                                {/* thead em sentence case (§6.2) — obrigatório porque a tela adotou a
+                                    escala de radius compacta (§16), mesmo critério já usado nas outras
+                                    telas do módulo Organização. */}
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-gray-50 text-gray-400 text-xs font-black uppercase tracking-[0.2em] border-b border-gray-100">
+                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                             {tableColumns.visibleColumns.includes('name') && (
-                                                <SortableHeader label="Organização" colKey="name" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-8 py-5" />
+                                                <SortableHeader label="Organização" colKey="name" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                             )}
                                             {tableColumns.visibleColumns.includes('contact') && (
-                                                <SortableHeader label="Contato" colKey="contact" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-8 py-5" />
+                                                <SortableHeader label="Contato" colKey="contact" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                             )}
                                             {tableColumns.visibleColumns.includes('cnpj') && (
-                                                <SortableHeader label="CNPJ" colKey="cnpj" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-8 py-5" />
+                                                <SortableHeader label="CNPJ" colKey="cnpj" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                                             )}
-                                            {tableColumns.visibleColumns.includes('actions') && (
-                                                <SortableHeader label="Ações" colKey="actions" sortable={false} className="px-8 py-5 text-center" />
-                                            )}
+                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-50">
+                                    <tbody className="divide-y divide-gray-200">
                                         <tr
                                             onClick={() => { setActiveOrganizationId(null); setManagingOrgId(null); }}
-                                            className={`hover:bg-blue-50/30 transition-all duration-200 group cursor-pointer ${!activeOrganizationId ? 'bg-blue-50/50' : ''}`}
+                                            className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${!activeOrganizationId ? 'bg-blue-50/60' : ''}`}
                                         >
                                             {tableColumns.visibleColumns.includes('name') && (
-                                                <td className="px-8 py-4">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center p-2 transition-all duration-300 ${!activeOrganizationId ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500'}`}>
-                                                            <Activity className="w-5 h-5" />
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${!activeOrganizationId ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                                            <Activity className="w-4 h-4" />
                                                         </div>
                                                         <div>
-                                                            <p className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors flex items-center gap-2 uppercase">
-                                                                TODAS AS ORGANIZAÇÕES
+                                                            <p className="text-sm font-normal text-gray-900 flex items-center gap-2">
+                                                                Todas as organizações
                                                                 {!activeOrganizationId && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
                                                             </p>
-                                                            <span className="text-xs text-gray-400 font-medium">Visão consolidada do grupo</span>
+                                                            <p className="text-xs font-medium text-gray-400">Visão consolidada do grupo</p>
                                                         </div>
                                                     </div>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('contact') && (
-                                                <td className="px-8 py-4 text-xs text-gray-400 font-black uppercase tracking-widest italic">Global</td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400">Global</td>
                                             )}
                                             {tableColumns.visibleColumns.includes('cnpj') && (
-                                                <td className="px-8 py-4">---</td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400">-</td>
                                             )}
-                                            {tableColumns.visibleColumns.includes('actions') && (
-                                                <td className="px-8 py-4">
-                                                    <div className="flex items-center justify-center">
-                                                        <Button
-                                                            onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(null); setManagingOrgId(null); }}
-                                                            size="sm"
-                                                            className={!activeOrganizationId ? 'bg-emerald-500 hover:bg-emerald-500' : undefined}
-                                                        >
-                                                            {!activeOrganizationId ? 'ATIVO' : 'SELECIONAR'}
-                                                        </Button>
-                                                    </div>
-                                                </td>
-                                            )}
+                                            <td className="px-6 py-2.5 text-right text-xs font-medium text-gray-400" onClick={(e) => e.stopPropagation()}>
+                                                {!activeOrganizationId && 'Ativa'}
+                                            </td>
                                         </tr>
                                         {filteredOrganizations.map(org => {
                                             const isActive = activeOrganizationId === org.id;
                                             return (
-                                                <tr key={org.id} className={`hover:bg-blue-50/30 transition-all duration-200 group cursor-pointer ${isActive ? 'bg-blue-50/50' : ''}`}
+                                                <tr key={org.id} className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${isActive ? 'bg-blue-50/60' : ''}`}
                                                     onClick={() => setActiveOrganizationId(org.id)}
                                                 >
                                                     {tableColumns.visibleColumns.includes('name') && (
-                                                        <td className="px-8 py-4">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center p-2 transition-all duration-300 ${isActive ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500'}`}>
-                                                                    <Building2 className="w-5 h-5" />
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isActive ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                                                    <Building2 className="w-4 h-4" />
                                                                 </div>
-                                                                <div>
-                                                                    <p className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors flex items-center gap-2 uppercase">
-                                                                        {org.name}
-                                                                        {isActive && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
-                                                                    </p>
-                                                                </div>
+                                                                <span className="text-sm font-normal text-gray-900 flex items-center gap-2">
+                                                                    {org.name}
+                                                                    {isActive && <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />}
+                                                                </span>
                                                             </div>
                                                         </td>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('contact') && (
-                                                        <td className="px-8 py-4">
-                                                            <div className="flex items-center gap-2 text-xs text-gray-500 font-bold uppercase">
-                                                                <Mail className="w-3.5 h-3.5 text-gray-400" />
-                                                                {org.email || '---'}
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            <div className="flex items-center text-sm font-normal text-gray-600">
+                                                                <Mail className="w-3.5 h-3.5 mr-1.5 text-gray-400 shrink-0" />
+                                                                {org.email || '-'}
                                                             </div>
                                                         </td>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('cnpj') && (
-                                                        <td className="px-8 py-4">
-                                                            <span className="text-xs font-black text-gray-600 font-mono bg-gray-100/50 px-3 py-1 rounded-lg border border-gray-100">
-                                                                {org.cnpj || '---'}
-                                                            </span>
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                            {org.cnpj || '-'}
                                                         </td>
                                                     )}
-                                                    {tableColumns.visibleColumns.includes('actions') && (
-                                                        <td className="px-8 py-4">
-                                                            <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                                                <Button
-                                                                    onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(org.id); }}
-                                                                    size="sm"
-                                                                    className={isActive ? 'bg-emerald-500 hover:bg-emerald-500' : undefined}
-                                                                >
-                                                                    {isActive ? 'ATIVO' : 'SELECIONAR'}
-                                                                </Button>
-                                                                <InlineDisclosureMenu
-                                                                    menuItems={[
-                                                                        {
-                                                                            icon: <Settings className="w-[18px] h-[18px]" />,
-                                                                            label: 'Detalhes',
-                                                                            onClick: () => { setManagingOrgId(org.id); onTabChange('settings'); },
-                                                                        },
-                                                                    ]}
-                                                                    showDelete
-                                                                    onDelete={() => onDelete(org.id)}
-                                                                />
-                                                            </div>
-                                                        </td>
-                                                    )}
+                                                    <td className="px-6 py-2.5 text-right">
+                                                        {/* Selecionar = clique na linha (ação dominante, §9.1). O botão
+                                                            "Ativo/Selecionar" antigo duplicava exatamente essa ação —
+                                                            removido. Kebab só tem o que sobra (Detalhes/Excluir). */}
+                                                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                                            {isActive && <span className="text-xs font-medium text-emerald-600">Ativa</span>}
+                                                            <InlineDisclosureMenu
+                                                                menuItems={[
+                                                                    {
+                                                                        icon: <Settings className="w-[18px] h-[18px]" />,
+                                                                        label: 'Detalhes',
+                                                                        onClick: () => { setManagingOrgId(org.id); onTabChange('settings'); },
+                                                                    },
+                                                                ]}
+                                                                showDelete
+                                                                onDelete={() => onDelete(org.id)}
+                                                            />
+                                                        </div>
+                                                    </td>
                                                 </tr>
                                             );
                                         })}
+                                        {filteredOrganizations.length === 0 && (
+                                            <tr>
+                                                <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-400">
+                                                    {searchTerm ? 'Nenhuma organização encontrada para essa busca.' : 'Nenhuma outra organização cadastrada ainda.'}
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                            {/* Grid View Content - Re-implement if needed or use same logic */}
-                            <div 
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {/* Selecionar = clique no card (ação dominante, §9.1) — mesmo critério da lista. */}
+                            <div
                                 onClick={() => setActiveOrganizationId(null)}
-                                className={`bg-white border rounded-[2.5rem] overflow-hidden group transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 cursor-pointer ${!activeOrganizationId ? 'ring-4 ring-blue-500/10 border-blue-500' : 'border-gray-100'}`}
+                                className={`bg-white border rounded-[10px] overflow-hidden group transition-all hover:shadow-md cursor-pointer flex flex-col ${!activeOrganizationId ? 'ring-2 ring-blue-500/20 border-blue-300' : 'border-gray-100'}`}
                             >
-                                <div className="aspect-video bg-gray-50 relative flex items-center justify-center p-8">
-                                    <Activity className={`w-16 h-16 ${!activeOrganizationId ? 'text-blue-600 shadow-2xl' : 'text-gray-200 group-hover:text-blue-200'}`} />
+                                <div className="aspect-video bg-gray-50 flex items-center justify-center">
+                                    <Activity className={`w-12 h-12 ${!activeOrganizationId ? 'text-blue-600' : 'text-gray-200'}`} />
                                 </div>
-                                <div className="p-8">
-                                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2 truncate">TODAS AS ORGANIZAÇÕES</h3>
-                                    <Button
-                                        onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(null); }}
-                                        className={`w-full ${!activeOrganizationId ? 'bg-emerald-500 hover:bg-emerald-500' : ''}`}
-                                    >
-                                        {!activeOrganizationId ? 'ATIVO' : 'SELECIONAR VISÃO GLOBAL'}
-                                    </Button>
+                                <div className="p-4 flex items-center justify-between gap-2">
+                                    <h3 className="text-sm font-normal text-gray-900 truncate">Todas as organizações</h3>
+                                    {!activeOrganizationId && <span className="text-xs font-medium text-emerald-600 shrink-0">Ativa</span>}
                                 </div>
                             </div>
                             {filteredOrganizations.map(org => {
                                 const isActive = activeOrganizationId === org.id;
                                 return (
-                                    <div key={org.id} 
+                                    <div key={org.id}
                                         onClick={() => setActiveOrganizationId(org.id)}
-                                        className={`bg-white border rounded-[2.5rem] overflow-hidden group transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 cursor-pointer ${isActive ? 'ring-4 ring-blue-500/10 border-blue-500' : 'border-gray-100'}`}
+                                        className={`bg-white border rounded-[10px] overflow-hidden group transition-all hover:shadow-md cursor-pointer flex flex-col ${isActive ? 'ring-2 ring-blue-500/20 border-blue-300' : 'border-gray-100'}`}
                                     >
-                                        <div className="aspect-video bg-gray-50 relative flex items-center justify-center p-8">
+                                        <div className="aspect-video bg-gray-50 flex items-center justify-center">
                                             {org.logoUrl ? (
-                                                <img src={org.logoUrl} alt={org.name} className="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-700" />
+                                                <img src={org.logoUrl} alt={org.name} className="max-h-full max-w-full object-contain" />
                                             ) : (
-                                                <Building2 className={`w-16 h-16 ${isActive ? 'text-blue-600' : 'text-gray-200 group-hover:text-blue-200'}`} />
+                                                <Building2 className={`w-12 h-12 ${isActive ? 'text-blue-600' : 'text-gray-200'}`} />
                                             )}
                                         </div>
-                                        <div className="p-8">
-                                            <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2 truncate">{org.name}</h3>
-                                            <div className="flex gap-3 items-center" onClick={(e) => e.stopPropagation()}>
-                                                <Button
-                                                    onClick={(e) => { e.stopPropagation(); setActiveOrganizationId(org.id); }}
-                                                    className={`flex-1 ${isActive ? 'bg-emerald-500 hover:bg-emerald-500' : ''}`}
-                                                >
-                                                    {isActive ? 'ATIVO' : 'SELECIONAR'}
-                                                </Button>
+                                        <div className="p-4 flex items-center justify-between gap-2">
+                                            <h3 className="text-sm font-normal text-gray-900 truncate">{org.name}</h3>
+                                            <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                {isActive && <span className="text-xs font-medium text-emerald-600">Ativa</span>}
                                                 <InlineDisclosureMenu
                                                     menuItems={[
                                                         {
@@ -536,44 +522,42 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             onUpdateAll={(updates) => (onSave ?? onEdit)({ ...currentOrg, ...updates })}
                         />
                     ) : (
-                        <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden">
-                            <div className="p-8 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                                <div>
-                                    <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Todos os Usuários</h2>
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Visão consolidada de acessos do ecossistema</p>
-                                </div>
+                        <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                            <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+                                <h2 className="text-lg font-black text-gray-900 tracking-tight">Todos os usuários</h2>
+                                <p className="text-sm text-gray-400 font-medium mt-0.5">Visão consolidada de acessos do ecossistema</p>
                             </div>
+                            {/* Tabela sem ordenação/ColumnConfig de propósito — é uma visão de
+                                fallback consolidada (só aparece quando nenhuma organização está
+                                selecionada), não a tela principal de Usuários. Adicionar
+                                useTableColumns completo aqui seria desproporcional ao caso de uso. */}
                             <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead className="bg-gray-50 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                         <tr>
-                                            <th className="px-8 py-4 text-left">Usuário</th>
-                                            <th className="px-8 py-4 text-left">E-mail</th>
-                                            <th className="px-8 py-4 text-left">Organização</th>
-                                            <th className="px-8 py-4 text-left">Função</th>
-                                            <th className="px-8 py-4 text-right">Ações</th>
+                                            <th className="px-6 py-2 border-r border-gray-100">Usuário</th>
+                                            <th className="px-6 py-2 border-r border-gray-100">E-mail</th>
+                                            <th className="px-6 py-2 border-r border-gray-100">Organização</th>
+                                            <th className="px-6 py-2 border-r border-gray-100">Função</th>
+                                            <th className="px-6 py-2 text-right">Ações</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-50">
+                                    <tbody className="divide-y divide-gray-200">
                                         {organizations.flatMap(org => (org.members || []).map(member => (
-                                            <tr key={`${org.id}-${member.email}`} className="hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-8 py-4 font-bold text-gray-900">{member.name}</td>
-                                                <td className="px-8 py-4 text-gray-500">{member.email}</td>
-                                                <td className="px-8 py-4">
-                                                    <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-black uppercase tracking-widest">
-                                                        {org.name}
-                                                    </span>
+                                            <tr key={`${org.id}-${member.email}`} className="hover:bg-blue-50/50 transition-colors">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900">{member.name}</td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{member.email}</td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600">
+                                                    {org.name}
                                                 </td>
-                                                <td className="px-8 py-4">
-                                                    <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs font-black uppercase tracking-widest">
-                                                        {member.role}
-                                                    </span>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                    {member.role}
                                                 </td>
-                                                <td className="px-8 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-2">
+                                                <td className="px-6 py-2.5 text-right">
+                                                    <div className="flex items-center justify-end gap-3">
                                                         <button
                                                             onClick={() => handleResendInviteFromList(org.id, member.email, member.name, member.role)}
-                                                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-button font-medium rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100 transition-colors"
+                                                            className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 text-sm font-medium p-1.5 hover:bg-indigo-50 rounded-lg transition-all"
                                                         >
                                                             <Send className="w-3.5 h-3.5" />
                                                             Reenviar
@@ -583,7 +567,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                                 setManagingOrgId(org.id);
                                                                 onTabChange('users');
                                                             }}
-                                                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-button font-medium rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-100 transition-colors"
+                                                            className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
                                                         >
                                                             <Users className="w-3.5 h-3.5" />
                                                             Gerenciar

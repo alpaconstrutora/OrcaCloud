@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Building2, Plus, Trash2, Star, ChevronDown, ChevronUp,
-    Save, X, AlertCircle, Loader2, CheckCircle2, Settings2, BarChart3,
+    Save, X, AlertCircle, Loader2, Settings2, BarChart3,
 } from 'lucide-react';
 import {
     Company, CompanyInsert,
@@ -12,8 +12,8 @@ import {
 import { companyService } from '../services/companyService';
 import CompanyDetailPage from './CompanyDetailPage';
 import CompanyGroupDashboard from './CompanyGroupDashboard';
-import Button from './ui/Button';
 import { formatMoney } from './ui/Format';
+import { useConfirm } from './ui/confirm';
 
 interface CompaniesModuleProps {
     orgId: string;
@@ -175,7 +175,16 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [success, setSuccess] = useState<string | null>(null);
+    const confirm = useConfirm();
+
+    // Toast (§13) — o formulário inline continua mostrando erro de validação
+    // perto do campo (setError), mas sucesso/erro de salvar vira toast, igual
+    // ao resto do módulo Organização.
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
 
     const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
     const [showDashboard, setShowDashboard] = useState(false);
@@ -225,10 +234,9 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
         setError(null);
         try {
             await companyService.create(formToPayload(form, orgId));
-            setSuccess('Empresa cadastrada. Clique em "Gerenciar" para adicionar sócios e contas bancárias.');
+            notify('Empresa cadastrada. Clique em "Gerenciar" para adicionar sócios e contas bancárias.', 'success');
             await load();
             setShowForm(false);
-            setTimeout(() => setSuccess(null), 5000);
         } catch (e: unknown) {
             setError((e as Error).message);
         } finally {
@@ -237,12 +245,19 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
     };
 
     const handleDelete = async (id: string, razao: string) => {
-        if (!confirm(`Excluir "${razao}"? Esta ação não pode ser desfeita.`)) return;
+        const ok = await confirm({
+            title: 'Excluir empresa?',
+            message: `Excluir "${razao}"? Essa ação não pode ser desfeita.`,
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
         try {
             await companyService.remove(id);
             setCompanies(prev => prev.filter(c => c.id !== id));
+            notify('Empresa excluída com sucesso.', 'success');
         } catch (e: unknown) {
-            setError((e as Error).message);
+            notify((e as Error).message, 'error');
         }
     };
 
@@ -289,41 +304,35 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight italic border-l-4 border-blue-600 pl-4">
-                        Empresas do Grupo
-                    </h2>
-                    <p className="text-gray-400 text-xs font-black uppercase tracking-widest mt-1">
-                        CNPJs, tipos e configurações de cada empresa do grupo econômico.
-                    </p>
+                    <h2 className="text-3xl font-black text-gray-900 tracking-tight">Empresas do Grupo</h2>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">CNPJs, tipos e configurações de cada empresa do grupo econômico.</p>
                 </div>
                 {!showForm && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                         <button
                             onClick={() => setShowDashboard(true)}
-                            className="px-5 py-3 border border-gray-200 text-gray-600 rounded-2xl font-black text-button uppercase tracking-[0.12em] hover:bg-gray-50 transition-all flex items-center gap-2 active:scale-95"
+                            className="flex items-center gap-1.5 h-9 px-3.5 border border-gray-200 text-gray-600 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
                         >
                             <BarChart3 className="w-4 h-4" />
                             Dashboard
                         </button>
-                        <Button onClick={openNew}>
-                            <Plus className="w-4 h-4" />
-                            Nova Empresa
-                        </Button>
+                        <button
+                            onClick={openNew}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                        >
+                            <Plus className="w-[15px] h-[15px]" />
+                            Nova empresa
+                        </button>
                     </div>
                 )}
             </div>
 
-            {/* Feedback */}
+            {/* Erro de validação do formulário — fica inline perto do formulário (não é toast,
+                é feedback contextual de campo obrigatório). Sucesso/erro de salvar já é toast (§13). */}
             {error && (
-                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-[6px] text-red-700 text-sm">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     {error}
-                </div>
-            )}
-            {success && (
-                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">
-                    <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                    {success}
                 </div>
             )}
 
@@ -538,31 +547,32 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                             className="px-5 py-2 text-sm font-black uppercase tracking-wide text-gray-500 hover:text-gray-700 transition-colors">
                             Cancelar
                         </button>
-                        <Button type="submit" disabled={saving}>
+                        <button type="submit" disabled={saving}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                            Cadastrar Empresa
-                        </Button>
+                            Cadastrar empresa
+                        </button>
                     </div>
                 </form>
             )}
 
             {/* List */}
             {loading ? (
-                <div className="flex items-center justify-center py-16 text-gray-400">
-                    <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                    <span className="text-sm font-medium">Carregando empresas...</span>
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-500">Carregando...</p>
                 </div>
             ) : companies.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
-                    <Building2 className="w-10 h-10 opacity-30" />
-                    <p className="text-sm font-medium">Nenhuma empresa cadastrada.</p>
-                    <p className="text-xs">Clique em "Nova Empresa" para começar.</p>
+                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                    <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma empresa cadastrada</h3>
+                    <p className="text-sm text-gray-500">Clique em "Nova empresa" para começar.</p>
                 </div>
             ) : (
                 <div className="space-y-3">
                     {companies.map(c => (
                         <div key={c.id}
-                            className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                            className="bg-white border border-gray-100 rounded-[10px] overflow-hidden hover:shadow-md transition-shadow">
                             {/* Card header */}
                             <div className="flex items-center gap-4 px-5 py-4">
                                 {/* Color badge */}
@@ -571,17 +581,17 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
 
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="font-black text-gray-900 text-sm truncate">{c.razao_social}</span>
+                                        <span className="font-normal text-gray-900 text-sm truncate">{c.razao_social}</span>
                                         {c.is_headquarters && (
-                                            <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-black uppercase tracking-wide">
+                                            <span className="flex items-center gap-1 text-xs font-normal text-amber-700">
                                                 <Star className="w-3 h-3" /> Sede
                                             </span>
                                         )}
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wide ${
-                                            c.status === 'ativa' ? 'bg-green-100 text-green-700' :
-                                            c.status === 'encerrada' ? 'bg-red-100 text-red-700' :
-                                            c.status === 'em_implantacao' ? 'bg-blue-100 text-blue-700' :
-                                            'bg-gray-100 text-gray-500'
+                                        <span className={`text-xs font-normal ${
+                                            c.status === 'ativa' ? 'text-green-700' :
+                                            c.status === 'encerrada' ? 'text-red-700' :
+                                            c.status === 'em_implantacao' ? 'text-blue-700' :
+                                            'text-gray-500'
                                         }`}>
                                             {c.status.replace('_', ' ')}
                                         </span>
@@ -660,14 +670,23 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                                         </p>
                                     </div>
                                     <div className="flex gap-4">
-                                        {c.retencao_iss && <span className="text-xs font-black uppercase text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">Ret. ISS</span>}
-                                        {c.retencao_inss && <span className="text-xs font-black uppercase text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">Ret. INSS</span>}
-                                        {c.retencao_irrf && <span className="text-xs font-black uppercase text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">Ret. IRRF</span>}
+                                        {c.retencao_iss && <span className="text-xs font-normal text-orange-700">Ret. ISS</span>}
+                                        {c.retencao_inss && <span className="text-xs font-normal text-orange-700">Ret. INSS</span>}
+                                        {c.retencao_irrf && <span className="text-xs font-normal text-orange-700">Ret. IRRF</span>}
                                     </div>
                                 </div>
                             )}
                         </div>
                     ))}
+                </div>
+            )}
+
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
                 </div>
             )}
         </div>

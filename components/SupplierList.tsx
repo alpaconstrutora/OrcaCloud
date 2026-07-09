@@ -358,7 +358,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
             ) : viewMode === 'list' ? (
                 <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                     <div className="overflow-auto max-h-[70vh]">
-                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
                                 <col style={{ width: '40px' }} />
                                 {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
@@ -368,6 +368,10 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                 {tableColumns.visibleColumns.includes('contact') && <col data-col-key="contact" style={{ width: `${cols.getWidth('contact')}px` }} />}
                                 {tableColumns.visibleColumns.includes('document') && <col data-col-key="document" style={{ width: `${cols.getWidth('document')}px` }} />}
                                 <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                                {/* coluna "espaçadora" sem largura fixa — absorve o espaço sobrando quando
+                                    a tabela é mais estreita que o container, em vez do navegador redistribuir
+                                    esse espaço entre as colunas de dado (ver §6.1 do guia de UI). */}
+                                <col />
                             </colgroup>
                             <thead>
                                 {/* sticky: cabeçalho fixo em tabelas longas (ui_ux_standard_guide.md §6.5) */}
@@ -415,6 +419,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                         Ações
                                         <cols.ResizeHandle colKey="actions" />
                                     </th>
+                                    <th aria-hidden="true" />
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -488,11 +493,12 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                     />
                                                 </div>
                                             </td>
+                                            <td aria-hidden="true" />
                                         </tr>
                                     ))
                                 ) : (
                                     <tr>
-                                        <td colSpan={tableColumns.visibleColumns.length + 2} className="px-6 py-20 text-center">
+                                        <td colSpan={tableColumns.visibleColumns.length + 3} className="px-6 py-20 text-center">
                                             <div className="flex flex-col items-center justify-center space-y-4 max-w-xs mx-auto">
                                                 <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center animate-pulse">
                                                     <Truck className="w-10 h-10 text-blue-200" />

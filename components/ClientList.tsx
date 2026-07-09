@@ -441,7 +441,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 viewMode === 'list' ? (
                     <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                         <div className="overflow-x-auto">
-                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
                                 {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
                                 {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}
@@ -450,6 +450,9 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                 {tableColumns.visibleColumns.includes('document') && <col data-col-key="document" style={{ width: `${cols.getWidth('document')}px` }} />}
                                 {tableColumns.visibleColumns.includes('projects') && <col data-col-key="projects" style={{ width: `${cols.getWidth('projects')}px` }} />}
                                 <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                                {/* coluna "espaçadora" sem largura fixa — absorve o espaço sobrando quando
+                                    a tabela é mais estreita que o container (ver §6.1 do guia de UI). */}
+                                <col />
                             </colgroup>
                             {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader força
                                 uppercase internamente por padrão; classes de estilo movidas pro <tr>, igual ao
@@ -510,6 +513,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         Ações
                                         <cols.ResizeHandle colKey="actions" />
                                     </th>
+                                    <th aria-hidden="true" />
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -618,6 +622,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                                     />
                                                 </div>
                                             </td>
+                                            <td aria-hidden="true" />
                                         </tr>
                                     );
                                 })}

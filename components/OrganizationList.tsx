@@ -19,6 +19,7 @@ const ALL_USERS_FALLBACK_COLUMNS: ColumnConfig[] = [
 ];
 
 const ORG_LIST_COLUMNS: ColumnConfig[] = [
+    { key: 'code', label: 'Código', sortable: true },
     { key: 'name', label: 'Organização', sortable: true },
     { key: 'contact', label: 'Contato', sortable: true },
     { key: 'cnpj', label: 'CNPJ', sortable: true },
@@ -184,6 +185,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                 if (tableColumns.sortColumn) {
                     const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
                     switch (tableColumns.sortColumn) {
+                        case 'code': return dir * ((a.code || '').localeCompare(b.code || '', 'pt-BR', { numeric: true }));
                         case 'name': return dir * a.name.localeCompare(b.name);
                         case 'contact': return dir * ((a.email || '').localeCompare(b.email || ''));
                         case 'cnpj': return dir * ((a.cnpj || '').localeCompare(b.cnpj || ''));
@@ -297,6 +299,9 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            {tableColumns.visibleColumns.includes('code') && (
+                                                <SortableHeader label="Código" colKey="code" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                            )}
                                             {tableColumns.visibleColumns.includes('name') && (
                                                 <SortableHeader label="Organização" colKey="name" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                             )}
@@ -314,6 +319,9 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                             onClick={() => { setActiveOrganizationId(null); setManagingOrgId(null); }}
                                             className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${!activeOrganizationId ? 'bg-blue-50/60' : ''}`}
                                         >
+                                            {tableColumns.visibleColumns.includes('code') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400 whitespace-nowrap">-</td>
+                                            )}
                                             {tableColumns.visibleColumns.includes('name') && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                     <div className="flex items-center gap-3">
@@ -346,6 +354,11 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                 <tr key={org.id} className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${isActive ? 'bg-blue-50/60' : ''}`}
                                                     onClick={() => setActiveOrganizationId(org.id)}
                                                 >
+                                                    {tableColumns.visibleColumns.includes('code') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                            {org.code || '-'}
+                                                        </td>
+                                                    )}
                                                     {tableColumns.visibleColumns.includes('name') && (
                                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                             <div className="flex items-center gap-3">
@@ -396,7 +409,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                         })}
                                         {filteredOrganizations.length === 0 && (
                                             <tr>
-                                                <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-400">
+                                                <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-400">
                                                     {searchTerm ? 'Nenhuma organização encontrada para essa busca.' : 'Nenhuma outra organização cadastrada ainda.'}
                                                 </td>
                                             </tr>

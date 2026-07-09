@@ -241,6 +241,7 @@ export interface OrganizationMember {
 
 export interface Organization {
     id: string;
+    code?: string;
     name: string;
     cnpj?: string;
     email?: string;

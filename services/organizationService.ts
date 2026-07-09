@@ -190,8 +190,20 @@ export const organizationService = {
             throw error;
         }
 
+        // Código sequencial 001/002/003... global, gerado à parte porque
+        // create_organization_v2 é uma RPC pré-existente que não conhece essa coluna.
+        let code = data.code as string | undefined;
+        if (!code) {
+            const { data: nextCode } = await supabase.rpc('get_next_organization_code');
+            if (nextCode) {
+                await supabase.from('organizations').update({ code: nextCode }).eq('id', data.id);
+                code = nextCode;
+            }
+        }
+
         return {
             ...data,
+            code,
             logoUrl: data.logo_url,
             members: creatorEmail ? [{ email: creatorEmail, role: 'owner' }] : []
         } as Organization;
@@ -202,6 +214,7 @@ export const organizationService = {
         const { data, error } = await supabase
             .from('organizations')
             .update({
+                ...(org.code !== undefined && { code: org.code }),
                 name: org.name,
                 cnpj: org.cnpj,
                 email: org.email,

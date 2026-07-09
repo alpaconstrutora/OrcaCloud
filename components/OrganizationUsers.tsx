@@ -13,6 +13,7 @@ import { ColumnConfig, useTableColumns, SortableHeader } from './ui/TableUtils';
 // legítima documentada, igual ao padrão de "Contato" em SupplierList.tsx.
 const MEMBER_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Membro', sortable: true },
+    { key: 'email', label: 'Email', sortable: true },
     { key: 'role', label: 'Função / Cargo', sortable: false },
     { key: 'joinedAt', label: 'Entrou em', sortable: true },
 ];
@@ -171,6 +172,9 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         const dir = memberColumns.sortDirection === 'asc' ? 1 : -1;
         if (memberColumns.sortColumn === 'name') {
             return [...members].sort((a, b) => a.name.localeCompare(b.name) * dir);
+        }
+        if (memberColumns.sortColumn === 'email') {
+            return [...members].sort((a, b) => a.email.localeCompare(b.email) * dir);
         }
         if (memberColumns.sortColumn === 'joinedAt') {
             return [...members].sort((a, b) => (new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime()) * dir);
@@ -566,6 +570,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                         <thead>
                             <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 <SortableHeader label="Membro" colKey="name" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                <SortableHeader label="Email" colKey="email" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 {/* Função/Cargo composta (papel + nome do cargo customizado) — sem valor único pra ordenar (§6.3). */}
                                 <SortableHeader label="Função / Cargo" colKey="role" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100" />
                                 <SortableHeader label="Entrou em" colKey="joinedAt" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
@@ -575,7 +580,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                         <tbody className="divide-y divide-gray-200">
                             {sortedMembers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-400">
+                                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-400">
                                         Nenhum membro encontrado.
                                     </td>
                                 </tr>
@@ -588,13 +593,13 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-semibold text-xs shrink-0">
                                                         {member.name.charAt(0).toUpperCase()}
                                                     </div>
-                                                    <div>
-                                                        <p className="text-sm font-normal text-gray-900">{member.name}</p>
-                                                        <div className="flex items-center text-xs font-medium text-gray-400">
-                                                            <Mail className="w-3 h-3 mr-1" />
-                                                            {member.email}
-                                                        </div>
-                                                    </div>
+                                                    <p className="text-sm font-normal text-gray-900">{member.name}</p>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <div className="flex items-center gap-1.5 text-sm text-gray-500 font-normal">
+                                                    <Mail className="w-3.5 h-3.5 text-gray-400" />
+                                                    {member.email}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">

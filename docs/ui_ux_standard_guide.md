@@ -481,11 +481,24 @@ const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'minhaTelaColWidths');
 
 ### 6.2 Variante `<thead>` sentence case (densidade alta)
 
-O `<thead>` da seção 6 (`uppercase text-xs tracking-wider`) é o padrão oficial
-e continua valendo por padrão. Em telas que adotam a escala de radius
-compacta (§16), teste `<thead>` em sentence case — cada tabela define seu
-próprio `<thead>` (não é componente compartilhado), então essa troca é sempre
-local a um arquivo, nunca cascateia para outras telas sozinha.
+**Regra:** toda tela que adota a escala de radius compacta (§16) usa `<thead>`
+em sentence case — não é mais "teste e decida", é acoplado. `SupplierList.tsx`
+e `ClientList.tsx` já seguem isso; `InvestorList.tsx` ficou pra trás numa
+correção (2026-07-10) — a escala compacta foi migrada mas o `<thead>` continuou
+`uppercase`, gerando inconsistência visível entre telas irmãs do mesmo módulo
+(Fornecedores/Clientes em sentence case, Investidores em caixa alta). Antes
+disso, o `<thead>` da seção 6 (`uppercase text-xs tracking-wider`) era o
+"padrão oficial e continua valendo por padrão" — texto que deixava a decisão
+solta demais e permitiu a inconsistência. Não decida "por tela" sem comparar
+com as telas do mesmo módulo/nível — a régua abaixo é a régua nova:
+
+- Escala **padrão** (§16) → `<thead>` uppercase (seção 6, sem mudança).
+- Escala **compacta** (§16) → `<thead>` sentence case (esta seção), sempre.
+
+Cada tabela ainda define seu próprio `<thead>` no código (não é componente
+compartilhado), então a troca continua sendo local a um arquivo — só o
+critério de quando trocar deixou de ser "teste e veja" e virou consequência
+direta da escolha de escala do §16.
 
 > ⚠️ **`SortableHeader` força `uppercase tracking-wider` internamente** —
 > trocar só a classe do `<tr>`/`<thead>` não muda nada nas colunas ordenáveis

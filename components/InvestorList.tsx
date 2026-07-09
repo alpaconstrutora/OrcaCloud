@@ -361,19 +361,21 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                     <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                         <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
-                            <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
-                                <tr>
+                            {/* thead em sentence case (§6.2) — obrigatório porque a tela adotou a escala
+                                de radius compacta (§16), mesmo critério já usado em SupplierList/ClientList. */}
+                            <thead>
+                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader label="Investidor" colKey="name" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader label="Investidor" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('contact') && (
-                                        <SortableHeader label="Acesso / Contato" colKey="contact" sortable={false} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader label="Acesso / Contato" colKey="contact" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('document') && (
-                                        <SortableHeader label="Documento" colKey="document" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                        <SortableHeader label="Documento" colKey="document" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                                     )}
                                     {tableColumns.visibleColumns.includes('project') && (
-                                        <SortableHeader label="Obra Vinculada" colKey="project" sortable={false} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                        <SortableHeader label="Obra Vinculada" colKey="project" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                                     )}
                                     <th className="px-6 py-2 text-right">Ações</th>
                                 </tr>

@@ -232,7 +232,7 @@ Copiar integralmente e substituir apenas os filtros específicos:
     <button
       onClick={() => setViewMode('grid')}
       className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid'
-        ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+        ? 'bg-blue-600 text-white'
         : 'text-gray-400 hover:text-gray-600'
       }`}
       title="Visualização em Grade"
@@ -242,7 +242,7 @@ Copiar integralmente e substituir apenas os filtros específicos:
     <button
       onClick={() => setViewMode('list')}
       className={`p-2.5 rounded-xl transition-all ${viewMode === 'list'
-        ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+        ? 'bg-blue-600 text-white'
         : 'text-gray-400 hover:text-gray-600'
       }`}
       title="Visualização em Lista"
@@ -256,6 +256,10 @@ Copiar integralmente e substituir apenas os filtros específicos:
 
 > ℹ️ Se a tela **não tem** modo grid/lista (ex: Recebimento), omitir os dois botões de viewMode
 > e deixar apenas o `ColumnConfigButton` com um `<div className="w-px bg-gray-200 mx-1 my-1">`.
+> ✅ O botão ativo do toggle grid/lista usa só `bg-blue-600 text-white` — sem
+> `shadow-lg shadow-blue-200`. A cor sólida já basta pra indicar o estado
+> selecionado; sombra em cima disso é o mesmo problema do botão primário (§17):
+> dois elementos competindo por destaque quando um já resolve sozinho.
 
 ### 5.1 Variante desaninhada (sem card externo)
 
@@ -298,10 +302,10 @@ página, mais baixa e mais leve. Extraído de `components/SupplierList.tsx` (F5)
   <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
     <ColumnConfigButton /* ...mesmas props da seção 5... */ />
     <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
-    <button className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}>
+    <button className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}>
       <LayoutDashboard className="w-4 h-4" />
     </button>
-    <button className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}>
+    <button className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}>
       <Table2 className="w-4 h-4" />
     </button>
   </div>
@@ -411,6 +415,10 @@ const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'minhaTelaColWidths');
 > ✅ `table-layout: fixed` no `<table>` é obrigatório para o `<colgroup>` controlar a largura de fato.
 > ✅ `SortableHeader` precisa da classe `overflow-hidden` quando tem `ResizeHandle` como filho (evita que o texto do rótulo vaze sobre a alça).
 > ℹ️ Se uma coluna não tem campo de ordenação correspondente no estado da tela, use `sortable={false}` nela — ela ainda ganha a alça de redimensionar, só não fica clicável para ordenar.
+> ⚠️ Ao adotar redimensionamento numa tela, aplique em **todas as colunas de
+> dado** (não só nas "principais") — coluna parcial de resize é inconsistência
+> visível (o usuário não entende por que só algumas bordas arrastam). A coluna
+> de checkbox é a única exceção aceitável: é utilitária, não é dado.
 
 ### 6.2 Variante `<thead>` sentence case (densidade alta)
 
@@ -419,6 +427,21 @@ e continua valendo por padrão. Em telas que adotam a escala de radius
 compacta (§16), teste `<thead>` em sentence case — cada tabela define seu
 próprio `<thead>` (não é componente compartilhado), então essa troca é sempre
 local a um arquivo, nunca cascateia para outras telas sozinha.
+
+> ⚠️ **`SortableHeader` força `uppercase tracking-wider` internamente** —
+> trocar só a classe do `<tr>`/`<thead>` não muda nada nas colunas ordenáveis
+> (foi um erro real: uma tela ficou marcada como "sentence case" no código sem
+> ter efeito visual nenhum). Use o prop `uppercase={false}`:
+>
+> ```tsx
+> <SortableHeader label="Fornecedor" colKey="name" uppercase={false} ... />
+> ```
+>
+> **Exceção — siglas ficam maiúsculas mesmo em sentence case:** `ID`, `CNPJ`,
+> `CPF`, `CNO`, `INSS`, `NF-e`, `XML`. `uppercase={false}` só normaliza o
+> `text-transform`/`tracking` do cabeçalho — o texto do `label` já deve estar
+> escrito como quer aparecer (ex: `label="CNPJ"` continua saindo `CNPJ`,
+> `label="Fornecedor"` sai `Fornecedor`, nunca `FORNECEDOR`).
 
 ```tsx
 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
@@ -429,6 +452,82 @@ local a um arquivo, nunca cascateia para outras telas sozinha.
 > de uma tela, o texto do label (`'Fornecedor'`, `'Categoria'`...) já deve
 > estar em capitalização normal no código — a versão uppercase antiga
 > dependia só da classe CSS `uppercase` para transformar o texto.
+
+### 6.3 Toda coluna de valor único é ordenável
+
+Regra: se a coluna representa **um único valor comparável** (texto, número,
+data, dinheiro), ela é `sortable: true`. Não deixe coluna sem ordenação só
+porque "não pensei nisso" — a exceção tem que ser justificada, não omissão.
+
+> ✅ Exceção legítima: colunas **compostas**, que juntam mais de um dado sem
+> um valor dominante óbvio para ordenar (ex: "Contato" = e-mail + telefone na
+> mesma célula). Documente a exceção com um comentário no `COLUMNS`, como em
+> `components/SupplierList.tsx`:
+> ```tsx
+> // Contato = e-mail + telefone combinados — sem valor único óbvio pra ordenar.
+> { key: 'contact', label: 'Contato', sortable: false },
+> ```
+> ❌ Não é exceção legítima: "a coluna raramente é usada pra ordenar" ou
+> "dava mais trabalho implementar" — se o dado é comparável, é ordenável.
+> ℹ️ A coluna `actions` nunca é ordenável (seção 2) — isso não é uma exceção
+> no mesmo sentido, é estrutural (não existe "valor" numa coluna de botões).
+
+### 6.4 Sem dropdown de ordenação fora do `<thead>`
+
+Se toda coluna relevante já ordena pelo próprio cabeçalho (§6.3), não crie um
+`<select>` de "Ordenar por" na toolbar — são dois controles fazendo a mesma
+coisa, e o dropdown nem cobre as mesmas opções que os cabeçalhos (fica preso a
+2-3 critérios hardcoded enquanto o `<thead>` cobre todas as colunas
+ordenáveis). Se a tela tinha um `sortBy` com fallback tipo `'name-asc'`,
+mova esse fallback pra dentro do `.sort()` como default **quando nenhuma
+coluna estiver selecionada** — sem expor um controle pra isso:
+
+```tsx
+return result.sort((a, b) => {
+  if (tableColumns.sortColumn) {
+    // ...ordena pela coluna clicada...
+  }
+  return a.name.localeCompare(b.name); // default sem seleção: nome A-Z
+});
+```
+
+> ❌ Não é o mesmo caso do "Filtro Rápido" da seção 5 — aquilo é um filtro
+> (reduz o conjunto), isto é ordenação (reordena o mesmo conjunto). Ordenação
+> já tem seu controle nativo no `<thead>`; filtro rápido não.
+
+### 6.5 Cabeçalho fixo (sticky) em tabelas longas
+
+Se a tabela pode crescer além da altura confortável de tela (listas com
+muitos registros), o container da tabela ganha altura própria com rolagem
+vertical, e o `<thead>` fica fixo no topo dessa área — sem isso o usuário
+rola a lista, perde a referência de qual coluna é qual, e tem que rolar de
+volta pra conferir.
+
+```tsx
+<div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+  <div className="overflow-auto max-h-[70vh]">
+    <table ref={cols.tableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+      <colgroup>{/* ... */}</colgroup>
+      <thead>
+        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+          {/* ... */}
+        </tr>
+      </thead>
+      <tbody>{/* ... */}</tbody>
+    </table>
+  </div>
+</div>
+```
+
+> ✅ `sticky top-0 z-10` vai no `<tr>` do `<thead>` (não só no `<thead>`) —
+> precisa também ter um `bg-*` **opaco** (`bg-gray-50`, não transparente),
+> senão as linhas da tabela aparecem "por trás" do cabeçalho ao rolar.
+> ✅ Isso troca a página de "rola inteira" para "tabela rola dentro de uma
+> altura fixa" (`overflow-auto` no container, não mais só `overflow-x-auto`)
+> — o scroll horizontal (se houver) continua funcionando no mesmo container.
+> ℹ️ `max-h-[70vh]` é ponto de partida, não valor fixo — ajuste conforme o
+> resto da tela (KPI cards, toolbar) para a tabela não ficar cortada acima da
+> dobra. Extraído de `components/SupplierList.tsx`.
 
 ---
 

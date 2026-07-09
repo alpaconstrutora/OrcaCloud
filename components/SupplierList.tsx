@@ -3,7 +3,7 @@ import { Search, Plus, Edit2, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, 
 import { Supplier } from '../types';
 import { supplierService } from '../services/supplierService';
 import { SupplierModal } from './SupplierModal';
-import { ColumnConfigButton, SortableHeader, usePersistedState, ColumnConfig, useTableColumns } from './ui/TableUtils';
+import { ColumnConfigButton, SortableHeader, usePersistedState, ColumnConfig, useTableColumns, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
@@ -14,9 +14,15 @@ const SUPPLIER_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Fornecedor', sortable: true },
     { key: 'category', label: 'Categoria', sortable: true },
     { key: 'organization', label: 'Organização', sortable: true },
+    // Contato = e-mail + telefone combinados numa célula — sem valor único óbvio
+    // pra ordenar, exceção documentada em ui_ux_standard_guide.md §6.3.
     { key: 'contact', label: 'Contato', sortable: false },
     { key: 'document', label: 'Documento', sortable: true },
 ];
+
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    name: 260, category: 160, organization: 200, contact: 220, document: 160, actions: 110,
+};
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca/ordenação já existentes, não os substitui.
@@ -53,7 +59,6 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     const [isIdInitialized, setIsIdInitialized] = React.useState(false);
     const [isModalOpen, setIsModalOpen] = React.useState(false);
     const [editingSupplier, setEditingSupplier] = React.useState<Supplier | undefined>();
-    const [sortBy, setSortBy] = usePersistedState<string>('supplierListFilters:sortBy', 'name-asc');
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('supplierListFilters:viewMode', 'list');
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
@@ -191,6 +196,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
 
     const tableColumns = useTableColumns(SUPPLIER_COLUMNS, 'supplierListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplierListFilters:advanced');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'supplierListColWidths');
 
     const filteredSuppliers = React.useMemo(() => {
         let result = suppliers
@@ -204,7 +210,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
         result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
 
         return result.sort((a, b) => {
-                // TableUtils sort takes priority over dropdown sort
+                // Sem coluna clicada, ordenação default é nome A-Z (não há mais dropdown "Ordenar" — toda coluna ordenável já ordena pelo próprio cabeçalho).
                 if (tableColumns.sortColumn) {
                     const col = tableColumns.sortColumn;
                     const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
@@ -213,13 +219,9 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     if (col === 'organization') return (a.organization_name || '').localeCompare(b.organization_name || '') * dir;
                     if (col === 'document') return (a.document || '').localeCompare(b.document || '') * dir;
                 }
-                if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
-                if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
-                if (sortBy === 'category') return (a.category || '').localeCompare(b.category || '');
-                if (sortBy === 'recent') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
-                return 0;
+                return a.name.localeCompare(b.name);
             });
-    }, [suppliers, searchTerm, sortBy, tableColumns.sortColumn, tableColumns.sortDirection, advancedFilters.rules]);
+    }, [suppliers, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, advancedFilters.rules]);
 
     const distinctCategories = React.useMemo(
         () => [...new Set(suppliers.map(s => s.category).filter((c): c is string => !!c))].sort(),
@@ -272,19 +274,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         onChange={e => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-gray-400 whitespace-nowrap">Ordenar:</span>
-                    <select
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value)}
-                        className="h-9 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-[6px] px-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-sans"
-                    >
-                        <option value="name-asc">Nome (A-Z)</option>
-                        <option value="name-desc">Nome (Z-A)</option>
-                        <option value="category">Categoria</option>
-                        <option value="recent">Mais Recentes</option>
-                    </select>
-                </div>
+                {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (ver ui_ux_standard_guide.md §6.4) */}
                 <div className="flex items-center h-9">
                     <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 </div>
@@ -317,7 +307,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     <button
                         onClick={() => setViewMode('grid')}
                         className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid'
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                            ? 'bg-blue-600 text-white'
                             : 'text-gray-400 hover:text-gray-600'
                             }`}
                         title="Visualização em Blocos"
@@ -327,7 +317,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     <button
                         onClick={() => setViewMode('list')}
                         className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list'
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                            ? 'bg-blue-600 text-white'
                             : 'text-gray-400 hover:text-gray-600'
                             }`}
                         title="Visualização em Linhas"
@@ -351,10 +341,20 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 </div>
             ) : viewMode === 'list' ? (
                 <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                    <div className="overflow-auto max-h-[70vh]">
+                        <table ref={cols.tableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+                            <colgroup>
+                                <col style={{ width: '40px' }} />
+                                {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
+                                {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}
+                                {tableColumns.visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${cols.getWidth('organization')}px` }} />}
+                                {tableColumns.visibleColumns.includes('contact') && <col data-col-key="contact" style={{ width: `${cols.getWidth('contact')}px` }} />}
+                                {tableColumns.visibleColumns.includes('document') && <col data-col-key="document" style={{ width: `${cols.getWidth('document')}px` }} />}
+                                <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                            </colgroup>
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                {/* sticky: cabeçalho fixo em tabelas longas (ui_ux_standard_guide.md §6.5) */}
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     <th className="w-10 px-4 py-5 text-center">
                                         <input
                                             type="checkbox"
@@ -365,21 +365,34 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                         />
                                     </th>
                                     {tableColumns.visibleColumns.includes('name') && (
-                                        <SortableHeader label="Fornecedor" colKey="name" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                        <SortableHeader label="Fornecedor" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                            <cols.ResizeHandle colKey="name" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('category') && (
-                                        <SortableHeader label="Categoria" colKey="category" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                        <SortableHeader label="Categoria" colKey="category" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                            <cols.ResizeHandle colKey="category" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('organization') && (
-                                        <SortableHeader label="Organização" colKey="organization" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                        <SortableHeader label="Organização" colKey="organization" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                            <cols.ResizeHandle colKey="organization" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('contact') && (
-                                        <SortableHeader label="Contato" colKey="contact" sortable={false} className="px-6 py-5" />
+                                        <SortableHeader label="Contato" colKey="contact" sortable={false} uppercase={false} className="px-6 py-5 overflow-hidden">
+                                            <cols.ResizeHandle colKey="contact" />
+                                        </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('document') && (
-                                        <SortableHeader label="Documento" colKey="document" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                        <SortableHeader label="Documento" colKey="document" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                            <cols.ResizeHandle colKey="document" />
+                                        </SortableHeader>
                                     )}
-                                    <th className="px-6 py-5 text-center">Ações</th>
+                                    <th className="px-6 py-5 text-center relative overflow-hidden">
+                                        Ações
+                                        <cols.ResizeHandle colKey="actions" />
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">

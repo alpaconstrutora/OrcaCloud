@@ -242,6 +242,8 @@ interface SortableHeaderProps {
   className?: string;
   /** Conteúdo extra dentro do <th> (ex.: alça de redimensionar coluna). Opcional — quem não passar não muda em nada. */
   children?: React.ReactNode;
+  /** Default true (padrão histórico). false = sentence case, sem tracking-wider — ver ui_ux_standard_guide.md §6.2. */
+  uppercase?: boolean;
 }
 
 export const SortableHeader: React.FC<SortableHeaderProps> = ({
@@ -253,10 +255,15 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   onSort,
   className = 'px-6 py-4',
   children,
+  uppercase = true,
 }) => {
+  const caseClasses = uppercase
+    ? 'text-gray-400 uppercase tracking-wider'
+    : 'text-gray-500';
+
   if (!sortable) {
     return (
-      <th className={`${className} relative text-table-header font-semibold text-gray-400 uppercase tracking-wider`}>
+      <th className={`${className} relative text-table-header font-semibold ${caseClasses}`}>
         {label}
         {children}
       </th>
@@ -266,7 +273,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   return (
     <th
       onClick={() => onSort?.(colKey)}
-      className={`${className} relative text-table-header font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-600 transition-colors select-none group`}
+      className={`${className} relative text-table-header font-semibold ${caseClasses} cursor-pointer hover:text-gray-600 transition-colors select-none group`}
     >
       <div className="flex items-center gap-1.5">
         {label}

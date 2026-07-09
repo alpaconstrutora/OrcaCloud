@@ -261,14 +261,16 @@
 .high-contrast.theme-midnight .border-slate-300 { border-color: rgba(255, 255, 255, 0.22); }
 
 .high-contrast .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
-.high-contrast .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.high-contrast .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: #94a3b8; }
+
 .high-contrast .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
-.high-contrast .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #94a3b8; }
+.high-contrast .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #7c8b9f; }
 
 .high-contrast.theme-midnight .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
-.high-contrast.theme-midnight .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.high-contrast.theme-midnight .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.16); }
+
 .high-contrast.theme-midnight .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
-.high-contrast.theme-midnight .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.16); }
+.high-contrast.theme-midnight .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.22); }
 
 @layer components {
   .opura-page {

@@ -498,6 +498,11 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
 
     return (
         <div className="space-y-6">
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Usuários</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie membros, cargos customizados e visibilidade de módulos.</p>
+            </div>
+
             <div className="flex items-center justify-between">
                 <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
                     <button

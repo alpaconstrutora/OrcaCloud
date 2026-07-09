@@ -137,7 +137,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-black text-gray-900 tracking-tight">Gerenciamento de Recebimento</h1>
-                    <p className="text-gray-500 text-sm mt-1">Controle de entregas, conferência de carga e checkouts de obra.</p>
+                    <p className="text-gray-500 text-sm mt-1.5">Controle de entregas, conferência de carga e checkouts de obra.</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm flex shrink-0 gap-1.5">

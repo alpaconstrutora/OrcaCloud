@@ -156,7 +156,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Pós-Obra & Garantia</h1>
-                    <p className="text-gray-400 text-sm mt-1 font-medium">
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
                         Gestão de chamados de assistência técnica e controle de prazos NBR 17170.
                     </p>
                 </div>

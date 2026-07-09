@@ -288,7 +288,7 @@ const CentralObra: React.FC<CentralObraProps> = ({ organizationId }) => {
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-2">
                         <Building2 className="w-7 h-7 text-orange-500" /> Central de Obras
                     </h1>
-                    <p className="text-gray-400 text-sm mt-1 font-medium">Orçado × Contratado × Pago × Recebido — por obra.</p>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Orçado × Contratado × Pago × Recebido — por obra.</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <select value={projectId} onChange={e => setProjectId(e.target.value)}

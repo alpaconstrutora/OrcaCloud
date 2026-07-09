@@ -227,7 +227,7 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-2">
                         <BarChart3 className="w-7 h-7 text-blue-600" /> ÒPURA · Relatórios
                     </h1>
-                    <p className="text-gray-400 text-sm mt-1 font-medium">
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
                         Analise por qualquer dimensão sem trocar de tela.
                     </p>
                 </div>

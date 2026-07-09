@@ -216,45 +216,6 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
 
     return (
         <div className="space-y-8">
-            {/* Header with Global Tabs — só a nav; identidade da org já está fixa no sidebar (Layout.tsx activeContextLabel) */}
-            <div className="flex flex-col md:flex-row md:items-center justify-start bg-slate-900 p-1.5 rounded-[10px] border border-slate-800 shadow-lg gap-2 relative overflow-hidden">
-                <div className="absolute inset-y-0 right-0 w-1/2 opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle at right, rgba(96,165,250,0.4) 0%, transparent 60%)' }} />
-                <div
-                    className="w-9 h-9 bg-blue-600 text-white rounded-[6px] flex items-center justify-center shadow-lg shadow-blue-500/30 shrink-0 relative"
-                    title={activeOrganizationId
-                        ? organizations.find(o => o.id === activeOrganizationId)?.name
-                        : 'Visão Consolidada Global'}
-                >
-                    <Building2 className="w-4 h-4" />
-                </div>
-
-                <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide max-w-full relative">
-                    {[
-                        { id: 'organizations', label: 'Organização', icon: Building2 },
-                        { id: 'empresas_grupo', label: 'Grupo', icon: Building2 },
-                        { id: 'clients', label: 'Clientes', icon: UserPlus },
-                        { id: 'investors', label: 'Investidores', icon: TrendingUp },
-                        { id: 'suppliers', label: 'Fornecedores', icon: Truck },
-                        { id: 'users', label: 'Usuários', icon: Users },
-                        { id: 'accounts', label: 'Contas', icon: Building2 },
-                        { id: 'cost_centers', label: 'Centros', icon: Filter },
-                        { id: 'chart_of_accounts', label: 'Plano', icon: HandCoins }
-                    ].map(tab => {
-                        const isActive = activeTab === tab.id;
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => onTabChange(tab.id)}
-                                className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] font-medium text-sm transition-all whitespace-nowrap ${isActive ? 'bg-slate-700/80 text-white shadow-inner ring-1 ring-white/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
-                            >
-                                <tab.icon className={`w-4 h-4 ${isActive ? 'opacity-100' : 'opacity-60'}`} />
-                                {tab.label}
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
-
             {/* Organizations Tab Content */}
             {activeTab === 'organizations' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">

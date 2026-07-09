@@ -204,22 +204,22 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     const totalItems = items.length;
 
     return (
-        <div className="flex flex-col h-full bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-            {/* Header */}
-            <div className="p-6 border-b border-gray-100 bg-gray-50/50 space-y-4">
-                <div className="flex items-center justify-between gap-4">
-                    <div>
-                        <h2 className="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-2.5">
-                            <Icon className="w-5 h-5 text-blue-600" />
-                            {title}
-                        </h2>
-                        <p className="text-gray-400 text-sm mt-1 font-medium">{description}</p>
-                    </div>
-                    <KpiCard shadow={false} size="sm" label="Total de Registros" value={totalItems} icon={<Hash className="w-4 h-4" />} color="blue" />
+        <div className="space-y-6">
+            {/* Header — mesma escala das demais abas de Minha Organização (h1 3xl, subtítulo mt-1.5) */}
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-2.5">
+                        <Icon className="w-6 h-6 text-blue-600" />
+                        {title}
+                    </h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">{description}</p>
                 </div>
+                <KpiCard shadow={false} size="sm" label="Total de Registros" value={totalItems} icon={<Hash className="w-4 h-4" />} color="blue" />
+            </div>
 
+            <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                 {/* Toolbar §5.1 (escala compacta §16), mesma decisão já aplicada no resto do módulo Organização */}
-                <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-gray-50/50">
                     <div className="flex-1 relative w-full">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input
@@ -280,10 +280,9 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                         Novo cadastro
                     </button>
                 </div>
-            </div>
 
-            {/* List Content */}
-            <div className="flex-1 overflow-y-auto">
+                {/* List Content */}
+                <div>
                 {(isAdding || isEditing) && (
                     <div className="p-8 border-b border-gray-100 bg-blue-50/30">
                         <form onSubmit={handleSubmit} className="p-8 bg-white border border-blue-100 rounded-3xl shadow-xl shadow-blue-900/5 animate-in fade-in slide-in-from-top-4 duration-300">
@@ -481,6 +480,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                         </tbody>
                     </table>
                 </div>
+            </div>
             </div>
 
             {notification && (

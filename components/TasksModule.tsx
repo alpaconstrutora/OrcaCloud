@@ -390,7 +390,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
   if (isMobile) return <TasksMobileApp orgId={activeOrganizationId || ''} />
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Prévia Mobile */}
       {showMobilePreview && (
         <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Minhas Tarefas">
@@ -402,7 +402,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Tarefas</h1>
-          <p className="text-slate-400 text-sm mt-1 font-medium">Sua agenda pessoal de pendências</p>
+          <p className="text-slate-400 text-sm mt-1.5 font-medium">Sua agenda pessoal de pendências</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Tabs — só no mobile (no desktop o rail substitui) */}

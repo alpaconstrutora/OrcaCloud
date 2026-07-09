@@ -146,7 +146,7 @@ const CentralFornecedor: React.FC<CentralFornecedorProps> = ({ organizationId })
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-2">
                         <Truck className="w-7 h-7 text-indigo-600" /> Central de Fornecedores
                     </h1>
-                    <p className="text-gray-400 text-sm mt-1 font-medium">Contratado × Pago × Saldo aberto — por fornecedor.</p>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Contratado × Pago × Saldo aberto — por fornecedor.</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <select value={supplierId} onChange={e => setSupplierId(e.target.value)}

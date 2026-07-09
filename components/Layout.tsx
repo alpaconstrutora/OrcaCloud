@@ -93,24 +93,30 @@ const NavDropdown = ({ label, icon: Icon, isOpen, onToggle, children, hasActiveC
   );
 };
 
-const DropdownItem = ({ id, label, icon: Icon, badge }: {
+const DropdownItem = ({ id, label, icon: Icon, badge, isActiveOverride, onClickOverride }: {
   id: string; label: string; icon?: React.ElementType; badge?: number;
+  isActiveOverride?: boolean; onClickOverride?: () => void;
 }) => {
   const { activeView, t, onChangeView, setIsMobileMenuOpen } = useNavCtx();
-  const isActive = activeView === id;
+  const isActive = isActiveOverride ?? activeView === id;
+  const href = onClickOverride ? undefined : viewUrl(id);
   const handleClick = (e: React.MouseEvent) => {
-    if (e.button !== 0 || e.ctrlKey || e.metaKey) return;
+    if (!onClickOverride && (e.button !== 0 || e.ctrlKey || e.metaKey)) return;
     e.preventDefault();
-    onChangeView(id);
+    if (onClickOverride) { onClickOverride(); } else { onChangeView(id); }
     setIsMobileMenuOpen(false);
   };
-  return (
-    <a href={viewUrl(id)} onClick={handleClick} className={`flex items-center w-full px-3 py-2 text-sm font-medium transition-colors duration-150 rounded-lg ${isActive ? t.itemActive : `${t.itemText} ${t.itemHover}`}`}>
+  const className = `flex items-center w-full px-3 py-2 text-sm font-medium transition-colors duration-150 rounded-lg ${isActive ? t.itemActive : `${t.itemText} ${t.itemHover}`}`;
+  const content = (
+    <>
       {Icon && <Icon className="w-4 h-4 mr-3 shrink-0" strokeWidth={2} />}
       <span className="flex-1 text-left">{label}</span>
       {badge !== undefined && badge > 0 && <span className={`px-1.5 py-0.5 rounded-md text-xs font-bold ml-1 ${isActive ? 'bg-white/20 text-white' : 'bg-orange-500 text-white'}`}>{badge}</span>}
-    </a>
+    </>
   );
+  return href
+    ? <a href={href} onClick={handleClick} className={className}>{content}</a>
+    : <button type="button" onClick={handleClick} className={className}>{content}</button>;
 };
 
 const DropdownGroupLabel = ({ label }: { label: string }) => {
@@ -155,7 +161,7 @@ const Layout: React.FC<LayoutProps> = ({
   isNotificationOpen = false,
   setIsNotificationOpen = () => { }
 }) => {
-  const { logout, companies, activeEmpresaId, setActiveEmpresaId, setManagementTab } = useStore();
+  const { logout, companies, activeEmpresaId, setActiveEmpresaId, managementTab, setManagementTab } = useStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isEmpresaDropdownOpen, setIsEmpresaDropdownOpen] = React.useState(false);
   const [isHeaderEmpresaDropdownOpen, setIsHeaderEmpresaDropdownOpen] = React.useState(false);
@@ -445,6 +451,8 @@ const Layout: React.FC<LayoutProps> = ({
   const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates','area-engine'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
+  const [isOrganizacaoOpen, setIsOrganizacaoOpen] = React.useState(() => activeView === 'organization');
+  React.useEffect(() => { if (activeView === 'organization') setIsOrganizacaoOpen(true); }, [activeView]);
   const especialidadesViews = ['pro-dashboard','offices-dashboard','reformas-dashboard','opura-cno','compliance-dashboard'];
   const [isEspecialidadesOpen, setIsEspecialidadesOpen] = React.useState(() => especialidadesViews.includes(activeView));
   React.useEffect(() => { if (especialidadesViews.includes(activeView)) setIsEspecialidadesOpen(true); }, [activeView]);
@@ -868,7 +876,36 @@ const Layout: React.FC<LayoutProps> = ({
                 </div>
               )}
 
-              <NavItem id="organization" icon={Building2} label="Minha Organização" />
+              <NavDropdown
+                label="Minha Organização"
+                icon={Building2}
+                isOpen={isOrganizacaoOpen}
+                onToggle={() => {
+                  if (isCollapsed) { onChangeView('organization'); }
+                  else { setIsOrganizacaoOpen(o => !o); }
+                }}
+                hasActiveChild={activeView === 'organization'}
+              >
+                {([
+                  { id: 'organizations', label: 'Organização', icon: Building2 },
+                  { id: 'empresas_grupo', label: 'Grupo', icon: Building2 },
+                  { id: 'clients', label: 'Clientes', icon: Users },
+                  { id: 'investors', label: 'Investidores', icon: TrendingUp },
+                  { id: 'suppliers', label: 'Fornecedores', icon: Truck },
+                  { id: 'users', label: 'Usuários', icon: Users },
+                  { id: 'accounts', label: 'Contas', icon: DollarSign },
+                  { id: 'cost_centers', label: 'Centros', icon: Filter },
+                ] as const).map(tab => (
+                  <DropdownItem
+                    key={tab.id}
+                    id={`organization-${tab.id}`}
+                    label={tab.label}
+                    icon={tab.icon}
+                    isActiveOverride={activeView === 'organization' && managementTab === tab.id}
+                    onClickOverride={() => { setManagementTab(tab.id); onChangeView('organization'); }}
+                  />
+                ))}
+              </NavDropdown>
               <NavItem id="opura-assets" icon={Package} label="Gestão de Ativos" />
               <NavItem id="opura-docs" icon={FolderOpen} label="Gestão de Documentos" />
               <NavItem id="opura-processos" icon={ClipboardList} label="Processos" />

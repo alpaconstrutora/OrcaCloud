@@ -275,7 +275,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">DRE</h1>
-                    <p className="text-gray-400 text-sm mt-1 font-medium">
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
                         Demonstrativo de Resultado do Exercício
                     </p>
                 </div>

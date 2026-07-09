@@ -147,7 +147,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-2">
                         <Users className="w-7 h-7 text-blue-600" /> Central de Clientes
                     </h1>
-                    <p className="text-gray-400 text-sm mt-1 font-medium">Contratado × Faturado × Recebido — por cliente.</p>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Contratado × Faturado × Recebido — por cliente.</p>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <select value={clientId} onChange={e => setClientId(e.target.value)}

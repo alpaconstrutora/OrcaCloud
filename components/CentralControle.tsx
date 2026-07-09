@@ -265,7 +265,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Central de Controle</h1>
-                    <p className="text-gray-400 text-sm mt-1 font-medium">O que precisa da sua atenção agora</p>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">O que precisa da sua atenção agora</p>
                 </div>
                 <div className="flex items-center gap-2">
                     {obraOptions.length > 0 && (

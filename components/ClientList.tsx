@@ -88,6 +88,13 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const tableColumns = useTableColumns(CLIENT_COLUMNS, 'clientListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'clientListFilters:advanced');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'clientListColWidths');
+    // table-layout:fixed + largura 100% faz o navegador redistribuir o espaço
+    // sobrando entre as colunas de <col> fixo (arrastar uma borda "puxava" as
+    // vizinhas). Fixar a largura total na soma exata das colunas elimina esse
+    // espaço sobrando — mesma correção aplicada em SupplierList.tsx.
+    const tableTotalWidth = (['name', 'category', 'organization', 'contact', 'document', 'projects'] as const)
+        .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
+        + cols.getWidth('actions');
     const confirm = useConfirm();
 
     React.useEffect(() => {
@@ -434,7 +441,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 viewMode === 'list' ? (
                     <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                         <div className="overflow-x-auto">
-                        <table ref={cols.tableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
                             <colgroup>
                                 {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
                                 {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}

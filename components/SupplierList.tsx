@@ -12,6 +12,7 @@ import Button from './ui/Button';
 
 const SUPPLIER_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Fornecedor', sortable: true },
+    { key: 'type', label: 'Tipo', sortable: true },
     { key: 'category', label: 'Categoria', sortable: true },
     { key: 'organization', label: 'Organização', sortable: true },
     // Contato = e-mail + telefone combinados numa célula — sem valor único óbvio
@@ -21,7 +22,7 @@ const SUPPLIER_COLUMNS: ColumnConfig[] = [
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    name: 260, category: 160, organization: 200, contact: 220, document: 160, actions: 110,
+    name: 260, type: 130, category: 160, organization: 200, contact: 220, document: 160, actions: 110,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
@@ -197,6 +198,20 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     const tableColumns = useTableColumns(SUPPLIER_COLUMNS, 'supplierListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplierListFilters:advanced');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'supplierListColWidths');
+    // table-layout:fixed + largura 100% faz o navegador REDISTRIBUIR o espaço
+    // sobrando entre as colunas com <col> de largura fixa (mesmo com px
+    // explícito) — arrastar uma borda "puxava" as vizinhas junto. Fixando a
+    // largura total da tabela na soma exata das colunas (em vez de w-full)
+    // elimina esse espaço sobrando: cada coluna passa a respeitar só o próprio
+    // <col>, e a div com overflow-auto assume a rolagem horizontal se precisar.
+    const tableTotalWidth = 40
+        + (tableColumns.visibleColumns.includes('name') ? cols.getWidth('name') : 0)
+        + (tableColumns.visibleColumns.includes('type') ? cols.getWidth('type') : 0)
+        + (tableColumns.visibleColumns.includes('category') ? cols.getWidth('category') : 0)
+        + (tableColumns.visibleColumns.includes('organization') ? cols.getWidth('organization') : 0)
+        + (tableColumns.visibleColumns.includes('contact') ? cols.getWidth('contact') : 0)
+        + (tableColumns.visibleColumns.includes('document') ? cols.getWidth('document') : 0)
+        + cols.getWidth('actions');
 
     const filteredSuppliers = React.useMemo(() => {
         let result = suppliers
@@ -215,6 +230,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     const col = tableColumns.sortColumn;
                     const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
                     if (col === 'name') return a.name.localeCompare(b.name) * dir;
+                    if (col === 'type') return (a.type || '').localeCompare(b.type || '') * dir;
                     if (col === 'category') return (a.category || '').localeCompare(b.category || '') * dir;
                     if (col === 'organization') return (a.organization_name || '').localeCompare(b.organization_name || '') * dir;
                     if (col === 'document') return (a.document || '').localeCompare(b.document || '') * dir;
@@ -342,10 +358,11 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
             ) : viewMode === 'list' ? (
                 <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                     <div className="overflow-auto max-h-[70vh]">
-                        <table ref={cols.tableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
                             <colgroup>
                                 <col style={{ width: '40px' }} />
                                 {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
+                                {tableColumns.visibleColumns.includes('type') && <col data-col-key="type" style={{ width: `${cols.getWidth('type')}px` }} />}
                                 {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}
                                 {tableColumns.visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${cols.getWidth('organization')}px` }} />}
                                 {tableColumns.visibleColumns.includes('contact') && <col data-col-key="contact" style={{ width: `${cols.getWidth('contact')}px` }} />}
@@ -367,6 +384,11 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                     {tableColumns.visibleColumns.includes('name') && (
                                         <SortableHeader label="Fornecedor" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
                                             <cols.ResizeHandle colKey="name" />
+                                        </SortableHeader>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('type') && (
+                                        <SortableHeader label="Tipo" colKey="type" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                            <cols.ResizeHandle colKey="type" />
                                         </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('category') && (
@@ -403,7 +425,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             onClick={() => { setEditingSupplier(supplier); setIsModalOpen(true); }}
                                             className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedIds.has(supplier.id) ? 'bg-blue-50/60' : ''}`}
                                         >
-                                            <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                            <td className="px-4 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                                                 <input
                                                     type="checkbox"
                                                     title="Dica: segure Shift e clique para selecionar um intervalo"
@@ -413,23 +435,27 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                 />
                                             </td>
                                             {tableColumns.visibleColumns.includes('name') && (
-                                                <td className="px-6 py-4">
+                                                <td className="px-6 py-2.5">
                                                     <p className="text-sm font-normal text-gray-700 group-hover:text-blue-700 transition-colors">{supplier.name}</p>
-                                                    <p className="text-xs font-medium text-gray-400">{supplier.type === 'PJ' ? 'Pessoa jurídica' : 'Pessoa física'}</p>
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('type') && (
+                                                <td className="px-6 py-2.5">
+                                                    <span className="text-sm font-normal text-gray-700">{supplier.type === 'PJ' ? 'Pessoa jurídica' : 'Pessoa física'}</span>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('category') && (
-                                                <td className="px-6 py-4">
+                                                <td className="px-6 py-2.5">
                                                     <span className="text-sm font-normal text-gray-700">{supplier.category}</span>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('organization') && (
-                                                <td className="px-6 py-4">
+                                                <td className="px-6 py-2.5">
                                                     <span className="text-sm font-normal text-gray-700">{supplier.organization_name}</span>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('contact') && (
-                                                <td className="px-6 py-4">
+                                                <td className="px-6 py-2.5">
                                                     <div className="space-y-1.5">
                                                         {supplier.email && (
                                                             <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
@@ -447,13 +473,13 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('document') && (
-                                                <td className="px-6 py-4">
+                                                <td className="px-6 py-2.5">
                                                     <span className="text-sm font-normal text-gray-600">
                                                         {supplier.document || '---'}
                                                     </span>
                                                 </td>
                                             )}
-                                            <td className="px-6 py-4 text-right">
+                                            <td className="px-6 py-2.5 text-right">
                                                 {/* Editar = clique na linha (ação dominante); kebab só tem Excluir, isolado de propósito */}
                                                 <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
                                                     <InlineDisclosureMenu

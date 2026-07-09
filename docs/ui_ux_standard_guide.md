@@ -13,12 +13,14 @@
 Ao aplicar o padrão em uma nova tela, marque cada item:
 
 - [ ] **IMPORTS** — `ColumnConfig`, `useTableColumns`, `ColumnConfigButton`, `SortableHeader`, `usePersistedState` de `./ui/TableUtils`
+- [ ] **Cabeçalho de tela (§20)** — `space-y-6` no container raiz, `<h1>` + `<p mt-1.5>` direto (sem card/hero), grid de KPI logo em seguida
 - [ ] **COLUMNS const** — array `ColumnConfig[]` definido fora do componente
 - [ ] **State** — `usePersistedState` para search/filtros, `useTableColumns` para colunas
 - [ ] **KPI Cards** — usar o componente `components/ui/KpiCard.tsx` (não reimplementar à mão)
 - [ ] **Toolbar** — search + filtros + `ColumnConfigButton` + botões grid/lista
 - [ ] **`<thead>`** — `SortableHeader` em cada coluna (exceto a de ações)
-- [ ] **`<tbody>` TDs** — classes de fonte corretas por tipo de dado
+- [ ] **Redimensionamento de colunas (§6.1), se usado** — `<table>` com largura explícita (soma das colunas), NUNCA `w-full`/100% — evita o navegador redistribuir espaço entre colunas ao arrastar
+- [ ] **`<tbody>` TDs** — classes de fonte corretas por tipo de dado; `py-2.5` em toda `<td>` (§7.2)
 - [ ] **Campos editáveis inline (select/dropdown/LazySelect dentro de TD)** — MESMA tipografia do TD (`text-sm font-normal`), nunca `text-xs`/`font-bold`/`uppercase` só porque "parece um chip"
 - [ ] **StatusBadge** — `text-sm font-normal` + cor de texto. ❌ sem pílula, fundo ou uppercase
 - [ ] **Coluna de Ações** — sempre visível, botão "Ver Detalhes" em texto azul + ícones secundários
@@ -68,6 +70,7 @@ suficiente).
 - [ ] §6.5 Cabeçalho fixo (sticky) — decisão explícita
 - [ ] §7 Tabela — `<tbody>` e TDs (tipografia por tipo de dado)
 - [ ] §7.1 Campos editáveis inline dentro de TD
+- [ ] §7.2 Altura da linha — `py-2.5` em toda `<td>`, sem exceção não documentada
 - [ ] §8 Status Badge
 - [ ] §9 Coluna de Ações (+ §9.1 ação dominante via clique na linha, se aplicável)
 - [ ] §10 Barra de ações em lote (+ §10.1 seleção de intervalo Shift+clique) — decisão explícita se a tela tem seleção múltipla
@@ -79,7 +82,8 @@ suficiente).
 - [ ] §16 Escala de radius — padrão vs compacta (qual foi usada, consistente na tela toda?)
 - [ ] §17 Botão primário — variante compacta vs padrão (decisão explícita, não default herdado de componente compartilhado)
 - [ ] §18 Não duplicar contexto já visível no shell
-- [ ] §19 Navegação de módulos (abas superiores compartilhadas) — se a tela pertencer a um módulo com abas irmãs, conferir se a barra bate com a escala de radius/tamanho da página
+- [ ] §19 Navegação de módulos — se a tela pertencer a um módulo com navegação de nível de módulo, conferir se é via sidebar (padrão atual) ou, em módulos legados, se a barra de abas local bate com a escala de radius/tamanho da página
+- [ ] §20 Cabeçalho de tela (título + subtítulo + KPIs) — `space-y-6`, `h1` + `p mt-1.5` direto (sem card/hero, a menos que seja decisão documentada), grid de KPI logo em seguida
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -485,7 +489,14 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 };
 const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'minhaTelaColWidths');
 
-<table ref={cols.tableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+// ⚠️ NÃO uses `w-full`/100% no <table> — ver aviso abaixo. A largura da
+// tabela é a SOMA exata das colunas visíveis (checkbox + colunas + actions).
+const tableTotalWidth = 40 // checkbox
+  + COLUMNS.filter(c => c.key !== 'actions')
+      .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 0)
+  + cols.getWidth('actions');
+
+<table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
   <colgroup>
     <col style={{ width: '40px' }} /> {/* checkbox */}
     {COLUMNS.filter(c => c.key !== 'actions').map(c => (
@@ -493,7 +504,7 @@ const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'minhaTelaColWidths');
         <col key={c.key} data-col-key={c.key} style={{ width: `${cols.getWidth(c.key)}px` }} />
       )
     ))}
-    {tableColumns.visibleColumns.includes('actions') && <col style={{ width: '160px' }} />}
+    {tableColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
   </colgroup>
   <thead>
     <tr>
@@ -512,6 +523,23 @@ const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'minhaTelaColWidths');
 > dado** (não só nas "principais") — coluna parcial de resize é inconsistência
 > visível (o usuário não entende por que só algumas bordas arrastam). A coluna
 > de checkbox é a única exceção aceitável: é utilitária, não é dado.
+> ⚠️ **`<table>` NUNCA com `w-full`/`width: 100%` quando usa `useResizableColumns`.**
+> Bug real em `SupplierList.tsx` (2026-07-11): com `table-layout: fixed` +
+> tabela em 100% de largura, se a soma das colunas do `<colgroup>` é menor que
+> a largura real do container, o navegador **redistribui o espaço sobrando
+> entre as colunas** — mesmo elas tendo `width` em px explícito no `<col>`.
+> Sintoma: arrastar a borda de uma coluna redimensiona a vizinha errada (o
+> handler em si estava correto, isolado por `colKey`; o problema é o motor de
+> layout de tabela do navegador). Correção: a tabela usa `width` explícito
+> igual à soma exata das colunas visíveis (`tableTotalWidth` acima, recalculado
+> a cada resize/toggle de coluna), nunca uma porcentagem. Se a tabela ficar
+> mais estreita que o container, sobra espaço em branco à direita — aceitável
+> (o `bg-white` do card ao redor cobre), a alternativa (redistribuição
+> silenciosa) é pior. Também exige um `<col data-col-key="...">` para
+> **cada** `<th>`/`<td>` renderizado, na mesma ordem — um `<col>` faltando
+> desalinha todas as colunas seguintes por posição (outro bug real, mesma
+> correção, ao adicionar uma coluna nova em `SupplierList.tsx` sem atualizar
+> o `<colgroup>`).
 
 ### 6.2 Variante `<thead>` sentence case (densidade alta)
 
@@ -621,7 +649,8 @@ volta pra conferir.
 ```tsx
 <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
   <div className="overflow-auto max-h-[70vh]">
-    <table ref={cols.tableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+    {/* largura explícita (soma das colunas), NUNCA w-full — ver aviso no §6.1 */}
+    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
       <colgroup>{/* ... */}</colgroup>
       <thead>
         <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
@@ -707,6 +736,31 @@ das demais na mesma linha).
 
 > ✅ Pode variar `bg-*`/`border-*` para indicar estado preenchido vs. vazio (isso é funcional, não tipográfico).
 > ❌ **NUNCA** `text-xs`, `font-bold`, `font-black` ou `uppercase tracking-wider` num campo editável dentro de TD — mesmo que pareça estilizado como "chip"/"pill". Se precisar de um badge visual de verdade, use o padrão da seção 8 (StatusBadge).
+
+### 7.2 Altura da linha — padding vertical padrão
+
+**Regra:** todo `<td>` de dado usa `py-2.5` (10px em cima/embaixo) — inclusive
+a célula de checkbox de seleção em lote. Não é "escolha por tela": é o mesmo
+valor em toda tabela do sistema (`ClientList.tsx`, `SupplierList.tsx`,
+`InvestorList.tsx`, `OrganizationUsers.tsx`, `FinancialRegistryManager.tsx`,
+`OrganizationList.tsx`). Achado real em 2026-07-11: `SupplierList.tsx` estava
+em `py-4` (16px) em todas as células — sobrou de antes da tela migrar pra
+escala compacta (§16) e nunca foi revisitado — deixando a altura da linha
+visivelmente diferente da tabela de Clientes/Investidores logo ao lado no
+mesmo módulo (Minha Organização).
+
+```tsx
+<td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">...</td>
+```
+
+> ℹ️ A altura final da `<tr>` ainda varia por conteúdo (célula com avatar
+> `w-8 h-8`, ou com duas linhas empilhadas tipo e-mail+telefone, fica mais
+> alta que uma célula de texto simples) — isso é esperado, a régua é sobre o
+> **padding**, não sobre travar todas as linhas numa altura fixa em px.
+> ❌ Não é exceção legítima "esta tabela é mais densa" ou "tem menos colunas"
+> — se motivo real existir para uma linha mais compacta/espaçosa em alguma
+> tela nova, documente aqui como seção própria antes de aplicar, não decida
+> ad-hoc no componente.
 
 ---
 
@@ -1068,51 +1122,88 @@ ser o elemento dominante do header, não a identidade repetida.
 
 ---
 
-## 19. NAVEGAÇÃO DE MÓDULOS (abas superiores compartilhadas)
+## 19. NAVEGAÇÃO DE MÓDULOS (histórico: abas superiores → sidebar)
 
-Barra de abas fixa no topo de um conjunto de telas irmãs (ex: o menu
-Organização/Grupo/Clientes/Investidores/Fornecedores/Usuários/Contas/Centros/Plano
-em `components/OrganizationList.tsx:196-232`) — **um único componente
-compartilhado por todas as abas**, não específico de nenhuma tela. Antes
-desta seção existir, essa barra usava um terceiro vocabulário de
-tamanho/radius (`rounded-full`, `py-1.5`, `text-xs`) que não batia nem com a
-escala padrão nem com a compacta do §16 — foi um achado real de
-2026-07-10, ao comparar Investidores com o resto da página depois de migrar
-pra escala compacta.
+**Estado atual (2026-07-11): não existe mais barra de abas superior no
+módulo Minha Organização.** A navegação entre Organização/Grupo/Clientes/
+Investidores/Fornecedores/Usuários/Contas/Centros foi movida para um dropdown
+próprio na sidebar (`components/Layout.tsx`, `NavDropdown label="Minha
+Organização"`, mesmo padrão visual do dropdown "Engenharia" — `NavDropdown`/
+`DropdownItem` já documentados no próprio componente). Cada item do dropdown
+navega direto pra aba (`onChangeView('organization')` + `setManagementTab(id)`
+via `onClickOverride`), sem precisar renderizar nenhuma barra dentro da tela.
+`components/OrganizationList.tsx` teve o bloco de abas removido (era um
+`<div className="flex ... bg-slate-900 ...">` com um botão por aba, ~40
+linhas) — a tela agora começa direto no conteúdo da aba ativa (§20).
+
+> ⚠️ Isso é consequência direta do §18 (não duplicar contexto já visível no
+> shell): a barra de abas era exatamente esse tipo de navegação redundante —
+> a sidebar já mostra "onde você está" via item destacado, então manter uma
+> segunda navegação equivalente dentro da tela virou peso morto assim que o
+> dropdown do sidebar existiu.
+> ℹ️ Se um módulo novo (fora de Minha Organização) ainda precisar de uma
+> barra de abas superior compartilhada por telas irmãs (ex: `TABS` locais em
+> `SalesManagementModule.tsx`, que continuam existindo — não fazem parte
+> deste módulo), aplique o vocabulário do §5.1/§16 (compacto: `h-9`,
+> `rounded-[6px]`, `text-sm font-medium`) em vez de inventar um terceiro
+> estilo — mas prefira sidebar quando a navegação for de nível de módulo
+> inteiro (não de sub-fluxo dentro de uma tela), pelo motivo acima.
+
+---
+
+## 20. CABEÇALHO DE TELA (título + subtítulo + KPIs)
+
+**Regra:** todo container raiz de tela usa `space-y-6` (não `space-y-4/5/8`,
+não classes extras de padding/animação no mesmo elemento). O bloco de título
+é uma `<div>` simples — nunca embrulhado num card, banda colorida ou "hero"
+com fundo — contendo só `<h1>` + `<p>` de subtítulo, seguido **imediatamente**
+(sem `<div>` intermediária, sem margem extra) pelo grid de `KpiCard` (§4):
 
 ```tsx
-<div className="flex flex-col md:flex-row md:items-center justify-start bg-slate-900 p-1.5 rounded-[10px] border border-slate-800 shadow-lg gap-2 relative overflow-hidden">
-  <div className="w-9 h-9 bg-blue-600 text-white rounded-[6px] flex items-center justify-center shadow-lg shadow-blue-500/30 shrink-0" title="...">
-    <Building2 className="w-4 h-4" />
+<div className="space-y-6">
+  <div>
+    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Meus Fornecedores</h1>
+    <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua rede de parceiros e fornecedores.</p>
   </div>
-  <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide max-w-full">
-    <button className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] font-medium text-sm transition-all whitespace-nowrap ${
-      isActive ? 'bg-slate-700/80 text-white shadow-inner ring-1 ring-white/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-    }`}>
-      <tab.icon className={`w-4 h-4 ${isActive ? 'opacity-100' : 'opacity-60'}`} />
-      {tab.label}
-    </button>
-    {/* ...demais abas... */}
+
+  <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+    <KpiCard ... />
   </div>
+  {/* ...toolbar, tabela... */}
 </div>
 ```
 
-> ✅ `h-9`/`rounded-[6px]`/`text-sm font-medium` — mesmo vocabulário da régua
-> de controles compacta (§5.1/§16), não um terceiro estilo à parte. O
-> container externo (`rounded-[10px]`) também já bate com a escala compacta.
-> ✅ Estado ativo/inativo é só cor+fundo (`bg-slate-700/80 text-white` vs
-> `text-slate-400`) — nunca tamanho de fonte diferente entre os dois estados
-> (foi outro erro real: parecia que a aba ativa tinha fonte maior, mas era
-> só o contraste de cor/fundo enganando o olho — confirmar sempre pelo código,
-> não só pelo print).
-> ℹ️ O fundo escuro (`bg-slate-900`) é identidade proposital de "barra de
-> navegação" (chrome), separado do conteúdo — só o tamanho/radius dos
-> controles precisa bater com a escala da página, não a paleta de cor.
-> ⚠️ Por ser componente único compartilhado por todas as abas do módulo,
-> qualquer mudança aqui se propaga pra todas elas — inclusive abas que ainda
-> não foram auditadas pelo padrão. Isso é aceito propositalmente (decisão de
-> 2026-07-10): a barra usa a escala compacta desde já, mesmo nas abas cujo
-> conteúdo interno ainda está na escala padrão.
+Referência: `SupplierList.tsx`, `ClientList.tsx`, `InvestorList.tsx`.
+
+> ✅ Subtítulo sempre `mt-1.5` (não `mt-1`, não `mt-0.5`, não ausente) —
+> corrigido em 2026-07-11 em `BIDashboard.tsx`, `CashFlowDashboard.tsx`,
+> `CentralCliente/Controle/Fornecedor/Obra.tsx`, `DREReport.tsx`,
+> `OpuraReports.tsx`, `WarrantyModule.tsx`, `TasksModule.tsx`,
+> `SupplyChainReceiptManager.tsx` — todas tinham o mesmo cabeçalho, só com o
+> valor de `mt` levemente diferente entre si.
+> ✅ Nenhum componente reutilizável de listagem deve embrulhar seu próprio
+> título num card (`bg-* p-6 border rounded-[10px]`) só porque o resto do
+> componente também é um card — o título é conteúdo de página, não parte do
+> card da tabela/toolbar. Corrigido em `FinancialRegistryManager.tsx`
+> (usado pelas abas Contas/Centros/Plano de Minha Organização): o header
+> estava dentro do mesmo card com fundo cinza (`bg-gray-50/50`) e padding
+> `p-6` que a tabela, com `h2 text-2xl` em vez de `h1 text-3xl` — o título
+> saiu do card e virou o bloco flat desta seção; só a toolbar+tabela
+> continuam dentro do card branco.
+> ✅ Toda tela com título tem que TER um título — `OrganizationUsers.tsx`
+> (aba Usuários) não tinha `<h1>` nenhum, ia direto pra barra de sub-abas
+> (Membros/Cargos/Visibilidade). Corrigido em 2026-07-11.
+> ❌ **Não é a mesma coisa que os cabeçalhos "hero"** (fundo escuro/gradiente,
+> `h1` branco `text-4xl`, ex: `RentalsModule.tsx`, `SalesModule.tsx`,
+> `ProjectOverview.tsx`, `TaxReport.tsx`, `CommercialModule.tsx`) nem os
+> cabeçalhos em card com breadcrumb (`OpuraAssetsModule.tsx`,
+> `OpuraDocsModule.tsx`, `EmpreendimentoModule.tsx`, `LaborModule.tsx`) — são
+> linguagens visuais deliberadamente diferentes, não inconsistência a
+> corrigir por esta seção. Não migre essas telas pro padrão flat sem decisão
+> explícita (seria redesign, não padronização de espaçamento).
+> ℹ️ Quando um dos KPIs é "o total" do qual os outros são decomposição, veja
+> §4.2 (quebra de simetria) — a régua de espaçamento título↔KPI é a mesma
+> nos dois casos (simétrico ou não), só a grade de KPI muda.
 
 ---
 

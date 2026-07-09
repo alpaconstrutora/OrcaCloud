@@ -79,6 +79,7 @@ suficiente).
 - [ ] §16 Escala de radius — padrão vs compacta (qual foi usada, consistente na tela toda?)
 - [ ] §17 Botão primário — variante compacta vs padrão (decisão explícita, não default herdado de componente compartilhado)
 - [ ] §18 Não duplicar contexto já visível no shell
+- [ ] §19 Navegação de módulos (abas superiores compartilhadas) — se a tela pertencer a um módulo com abas irmãs, conferir se a barra bate com a escala de radius/tamanho da página
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -1037,6 +1038,54 @@ header em `components/OrganizationList.tsx`: o bloco "logo + Minha
 Organização + Filtro Ativo: X" foi removido, sobrando só um ícone-âncora com
 `title` (tooltip) para quem precisa do contexto — a nav do módulo passou a
 ser o elemento dominante do header, não a identidade repetida.
+
+---
+
+## 19. NAVEGAÇÃO DE MÓDULOS (abas superiores compartilhadas)
+
+Barra de abas fixa no topo de um conjunto de telas irmãs (ex: o menu
+Organização/Grupo/Clientes/Investidores/Fornecedores/Usuários/Contas/Centros/Plano
+em `components/OrganizationList.tsx:196-232`) — **um único componente
+compartilhado por todas as abas**, não específico de nenhuma tela. Antes
+desta seção existir, essa barra usava um terceiro vocabulário de
+tamanho/radius (`rounded-full`, `py-1.5`, `text-xs`) que não batia nem com a
+escala padrão nem com a compacta do §16 — foi um achado real de
+2026-07-10, ao comparar Investidores com o resto da página depois de migrar
+pra escala compacta.
+
+```tsx
+<div className="flex flex-col md:flex-row md:items-center justify-start bg-slate-900 p-1.5 rounded-[10px] border border-slate-800 shadow-lg gap-2 relative overflow-hidden">
+  <div className="w-9 h-9 bg-blue-600 text-white rounded-[6px] flex items-center justify-center shadow-lg shadow-blue-500/30 shrink-0" title="...">
+    <Building2 className="w-4 h-4" />
+  </div>
+  <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide max-w-full">
+    <button className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] font-medium text-sm transition-all whitespace-nowrap ${
+      isActive ? 'bg-slate-700/80 text-white shadow-inner ring-1 ring-white/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+    }`}>
+      <tab.icon className={`w-4 h-4 ${isActive ? 'opacity-100' : 'opacity-60'}`} />
+      {tab.label}
+    </button>
+    {/* ...demais abas... */}
+  </div>
+</div>
+```
+
+> ✅ `h-9`/`rounded-[6px]`/`text-sm font-medium` — mesmo vocabulário da régua
+> de controles compacta (§5.1/§16), não um terceiro estilo à parte. O
+> container externo (`rounded-[10px]`) também já bate com a escala compacta.
+> ✅ Estado ativo/inativo é só cor+fundo (`bg-slate-700/80 text-white` vs
+> `text-slate-400`) — nunca tamanho de fonte diferente entre os dois estados
+> (foi outro erro real: parecia que a aba ativa tinha fonte maior, mas era
+> só o contraste de cor/fundo enganando o olho — confirmar sempre pelo código,
+> não só pelo print).
+> ℹ️ O fundo escuro (`bg-slate-900`) é identidade proposital de "barra de
+> navegação" (chrome), separado do conteúdo — só o tamanho/radius dos
+> controles precisa bater com a escala da página, não a paleta de cor.
+> ⚠️ Por ser componente único compartilhado por todas as abas do módulo,
+> qualquer mudança aqui se propaga pra todas elas — inclusive abas que ainda
+> não foram auditadas pelo padrão. Isso é aceito propositalmente (decisão de
+> 2026-07-10): a barra usa a escala compacta desde já, mesmo nas abas cujo
+> conteúdo interno ainda está na escala padrão.
 
 ---
 

@@ -208,6 +208,68 @@
 .theme-midnight input::placeholder,
 .theme-midnight textarea::placeholder { color: #6b7280; }
 
+/* =====================================================================
+   ALTO CONTRASTE — acessibilidade (texto e bordas)
+   ---------------------------------------------------------------------
+   Aplicada em documentElement (junto com .theme-midnight quando ambos
+   estão ativos), fora de @layer para vencer os utilitários do Tailwind
+   independente de especificidade. Reforça textos secundários (que hoje
+   usam cinza claro, baixo contraste) e bordas sutis.
+   ===================================================================== */
+.high-contrast .text-gray-600,
+.high-contrast .text-slate-600,
+.high-contrast .text-zinc-600,
+.high-contrast .text-gray-500,
+.high-contrast .text-slate-500,
+.high-contrast .text-zinc-500,
+.high-contrast .text-gray-400,
+.high-contrast .text-slate-400,
+.high-contrast .text-zinc-400 { color: #1e293b; }
+
+.high-contrast.theme-midnight .text-gray-600,
+.high-contrast.theme-midnight .text-slate-600,
+.high-contrast.theme-midnight .text-zinc-600,
+.high-contrast.theme-midnight .text-gray-500,
+.high-contrast.theme-midnight .text-slate-500,
+.high-contrast.theme-midnight .text-zinc-500,
+.high-contrast.theme-midnight .text-gray-400,
+.high-contrast.theme-midnight .text-slate-400,
+.high-contrast.theme-midnight .text-zinc-400 { color: #eef0f4; }
+
+.high-contrast .border-gray-100,
+.high-contrast .border-slate-100,
+.high-contrast .border-zinc-100,
+.high-contrast .border-neutral-100 { border-color: #94a3b8; }
+
+.high-contrast .border-gray-200,
+.high-contrast .border-slate-200,
+.high-contrast .border-zinc-200,
+.high-contrast .border-neutral-200,
+.high-contrast .border-gray-300,
+.high-contrast .border-slate-300 { border-color: #7c8b9f; }
+
+.high-contrast.theme-midnight .border-gray-100,
+.high-contrast.theme-midnight .border-slate-100,
+.high-contrast.theme-midnight .border-zinc-100,
+.high-contrast.theme-midnight .border-neutral-100 { border-color: rgba(255, 255, 255, 0.16); }
+
+.high-contrast.theme-midnight .border-gray-200,
+.high-contrast.theme-midnight .border-slate-200,
+.high-contrast.theme-midnight .border-zinc-200,
+.high-contrast.theme-midnight .border-neutral-200,
+.high-contrast.theme-midnight .border-gray-300,
+.high-contrast.theme-midnight .border-slate-300 { border-color: rgba(255, 255, 255, 0.22); }
+
+.high-contrast .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+.high-contrast .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.high-contrast .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+.high-contrast .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #94a3b8; }
+
+.high-contrast.theme-midnight .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+.high-contrast.theme-midnight .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.high-contrast.theme-midnight .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+.high-contrast.theme-midnight .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.16); }
+
 @layer components {
   .opura-page {
     @apply mx-auto flex w-full max-w-[1440px] flex-col gap-6;

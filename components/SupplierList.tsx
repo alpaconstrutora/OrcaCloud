@@ -380,7 +380,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                     <th className="px-6 py-5 text-center">Ações</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-50">
+                            <tbody className="divide-y divide-gray-200">
                                 {filteredSuppliers.length > 0 ? (
                                     filteredSuppliers.map((supplier, rowIndex) => (
                                         <tr

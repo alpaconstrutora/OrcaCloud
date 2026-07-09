@@ -1,11 +1,19 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronLeft, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Zap, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Link2, Clock, Target, Percent, Receipt, ClipboardList, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
+import PreferencesSheet, { type ThemeMode } from './PreferencesSheet';
 import { notificationService } from '../services/notificationService';
 import { taskService } from '../services/taskService';
 import { viewUrl } from '../lib/tabRouter';
+
+const ThemeModeIcon = ({ mode, className }: { mode: ThemeMode; className?: string }) => {
+  if (mode === 'light') return <Sun className={className} />;
+  if (mode === 'dark') return <Moon className={className} />;
+  if (mode === 'midnight') return <MoonStar className={className} />;
+  return <SunMoon className={className} />;
+};
 
 // ── Nav context ───────────────────────────────────────────────────────────────
 // Defining NavItem/DropdownItem etc. inside Layout creates a new function type
@@ -276,32 +284,71 @@ const Layout: React.FC<LayoutProps> = ({
   const mod = allowedMods;
   const isDev = profile.group === 'DESENVOLVEDOR' || isDevEmail;
   // Tema do sidebar: 'light' | 'dark' (sidebar escuro, janelas claras) |
-  // 'midnight' (Escuro Total: sidebar + janelas escuros).
-  type ThemeMode = 'light' | 'dark' | 'midnight';
-  const THEME_ORDER: ThemeMode[] = ['light', 'dark', 'midnight'];
+  // 'midnight' (Escuro Total: sidebar + janelas escuros) | 'auto' (segue o SO).
+  const THEME_ORDER: ThemeMode[] = ['light', 'dark', 'auto', 'midnight'];
   const [themeMode, setThemeMode] = React.useState<ThemeMode>(() => {
     if (typeof window === 'undefined') return 'dark';
     const stored = localStorage.getItem('sidebar_theme');
-    if (stored === 'light' || stored === 'dark' || stored === 'midnight') return stored;
+    if (stored === 'light' || stored === 'dark' || stored === 'midnight' || stored === 'auto') return stored;
     return 'dark';
   });
   React.useEffect(() => {
     localStorage.setItem('sidebar_theme', themeMode);
   }, [themeMode]);
+
+  // Preferência de cor do SO, usada quando themeMode === 'auto'.
+  const [osPrefersDark, setOsPrefersDark] = React.useState(() =>
+    typeof window !== 'undefined' && window.matchMedia
+      ? window.matchMedia('(prefers-color-scheme: dark)').matches
+      : false
+  );
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => setOsPrefersDark(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  // Modo efetivo já resolvido (Auto vira 'light' ou 'dark' conforme o SO).
+  const resolvedThemeMode: 'light' | 'dark' | 'midnight' =
+    themeMode === 'auto' ? (osPrefersDark ? 'dark' : 'light') : themeMode;
+
   // "Escuro total": aplica .theme-midnight na raiz do documento para que o
   // override global de conteúdo (index.css) alcance TODAS as telas, inclusive
   // modais/toasts renderizados em portal fora da árvore do Layout.
   React.useEffect(() => {
     const root = document.documentElement;
-    root.classList.toggle('theme-midnight', themeMode === 'midnight');
+    root.classList.toggle('theme-midnight', resolvedThemeMode === 'midnight');
     return () => { root.classList.remove('theme-midnight'); };
-  }, [themeMode]);
+  }, [resolvedThemeMode]);
+
+  // Alto contraste: texto e bordas mais fortes para acessibilidade, também
+  // aplicado na raiz do documento para alcançar modais/toasts em portal.
+  const [highContrast, setHighContrast] = React.useState(() =>
+    typeof window !== 'undefined' && localStorage.getItem('high_contrast') === 'true'
+  );
+  React.useEffect(() => {
+    localStorage.setItem('high_contrast', String(highContrast));
+    const root = document.documentElement;
+    root.classList.toggle('high-contrast', highContrast);
+    return () => { root.classList.remove('high-contrast'); };
+  }, [highContrast]);
+
   const cycleTheme = React.useCallback(() => {
     setThemeMode(prev => THEME_ORDER[(THEME_ORDER.indexOf(prev) + 1) % THEME_ORDER.length]);
   }, []);
-  const isDarkMode = themeMode !== 'light'; // sidebar escuro nos dois modos escuros
-  const isMidnight = themeMode === 'midnight';
-  const themeLabel = themeMode === 'light' ? 'Tema claro' : themeMode === 'dark' ? 'Tema escuro' : 'Escuro total';
+  const isDarkMode = resolvedThemeMode !== 'light'; // sidebar escuro nos modos escuros
+  const isMidnight = resolvedThemeMode === 'midnight';
+  const themeLabel = themeMode === 'light'
+    ? 'Tema claro'
+    : themeMode === 'dark'
+      ? 'Tema escuro'
+      : themeMode === 'midnight'
+        ? 'Escuro total'
+        : `Automático (${resolvedThemeMode === 'dark' ? 'escuro' : 'claro'})`;
+
+  const [isPreferencesOpen, setIsPreferencesOpen] = React.useState(false);
 
   // Tema das "janelas" (área de conteúdo + topo). Só escurece no modo Escuro Total.
   const w = isMidnight
@@ -387,7 +434,7 @@ const Layout: React.FC<LayoutProps> = ({
     sunIcon: 'text-orange-400',
     moonIcon: 'text-gray-400',
   };
-  const t = themeMode === 'light' ? sidebarLight : themeMode === 'midnight' ? sidebarMidnight : sidebarDark;
+  const t = resolvedThemeMode === 'light' ? sidebarLight : resolvedThemeMode === 'midnight' ? sidebarMidnight : sidebarDark;
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
   const [isVendasOpen, setIsVendasOpen] = React.useState(false);
@@ -1137,7 +1184,7 @@ const Layout: React.FC<LayoutProps> = ({
               title={themeLabel}
               aria-label={themeLabel}
             >
-              {themeMode === 'light' ? <Sun className="h-4 w-4" /> : themeMode === 'dark' ? <Moon className="h-4 w-4" /> : <MoonStar className="h-4 w-4" />}
+              <ThemeModeIcon mode={themeMode} className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -1366,12 +1413,12 @@ const Layout: React.FC<LayoutProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => { cycleTheme(); setIsProfileMenuOpen(false); }}
+                      onClick={() => { setIsProfileMenuOpen(false); setIsPreferencesOpen(true); }}
                       className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
                       role="menuitem"
                     >
-                      {themeMode === 'light' ? <Sun className="h-4 w-4 text-slate-400" /> : themeMode === 'dark' ? <Moon className="h-4 w-4 text-slate-400" /> : <MoonStar className="h-4 w-4 text-slate-400" />}
-                      <span className="flex-1">Preferencias</span>
+                      <ThemeModeIcon mode={themeMode} className="h-4 w-4 text-slate-400" />
+                      <span className="flex-1">Preferências</span>
                       <span className="text-xs text-slate-400">{themeLabel}</span>
                     </button>
                     <button
@@ -1555,6 +1602,16 @@ const Layout: React.FC<LayoutProps> = ({
           />
         </div>
       )}
+
+      <PreferencesSheet
+        open={isPreferencesOpen}
+        onClose={() => setIsPreferencesOpen(false)}
+        themeMode={themeMode}
+        setThemeMode={setThemeMode}
+        resolvedThemeMode={resolvedThemeMode}
+        highContrast={highContrast}
+        setHighContrast={setHighContrast}
+      />
     </div>
     </NavContext.Provider>
   );

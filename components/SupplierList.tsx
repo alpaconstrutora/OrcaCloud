@@ -389,7 +389,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             <cols.ResizeHandle colKey="document" />
                                         </SortableHeader>
                                     )}
-                                    <th className="px-6 py-5 text-center relative overflow-hidden">
+                                    <th className="px-6 py-5 text-center relative overflow-hidden text-table-header font-semibold text-gray-500">
                                         Ações
                                         <cols.ResizeHandle colKey="actions" />
                                     </th>

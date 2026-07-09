@@ -499,7 +499,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                             <cols.ResizeHandle colKey="projects" />
                                         </SortableHeader>
                                     )}
-                                    <th className="px-6 py-2 text-right relative overflow-hidden">
+                                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
                                         Ações
                                         <cols.ResizeHandle colKey="actions" />
                                     </th>

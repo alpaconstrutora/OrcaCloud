@@ -423,13 +423,28 @@ página, mais baixa e mais leve. Extraído de `components/SupplierList.tsx` (F5)
         )}
         {/* ... demais colunas seguem o mesmo padrão ... */}
 
-        {/* Coluna de Ações — sempre a última, sem SortableHeader */}
+        {/* Coluna de Ações — sempre a última, sem SortableHeader.
+            ⚠️ precisa repetir manualmente `text-table-header font-semibold` (+ a
+            cor/case do momento) — ver aviso abaixo sobre por que isso não é opcional. */}
         {tableColumns.visibleColumns.includes('actions') && (
-          <th className="px-6 py-2 text-right">Ações</th>
+          <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-400 uppercase tracking-wider">Ações</th>
         )}
       </tr>
     </thead>
 ```
+
+> ⚠️ **A coluna "Ações" fica menor que as outras se você esquecer o
+> `text-table-header font-semibold`.** `SortableHeader` (`components/ui/TableUtils.tsx`)
+> aplica `text-table-header` (14px, igual ao `text-sm` do corpo da tabela) em
+> toda coluna que passa por ele — mas "Ações" é sempre um `<th>` cru (não usa
+> `SortableHeader`), então sem essa classe explícita ela herda o `text-xs`
+> (12px) do `<thead>`/`<tr>` pai. É uma diferença de 2px que passa quase
+> despercebida em CAIXA ALTA, mas fica bem visível em sentence case (§6.2) —
+> foi um erro real, presente desde a primeira versão deste snippet, e que só
+> apareceu quando `SupplierList.tsx`/`ClientList.tsx`/`InvestorList.tsx`
+> migraram pra sentence case (corrigido em todas em 2026-07-10). Cor/case da
+> classe acompanha a variante da tela: `text-gray-400 uppercase tracking-wider`
+> no padrão (acima), `text-gray-500` na variante sentence case (§6.2).
 
 ---
 

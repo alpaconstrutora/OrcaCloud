@@ -377,7 +377,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                     {tableColumns.visibleColumns.includes('project') && (
                                         <SortableHeader label="Obra Vinculada" colKey="project" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                                     )}
-                                    <th className="px-6 py-2 text-right">Ações</th>
+                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">

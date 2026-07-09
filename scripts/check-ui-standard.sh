@@ -40,8 +40,12 @@ check_file() {
   #    Estado simples por linha: entra em modo "dentro de TD" ao ver <td,
   #    sai ao ver </td>. Não cobre <td> que abre e fecha aninhado em múltiplas
   #    linhas com outro <td> no meio (padrão não usado neste projeto).
+  #    Exceção: <td colSpan=...> é a linha de empty-state (§12) — o título/botão
+  #    dentro dela usa font-bold legitimamente (mesmo padrão do snippet oficial
+  #    do §12), não é uma célula de dado.
   local td_hits
   td_hits=$(awk '
+    /<td[ >]/ && /colSpan/ { next }
     /<td[ >]/ { in_td = 1 }
     in_td && /font-bold|font-black|font-mono/ {
       print NR": "$0

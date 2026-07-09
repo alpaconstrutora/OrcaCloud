@@ -375,8 +375,10 @@ function DocumentDetail({
 
   const alertSummary = summarizeAlerts(alerts);
 
-  const currentStep = STEP_ORDER[invoice.document_status] ?? -1;
-  const isError = ['failed', 'dead_letter'].includes(invoice.document_status);
+  // nfe_invoices só existe após o pipeline concluir com sucesso — document_status
+  // aqui é o ciclo de vida do documento (sempre 'active'), não o estágio do parse.
+  const currentStep = STEP_ORDER.completed;
+  const isError = false;
   const canApprove = !invoice.linked_transaction_id;
   const linkedProject = projects.find(p => p.id === invoice.project_id);
 
@@ -389,7 +391,7 @@ function DocumentDetail({
           <div className="f-page-sub" style={{ marginTop: 2 }}>NF-e emitida em {fmtDate(invoice.issue_date)}</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Badge status={invoice.document_status} />
+          <Badge status="completed" />
           {alertSummary.critical > 0 && (
             <span
               style={{
@@ -489,8 +491,8 @@ function DocumentDetail({
               ['Emitente',          invoice.issuer_name],
               ['CNPJ emitente',     invoice.issuer_cnpj],
               ['Data de emissão',   fmtDate(invoice.issue_date)],
-              ['Valor total',       invoice.document_status === 'completed' ? fmt(invoice.total_value) : '—'],
-              ['Status documento',  invoice.document_status],
+              ['Valor total',       fmt(invoice.total_value)],
+              ['Status documento',  'Concluído'],
               ['Status pagamento',  invoice.payment_status],
             ] as [string, string][]).map(([k, v]) => (
               <div key={k}>
@@ -584,13 +586,7 @@ function DocumentDetail({
       )}
 
       {tab === 'validation' && (
-        invoice.document_status !== 'completed' ? (
-          <div className="f-card" style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--ftext3)' }}>
-            A validação tributária só está disponível para NF-es processadas com sucesso.
-          </div>
-        ) : (
-          <TaxValidationPanel alerts={alerts} loading={loading} />
-        )
+        <TaxValidationPanel alerts={alerts} loading={loading} />
       )}
 
       {tab === 'logs' && (
@@ -653,32 +649,26 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
     );
   }
 
+  // nfe_invoices só contém documentos que já passaram pelo pipeline com sucesso
+  // (falhas ficam em raw_documents/processing_jobs, exibidas na aba "Fila & Jobs").
   const counts = {
     all:       invoices.length,
-    completed: invoices.filter(i => i.document_status === 'completed').length,
-    failed:    invoices.filter(i => ['failed', 'dead_letter'].includes(i.document_status)).length,
-    queued:    invoices.filter(i => i.document_status === 'queued').length,
+    completed: invoices.length,
+    failed:    0, // falhas ficam em raw_documents/processing_jobs — nunca chegam a nfe_invoices
     linked:    invoices.filter(i => !!i.linked_transaction_id).length,
   };
 
   const shown = invoices.filter(i =>
-    filter === 'all'      ? true :
-    filter === 'failed'   ? ['failed', 'dead_letter'].includes(i.document_status) :
     filter === 'linked'   ? !!i.linked_transaction_id :
-    filter === 'pendente' ? i.document_status === 'completed' && !i.linked_transaction_id :
-    i.document_status === filter
+    filter === 'pendente' ? !i.linked_transaction_id :
+    true // 'all' e 'completed' — todo registro aqui já está processado
   );
 
-  const totalValue = invoices
-    .filter(i => i.document_status === 'completed')
-    .reduce((a, b) => a + b.total_value, 0);
+  const totalValue = invoices.reduce((a, b) => a + b.total_value, 0);
 
-  const successRate = counts.all > 0
-    ? Math.round((counts.completed / counts.all) * 100)
-    : 0;
+  const successRate = 100;
 
-  const deadLetterCount = invoices.filter(i => i.document_status === 'dead_letter').length;
-  const pendingLink = counts.completed - counts.linked;
+  const pendingLink = counts.all - counts.linked;
 
   const FILTERS = [
     { k: 'all',       label: 'Todos',            count: counts.all },
@@ -755,7 +745,7 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
               <tbody>
                 {shown.map(inv => (
                   <tr key={inv.id} style={{ cursor: 'pointer' }} onClick={() => setSelected(inv)}>
-                    <td><Badge status={inv.document_status} /></td>
+                    <td><Badge status="completed" /></td>
                     <td>
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{inv.issuer_name}</div>
                       <div className="f-mono" style={{ color: 'var(--ftext3)', marginTop: 2 }}>
@@ -764,14 +754,12 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
                     </td>
                     <td>{fmtDate(inv.issue_date)}</td>
                     <td style={{ fontWeight: 700 }}>
-                      {inv.document_status === 'completed' ? fmt(inv.total_value) : <span style={{ color: 'var(--ftext3)' }}>—</span>}
+                      {fmt(inv.total_value)}
                     </td>
                     <td>
                       {inv.linked_transaction_id
                         ? <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--fgreen)' }}>✓ Gerado</span>
-                        : inv.document_status === 'completed'
-                          ? <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--fyellow, #d97706)' }}>Pendente</span>
-                          : <span style={{ color: 'var(--ftext3)', fontSize: 11 }}>—</span>
+                        : <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--fyellow, #d97706)' }}>Pendente</span>
                       }
                     </td>
                     <td>
@@ -790,16 +778,6 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
         )}
       </div>
 
-      {deadLetterCount > 0 && (
-        <div style={{
-          marginTop: 16, padding: '12px 16px', borderRadius: 10,
-          background: 'color-mix(in srgb, var(--fred) 10%, transparent)',
-          border: '1px solid color-mix(in srgb, var(--fred) 30%, transparent)',
-          fontSize: 13, color: 'var(--fred)', fontWeight: 600,
-        }}>
-          ⚠ {deadLetterCount} documento(s) em dead letter — acesse Jobs para fazer replay.
-        </div>
-      )}
     </div>
   );
 }

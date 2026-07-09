@@ -50,7 +50,15 @@ interface KpiCardProps {
     onClick?: () => void;
     /** Sombra de base + hover:shadow-lg. Default true (padrão histórico). Desligue em telas que preferem borda-só, sem elevação. */
     shadow?: boolean;
+    /** Tamanho do valor/ícone. Default 'md' (padrão histórico, text-2xl). 'lg' destaca um KPI principal; 'sm' para KPIs secundários. */
+    size?: 'sm' | 'md' | 'lg';
 }
+
+const SIZE_MAP: Record<'sm' | 'md' | 'lg', { value: string; padding: string; radius: string; bareIcon: boolean }> = {
+    sm: { value: 'text-lg',  padding: 'px-3.5 py-2.5', radius: 'rounded-[10px]', bareIcon: true },
+    md: { value: 'text-2xl', padding: 'p-5',           radius: 'rounded-[1.5rem]', bareIcon: false },
+    lg: { value: 'text-3xl', padding: 'px-4 py-2.5',   radius: 'rounded-[10px]', bareIcon: true },
+};
 
 /**
  * Componente canônico de KPI Card.
@@ -66,15 +74,18 @@ export function KpiCard({
     className = '',
     onClick,
     shadow = true,
+    size = 'md',
 }: KpiCardProps) {
     const c = COLOR_MAP[color];
+    const s = SIZE_MAP[size];
     const isClickable = !!onClick;
 
     return (
         <div
             onClick={onClick}
             className={[
-                'bg-white p-5 rounded-[1.5rem] border border-gray-100',
+                'bg-white border border-gray-100',
+                s.radius, s.padding,
                 shadow ? 'shadow-sm' : '',
                 'flex items-center gap-5 group transition-all',
                 c.hover,
@@ -83,8 +94,8 @@ export function KpiCard({
                 className,
             ].join(' ')}
         >
-            {/* Ícone */}
-            {icon && (
+            {/* Ícone — bloco circular (md, padrão histórico) ou solto/inline (sm, lg) */}
+            {icon && !s.bareIcon && (
                 <div className={[
                     'p-3.5 rounded-[1.25rem] shrink-0',
                     'group-hover:scale-110 transition-transform',
@@ -96,10 +107,11 @@ export function KpiCard({
 
             {/* Textos */}
             <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">
-                    {label}
+                <p className={`text-xs font-semibold text-gray-500 flex items-center gap-1.5 ${s.bareIcon ? 'leading-none mb-1.5' : 'uppercase tracking-wider mb-0.5'}`}>
+                    {icon && s.bareIcon && <span className={`shrink-0 ${c.text}`}>{icon}</span>}
+                    <span className="truncate">{label}</span>
                 </p>
-                <p className="text-2xl font-bold text-gray-900 truncate">
+                <p className={`${s.value} font-bold text-gray-900 truncate ${s.bareIcon ? 'leading-none' : ''}`}>
                     {value}
                 </p>
                 {sub && (

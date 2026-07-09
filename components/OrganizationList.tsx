@@ -192,21 +192,16 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
 
     return (
         <div className="space-y-8">
-            {/* Header with Global Tabs */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-lg gap-6 relative overflow-hidden">
+            {/* Header with Global Tabs — só a nav; identidade da org já está fixa no sidebar (Layout.tsx activeContextLabel) */}
+            <div className="flex flex-col md:flex-row md:items-center justify-start bg-slate-900 px-4 py-2.5 rounded-[10px] border border-slate-800 shadow-lg gap-4 relative overflow-hidden">
                 <div className="absolute inset-y-0 right-0 w-1/2 opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle at right, rgba(96,165,250,0.4) 0%, transparent 60%)' }} />
-                <div className="flex items-center gap-4 relative">
-                    <div className="w-12 h-12 bg-blue-600 text-white rounded-2xl flex items-center justify-center p-3 shadow-lg shadow-blue-500/30">
-                        <Building2 className="w-6 h-6" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-black text-white tracking-tight uppercase">Minha Organização</h1>
-                        <p className="text-slate-400 text-xs font-black uppercase tracking-widest">
-                            {activeOrganizationId
-                                ? `Filtro Ativo: ${organizations.find(o => o.id === activeOrganizationId)?.name}`
-                                : 'Visão Consolidada Global'}
-                        </p>
-                    </div>
+                <div
+                    className="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/30 shrink-0 relative"
+                    title={activeOrganizationId
+                        ? organizations.find(o => o.id === activeOrganizationId)?.name
+                        : 'Visão Consolidada Global'}
+                >
+                    <Building2 className="w-4 h-4" />
                 </div>
 
                 <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide max-w-full relative">
@@ -226,9 +221,9 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             <button
                                 key={tab.id}
                                 onClick={() => onTabChange(tab.id)}
-                                className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-black text-xs uppercase tracking-widest transition-all whitespace-nowrap ${isActive ? 'bg-slate-700/80 text-white shadow-inner ring-1 ring-white/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold text-xs transition-all whitespace-nowrap ${isActive ? 'bg-slate-700/80 text-white shadow-inner ring-1 ring-white/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
                             >
-                                <tab.icon className="w-4 h-4" />
+                                <tab.icon className={`w-4 h-4 ${isActive ? 'opacity-100' : 'opacity-60'}`} />
                                 {tab.label}
                             </button>
                         );

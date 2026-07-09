@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Plus, Edit2, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, Table2, Loader2, AlertCircle, Building2, Users, Pencil, X, Filter } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, Table2, Loader2, AlertCircle, Building2, Users, Pencil, X, RefreshCw } from 'lucide-react';
 import { Supplier } from '../types';
 import { supplierService } from '../services/supplierService';
 import { SupplierModal } from './SupplierModal';
@@ -248,47 +248,36 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Meus Fornecedores</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua rede de parceiros e fornecedores com agilidade premium.</p>
-                </div>
-                <div className="flex items-center gap-3">
-
-                    <button
-                        onClick={() => { setEditingSupplier(undefined); setIsModalOpen(true); }}
-                        className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
-                    >
-                        <Plus className="w-5 h-5" />
-                        Novo Fornecedor
-                    </button>
-                </div>
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Meus Fornecedores</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua rede de parceiros e fornecedores.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KpiCard shadow={false} label="Total de Fornecedores" value={kpis.total} sub="Cadastrados na organização" icon={<Truck className="w-5 h-5" />} color="blue" />
-                <KpiCard shadow={false} label="Pessoa Jurídica" value={kpis.pj} sub="Fornecedores PJ" icon={<Building2 className="w-5 h-5" />} color="indigo" />
-                <KpiCard shadow={false} label="Pessoa Física" value={kpis.pf} sub="Fornecedores PF" icon={<Users className="w-5 h-5" />} color="purple" />
-                <KpiCard shadow={false} label="Categorias" value={kpis.categorias} sub="Categorias distintas em uso" icon={<Tag className="w-5 h-5" />} color="amber" />
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                {/* "Total" em destaque (2 colunas, valor maior); os demais são a decomposição dele */}
+                <KpiCard shadow={false} size="lg" className="col-span-2" label="Total de Fornecedores" value={kpis.total} icon={<Truck className="w-4 h-4" />} color="blue" />
+                <KpiCard shadow={false} size="sm" label="Pessoa Jurídica" value={kpis.pj} icon={<Building2 className="w-4 h-4" />} color="indigo" />
+                <KpiCard shadow={false} size="sm" label="Pessoa Física" value={kpis.pf} icon={<Users className="w-4 h-4" />} color="purple" />
+                <KpiCard shadow={false} size="sm" label="Categorias" value={kpis.categorias} icon={<Tag className="w-4 h-4" />} color="amber" />
             </div>
 
-            <div className="bg-white p-5 rounded-[2.5rem] border border-gray-100 flex flex-col md:flex-row gap-4 items-center">
+            <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
-                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
                         placeholder="Buscar por nome, categoria, e-mail ou documento..."
-                        className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-transparent rounded-[1.5rem] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-gray-400 whitespace-nowrap">Ordenar:</span>
                     <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value)}
-                        className="text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-[1.25rem] px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-sans"
+                        className="h-9 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-[6px] px-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-sans"
                     >
                         <option value="name-asc">Nome (A-Z)</option>
                         <option value="name-desc">Nome (Z-A)</option>
@@ -296,17 +285,22 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         <option value="recent">Mais Recentes</option>
                     </select>
                 </div>
-                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                <div className="flex items-center h-9">
+                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                </div>
 
                 <button
                     onClick={loadSuppliers}
-                    className="p-4 bg-blue-50 text-blue-600 rounded-[1.25rem] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shadow-sm"
+                    className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
                     title="Atualizar"
                 >
-                    <Filter className="w-4 h-4" />
+                    <RefreshCw className="w-4 h-4" />
                 </button>
 
-                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 gap-1.5 shrink-0">
+                {/* Separador entre grupo "filtrar" (busca/ordenar/filtros/refresh) e grupo "visualizar" (colunas/grid/lista) */}
+                <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                     {viewMode === 'list' && (
                         <>
                             <ColumnConfigButton
@@ -317,30 +311,38 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
-                            <div className="w-px bg-gray-200 mx-1 my-1"></div>
+                            <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                         </>
                     )}
                     <button
                         onClick={() => setViewMode('grid')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid'
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid'
                             ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                             : 'text-gray-400 hover:text-gray-600'
                             }`}
                         title="Visualização em Blocos"
                     >
-                        <LayoutDashboard className="w-5 h-5" />
+                        <LayoutDashboard className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'list'
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list'
                             ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                             : 'text-gray-400 hover:text-gray-600'
                             }`}
                         title="Visualização em Linhas"
                     >
-                        <Table2 className="w-5 h-5" />
+                        <Table2 className="w-4 h-4" />
                     </button>
                 </div>
+
+                <button
+                    onClick={() => { setEditingSupplier(undefined); setIsModalOpen(true); }}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    Novo fornecedor
+                </button>
             </div>
 
             {isLoading ? (
@@ -348,11 +350,11 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                 </div>
             ) : viewMode === 'list' ? (
-                <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
+                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     <th className="w-10 px-4 py-5 text-center">
                                         <input
                                             type="checkbox"
@@ -399,15 +401,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             </td>
                                             {tableColumns.visibleColumns.includes('name') && (
                                                 <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-                                                            <Truck className="w-5 h-5 text-blue-600" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-normal text-gray-700 group-hover:text-blue-700 transition-colors">{supplier.name}</p>
-                                                            <p className="text-xs font-medium text-gray-400 uppercase tracking-tight">{supplier.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}</p>
-                                                        </div>
-                                                    </div>
+                                                    <p className="text-sm font-normal text-gray-700 group-hover:text-blue-700 transition-colors">{supplier.name}</p>
+                                                    <p className="text-xs font-medium text-gray-400">{supplier.type === 'PJ' ? 'Pessoa jurídica' : 'Pessoa física'}</p>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('category') && (
@@ -446,13 +441,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                 </td>
                                             )}
                                             <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
-                                                    <button
-                                                        onClick={() => { setEditingSupplier(supplier); setIsModalOpen(true); }}
-                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
-                                                    >
-                                                        Editar
-                                                    </button>
+                                                {/* Editar = clique na linha (ação dominante); kebab só tem Excluir, isolado de propósito */}
+                                                <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
                                                     <InlineDisclosureMenu
                                                         showDelete
                                                         onDelete={() => performDelete(supplier.id)}
@@ -493,7 +483,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                             <div
                                 key={supplier.id}
                                 onClick={() => { setEditingSupplier(supplier); setIsModalOpen(true); }}
-                                className="bg-white rounded-2xl border border-gray-100 hover:border-blue-300 hover:shadow-md transition-all group flex flex-col overflow-hidden cursor-pointer"
+                                className="bg-white rounded-[10px] border border-gray-100 hover:border-blue-300 hover:shadow-md transition-all group flex flex-col overflow-hidden cursor-pointer"
                             >
                                 <div className="p-6 flex-1">
                                     <div className="flex items-start justify-between mb-4">
@@ -554,7 +544,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                             </div>
                         ))
                     ) : (
-                        <div className="col-span-full py-20 text-center bg-white rounded-2xl border border-gray-100">
+                        <div className="col-span-full py-20 text-center bg-white rounded-[10px] border border-gray-100">
                             <div className="flex flex-col items-center justify-center space-y-4 max-w-xs mx-auto">
                                 <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center">
                                     <Truck className="w-10 h-10 text-blue-200" />

@@ -121,6 +121,58 @@ entender a estrutura, não para copiar):
 > `ProjectFinancialManager.tsx`: um "conserto" manual que só troca um erro por
 > outro. Use o componente.
 
+### 4.1 `sub` é opcional — omita quando for redundante
+
+O prop `sub` (legenda de apoio) existe para dar contexto que o `label` sozinho
+não dá (ex: "Confirmados" com sub "Baseado em 12 pedidos concluídos"). Não
+preencha `sub` só para preencher — se ele só repete o que `label` e `value`
+já dizem (ex: label "Total de Fornecedores", sub "Cadastrados na
+organização"), omita o prop. Menos uma linha por card reduz a altura do bloco
+de KPIs sem perder informação.
+
+### 4.2 Quebra de simetria — quando um KPI é "o principal"
+
+Quando um dos KPIs é o total do qual os outros são a decomposição (ex: Total
+→ PJ/PF/Categorias, ou Total → Pendente/Aprovado/Rejeitado), não renderize
+todos como cards de largura e destaque iguais — isso comunica "importância
+igual" quando não é o caso. Use `size="lg"` + `className="col-span-2"` no
+KPI principal e `size="sm"` nos demais:
+
+```tsx
+<div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+  <KpiCard shadow={false} size="lg" className="col-span-2" label="Total de Fornecedores" value={total} icon={<Truck className="w-4 h-4" />} color="blue" />
+  <KpiCard shadow={false} size="sm" label="Pessoa Jurídica" value={pj} icon={<Building2 className="w-4 h-4" />} color="indigo" />
+  <KpiCard shadow={false} size="sm" label="Pessoa Física" value={pf} icon={<Users className="w-4 h-4" />} color="purple" />
+  <KpiCard shadow={false} size="sm" label="Categorias" value={categorias} icon={<Tag className="w-4 h-4" />} color="amber" />
+</div>
+```
+
+> ℹ️ `size` aceita `'sm' | 'md' | 'lg'` (default `'md'`, idêntico ao histórico
+> — telas existentes não são afetadas). `sm`/`lg` reduzem o padding do card
+> (`px-3.5 py-2.5` / `px-4 py-2.5` vs `p-5` do `md`) e usam ícone solto (sem
+> caixa circular colorida) inline com o label, em vez do bloco de ícone à
+> esquerda do `md`.
+> ℹ️ O contraste de escala entre principal e secundários é `text-3xl` (30px,
+> `size="lg"`) vs `text-lg` (18px, `size="sm"`) — não `text-2xl` vs `text-lg`;
+> a diferença menor não lia como hierarquia num teste real.
+> ℹ️ Ícone em `size="sm"`/`"lg"`: use `w-4 h-4` (16px), não `w-5 h-5` — o ícone
+> aqui é decorativo ao lado do label, não o elemento dominante do card como no
+> bloco circular do `md`.
+> ℹ️ Se os KPIs são todos do mesmo nível de importância (sem "um total dos
+> outros"), mantenha a grade simétrica `grid-cols-1 md:grid-cols-2 lg:grid-cols-4`
+> da seção 4 — a quebra de simetria é para quando a hierarquia existe de fato,
+> não um estilo padrão.
+
+### 4.3 `sm`/`lg` também tiram o `uppercase` do label — escopo por `size`
+
+Nos tamanhos `sm`/`lg`, o label do KPI sai de `uppercase tracking-wider` para
+sentence case (o `md`, usado no resto do sistema, mantém uppercase
+intacto — é o padrão oficial da seção acima, não mudou). O componente decide
+isso sozinho por `size`, nada a fazer na tela que usa `<KpiCard>`. Além disso,
+o espaçamento vertical do label/valor usa `leading-none` + `mb-1.5` fixo em
+vez do `line-height` padrão do navegador — é essa folga de `line-height`, não
+o padding do card, que normalmente infla a altura "vazia" abaixo do número.
+
 ---
 
 ## 5. TOOLBAR (Barra de Pesquisa e Controles)
@@ -204,6 +256,68 @@ Copiar integralmente e substituir apenas os filtros específicos:
 
 > ℹ️ Se a tela **não tem** modo grid/lista (ex: Recebimento), omitir os dois botões de viewMode
 > e deixar apenas o `ColumnConfigButton` com um `<div className="w-px bg-gray-200 mx-1 my-1">`.
+
+### 5.1 Variante desaninhada (sem card externo)
+
+O snippet acima envolve a busca num card branco (`bg-white p-5 rounded-[2.5rem]
+border shadow-sm`) que por sua vez contém um `<input>` com sua própria borda —
+duas molduras concêntricas ("caixa dentro de caixa"). Em telas onde a página já
+tem respiro suficiente (ex: logo abaixo de KPI cards), prefira a variante sem
+card externo: a barra vira uma régua de controles direto sobre o fundo da
+página, mais baixa e mais leve. Extraído de `components/SupplierList.tsx` (F5).
+
+```tsx
+{/* Sem card externo — controles direto sobre o fundo da página, todos com h-9 (36px) */}
+<div className="flex flex-col md:flex-row gap-2.5 items-center">
+  <div className="flex-1 relative w-full">
+    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+    <input
+      type="text"
+      placeholder="Buscar por nome, categoria, e-mail ou documento..."
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+    />
+  </div>
+
+  {/* Refresh — h-9 quadrado, ícone RefreshCw (não Filter/funil: esse ícone já
+      é usado por "Filtro avançado" ao lado; dois funis lado a lado para ações
+      diferentes é o tipo de ambiguidade que esta variante evita) */}
+  <button onClick={loadData} className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95">
+    <RefreshCw className="w-4 h-4" />
+  </button>
+
+  {/* Separador entre o grupo "filtrar" (busca/ordenar/filtro avançado/refresh)
+      e o grupo "visualizar" (colunas/grid/lista) — só nesta variante, porque
+      sem o card externo os dois grupos perdem o limite visual que a borda do
+      container dava */}
+  <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+  {/* ColumnConfig + ViewMode: mesmo agrupador da seção 5, mas h-9 e radius 10px
+      (não rounded-2xl) para acompanhar o resto da régua */}
+  <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+    <ColumnConfigButton /* ...mesmas props da seção 5... */ />
+    <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+    <button className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}>
+      <LayoutDashboard className="w-4 h-4" />
+    </button>
+    <button className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}>
+      <Table2 className="w-4 h-4" />
+    </button>
+  </div>
+</div>
+```
+
+> ✅ Escolha **uma das duas variantes** por tela — não misture card externo em
+> alguns controles e régua nua em outros na mesma toolbar.
+> ✅ Ambas as variantes são válidas; a com card (§5) tem mais peso visual e
+> funciona bem como primeiro elemento da página. A desaninhada (§5.1) é mais
+> leve e funciona melhor quando já há KPI cards acima dando contexto.
+> ❌ Não empilhar as duas bordas (input com borda dentro de um container com
+> borda) — isso é o defeito que esta variante corrige.
+> ℹ️ Esta variante usa a escala de radius compacta (§16): `10px` em containers,
+> `6px` em inputs/botões — não a escala `rounded-[1.25rem]`/`rounded-2xl` da §5.
+> Ver §16 antes de decidir qual escala usar numa tela nova.
 
 ---
 
@@ -297,6 +411,24 @@ const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'minhaTelaColWidths');
 > ✅ `table-layout: fixed` no `<table>` é obrigatório para o `<colgroup>` controlar a largura de fato.
 > ✅ `SortableHeader` precisa da classe `overflow-hidden` quando tem `ResizeHandle` como filho (evita que o texto do rótulo vaze sobre a alça).
 > ℹ️ Se uma coluna não tem campo de ordenação correspondente no estado da tela, use `sortable={false}` nela — ela ainda ganha a alça de redimensionar, só não fica clicável para ordenar.
+
+### 6.2 Variante `<thead>` sentence case (densidade alta)
+
+O `<thead>` da seção 6 (`uppercase text-xs tracking-wider`) é o padrão oficial
+e continua valendo por padrão. Em telas que adotam a escala de radius
+compacta (§16), teste `<thead>` em sentence case — cada tabela define seu
+próprio `<thead>` (não é componente compartilhado), então essa troca é sempre
+local a um arquivo, nunca cascateia para outras telas sozinha.
+
+```tsx
+<tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+```
+
+> ⚠️ Diferente do label do KPI Card (§4.3), aqui não há um prop que isole a
+> variante — é uma troca manual de classe por tela. Se decidir adotar em mais
+> de uma tela, o texto do label (`'Fornecedor'`, `'Categoria'`...) já deve
+> estar em capitalização normal no código — a versão uppercase antiga
+> dependia só da classe CSS `uppercase` para transformar o texto.
 
 ---
 
@@ -437,6 +569,32 @@ const StatusBadge = ({ status }: { status: string }) => {
   </td>
 )}
 ```
+
+### 9.1 Ação dominante via clique na linha — quando não sobra "Ver Detalhes"
+
+Nem toda tela tem uma tela de detalhes separada. Quando clicar na linha já
+abre a única ação relevante (ex: editar, num CRUD simples de cadastro), não
+duplique essa ação como botão de texto na coluna — a linha inteira já é
+clicável (`onClick` no `<tr>`, `cursor-pointer`, `hover:bg-blue-50/50` da
+seção 7 já sinalizam isso visualmente). Nesse caso a coluna de ações fica só
+com o que **não** é a ação dominante — tipicamente exclusão, isolada de
+propósito para não ser acionada sem querer:
+
+```tsx
+<td className="px-6 py-2.5 text-right">
+  {/* Editar = clique na linha (ação dominante). Kebab só tem o que sobra. */}
+  <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+    <InlineDisclosureMenu showDelete onDelete={() => performDelete(item.id)} />
+  </div>
+</td>
+```
+
+> ✅ Use isto **só quando o clique na linha já é inequívoco** (uma única ação
+> óbvia). Se a linha tem múltiplas ações prováveis (ver detalhes ≠ editar ≠
+> duplicar), volte para o padrão da seção 9 — "Ver Detalhes" + ícone + menu.
+> ❌ Não deixe um botão de texto "Editar" fazendo a mesma coisa que o clique
+> na linha já faz — são dois controles para uma ação, não dois controles para
+> duas ações. Extraído de `components/SupplierList.tsx`.
 
 ---
 
@@ -615,6 +773,84 @@ async function handleDelete(id: string) {
 - **KPI Cards:** `grid-cols-1 md:grid-cols-2 lg:grid-cols-4`
 - **Toolbar:** `flex-col md:flex-row`
 - **Tabela:** envolver em `overflow-x-auto` se necessário
+
+---
+
+## 16. ESCALA DE RADIUS — padrão vs compacta
+
+O padrão histórico (seções 4–9, `SupplyChainOrderList.tsx`) usa uma escala de
+radius grande — `rounded-[2.5rem]` em containers, `rounded-[1.25rem]`/`[1.5rem]`
+em inputs e botões. Isso lê como identidade "pill"/consumer app. Testado em
+`components/SupplierList.tsx`, existe uma escala alternativa mais compacta,
+mais próxima de um ERP denso:
+
+| Elemento | Escala padrão (§4–9) | Escala compacta |
+|---|---|---|
+| Containers (tabela, cards, toolbar agrupada) | `rounded-[2.5rem]` / `rounded-2xl` | `rounded-[10px]` |
+| Inputs, botões, chips | `rounded-[1.25rem]` / `rounded-xl` | `rounded-[6px]` |
+| Altura dos controles da toolbar | `py-3`/`py-4` (variável) | `h-9` (36px) uniforme |
+
+> ✅ **Escolha uma escala por tela, não misture.** Uma tabela com
+> `rounded-[10px]` ao lado de um modal `rounded-2xl` na mesma tela é
+> inconsistência nova, não economia de esforço.
+> ℹ️ Nenhuma das duas está "errada" — a compacta ganha em telas com muita
+> densidade de dado (listas grandes, tabelas), a padrão funciona bem em telas
+> com menos itens por tela. Ainda não há critério fechado de quando usar
+> qual — hoje é decisão por tela, avaliar caso a caso.
+> ⚠️ Isto é uma **segunda escala documentada**, não uma substituição da
+> seção 4–9. Só migre uma tela existente para a compacta com decisão
+> explícita — não é o novo default silencioso.
+
+---
+
+## 17. BOTÃO PRIMÁRIO — variante compacta
+
+O CTA primário padrão (`px-6 py-3 rounded-[1.25rem] uppercase tracking-widest
+shadow-xl`) fica ~265×50px com o texto "Novo Fornecedor" — pesado o bastante
+para competir com o próprio título da página. Numa tela cujo trabalho
+principal é consultar registros (não criar), isso é ruído. Variante testada,
+~150×40px (ou `h-9` se o botão mora dentro da régua de controles da §5.1, não
+isolado no cabeçalho):
+
+```tsx
+<button className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95">
+  <Plus className="w-[15px] h-[15px]" />
+  Novo fornecedor
+</button>
+```
+
+Diferenças do padrão: `font-medium` (não `font-black`), sentence case (não
+uppercase — o `tracking-widest` da caixa alta é o que inflava a largura para
+265px), sem `shadow-xl`/glow (o mesmo halo azul aparece no toggle de view
+ativo; dois elementos brilhando ao mesmo tempo competem por foco), radius
+`6px` alinhado aos inputs em vez de `1.25rem` (que lê como card, não como
+controle, num botão largo).
+
+> ℹ️ **Onde colocar o botão** depende da frequência de uso: ação rara (ex:
+> cadastro esporádico) → mova para dentro da régua de controles (§5.1), à
+> direita dos toggles de view — o cabeçalho vira só título + subtítulo. Ação
+> frequente (ex: criação é o fluxo principal da tela) → mantenha isolado e
+> alinhado ao título, mas ainda no tamanho compacto acima — 50px de altura
+> nunca se justifica só pela frequência de uso.
+> ✅ Ele continua sendo o único elemento azul sólido da tela — isso já é
+> ênfase suficiente. Caixa alta e sombra por cima disso é redundância, não
+> reforço.
+
+---
+
+## 18. NÃO DUPLICAR CONTEXTO JÁ VISÍVEL NO SHELL
+
+Antes de um header de tela mostrar "onde estou" (logo + nome + filtro ativo),
+confira se essa informação já não está persistente em outro lugar do shell do
+app (ex: `activeContextLabel` no sidebar de `components/Layout.tsx`). Um
+segundo bloco de identidade — geralmente puxando de uma fonte de dado
+diferente do primeiro (`nome_fantasia` vs `organizations.name`, por exemplo)
+— não só ocupa altura à toa como pode divergir do primeiro (grafias
+diferentes do mesmo nome, um typo em cada). Extraído da simplificação do
+header em `components/OrganizationList.tsx`: o bloco "logo + Minha
+Organização + Filtro Ativo: X" foi removido, sobrando só um ícone-âncora com
+`title` (tooltip) para quem precisa do contexto — a nav do módulo passou a
+ser o elemento dominante do header, não a identidade repetida.
 
 ---
 

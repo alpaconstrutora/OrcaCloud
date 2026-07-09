@@ -12,6 +12,7 @@ import { ColumnConfig, useTableColumns, SortableHeader } from './ui/TableUtils';
 // (papel + nome do cargo customizado opcional na mesma célula) — exceção
 // legítima documentada, igual ao padrão de "Contato" em SupplierList.tsx.
 const MEMBER_COLUMNS: ColumnConfig[] = [
+    { key: 'code', label: 'Código', sortable: true },
     { key: 'name', label: 'Membro', sortable: true },
     { key: 'email', label: 'Email', sortable: true },
     { key: 'role', label: 'Função / Cargo', sortable: false },
@@ -170,6 +171,9 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const memberColumns = useTableColumns(MEMBER_COLUMNS, 'organizationUsersMembersColumns');
     const sortedMembers = React.useMemo(() => {
         const dir = memberColumns.sortDirection === 'asc' ? 1 : -1;
+        if (memberColumns.sortColumn === 'code') {
+            return [...members].sort((a, b) => (a.code || '').localeCompare(b.code || '', 'pt-BR', { numeric: true }) * dir);
+        }
         if (memberColumns.sortColumn === 'name') {
             return [...members].sort((a, b) => a.name.localeCompare(b.name) * dir);
         }
@@ -569,6 +573,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                                 <SortableHeader label="Membro" colKey="name" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 <SortableHeader label="Email" colKey="email" sortable={true} uppercase={false} sortColumn={memberColumns.sortColumn} sortDirection={memberColumns.sortDirection} onSort={memberColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 {/* Função/Cargo composta (papel + nome do cargo customizado) — sem valor único pra ordenar (§6.3). */}
@@ -580,7 +585,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                         <tbody className="divide-y divide-gray-200">
                             {sortedMembers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-400">
+                                    <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-400">
                                         Nenhum membro encontrado.
                                     </td>
                                 </tr>
@@ -588,6 +593,9 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 sortedMembers.map((member) => (
                                     <React.Fragment key={member.id}>
                                         <tr className="hover:bg-blue-50/50 transition-colors">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                {member.code || '-'}
+                                            </td>
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-semibold text-xs shrink-0">

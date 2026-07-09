@@ -90,6 +90,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
         setCnpjaLookupStatus(null);
         if (initialData) {
             setFormData({
+                code: initialData.code,
                 name: initialData.name,
                 contact_name: initialData.contact_name || '',
                 email: initialData.email || '',
@@ -277,6 +278,19 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                 {/* Aba: Cadastro (formulário principal) */}
                 {modalTab === 'cadastro' && (
                 <form id="supplier-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-7 py-5 space-y-4">
+
+                    {initialData && (
+                        <div className="w-32">
+                            <label className={labelCls}>Código</label>
+                            <input
+                                type="text"
+                                placeholder="001"
+                                className={inputCls}
+                                value={formData.code ?? ''}
+                                onChange={e => set({ code: e.target.value })}
+                            />
+                        </div>
+                    )}
 
                     {/* Razão Social */}
                     <div>

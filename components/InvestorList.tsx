@@ -12,6 +12,7 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
 
 const INVESTOR_COLUMNS: ColumnConfig[] = [
+    { key: 'code', label: 'Código', sortable: true },
     { key: 'name', label: 'Investidor', sortable: true },
     // Acesso/Contato = e-mail + telefone combinados — sem valor único óbvio pra ordenar (§6.3).
     { key: 'contact', label: 'Acesso / Contato', sortable: false },
@@ -235,6 +236,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                 if (tableColumns.sortColumn) {
                     const col = tableColumns.sortColumn;
                     const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+                    if (col === 'code') return (a.code || '').localeCompare(b.code || '', 'pt-BR', { numeric: true }) * dir;
                     if (col === 'name') return a.name.localeCompare(b.name) * dir;
                     if (col === 'document') return (a.document || '').localeCompare(b.document || '') * dir;
                 }
@@ -365,6 +367,9 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                 de radius compacta (§16), mesmo critério já usado em SupplierList/ClientList. */}
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {tableColumns.visibleColumns.includes('code') && (
+                                        <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                    )}
                                     {tableColumns.visibleColumns.includes('name') && (
                                         <SortableHeader label="Investidor" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
@@ -383,6 +388,11 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                             <tbody className="divide-y divide-gray-200">
                                 {filteredInvestors.map(investor => (
                                     <tr key={investor.id} className="hover:bg-blue-50/50 transition-colors group">
+                                        {tableColumns.visibleColumns.includes('code') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                {investor.code || '-'}
+                                            </td>
+                                        )}
                                         {tableColumns.visibleColumns.includes('name') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 <div className="flex items-center gap-3">

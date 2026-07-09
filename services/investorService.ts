@@ -32,6 +32,7 @@ const NBR_TO_SINAPI: Record<string, string> = {
 
 export interface Investor {
     id: string;
+    code?: string;
     name: string;
     email?: string;
     phone?: string;
@@ -48,7 +49,7 @@ export const investorService = {
     async listInvestors(organizationId?: string) {
         // We'll try to fetch, if it fails because table doesn't exist, we return empty
         try {
-            const INVESTOR_COLS = 'id, name, email, phone, document, organization_id, settings, created_at';
+            const INVESTOR_COLS = 'id, code, name, email, phone, document, organization_id, settings, created_at';
 
             let query = supabase
                 .from('investors')
@@ -79,7 +80,7 @@ export const investorService = {
     },
 
     async saveInvestor(investor: Partial<Investor>) {
-        const INVESTOR_COLS = 'id, name, email, phone, document, organization_id, settings, created_at';
+        const INVESTOR_COLS = 'id, code, name, email, phone, document, organization_id, settings, created_at';
         // Coerce empty email to null so the UNIQUE constraint allows multiple
         // investors without email. Kept off the typed interface (DB-only concern).
         const payload: Record<string, unknown> = {
@@ -100,6 +101,11 @@ export const investorService = {
             if (error) throw error;
             return data as Investor;
         } else {
+            // Código sequencial 001/002/003... único por organização (§ui_ux_standard_guide.md).
+            if (!payload.code) {
+                const { data: nextCode } = await supabase.rpc('get_next_investor_code', { p_org_id: investor.organization_id ?? null });
+                if (nextCode) payload.code = nextCode;
+            }
             const { data, error } = await supabase
                 .from('investors')
                 .insert(payload)

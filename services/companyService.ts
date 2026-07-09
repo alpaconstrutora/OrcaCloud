@@ -16,7 +16,7 @@ export const companyService = {
     async list(orgId: string): Promise<Company[]> {
         const { data, error } = await supabase
             .from('companies')
-            .select('id, org_id, razao_social, nome_fantasia, cnpj, status, tipo, is_headquarters, cor_sistema, logo_url, modulos_habilitados, regime_tributario, simples_anexo_iv, created_at, updated_at')
+            .select('id, code, org_id, razao_social, nome_fantasia, cnpj, status, tipo, is_headquarters, cor_sistema, logo_url, modulos_habilitados, regime_tributario, simples_anexo_iv, created_at, updated_at')
             .eq('org_id', orgId)
             .order('is_headquarters', { ascending: false })
             .order('razao_social');
@@ -35,9 +35,15 @@ export const companyService = {
     },
 
     async create(payload: CompanyInsert): Promise<Company> {
+        const insertPayload: Record<string, unknown> = { ...payload };
+        // Código sequencial 001/002/003... único por organização (§ui_ux_standard_guide.md).
+        if (!insertPayload.code) {
+            const { data: nextCode } = await supabase.rpc('get_next_company_code', { p_org_id: payload.org_id });
+            if (nextCode) insertPayload.code = nextCode;
+        }
         const { data, error } = await supabase
             .from('companies')
-            .insert(payload)
+            .insert(insertPayload)
             .select()
             .single();
         if (error) throw error;

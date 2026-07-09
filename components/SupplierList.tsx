@@ -11,6 +11,7 @@ import { KpiCard } from './ui/KpiCard';
 import Button from './ui/Button';
 
 const SUPPLIER_COLUMNS: ColumnConfig[] = [
+    { key: 'code', label: 'Código', sortable: true },
     { key: 'name', label: 'Fornecedor', sortable: true },
     { key: 'type', label: 'Tipo', sortable: true },
     { key: 'category', label: 'Categoria', sortable: true },
@@ -22,7 +23,7 @@ const SUPPLIER_COLUMNS: ColumnConfig[] = [
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    name: 260, type: 130, category: 160, organization: 200, contact: 220, document: 160, actions: 110,
+    code: 90, name: 260, type: 130, category: 160, organization: 200, contact: 220, document: 160, actions: 110,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
@@ -205,6 +206,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     // elimina esse espaço sobrando: cada coluna passa a respeitar só o próprio
     // <col>, e a div com overflow-auto assume a rolagem horizontal se precisar.
     const tableTotalWidth = 40
+        + (tableColumns.visibleColumns.includes('code') ? cols.getWidth('code') : 0)
         + (tableColumns.visibleColumns.includes('name') ? cols.getWidth('name') : 0)
         + (tableColumns.visibleColumns.includes('type') ? cols.getWidth('type') : 0)
         + (tableColumns.visibleColumns.includes('category') ? cols.getWidth('category') : 0)
@@ -229,6 +231,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 if (tableColumns.sortColumn) {
                     const col = tableColumns.sortColumn;
                     const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+                    if (col === 'code') return (a.code || '').localeCompare(b.code || '', 'pt-BR', { numeric: true }) * dir;
                     if (col === 'name') return a.name.localeCompare(b.name) * dir;
                     if (col === 'type') return (a.type || '').localeCompare(b.type || '') * dir;
                     if (col === 'category') return (a.category || '').localeCompare(b.category || '') * dir;
@@ -361,6 +364,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
                                 <col style={{ width: '40px' }} />
+                                {tableColumns.visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
                                 {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
                                 {tableColumns.visibleColumns.includes('type') && <col data-col-key="type" style={{ width: `${cols.getWidth('type')}px` }} />}
                                 {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}
@@ -385,6 +389,11 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             onChange={toggleAllVisible}
                                         />
                                     </th>
+                                    {tableColumns.visibleColumns.includes('code') && (
+                                        <SortableHeader label="Código" colKey="code" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                            <cols.ResizeHandle colKey="code" />
+                                        </SortableHeader>
+                                    )}
                                     {tableColumns.visibleColumns.includes('name') && (
                                         <SortableHeader label="Fornecedor" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
                                             <cols.ResizeHandle colKey="name" />
@@ -439,6 +448,11 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                                     onChange={(e) => handleRowCheck(supplier.id, rowIndex, (e.nativeEvent as MouseEvent).shiftKey, filteredSuppliers)}
                                                 />
                                             </td>
+                                            {tableColumns.visibleColumns.includes('code') && (
+                                                <td className="px-6 py-2.5 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                    {supplier.code || '-'}
+                                                </td>
+                                            )}
                                             {tableColumns.visibleColumns.includes('name') && (
                                                 <td className="px-6 py-2.5">
                                                     <p className="text-sm font-normal text-gray-700 group-hover:text-blue-700 transition-colors">{supplier.name}</p>

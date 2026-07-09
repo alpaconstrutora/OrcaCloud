@@ -12,6 +12,7 @@ export interface Message {
 
 export interface Client {
     id: string;
+    code?: string;
     name: string;
     email?: string;
     phone?: string;
@@ -52,6 +53,7 @@ export interface Client {
 
 export interface Investor {
     id: string;
+    code?: string;
     name: string;
     email?: string;
     phone?: string;
@@ -80,6 +82,7 @@ export interface SupplierStateRegistration {
 
 export interface Supplier {
     id: string;
+    code?: string;
     name: string;
     contact_name?: string;
     email?: string;
@@ -225,6 +228,7 @@ export interface OrganizationCustomRole {
 
 export interface OrganizationMember {
     id: string;
+    code?: string;
     name: string;
     email: string;
     role: OrganizationRole;

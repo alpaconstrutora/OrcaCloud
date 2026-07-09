@@ -24,7 +24,7 @@ export const organizationService = {
         // Fetch members and custom roles in parallel
         const [membersResult, rolesResult] = await Promise.all([
             supabase.from('organization_members')
-                .select('id, organization_id, name, email, role, custom_role_id, joined_at, permissions')
+                .select('id, code, organization_id, name, email, role, custom_role_id, joined_at, permissions')
                 .in('organization_id', orgIds),
             supabase.from('organization_custom_roles')
                 .select('id, organization_id, name, permissions')
@@ -155,6 +155,7 @@ export const organizationService = {
                 })),
                 members: allMembers.filter(m => m.organization_id === org.id).map(m => ({
                     id: m.id,
+                    code: m.code,
                     name: m.name || m.email.split('@')[0],
                     email: m.email,
                     role: m.role,
@@ -275,6 +276,14 @@ export const organizationService = {
             }
 
             for (const member of org.members) {
+                // Código sequencial 001/002/003... único por organização, gerado só
+                // na primeira vez que o membro é criado — em edições, preserva o
+                // valor já existente (ou o que o usuário editou) em member.code.
+                let code = member.code;
+                if (!code && !currentEmails.includes(member.email.toLowerCase())) {
+                    const { data: nextCode } = await supabase.rpc('get_next_member_code', { p_org_id: id });
+                    code = nextCode ?? undefined;
+                }
                 await supabase
                     .from('organization_members')
                     .upsert({
@@ -283,7 +292,8 @@ export const organizationService = {
                         name: member.name,
                         role: member.role,
                         custom_role_id: member.customRoleId,
-                        permissions: member.permissions
+                        permissions: member.permissions,
+                        code
                     }, {
                         onConflict: 'organization_id,email'
                     });
@@ -308,12 +318,14 @@ export const organizationService = {
 
     // Member Management
     async addMember(organizationId: string, email: string, role: string = 'member'): Promise<void> {
+        const { data: nextCode } = await supabase.rpc('get_next_member_code', { p_org_id: organizationId });
         const { error } = await supabase
             .from('organization_members')
             .insert({
                 organization_id: organizationId,
                 email: email.toLowerCase(),
-                role: role
+                role: role,
+                code: nextCode ?? undefined
             });
 
         if (error) throw error;

@@ -198,6 +198,18 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
 
                 <SheetPanel className="p-6 space-y-6">
                     <form id="investor-form" onSubmit={handleSubmit} className="space-y-4">
+                        {initialData && (
+                            <div className="w-32">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Código</label>
+                                <input
+                                    type="text"
+                                    className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-purple-500 outline-none"
+                                    value={formData.code ?? ''}
+                                    onChange={(e) => update({ code: e.target.value })}
+                                    placeholder="001"
+                                />
+                            </div>
+                        )}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
                             <div className="relative">

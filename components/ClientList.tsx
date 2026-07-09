@@ -24,6 +24,7 @@ interface ClientListProps {
 }
 
 const CLIENT_COLUMNS: ColumnConfig[] = [
+    { key: 'code', label: 'Código', sortable: true },
     { key: 'name', label: 'Cliente', sortable: true },
     { key: 'category', label: 'Tipo', sortable: true },
     { key: 'organization', label: 'Organização', sortable: true },
@@ -34,7 +35,7 @@ const CLIENT_COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    name: 220, category: 130, organization: 180, contact: 200, document: 150, projects: 200, actions: 190,
+    code: 90, name: 220, category: 130, organization: 180, contact: 200, document: 150, projects: 200, actions: 190,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
@@ -92,7 +93,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     // sobrando entre as colunas de <col> fixo (arrastar uma borda "puxava" as
     // vizinhas). Fixar a largura total na soma exata das colunas elimina esse
     // espaço sobrando — mesma correção aplicada em SupplierList.tsx.
-    const tableTotalWidth = (['name', 'category', 'organization', 'contact', 'document', 'projects'] as const)
+    const tableTotalWidth = (['code', 'name', 'category', 'organization', 'contact', 'document', 'projects'] as const)
         .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
         + cols.getWidth('actions');
     const confirm = useConfirm();
@@ -249,6 +250,10 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 // Ordenação por coluna (quando selecionada)
                 if (tableColumns.sortColumn) {
                     switch (tableColumns.sortColumn) {
+                        case 'code':
+                            return tableColumns.sortDirection === 'asc'
+                                ? (a.code || '').localeCompare(b.code || '', 'pt-BR', { numeric: true })
+                                : (b.code || '').localeCompare(a.code || '', 'pt-BR', { numeric: true });
                         case 'name':
                             return tableColumns.sortDirection === 'asc'
                                 ? a.name.localeCompare(b.name)
@@ -443,6 +448,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                         <div className="overflow-x-auto">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
+                                {tableColumns.visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
                                 {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
                                 {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}
                                 {tableColumns.visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${cols.getWidth('organization')}px` }} />}
@@ -459,6 +465,14 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                 snippet oficial do guia. */}
                             <thead>
                                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {tableColumns.visibleColumns.includes('code') && (
+                                        <SortableHeader colKey="code" label="Código" uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort}
+                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden">
+                                            <cols.ResizeHandle colKey="code" />
+                                        </SortableHeader>
+                                    )}
                                     {tableColumns.visibleColumns.includes('name') && (
                                         <SortableHeader colKey="name" label="Cliente" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
@@ -521,6 +535,11 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                     const clientProjects = getClientProjects(client.id);
                                     return (
                                         <tr key={client.id} className="hover:bg-blue-50/50 transition-colors group">
+                                            {tableColumns.visibleColumns.includes('code') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                    {client.code || '-'}
+                                                </td>
+                                            )}
                                             {tableColumns.visibleColumns.includes('name') && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                     <div className="flex items-center gap-3">

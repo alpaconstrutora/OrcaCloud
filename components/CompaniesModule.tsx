@@ -575,6 +575,9 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                             className="bg-white border border-gray-100 rounded-[10px] overflow-hidden hover:shadow-md transition-shadow">
                             {/* Card header */}
                             <div className="flex items-center gap-4 px-5 py-4">
+                                {/* Código sequencial (§ui_ux_standard_guide.md) */}
+                                <span className="text-xs font-normal text-gray-400 shrink-0 w-8 text-center">{c.code || '-'}</span>
+
                                 {/* Color badge */}
                                 <div className="w-2 h-10 rounded-full flex-shrink-0"
                                     style={{ backgroundColor: c.cor_sistema }} />

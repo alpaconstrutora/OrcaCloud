@@ -55,7 +55,7 @@ export const clientService = {
     async listClients(organizationId?: string) {
         let query = supabase
             .from('clients')
-            .select('id, name, email, phone, document, type, category, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
+            .select('id, code, name, email, phone, document, type, category, address, address_number, neighborhood, zip_code, city, state, created_at, organization_id, organizations:organization_id(name)');
 
         if (organizationId) {
             query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
@@ -66,7 +66,7 @@ export const clientService = {
         // Fallback se a coluna organization_id ainda não existir no banco
         if (error && error.code === '42703' && organizationId) {
             console.warn("[CLIENT SERVICE] organization_id column missing, falling back to global list.");
-            const retry = await supabase.from('clients').select('id, name, email, phone, document, type, category, address, neighborhood, city, state, created_at, organization_id').order('name', { ascending: true });
+            const retry = await supabase.from('clients').select('id, code, name, email, phone, document, type, category, address, neighborhood, city, state, created_at, organization_id').order('name', { ascending: true });
             data = retry.data as any;
             error = retry.error;
         }
@@ -107,6 +107,11 @@ export const clientService = {
             }
             return mapToFrontendClient(data);
         } else {
+            // Código sequencial 001/002/003... único por organização (§ui_ux_standard_guide.md).
+            if (!payload.code) {
+                const { data: nextCode } = await supabase.rpc('get_next_client_code', { p_org_id: (client.organization_id as string) ?? null });
+                if (nextCode) payload.code = nextCode;
+            }
             const { data, error } = await supabase
                 .from('clients')
                 .insert(payload)

@@ -97,6 +97,7 @@ export interface Invoice {
 
 export interface PaymentAccount {
     id: string;
+    code?: string;
     organization_id: string;
     empresa_id?: string;
     name: string;

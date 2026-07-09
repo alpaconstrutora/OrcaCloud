@@ -97,6 +97,19 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
 
             <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
                 <SheetPanel className="p-6 space-y-6">
+                    {initialData && (
+                        <div className="w-32">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Código</label>
+                            <input
+                                type="text"
+                                className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                value={formData.code ?? ''}
+                                onChange={(e) => update({ code: e.target.value })}
+                                placeholder="001"
+                            />
+                        </div>
+                    )}
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo / Razão Social</label>
                         <div className="relative">

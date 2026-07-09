@@ -43,6 +43,7 @@ export interface CompanyModulos {
 
 export interface Company {
   id: string;
+  code?: string;
   org_id: string;
 
   razao_social: string;

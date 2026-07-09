@@ -583,7 +583,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         }
                         showDescription={activeTab === 'accounts'}
                         showBankDetails={activeTab === 'accounts'}
-                        showCode={activeTab !== 'accounts'}
+                        showCode={true}
                         onSave={async (item) => {
                             const currentOrgId = item.organization_id || activeOrganizationId || managingOrgId;
                             if (!currentOrgId) return alert("Selecione uma organização para vincular a conta.");
@@ -591,7 +591,8 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             // Remover apenas campos gerados pelo servidor (id, created_at)
                             const { id: _id, created_at: _ca, ...rest } = item as { id?: string; created_at?: string; name: string; description?: string; bank?: string; branch?: string; account_number?: string; code?: string; organization_id?: string };
                             if (activeTab === 'accounts') {
-                                const payload = { name: rest.name, description: rest.description, bank: rest.bank, branch: rest.branch, account_number: rest.account_number };
+                                // code: em branco = auto-gerado pelo service (001/002/003...); preenchido = respeita a edição manual.
+                                const payload = { name: rest.name, description: rest.description, bank: rest.bank, branch: rest.branch, account_number: rest.account_number, code: rest.code || undefined };
                                 if (item.id) await financialRegistryService.updatePaymentAccount(item.id, { ...payload, organization_id: currentOrgId });
                                 else await financialRegistryService.createPaymentAccount({ ...payload, organization_id: currentOrgId });
                             } else if (activeTab === 'cost_centers') {

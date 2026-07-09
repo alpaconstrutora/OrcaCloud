@@ -3,8 +3,8 @@ import { Supplier, SupplierCnaeActivity, SupplierPartner, SupplierStateRegistrat
 import { isRealEstateBrokerCategory, REAL_ESTATE_BROKER_CATEGORY } from '../constants/supplierCategories';
 
 const CNPJA_COLUMNS = 'cnpj_status, cnpj_status_date, cnpj_updated_at, cnpj_founded_at, cnpj_legal_nature, cnpj_company_size, cnpj_main_activity_code, cnpj_main_activity_text, cnpj_side_activities, cnpj_partners, cnpj_simples_optant, cnpj_simples_since, cnpj_simei_optant, cnpj_simei_since, cnpj_state_registrations';
-const SUPPLIER_SELECT = `id, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}`;
-const SUPPLIER_LIST_SELECT = `id, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}, organizations:organization_id(name)`;
+const SUPPLIER_SELECT = `id, code, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}`;
+const SUPPLIER_LIST_SELECT = `id, code, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}, organizations:organization_id(name)`;
 const CNPJA_PUBLIC_API_BASE = 'https://open.cnpja.com/office';
 const CNPJA_PUBLIC_LIMIT = 5;
 const CNPJA_PUBLIC_WINDOW_MS = 60_000;
@@ -337,10 +337,16 @@ export const supplierService = {
     },
 
     addSupplier: async (supplier: Omit<Supplier, 'id' | 'created_at'>): Promise<Supplier> => {
-        const payload = {
+        const payload: Record<string, unknown> = {
             ...supplier,
             email: normalizeEmail(supplier.email) || null,
         };
+
+        // Código sequencial 001/002/003... único por organização (§ui_ux_standard_guide.md).
+        if (!payload.code) {
+            const { data: nextCode } = await supabase.rpc('get_next_supplier_code', { p_org_id: supplier.organization_id ?? null });
+            if (nextCode) payload.code = nextCode;
+        }
 
         let { data, error } = await supabase
             .from('suppliers')

@@ -6,7 +6,7 @@ export const financialRegistryService = {
     async listPaymentAccounts(organizationId?: string, empresaId?: string): Promise<PaymentAccount[]> {
         let query = supabase
             .from('payment_accounts')
-            .select('id, organization_id, empresa_id, name, description, bank, branch, account_number, created_at');
+            .select('id, code, organization_id, empresa_id, name, description, bank, branch, account_number, created_at');
 
         if (empresaId) {
             query = query.eq('empresa_id', empresaId);
@@ -21,9 +21,15 @@ export const financialRegistryService = {
     },
 
     async createPaymentAccount(account: Omit<PaymentAccount, 'id' | 'created_at'>): Promise<PaymentAccount> {
+        const payload: Record<string, unknown> = { ...account };
+        // Código sequencial 001/002/003... único por organização (§ui_ux_standard_guide.md).
+        if (!payload.code) {
+            const { data: nextCode } = await supabase.rpc('get_next_payment_account_code', { p_org_id: account.organization_id });
+            if (nextCode) payload.code = nextCode;
+        }
         const { data, error } = await supabase
             .from('payment_accounts')
-            .insert(account)
+            .insert(payload)
             .select()
             .single();
 

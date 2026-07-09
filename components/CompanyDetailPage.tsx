@@ -35,6 +35,7 @@ type Tab = 'identificacao' | 'socios' | 'bancos' | 'financeiro' | 'tributario' |
 
 type FormData = {
     // Identificação
+    code: string;
     razao_social: string;
     nome_fantasia: string;
     cnpj: string;
@@ -107,6 +108,7 @@ type FormData = {
 
 function companyToForm(c: Company): FormData {
     return {
+        code: c.code ?? '',
         razao_social: c.razao_social,
         nome_fantasia: c.nome_fantasia ?? '',
         cnpj: c.cnpj ?? '',
@@ -171,6 +173,7 @@ function companyToForm(c: Company): FormData {
 
 function formToPayload(f: FormData): CompanyUpdate {
     return {
+        code: f.code.trim() || undefined,
         razao_social: f.razao_social.trim(),
         nome_fantasia: f.nome_fantasia.trim() || undefined,
         cnpj: f.cnpj.trim() || undefined,
@@ -441,6 +444,10 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                 <form onSubmit={handleSave} className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm space-y-6">
                     <Section title="Identificação">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <Field label="Código">
+                                <input className={inputCls} value={form.code} placeholder="001"
+                                    onChange={e => set('code', e.target.value)} />
+                            </Field>
                             <Field label="Razão Social" required>
                                 <input className={inputCls} value={form.razao_social}
                                     onChange={e => set('razao_social', e.target.value)} />

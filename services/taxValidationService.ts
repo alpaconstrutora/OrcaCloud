@@ -16,7 +16,11 @@ export interface TaxAlert {
 const fmtBRL = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-const CFOP_ENTRADA = /^[123]/;
+// CFOP no XML da NF-e reflete a operação do EMITENTE (venda), não do destinatário —
+// por isso séries 5xxx (venda intraestadual) e 6xxx (venda interestadual) são normais
+// em nota de compra recebida de fornecedor. Não existe CFOP iniciado em 4; os únicos
+// primeiros dígitos válidos são 1, 2, 3 (entrada) e 5, 6, 7 (saída).
+const CFOP_VALIDO = /^[123567]\d{3}$/;
 
 const NCM_8_DIGITS = /^\d{8}$/;
 
@@ -25,33 +29,20 @@ const NCM_GENERICOS = new Set([
   '0', '99', '9999', '000', '9999999',
 ]);
 
-// CFOPs de operações de saída (emissão de NF) que não deveriam aparecer numa NF-e de entrada
-const CFOP_SAIDA_PREFIXES = ['5', '6', '7'];
-
 // ── Validações por item ───────────────────────────────────────────────────────
 
 function validateItem(item: NfeInvoiceItem): TaxAlert[] {
   const alerts: TaxAlert[] = [];
   const desc = `"${item.description}" (linha ${item.line_number})`;
 
-  // 1. CFOP de saída em nota de entrada
+  // 1. CFOP com formato inválido
   if (item.cfop) {
-    const prefix = item.cfop.charAt(0);
-    if (CFOP_SAIDA_PREFIXES.includes(prefix)) {
-      alerts.push({
-        severity: 'critical',
-        code: 'CFOP_SAIDA_EM_ENTRADA',
-        title: 'CFOP de saída em NF-e de entrada',
-        message: `Item ${desc} tem CFOP ${item.cfop}. CFOPs iniciados em 5, 6 ou 7 são operações de saída/venda. Em nota de compra, use 1xxx (intra-estado), 2xxx (interestadual) ou 3xxx (importação).`,
-        lineNumber: item.line_number,
-        itemDescription: item.description,
-      });
-    } else if (!CFOP_ENTRADA.test(item.cfop)) {
+    if (!CFOP_VALIDO.test(item.cfop)) {
       alerts.push({
         severity: 'warning',
         code: 'CFOP_FORMATO_INVALIDO',
         title: 'CFOP com formato inesperado',
-        message: `Item ${desc}: CFOP "${item.cfop}" fora do padrão esperado (4 dígitos começando com 1, 2 ou 3).`,
+        message: `Item ${desc}: CFOP "${item.cfop}" fora do padrão esperado (4 dígitos começando com 1, 2, 3, 5, 6 ou 7).`,
         lineNumber: item.line_number,
         itemDescription: item.description,
       });

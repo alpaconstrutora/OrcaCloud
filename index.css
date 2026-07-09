@@ -3,15 +3,22 @@
 @import "tailwindcss";
 
 @theme {
-  --font-size-menu: 14px;
-  --font-size-button: 14px;
-  --font-size-form-label: 13px;
-  --font-size-form-input: 14px;
-  --font-size-table-body: 14px;
-  --font-size-table-header: 14px;
-  --font-size-tooltip: 13px;
-  --font-size-modal-body: 14px;
-  --font-size-card-body: 14px;
+  /* Tailwind v4 exige o namespace --text-* (não --font-size-*) pra gerar as
+     classes text-{nome}. Com --font-size-*, essas 9 classes nunca geraram CSS
+     nenhum — text-table-header/text-button/etc ficaram inertes em ~285
+     arquivos desde que foram criadas (achado real, 2026-07-10, ao investigar
+     por que o thead da tabela continuava menor que o corpo mesmo depois da
+     classe já estar aplicada). Ver docs/ui_ux_standard_guide.md §6.
+     https://tailwindcss.com/docs/theme#theme-variable-namespaces */
+  --text-menu: 14px;
+  --text-button: 14px;
+  --text-form-label: 13px;
+  --text-form-input: 14px;
+  --text-table-body: 14px;
+  --text-table-header: 14px;
+  --text-tooltip: 13px;
+  --text-modal-body: 14px;
+  --text-card-body: 14px;
 }
 
 /* OrçaCloud SaaS - Global Styles */

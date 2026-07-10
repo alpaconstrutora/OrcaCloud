@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, ArrowUpDown, Mail, Phone, Briefcase, FileText, AlertCircle } from 'lucide-react';
+import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, FileText, AlertCircle, RefreshCw } from 'lucide-react';
 import { commercialService } from '../services/commercialService';
 import { Property, PropertyStatus, PropertyDeal, Client, HedonicPricingConfig } from '../types';
 import { TowerMatrixConfig, GridCellConfig, TowerNumberingConfig } from '../types/imovib';
@@ -38,12 +38,50 @@ import ContractDetailView from './ContractDetailView';
 import { contractService } from '../services/contractService';
 import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
-import { usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
 
 interface SalesModuleProps {
     organizationId?: string;
 }
+
+// ui_ux_standard_guide.md §2 — colunas fora do componente.
+// `context: 'building'` só aparece na visão de detalhe de um edifício (selectedBuildingId);
+// `context: 'all'` aparece nas duas visões (mestre e detalhe).
+const INVENTORY_COLUMNS: (ColumnConfig & { context: 'all' | 'building' })[] = [
+    { key: 'name', label: 'Imóvel', sortable: true, context: 'all' },
+    { key: 'address', label: 'Endereço / referência', sortable: true, context: 'all' },
+    { key: 'block', label: 'Bloco', sortable: true, context: 'building' },
+    { key: 'private_area', label: 'Á. priv.', sortable: true, context: 'building' },
+    { key: 'price', label: 'Preço', sortable: true, context: 'all' },
+    { key: 'price_per_m2', label: 'Vlr/m²', sortable: true, context: 'all' },
+    { key: 'position_weight', label: 'Peso pos.', sortable: true, context: 'building' },
+    { key: 'sun_weight', label: 'Peso sol', sortable: true, context: 'building' },
+    { key: 'floor', label: 'Andar', sortable: true, context: 'building' },
+    { key: 'status', label: 'Status', sortable: true, context: 'all' },
+    { key: 'actions', label: 'Ações', sortable: false, context: 'all' },
+];
+
+const DEALS_COLUMNS: ColumnConfig[] = [
+    { key: 'property', label: 'Imóvel', sortable: true },
+    { key: 'block', label: 'Bloco', sortable: true },
+    { key: 'private_area', label: 'Á. priv.', sortable: true },
+    { key: 'price_base', label: 'Preço base', sortable: true },
+    { key: 'price_per_m2_base', label: 'Vlr/m² base', sortable: true },
+    { key: 'floor', label: 'Andar', sortable: true },
+    { key: 'sale_value', label: 'Vlr venda', sortable: true },
+    { key: 'sale_value_per_m2', label: 'Vlr venda/m²', sortable: true },
+    { key: 'variance', label: 'Var. (R$)', sortable: true },
+    { key: 'variance_pct', label: 'Var. (%)', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+
+const getPositionWeight = (p?: { position_type?: string | null }) =>
+    p?.position_type === 'FRONT' ? 1.03 : p?.position_type === 'BACK' ? 0.97 : 1.00;
+
+const getSunWeight = (p?: { sun_orientation?: string | null }) =>
+    p?.sun_orientation === 'NORTH' ? 1.02 : p?.sun_orientation === 'EAST' ? 1.01 : p?.sun_orientation === 'WEST' ? 0.99 : p?.sun_orientation === 'SOUTH' ? 0.98 : 1.00;
 
 const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'simulation' | 'price-tables' | 'brokers' | 'contracts'>(
@@ -60,11 +98,14 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     const [searchTerm, setSearchTerm] = usePersistedState('salesModuleFilters:search', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list' | 'tower'>('salesModuleFilters:viewMode', 'list');
     const [selectedProperties, setSelectedProperties] = useState<string[]>([]);
+    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(() => {
         const saved = localStorage.getItem('sales_selected_building_id');
         return (saved && saved !== 'undefined') ? saved : null;
     });
-    const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+    // ui_ux_standard_guide.md §3 — colunas + ordenação persistidas via useTableColumns.
+    const inventoryColumns = useTableColumns(INVENTORY_COLUMNS, 'salesModuleInventoryColumns');
+    const dealsColumns = useTableColumns(DEALS_COLUMNS, 'salesModuleDealsColumns');
 
 
     // Modals Control
@@ -124,10 +165,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     useEffect(() => {
         if (!selectedBuildingId) {
             if (activeTab !== 'inventory') setActiveTab('inventory');
-            if (sortConfig) setSortConfig(null);
             if (viewMode === 'tower') setViewMode('list');
         }
-    }, [selectedBuildingId, activeTab, sortConfig, viewMode]);
+    }, [selectedBuildingId, activeTab, viewMode]);
 
     useEffect(() => {
         loadData();
@@ -426,41 +466,77 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     };
 
 
+    // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+    const getStatusColor = (status: PropertyStatus) => {
+        switch (status) {
+            case PropertyStatus.AVAILABLE: return 'text-emerald-600';
+            case PropertyStatus.SOLD: return 'text-red-600';
+            case PropertyStatus.RENTED: return 'text-purple-600';
+            case PropertyStatus.RESERVED: return 'text-amber-600';
+            case PropertyStatus.EXCHANGED: return 'text-blue-600';
+            default: return 'text-gray-600';
+        }
+    };
+
+    const getStatusLabel = (status: PropertyStatus) => {
+        switch (status) {
+            case PropertyStatus.AVAILABLE: return 'Disponível';
+            case PropertyStatus.SOLD: return 'Vendido';
+            case PropertyStatus.RENTED: return 'Alugado';
+            case PropertyStatus.RESERVED: return 'Reservado';
+            case PropertyStatus.EXCHANGED: return 'Permutado';
+            default: return status;
+        }
+    };
+
+    // ui_ux_standard_guide.md §6.3 — valor de ordenação de cada coluna de propriedade.
+    const getInventorySortValue = (p: Property, key: string): string | number => {
+        switch (key) {
+            case 'name': return (p.name || '').toLowerCase();
+            case 'address': return (p.address || '').toLowerCase();
+            case 'block': return (p.block || '').toLowerCase();
+            case 'private_area': return p.private_area || 0;
+            case 'price': return p.price || 0;
+            case 'price_per_m2': return (p.price || 0) / (p.private_area || p.area || 1);
+            case 'position_weight': return getPositionWeight(p);
+            case 'sun_weight': return getSunWeight(p);
+            case 'floor': return p.floor ?? -1;
+            case 'status': return getStatusLabel(p.status);
+            default: return '';
+        }
+    };
+
     const filteredProperties = useMemo(() => {
         let result = properties.filter(p => {
             const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 p.address.toLowerCase().includes(searchTerm.toLowerCase());
-            
+
             if (!selectedBuildingId) {
                 // Master View: Show only Buildings or main units (parent_id null)
                 // If search term is present, show everything that matches
                 if (searchTerm) return matchesSearch;
-                
+
                 // Relaxed rule: if it's a BUILDING, it belongs to master view regardless of parent_id
                 return matchesSearch && (p.type === 'BUILDING' || !p.parent_id);
             }
-            
+
             // Detail View: Show only children of the selected building
             return matchesSearch && String(p.parent_id).toLowerCase() === String(selectedBuildingId).toLowerCase();
         });
 
-        if (sortConfig) {
-            result.sort((a: Property, b: Property) => {
-                let aValue = (a as unknown as Record<string, unknown>)[sortConfig.key];
-                let bValue = (b as unknown as Record<string, unknown>)[sortConfig.key];
-
-                // Tratamento especial para números/nulos
-                if (aValue === null || aValue === undefined) aValue = sortConfig.direction === 'asc' ? Infinity : -Infinity;
-                if (bValue === null || bValue === undefined) bValue = sortConfig.direction === 'asc' ? Infinity : -Infinity;
-
-                if ((aValue as number) < (bValue as number)) return sortConfig.direction === 'asc' ? -1 : 1;
-                if ((aValue as number) > (bValue as number)) return sortConfig.direction === 'asc' ? 1 : -1;
+        if (inventoryColumns.sortColumn) {
+            const { sortColumn, sortDirection } = inventoryColumns;
+            result.sort((a, b) => {
+                const aValue = getInventorySortValue(a, sortColumn);
+                const bValue = getInventorySortValue(b, sortColumn);
+                if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+                if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
                 return 0;
             });
         }
 
         return result;
-    }, [properties, searchTerm, selectedBuildingId, sortConfig]);
+    }, [properties, searchTerm, selectedBuildingId, inventoryColumns.sortColumn, inventoryColumns.sortDirection]);
 
     const currentBuilding = selectedBuildingId ? properties.find(p => String(p.id).toLowerCase() === String(selectedBuildingId).toLowerCase()) : null;
 
@@ -473,6 +549,42 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         
         return isChild || isSelf;
     }) : deals;
+
+    // ui_ux_standard_guide.md §6.3 — valor de ordenação de cada coluna de negociação.
+    const getDealSortValue = (deal: PropertyDeal, key: string): string | number => {
+        const property = properties.find(p => p.id === deal.property_id);
+        const m2 = property?.private_area || property?.area || 1;
+        switch (key) {
+            case 'property': return (property?.name || '').toLowerCase();
+            case 'block': return (property?.block || '').toLowerCase();
+            case 'private_area': return property?.private_area || property?.area || 0;
+            case 'price_base': return property?.price || 0;
+            case 'price_per_m2_base': return (property?.price || 0) / m2;
+            case 'floor': return property?.floor ?? -1;
+            case 'sale_value': return deal.value || 0;
+            case 'sale_value_per_m2': return (deal.value || 0) / m2;
+            case 'variance': return (deal.value || 0) / m2 - (property?.price || 0) / m2;
+            case 'variance_pct': {
+                const base = (property?.price || 0) / m2;
+                const venda = (deal.value || 0) / m2;
+                return base > 0 ? ((venda - base) / base) * 100 : 0;
+            }
+            case 'status': return deal.status || '';
+            default: return '';
+        }
+    };
+
+    const sortedBuildingDeals = useMemo(() => {
+        if (!dealsColumns.sortColumn) return buildingDeals;
+        const { sortColumn, sortDirection } = dealsColumns;
+        return [...buildingDeals].sort((a, b) => {
+            const aValue = getDealSortValue(a, sortColumn);
+            const bValue = getDealSortValue(b, sortColumn);
+            if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+            if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [buildingDeals, properties, dealsColumns.sortColumn, dealsColumns.sortDirection]);
 
     const stats = useMemo(() => {
         // Filtrar unidades vendáveis (excluir permutas da base estratégica)
@@ -501,29 +613,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         };
     }, [filteredProperties, buildingDeals]);
 
-    // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
-    const getStatusColor = (status: PropertyStatus) => {
-        switch (status) {
-            case PropertyStatus.AVAILABLE: return 'text-emerald-600';
-            case PropertyStatus.SOLD: return 'text-red-600';
-            case PropertyStatus.RENTED: return 'text-purple-600';
-            case PropertyStatus.RESERVED: return 'text-amber-600';
-            case PropertyStatus.EXCHANGED: return 'text-blue-600';
-            default: return 'text-gray-600';
-        }
-    };
-
-    const getStatusLabel = (status: PropertyStatus) => {
-        switch (status) {
-            case PropertyStatus.AVAILABLE: return 'Disponível';
-            case PropertyStatus.SOLD: return 'Vendido';
-            case PropertyStatus.RENTED: return 'Alugado';
-            case PropertyStatus.RESERVED: return 'Reservado';
-            case PropertyStatus.EXCHANGED: return 'Permutado';
-            default: return status;
-        }
-    };
-
     const handleBulkUpdate = async (updates: Partial<Property>) => {
         if (selectedProperties.length === 0) return;
 
@@ -542,25 +631,21 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     };
 
     const handleSelectProperty = (propertyId: string) => {
-        setSelectedProperties(prev => 
+        setSelectedProperties(prev =>
             prev.includes(propertyId) ? prev.filter(id => id !== propertyId) : [...prev, propertyId]
         );
     };
 
-    const handleSort = (key: string) => {
-        setSortConfig(current => {
-            if (current?.key === key) {
-                if (current.direction === 'asc') return { key, direction: 'desc' };
-                return null; // Terceiro clique remove a ordenação
-            }
-            return { key, direction: 'asc' };
-        });
-    };
-
-    const SortIndicator = ({ columnKey }: { columnKey: string }) => {
-        if (sortConfig?.key !== columnKey) return <ArrowUpDown className="w-3 h-3 ml-1 opacity-20 group-hover:opacity-100 transition-opacity" />;
-        if (sortConfig.direction === 'asc') return <ChevronDown className="w-3 h-3 ml-1 text-blue-600 rotate-180 transition-transform" />;
-        return <ChevronDown className="w-3 h-3 ml-1 text-blue-600" />;
+    // ui_ux_standard_guide.md §10.1 — Shift+clique seleciona o intervalo entre a última linha marcada e a atual.
+    const handleRowCheck = (propertyId: string, index: number, shiftKey: boolean) => {
+        if (shiftKey && lastCheckedIndex !== null) {
+            const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
+            const rangeIds = filteredProperties.slice(start, end + 1).map(p => p.id);
+            setSelectedProperties(prev => [...new Set([...prev, ...rangeIds])]);
+        } else {
+            handleSelectProperty(propertyId);
+            setLastCheckedIndex(index);
+        }
     };
 
     const handleSelectAllInBuilding = (buildingId: string, unitIds: string[]) => {
@@ -607,13 +692,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         {getStatusLabel(property.status)}
                     </span>
                     <div className="flex gap-2">
-                        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-2 bg-white/90 backdrop-blur-md rounded-xl text-gray-600 hover:text-blue-600 shadow-lg transition-all"><Edit className="w-4 h-4" /></button>
-                        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 bg-white/90 backdrop-blur-md rounded-xl text-gray-600 hover:text-red-500 shadow-lg transition-all"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-2 bg-white/90 backdrop-blur-md rounded-[6px] text-gray-600 hover:text-blue-600 shadow-lg transition-all"><Edit className="w-4 h-4" /></button>
+                        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 bg-white/90 backdrop-blur-md rounded-[6px] text-gray-600 hover:text-red-500 shadow-lg transition-all"><Trash2 className="w-4 h-4" /></button>
                     </div>
                 </div>
                 {property.client_id && (
                     <div className="absolute top-24 left-6 z-10 animate-in fade-in zoom-in duration-500">
-                        <div className="px-4 py-2 bg-white/90 backdrop-blur-md rounded-2xl border border-white shadow-xl flex items-center gap-2">
+                        <div className="px-4 py-2 bg-white/90 backdrop-blur-md rounded-[10px] border border-white shadow-xl flex items-center gap-2">
                             <User className="w-3.5 h-3.5 text-blue-600" />
                             <span className="text-[9px] font-black text-blue-900 uppercase tracking-widest leading-none">
                                 {clients.find(c => c.id === property.client_id)?.name || 'Proprietário'}
@@ -646,24 +731,24 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price || 0)}
                         </span>
                     </div>
-                    <div className="p-4 bg-gray-50 rounded-2xl group-hover:bg-blue-50 transition-colors">
+                    <div className="p-4 bg-gray-50 rounded-[10px] group-hover:bg-blue-50 transition-colors">
                         <TrendingUp className="w-5 h-5 text-gray-400 group-hover:text-blue-500" />
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-2 mb-6">
-                    <div className="flex-1 bg-gray-50 p-3 rounded-2xl flex flex-col items-center justify-center border border-gray-100">
+                    <div className="flex-1 bg-gray-50 p-3 rounded-[10px] flex flex-col items-center justify-center border border-gray-100">
                         <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">Valor m²</span>
                         <span className="text-xs font-black text-gray-700">
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format((property.price || 0) / (property.private_area || property.area || 1))}
                         </span>
                     </div>
-                    <div className="bg-blue-50 p-3 rounded-2xl flex flex-col items-center justify-center border border-blue-100">
+                    <div className="bg-blue-50 p-3 rounded-[10px] flex flex-col items-center justify-center border border-blue-100">
                         <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest mb-1">Posição</span>
                         <span className="text-xs font-black text-blue-700">
                             {property.position_type === 'FRONT' ? '1.03x' : property.position_type === 'BACK' ? '0.97x' : '1.00x'}
                         </span>
                     </div>
-                    <div className="bg-amber-50 p-3 rounded-2xl flex flex-col items-center justify-center border border-amber-100">
+                    <div className="bg-amber-50 p-3 rounded-[10px] flex flex-col items-center justify-center border border-amber-100">
                         <span className="text-[8px] font-black text-amber-600 uppercase tracking-widest mb-1">Sol</span>
                         <span className="text-xs font-black text-amber-700">
                             {property.sun_orientation === 'NORTH' ? '1.02x' : property.sun_orientation === 'EAST' ? '1.01x' : property.sun_orientation === 'WEST' ? '0.99x' : property.sun_orientation === 'SOUTH' ? '0.98x' : '1.00x'}
@@ -671,18 +756,19 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     </div>
                 </div>
 
+                {/* CTA — variante compacta (§17): font-medium, sentence case, sem shadow-xl */}
                 <button
                     onClick={onRegisterDeal}
-                    className="w-full py-4 bg-gray-900 text-white rounded-2xl font-black text-button uppercase tracking-[0.2em] hover:bg-blue-600 transition-all active:scale-95 shadow-xl shadow-gray-900/10 hover:shadow-blue-600/20"
+                    className="w-full h-9 flex items-center justify-center bg-gray-900 text-white rounded-[6px] font-medium text-[13px] hover:bg-blue-600 transition-all active:scale-95"
                 >
-                    Registrar Negócio
+                    Registrar negócio
                 </button>
             </div>
         </div>
     );
 
     return (
-        <div className="space-y-6 pb-20">
+        <div className="space-y-6">
             {/* Header — §20 (flat, sem hero) */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -828,8 +914,26 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             <Filter className="w-4 h-4" />
                             Mais filtros
                         </button>
+                        <button onClick={loadData} className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0" title="Atualizar">
+                            <RefreshCw className="w-4 h-4" />
+                        </button>
+
+                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
 
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            {viewMode === 'list' && (
+                                <>
+                                    <ColumnConfigButton
+                                        columns={INVENTORY_COLUMNS.filter(c => c.key !== 'actions' && (c.context === 'all' || selectedBuildingId))}
+                                        visibleColumns={inventoryColumns.visibleColumns}
+                                        showColumnConfig={inventoryColumns.showColumnConfig}
+                                        onToggleShow={() => inventoryColumns.setShowColumnConfig(!inventoryColumns.showColumnConfig)}
+                                        onToggleColumn={inventoryColumns.toggleColumn}
+                                        onReset={inventoryColumns.resetColumns}
+                                    />
+                                    <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                                </>
+                            )}
                             <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Grade"><LayoutGrid className="w-4 h-4" /></button>
                             <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Lista"><List className="w-4 h-4" /></button>
                             {selectedBuildingId && (
@@ -898,109 +1002,119 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 </div>
                             )}
 
-                            {viewMode === 'list' && (
+                            {viewMode === 'list' && (() => {
+                                const visible = inventoryColumns.visibleColumns;
+                                const isVisible = (key: string) => visible.includes(key) && (
+                                    INVENTORY_COLUMNS.find(c => c.key === key)?.context === 'all' || !!selectedBuildingId
+                                );
+                                const colSpan = 1 + INVENTORY_COLUMNS.filter(c => isVisible(c.key)).length;
+                                const sortHeaderProps = {
+                                    sortColumn: inventoryColumns.sortColumn,
+                                    sortDirection: inventoryColumns.sortDirection,
+                                    onSort: inventoryColumns.handleColumnSort,
+                                    uppercase: false as const,
+                                };
+                                return (
                                 <div className="bg-white border border-gray-100 rounded-[10px] overflow-hidden">
                                     <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
-                                        {/* thead em sentence case (§6.2) — escala compacta */}
+                                        {/* thead em sentence case (§6.2) — escala compacta, colunas via SortableHeader (§6/§6.3) */}
                                         <thead>
                                             <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                                <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-left">Imóvel</th>
-                                                <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-left">Endereço / referência</th>
-                                                {selectedBuildingId && (
-                                                    <>
-                                                        <th
-                                                            onClick={() => handleSort('block')}
-                                                            className="px-6 py-2 border-r border-gray-100 last:border-r-0 cursor-pointer hover:bg-gray-100 transition-colors group"
-                                                        >
-                                                            <div className="flex items-center gap-1">
-                                                                Bloco
-                                                                <SortIndicator columnKey="block" />
-                                                            </div>
-                                                        </th>
-                                                        <th
-                                                            onClick={() => handleSort('private_area')}
-                                                            className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors group"
-                                                        >
-                                                            <div className="flex items-center gap-1">
-                                                                Á. priv.
-                                                                <SortIndicator columnKey="private_area" />
-                                                            </div>
-                                                        </th>
-                                                    </>
-                                                )}
-                                                <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap">Preço</th>
-                                                <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap">Vlr/m²</th>
-                                                {selectedBuildingId && (
-                                                    <>
-                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Peso pos.</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Peso sol</th>
-                                                        <th
-                                                            onClick={() => handleSort('floor')}
-                                                            className="px-6 py-2 border-r border-gray-100 last:border-r-0 cursor-pointer hover:bg-gray-100 transition-colors group"
-                                                        >
-                                                            <div className="flex items-center gap-1">
-                                                                Andar
-                                                                <SortIndicator columnKey="floor" />
-                                                            </div>
-                                                        </th>
-                                                    </>
-                                                )}
-                                                <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Status</th>
+                                                <th className="w-10 px-4 py-2 border-r border-gray-100 text-center"></th>
+                                                {isVisible('name') && <SortableHeader colKey="name" label="Imóvel" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
+                                                {isVisible('address') && <SortableHeader colKey="address" label="Endereço / referência" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
+                                                {isVisible('block') && <SortableHeader colKey="block" label="Bloco" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
+                                                {isVisible('private_area') && <SortableHeader colKey="private_area" label="Á. priv." {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap" />}
+                                                {isVisible('price') && <SortableHeader colKey="price" label="Preço" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap" />}
+                                                {isVisible('price_per_m2') && <SortableHeader colKey="price_per_m2" label="Vlr/m²" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap" />}
+                                                {isVisible('position_weight') && <SortableHeader colKey="position_weight" label="Peso pos." {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
+                                                {isVisible('sun_weight') && <SortableHeader colKey="sun_weight" label="Peso sol" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
+                                                {isVisible('floor') && <SortableHeader colKey="floor" label="Andar" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
+                                                {isVisible('status') && <SortableHeader colKey="status" label="Status" {...sortHeaderProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
                                                 <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200">
                                             {selectedBuildingId ? (
                                                 filteredProperties.length > 0 ? (
-                                                    filteredProperties.map(property => (
-                                                        <tr key={property.id} className="hover:bg-blue-50/50 transition-colors">
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900">
-                                                                {property.name}
+                                                    filteredProperties.map((property, index) => (
+                                                        <tr key={property.id} className={`hover:bg-blue-50/50 transition-colors ${selectedProperties.includes(property.id) ? 'bg-blue-50/60' : ''}`}>
+                                                            <td className="px-4 py-2.5 border-r border-gray-100 text-center">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    title="Dica: segure Shift e clique para selecionar um intervalo"
+                                                                    checked={selectedProperties.includes(property.id)}
+                                                                    onChange={(e) => handleRowCheck(property.id, index, (e.nativeEvent as MouseEvent).shiftKey)}
+                                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                                />
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                                {property.address || 'Resumo do Empreendimento'}
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                                                {property.block || '-'}
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                                {property.private_area ? `${property.private_area}m²` : '-'}
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
-                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price || 0)}
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format((property.price || 0) / (property.private_area || property.area || 1))}
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-sm font-normal text-gray-900 leading-none mb-1">
-                                                                        {property.position_type === 'FRONT' ? '1.03x' : property.position_type === 'BACK' ? '0.97x' : '1.00x'}
+                                                            {isVisible('name') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900">
+                                                                    {property.name}
+                                                                </td>
+                                                            )}
+                                                            {isVisible('address') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                                    {property.address || 'Resumo do Empreendimento'}
+                                                                </td>
+                                                            )}
+                                                            {isVisible('block') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                                    {property.block || '-'}
+                                                                </td>
+                                                            )}
+                                                            {isVisible('private_area') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                                    {property.private_area ? `${property.private_area}m²` : '-'}
+                                                                </td>
+                                                            )}
+                                                            {isVisible('price') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
+                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price || 0)}
+                                                                </td>
+                                                            )}
+                                                            {isVisible('price_per_m2') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600">
+                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format((property.price || 0) / (property.private_area || property.area || 1))}
+                                                                </td>
+                                                            )}
+                                                            {isVisible('position_weight') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-sm font-normal text-gray-900 leading-none mb-1">
+                                                                            {property.position_type === 'FRONT' ? '1.03x' : property.position_type === 'BACK' ? '0.97x' : '1.00x'}
+                                                                        </span>
+                                                                        <span className="text-xs font-normal text-gray-400">
+                                                                            {property.position_type === 'FRONT' ? 'Frente' : property.position_type === 'BACK' ? 'Fundos' : 'Lateral / Base'}
+                                                                        </span>
+                                                                    </div>
+                                                                </td>
+                                                            )}
+                                                            {isVisible('sun_weight') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-sm font-normal text-gray-900 leading-none mb-1">
+                                                                            {property.sun_orientation === 'NORTH' ? '1.02x' : property.sun_orientation === 'EAST' ? '1.01x' : property.sun_orientation === 'WEST' ? '0.99x' : property.sun_orientation === 'SOUTH' ? '0.98x' : '1.00x'}
+                                                                        </span>
+                                                                        <span className="text-xs font-normal text-gray-400">
+                                                                            {property.sun_orientation === 'NORTH' ? 'Norte' : property.sun_orientation === 'EAST' ? 'Leste' : property.sun_orientation === 'WEST' ? 'Oeste' : property.sun_orientation === 'SOUTH' ? 'Sul' : 'Base'}
+                                                                        </span>
+                                                                    </div>
+                                                                </td>
+                                                            )}
+                                                            {isVisible('floor') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                                    {property.floor ? `${property.floor}º` : 'Térreo'}
+                                                                </td>
+                                                            )}
+                                                            {isVisible('status') && (
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                                    <span className={`text-sm font-normal ${getStatusColor(property.status)}`}>
+                                                                        {getStatusLabel(property.status)}
                                                                     </span>
-                                                                    <span className="text-xs font-normal text-gray-400">
-                                                                        {property.position_type === 'FRONT' ? 'Frente' : property.position_type === 'BACK' ? 'Fundos' : 'Lateral / Base'}
-                                                                    </span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-sm font-normal text-gray-900 leading-none mb-1">
-                                                                        {property.sun_orientation === 'NORTH' ? '1.02x' : property.sun_orientation === 'EAST' ? '1.01x' : property.sun_orientation === 'WEST' ? '0.99x' : property.sun_orientation === 'SOUTH' ? '0.98x' : '1.00x'}
-                                                                    </span>
-                                                                    <span className="text-xs font-normal text-gray-400">
-                                                                        {property.sun_orientation === 'NORTH' ? 'Norte' : property.sun_orientation === 'EAST' ? 'Leste' : property.sun_orientation === 'WEST' ? 'Oeste' : property.sun_orientation === 'SOUTH' ? 'Sul' : 'Base'}
-                                                                    </span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                                {property.floor ? `${property.floor}º` : 'Térreo'}
-                                                            </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                                <span className={`text-sm font-normal ${getStatusColor(property.status)}`}>
-                                                                    {getStatusLabel(property.status)}
-                                                                </span>
-                                                            </td>
+                                                                </td>
+                                                            )}
                                                             <td className="px-6 py-2.5 text-right">
                                                                 <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
                                                                     <button onClick={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }} className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all">Editar</button>
@@ -1011,19 +1125,30 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                     ))
                                                 ) : (
                                                     <tr>
-                                                        <td colSpan={11} className="px-6 py-10 text-center text-sm text-gray-400 border-b border-gray-100">Nenhuma unidade encontrada.</td>
+                                                        <td colSpan={colSpan} className="px-6 py-10 text-center text-sm text-gray-400 border-b border-gray-100">Nenhuma unidade encontrada.</td>
                                                     </tr>
                                                 )
                                             ) : (
-                                                filteredProperties.filter(p => p.type === 'BUILDING' || !p.parent_id).map(property => (
-                                                    <tr key={property.id} className="hover:bg-blue-50/50 transition-colors cursor-pointer group" onClick={() => setSelectedBuildingId(property.id)}>
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors whitespace-nowrap">{property.name}</td>
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400">{property.address || 'Resumo do Empreendimento'}</td>
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 whitespace-nowrap">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price || 0)}</td>
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400 text-center whitespace-nowrap">---</td>
-                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                            <span className={`text-sm font-normal ${getStatusColor(property.status)}`}>{getStatusLabel(property.status)}</span>
+                                                filteredProperties.filter(p => p.type === 'BUILDING' || !p.parent_id).map((property, index) => (
+                                                    <tr key={property.id} className={`hover:bg-blue-50/50 transition-colors group ${selectedProperties.includes(property.id) ? 'bg-blue-50/60' : ''}`}>
+                                                        <td className="px-4 py-2.5 border-r border-gray-100 text-center" onClick={(e) => e.stopPropagation()}>
+                                                            <input
+                                                                type="checkbox"
+                                                                title="Dica: segure Shift e clique para selecionar um intervalo"
+                                                                checked={selectedProperties.includes(property.id)}
+                                                                onChange={(e) => handleRowCheck(property.id, index, (e.nativeEvent as MouseEvent).shiftKey)}
+                                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                            />
                                                         </td>
+                                                        {isVisible('name') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors whitespace-nowrap cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>{property.name}</td>}
+                                                        {isVisible('address') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400 cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>{property.address || 'Resumo do Empreendimento'}</td>}
+                                                        {isVisible('price') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 whitespace-nowrap cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price || 0)}</td>}
+                                                        {isVisible('price_per_m2') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400 text-center whitespace-nowrap cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>---</td>}
+                                                        {isVisible('status') && (
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>
+                                                                <span className={`text-sm font-normal ${getStatusColor(property.status)}`}>{getStatusLabel(property.status)}</span>
+                                                            </td>
+                                                        )}
                                                         <td className="px-6 py-2.5 text-right">
                                                             <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                                                                 <button onClick={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit className="w-4 h-4" /></button>
@@ -1037,7 +1162,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     </table>
                                     </div>
                                 </div>
-                            )}
+                                );
+                            })()}
 
                             {viewMode === 'tower' && (
                                 <PropertyUnitMap 
@@ -1184,16 +1310,16 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
                                         <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Velocidade de Vendas</label>
-                                        <span className="text-sm font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">{simMonthlySales} und/mês</span>
+                                        <span className="text-sm font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-[6px]">{simMonthlySales} und/mês</span>
                                     </div>
-                                    <input 
-                                        type="range" 
-                                        min="1" 
-                                        max="20" 
+                                    <input
+                                        type="range"
+                                        min="1"
+                                        max="20"
                                         step="1"
                                         value={simMonthlySales}
                                         onChange={(e) => setSimMonthlySales(Number(e.target.value))}
-                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                        className="w-full h-2 bg-gray-200 rounded-[6px] appearance-none cursor-pointer accent-blue-600"
                                     />
                                     <p className="text-[9px] font-bold text-gray-400 leading-tight">Define quantas unidades do estoque são absorvidas mensalmente.</p>
                                 </div>
@@ -1201,24 +1327,24 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
                                         <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Ajuste de Preço (VGV)</label>
-                                        <span className={`text-sm font-black px-2 py-1 rounded-lg ${simPriceAdjust >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
+                                        <span className={`text-sm font-black px-2 py-1 rounded-[6px] ${simPriceAdjust >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
                                             {simPriceAdjust > 0 ? '+' : ''}{simPriceAdjust}%
                                         </span>
                                     </div>
-                                    <input 
-                                        type="range" 
-                                        min="-20" 
-                                        max="50" 
+                                    <input
+                                        type="range"
+                                        min="-20"
+                                        max="50"
                                         step="1"
                                         value={simPriceAdjust}
                                         onChange={(e) => setSimPriceAdjust(Number(e.target.value))}
-                                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                                        className="w-full h-2 bg-gray-200 rounded-[6px] appearance-none cursor-pointer accent-blue-600"
                                     />
                                     <p className="text-[9px] font-bold text-gray-400 leading-tight">Simula valorização ou descontos agressivos no estoque remanescente.</p>
                                 </div>
 
                                 <div className="pt-6 border-t border-gray-200 space-y-4">
-                                    <div className="p-4 bg-gray-900 rounded-2xl text-white">
+                                    <div className="p-4 bg-gray-900 rounded-[10px] text-white">
                                         <div className="flex items-center gap-2 mb-2">
                                             <TrendingUp className="w-4 h-4 text-blue-400" />
                                             <span className="text-[9px] font-black uppercase tracking-widest">Tempo de Esgotamento</span>
@@ -1236,7 +1362,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                             { label: 'Moderada', velocity: 0.5 },
                                             { label: 'Agressiva', velocity: 0.9 },
                                         ]).map(s => (
-                                            <div key={s.label} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl border border-gray-100">
+                                            <div key={s.label} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-[6px] border border-gray-100">
                                                 <span className="text-xs font-bold text-gray-600">{s.label}</span>
                                                 <span className="text-xs font-black text-blue-600">{s.monthsToSellOut} meses</span>
                                             </div>
@@ -1245,9 +1371,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
                                     <button
                                         onClick={() => { setSimMonthlySales(2); setSimPriceAdjust(0); }}
-                                        className="w-full py-3 bg-white text-gray-400 hover:text-gray-900 text-xs font-black uppercase tracking-widest rounded-xl border border-gray-200 transition-all"
+                                        className="w-full h-9 bg-white text-gray-500 hover:text-gray-900 text-sm font-medium rounded-[6px] border border-gray-200 transition-all"
                                     >
-                                        Resetar Simulação
+                                        Resetar simulação
                                     </button>
                                 </div>
                             </div>
@@ -1289,6 +1415,19 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 </h3>
                             </div>
                             <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                {viewMode === 'list' && (
+                                    <>
+                                        <ColumnConfigButton
+                                            columns={DEALS_COLUMNS.filter(c => c.key !== 'actions')}
+                                            visibleColumns={dealsColumns.visibleColumns}
+                                            showColumnConfig={dealsColumns.showColumnConfig}
+                                            onToggleShow={() => dealsColumns.setShowColumnConfig(!dealsColumns.showColumnConfig)}
+                                            onToggleColumn={dealsColumns.toggleColumn}
+                                            onReset={dealsColumns.resetColumns}
+                                        />
+                                        <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                                    </>
+                                )}
                                 <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Grade"><LayoutGrid className="w-4 h-4" /></button>
                                 <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Lista"><List className="w-4 h-4" /></button>
                             </div>
@@ -1370,84 +1509,108 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     <p className="text-xs text-gray-400 text-center mt-1 px-4">Inicie o registro de uma nova venda de imóvel.</p>
                                 </button>
                             </div>
-                        ) : (
+                        ) : (() => {
+                            const dv = dealsColumns.visibleColumns;
+                            const dSortProps = {
+                                sortColumn: dealsColumns.sortColumn,
+                                sortDirection: dealsColumns.sortDirection,
+                                onSort: dealsColumns.handleColumnSort,
+                                uppercase: false as const,
+                            };
+                            return (
                             <div className="bg-white border border-gray-100 rounded-[10px] overflow-hidden">
                                 <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
-                                    {/* thead em sentence case (§6.2) — escala compacta */}
+                                    {/* thead em sentence case (§6.2) — escala compacta, colunas via SortableHeader (§6/§6.3) */}
                                     <thead>
                                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-left">Imóvel</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center">Bloco</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap">Á. priv.</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap">Preço base</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap">Vlr/m² base</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center">Andar</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap">Vlr venda</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap">Vlr venda/m²</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap">Var. (R$)</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap">Var. (%)</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Status</th>
+                                            {dv.includes('property') && <SortableHeader colKey="property" label="Imóvel" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
+                                            {dv.includes('block') && <SortableHeader colKey="block" label="Bloco" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />}
+                                            {dv.includes('private_area') && <SortableHeader colKey="private_area" label="Á. priv." {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap" />}
+                                            {dv.includes('price_base') && <SortableHeader colKey="price_base" label="Preço base" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />}
+                                            {dv.includes('price_per_m2_base') && <SortableHeader colKey="price_per_m2_base" label="Vlr/m² base" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />}
+                                            {dv.includes('floor') && <SortableHeader colKey="floor" label="Andar" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />}
+                                            {dv.includes('sale_value') && <SortableHeader colKey="sale_value" label="Vlr venda" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />}
+                                            {dv.includes('sale_value_per_m2') && <SortableHeader colKey="sale_value_per_m2" label="Vlr venda/m²" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />}
+                                            {dv.includes('variance') && <SortableHeader colKey="variance" label="Var. (R$)" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />}
+                                            {dv.includes('variance_pct') && <SortableHeader colKey="variance_pct" label="Var. (%)" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap" />}
+                                            {dv.includes('status') && <SortableHeader colKey="status" label="Status" {...dSortProps} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />}
                                             <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
-                                        {buildingDeals.map(deal => {
+                                        {sortedBuildingDeals.map(deal => {
                                             const property = properties.find(p => p.id === deal.property_id);
                                             const client = clients.find(c => c.id === deal.client_id);
+                                            const m2 = property?.private_area || property?.area || 1;
+                                            const m2Base = (property?.price || 0) / m2;
+                                            const m2Venda = deal.value / m2;
+                                            const variancia = m2Venda - m2Base;
+                                            const varianciaPct = m2Base > 0 ? (variancia / m2Base) * 100 : 0;
                                             return (
                                                 <tr key={deal.id} className="hover:bg-blue-50/50 transition-colors cursor-pointer group" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }}>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || '---'}</span>
-                                                            <span className="text-xs font-normal text-gray-400">
-                                                                {client?.name || 'Não vinculado'}
+                                                    {dv.includes('property') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            <div className="flex flex-col">
+                                                                <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || '---'}</span>
+                                                                <span className="text-xs font-normal text-gray-400">
+                                                                    {client?.name || 'Não vinculado'}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                    )}
+                                                    {dv.includes('block') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center">
+                                                            {property?.block || '-'}
+                                                        </td>
+                                                    )}
+                                                    {dv.includes('private_area') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center">
+                                                            {property?.private_area || property?.area || 0}m²
+                                                        </td>
+                                                    )}
+                                                    {dv.includes('price_base') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600 text-right">
+                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property?.price || 0)}
+                                                        </td>
+                                                    )}
+                                                    {dv.includes('price_per_m2_base') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600 text-right">
+                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(m2Base)}
+                                                        </td>
+                                                    )}
+                                                    {dv.includes('floor') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center">
+                                                            {property?.floor ? `${property.floor}º` : 'T'}
+                                                        </td>
+                                                    )}
+                                                    {dv.includes('sale_value') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
+                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(deal.value)}
+                                                        </td>
+                                                    )}
+                                                    {dv.includes('sale_value_per_m2') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-blue-600 text-right">
+                                                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(m2Venda)}
+                                                        </td>
+                                                    )}
+                                                    {dv.includes('variance') && (
+                                                        <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-right ${variancia >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                            {variancia >= 0 ? '+' : ''}{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(variancia)}
+                                                        </td>
+                                                    )}
+                                                    {dv.includes('variance_pct') && (
+                                                        <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-center ${variancia >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                            {Math.abs(varianciaPct).toFixed(1)}%
+                                                        </td>
+                                                    )}
+                                                    {dv.includes('status') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            <span className={`text-sm font-normal ${deal.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                                                {deal.status === 'COMPLETED' ? 'Concluído' : 'Pendente'}
                                                             </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center">
-                                                        {property?.block || '-'}
-                                                    </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center">
-                                                        {property?.private_area || property?.area || 0}m²
-                                                    </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-right">
-                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property?.price || 0)}
-                                                    </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-right">
-                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format((property?.price || 0) / (property?.private_area || property?.area || 1))}
-                                                    </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center">
-                                                        {property?.floor ? `${property.floor}º` : 'T'}
-                                                    </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
-                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(deal.value)}
-                                                    </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-blue-600 text-right">
-                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(deal.value / (property?.private_area || property?.area || 1))}
-                                                    </td>
-                                                    {(() => {
-                                                        const m2Base = (property?.price || 0) / (property?.private_area || property?.area || 1);
-                                                        const m2Venda = deal.value / (property?.private_area || property?.area || 1);
-                                                        const variancia = m2Venda - m2Base;
-                                                        const varianciaPct = m2Base > 0 ? (variancia / m2Base) * 100 : 0;
-
-                                                        return (
-                                                            <>
-                                                                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-right ${variancia >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                                                    {variancia >= 0 ? '+' : ''}{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(variancia)}
-                                                                </td>
-                                                                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-center ${variancia >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                                                    {Math.abs(varianciaPct).toFixed(1)}%
-                                                                </td>
-                                                            </>
-                                                        );
-                                                    })()}
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <span className={`text-sm font-normal ${deal.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                                            {deal.status === 'COMPLETED' ? 'Concluído' : 'Pendente'}
-                                                        </span>
-                                                    </td>
+                                                        </td>
+                                                    )}
                                                     <td className="px-6 py-2.5 text-right">
                                                         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                                                             <button onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit className="w-4 h-4" /></button>
@@ -1471,7 +1634,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     Registrar nova negociação
                                 </button>
                             </div>
-                        )}
+                            );
+                        })()}
                     </div>
                 )
             }

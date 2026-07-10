@@ -2929,12 +2929,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         />
                       </div>
                       <div className="space-y-1 sm:col-span-2">
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Máscara / Fórmula (Tokens permitidos: [OBRA], [DISCIPLINA], [NUMERO], [REVISAO])</label>
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Máscara / Fórmula (Tokens: [OBRA], [DISCIPLINA], [NUMERO], [REVISAO])</label>
                         <div className="flex gap-2">
                           <input
                             type="text"
                             required
-                            placeholder="[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]"
+                            placeholder="[OBRA{3}]-[DISCIPLINA{3}]-[NUMERO{3}]-R[REVISAO{2}]"
                             value={newPatMask}
                             onChange={(e) => setNewPatMask(e.target.value)}
                             className="flex-grow px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
@@ -2946,6 +2946,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             Adicionar
                           </button>
                         </div>
+                        <span className="text-[9px] text-slate-400 font-bold block mt-1.5 uppercase tracking-wider">
+                          Dica: Defina o tamanho dos caracteres usando chaves. Ex: <strong className="text-blue-600 font-mono select-all">[OBRA{3}]-[DISCIPLINA{3}]-[NUMERO{3}]-R[REVISAO{2}]</strong>
+                        </span>
                       </div>
                     </div>
                   </form>

@@ -1,18 +1,21 @@
 import React from 'react';
 import {
-    Search, Plus, Filter, MoreHorizontal,
+    Search, Plus,
     FileText, Calendar, Building2, DollarSign,
-    ArrowRight, Clock, Shield, LayoutGrid,
-    List, RotateCcw, Copy, Trash2, Pencil,
-    ChevronUp, ChevronDown, ChevronsUpDown, AlertCircle
+    ArrowRight, Clock, Shield, LayoutDashboard,
+    Table2, RefreshCw, Copy, Trash2, Pencil,
+    AlertCircle
 } from 'lucide-react';
 import { contractService } from '../services/contractService';
 import { supplierService } from '../services/supplierService';
 import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
 import { Contract } from '../types';
-import Button from './ui/Button';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import Button from './ui/Button';
+import { KpiCard } from './ui/KpiCard';
+import { useConfirm } from './ui/confirm';
+import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
@@ -66,7 +69,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainContractColumns');
 
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-    const [confirmDeleteId, setConfirmDeleteId] = React.useState<string | null>(null);
+    const confirm = useConfirm();
 
     const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setNotification({ message, type });
@@ -115,17 +118,12 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         );
     };
 
-    const handleDelete = (e: React.MouseEvent, id: string) => {
-        e.stopPropagation();
-        setConfirmDeleteId(id);
-    };
-
-    const confirmDelete = async () => {
-        if (!confirmDeleteId) return;
-        setConfirmDeleteId(null);
+    // Excluir direto (sem diálogo) — usado pelo InlineDisclosureMenu, que já tem
+    // confirmação de 2 passos embutida (ui_ux_standard_guide.md §9).
+    const performDelete = async (id: string) => {
         try {
             setLoading(true);
-            await contractService.deleteContract(confirmDeleteId);
+            await contractService.deleteContract(id);
             await loadContracts();
             onDelete?.();
             notify("Contrato excluído com sucesso.", "success");
@@ -137,8 +135,20 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         }
     };
 
-    const handleDuplicate = async (e: React.MouseEvent, id: string) => {
+    // Excluir fora do kebab (grid view): pede confirmação via useConfirm (§14).
+    const handleDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
+        const ok = await confirm({
+            title: 'Excluir contrato?',
+            message: 'Esta ação é irreversível e removerá todos os dados associados ao contrato.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        await performDelete(id);
+    };
+
+    const performDuplicate = async (id: string) => {
         try {
             setLoading(true);
             const dupe = await contractService.duplicateContract(id);
@@ -150,6 +160,11 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleDuplicate = (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        performDuplicate(id);
     };
 
     const filteredContracts = React.useMemo(() => {
@@ -183,19 +198,6 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
         pendingMeasurements: 0, // Placeholder
     };
 
-    const STAT_ICON_CLS: Record<string, string> = {
-        blue:   'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white',
-        green:  'bg-green-50 text-green-600 group-hover:bg-green-600 group-hover:text-white',
-        indigo: 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white',
-        amber:  'bg-amber-50 text-amber-600 group-hover:bg-amber-600 group-hover:text-white',
-    };
-    const STAT_BG_CLS: Record<string, string> = {
-        blue:   'bg-blue-500/5',
-        green:  'bg-green-500/5',
-        indigo: 'bg-indigo-500/5',
-        amber:  'bg-amber-500/5',
-    };
-
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center p-20 space-y-4">
@@ -206,156 +208,95 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     }
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6">
             {/* Notification toast */}
             {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] max-w-sm px-6 py-4 rounded-[1.5rem] shadow-2xl font-bold text-sm animate-in fade-in slide-in-from-bottom-4 duration-300 flex items-center gap-3 ${
-                    notification.type === 'success' ? 'bg-gray-900 text-white' :
-                    notification.type === 'error' ? 'bg-red-600 text-white' :
-                    'bg-gray-900 text-white'
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'error' ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'
                 }`}>
-                    {notification.type === 'error' && <AlertCircle className="w-5 h-5" />}
+                    <AlertCircle className="w-4 h-4 shrink-0" />
                     {notification.message}
-                </div>
-            )}
-
-            {/* Inline confirm dialog */}
-            {confirmDeleteId && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl p-8 max-w-md w-full space-y-6 border border-gray-100 animate-in zoom-in-95 duration-200">
-                        <div className="flex items-start gap-4">
-                            <div className="p-3 bg-red-50 text-red-600 rounded-[1.25rem] shrink-0">
-                                <AlertCircle className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-bold text-gray-900 mb-1">Excluir contrato?</p>
-                                <p className="text-sm text-gray-500">Esta ação é irreversível e removerá todos os dados associados ao contrato.</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={() => setConfirmDeleteId(null)}
-                                className="px-6 py-3 bg-gray-50 text-gray-600 rounded-[1.25rem] font-bold text-sm hover:bg-gray-100 transition-all"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={confirmDelete}
-                                className="px-6 py-3 bg-red-600 text-white rounded-[1.25rem] font-bold text-sm shadow-lg shadow-red-200 hover:bg-red-700 transition-all"
-                            >
-                                Excluir
-                            </button>
-                        </div>
-                    </div>
                 </div>
             )}
 
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-medium text-gray-900 tracking-tight">{title}</h1>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{title}</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">{subtitle}</p>
                 </div>
                 <div className="flex items-center gap-3">
                     {extraActions}
                     <button
                         onClick={onCreateNew}
-                        className="group flex items-center gap-2 px-6 py-4 bg-gray-900 text-white rounded-[1.25rem] hover:bg-blue-600 transition-all shadow-xl shadow-gray-200 hover:shadow-blue-200 font-medium text-button uppercase tracking-widest active:scale-95"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                     >
-                        <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
-                        Novo Contrato
+                        <Plus className="w-[15px] h-[15px]" />
+                        Novo contrato
                     </button>
-                    {projectId && (
-                        <button
-                            onClick={() => setLocalShowAll(!localShowAll)}
-                            className={`flex items-center gap-2 px-6 py-4 rounded-[1.25rem] border transition-all font-medium text-button uppercase tracking-widest active:scale-95 ${!localShowAll
-                                ? 'bg-blue-50 border-blue-200 text-blue-700'
-                                : 'bg-white border-gray-100 text-gray-400 hover:text-gray-600'
-                                } `}
-                        >
-                            <Building2 className="w-4 h-4" />
-                            {localShowAll ? 'Filtrar por Obra' : 'Ver Todos Projetos'}
-                        </button>
-                    )}
                 </div>
             </div>
 
             {/* Stats Dashboard */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-blue-100 transition-all">
-                    <div className="p-3.5 bg-blue-50 text-blue-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <FileText className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Total de Contratos</p>
-                        <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-                    </div>
-                </div>
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-green-100 transition-all">
-                    <div className="p-3.5 bg-green-50 text-green-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <Shield className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Contratos Ativos</p>
-                        <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
-                    </div>
-                </div>
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-indigo-100 transition-all">
-                    <div className="p-3.5 bg-indigo-50 text-indigo-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <DollarSign className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Valor Total Contratado</p>
-                        <p className="text-xl font-bold text-gray-900 truncate">R$ {stats.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                    </div>
-                </div>
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-amber-100 transition-all">
-                    <div className="p-3.5 bg-amber-50 text-amber-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <Clock className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Pendentes de Medição</p>
-                        <p className="text-2xl font-bold text-gray-900">{stats.pendingMeasurements}</p>
-                    </div>
-                </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <KpiCard shadow={false} size="sm" label="Total de Contratos" value={stats.total} icon={<FileText className="w-4 h-4" />} color="blue" />
+                <KpiCard shadow={false} size="sm" label="Contratos Ativos" value={stats.active} icon={<Shield className="w-4 h-4" />} color="emerald" />
+                <KpiCard shadow={false} size="sm" label="Valor Total Contratado" value={`R$ ${stats.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<DollarSign className="w-4 h-4" />} color="indigo" />
+                <KpiCard shadow={false} size="sm" label="Pendentes de Medição" value={stats.pendingMeasurements} icon={<Clock className="w-4 h-4" />} color="amber" />
             </div>
 
-            {/* Filters */}
-            <div className="bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+            {/* Filters — §5.1 (variante desaninhada, escala compacta §16) */}
+            <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
-                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
                         placeholder="Buscar por número, título ou tipo..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-transparent rounded-[1.5rem] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                 </div>
-                <div className="flex items-center gap-2">
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="px-6 py-4 bg-gray-50 border border-transparent rounded-[1.5rem] text-sm font-semibold uppercase tracking-wider text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all cursor-pointer"
-                    >
-                        <option value="all">Todos os Status</option>
-                        <option value="Rascunho">Rascunho</option>
-                        <option value="Minuta">Minuta</option>
-                        <option value="Ativo">Ativo</option>
-                        <option value="Suspenso">Suspenso</option>
-                        <option value="Encerrado">Encerrado</option>
-                        <option value="Cancelado">Cancelado</option>
-                    </select>
 
+                <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="h-9 text-sm font-normal text-gray-700 bg-white border border-gray-200 rounded-[6px] px-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                    <option value="all">Todos os Status</option>
+                    <option value="Rascunho">Rascunho</option>
+                    <option value="Minuta">Minuta</option>
+                    <option value="Ativo">Ativo</option>
+                    <option value="Suspenso">Suspenso</option>
+                    <option value="Encerrado">Encerrado</option>
+                    <option value="Cancelado">Cancelado</option>
+                </select>
+
+                {projectId && (
                     <button
-                        onClick={loadContracts}
-                        className="p-4 bg-blue-50 text-blue-600 rounded-[1.25rem] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shadow-sm group"
+                        onClick={() => setLocalShowAll(!localShowAll)}
+                        title={!localShowAll ? 'Mostrando apenas contratos desta obra — clique para ver todos' : 'Filtrar contratos por esta obra'}
+                        className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] transition-all active:scale-95 text-sm font-medium whitespace-nowrap ${!localShowAll
+                            ? 'bg-blue-50 text-blue-700'
+                            : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                            }`}
                     >
-                        <RotateCcw className={`w-4 h-4 group-hover:rotate-180 transition-transform duration-500 ${loading ? 'animate-spin' : ''}`} />
+                        <Building2 className="w-4 h-4" />
+                        {localShowAll ? 'Filtrar por Obra' : 'Ver Todos Projetos'}
                     </button>
-                </div>
+                )}
 
-                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                <button
+                    onClick={loadContracts}
+                    className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                    title="Atualizar"
+                >
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+
+                <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                     <ColumnConfigButton
                         columns={COLUMNS.filter(c => c.key !== 'actions')}
                         visibleColumns={tableColumns.visibleColumns}
@@ -364,36 +305,36 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         onToggleColumn={tableColumns.toggleColumn}
                         onReset={tableColumns.resetColumns}
                     />
-                    <div className="w-px bg-gray-200 mx-1 my-1"></div>
+                    <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                     <button
                         onClick={() => setViewMode('grid')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid'
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid'
+                            ? 'bg-blue-600 text-white'
                             : 'text-gray-400 hover:text-gray-600'
                             }`}
                         title="Visualização em Grade"
                     >
-                        <LayoutGrid className="w-5 h-5" />
+                        <LayoutDashboard className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'list'
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list'
+                            ? 'bg-blue-600 text-white'
                             : 'text-gray-400 hover:text-gray-600'
                             }`}
                         title="Visualização em Lista"
                     >
-                        <List className="w-5 h-5" />
+                        <Table2 className="w-4 h-4" />
                     </button>
                 </div>
             </div>
 
             {/* Content List */}
             {filteredContracts.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[2.5rem] shadow-sm border border-gray-100">
+                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
                     <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum contrato encontrado</h3>
-                    <p className="text-sm text-gray-500 max-w-md mx-auto mb-6">Não há contratos registrados para este projeto ainda.</p>
+                    <p className="text-sm text-gray-500 mb-6">Não há contratos registrados para este projeto ainda.</p>
                     <button onClick={onCreateNew} className="text-blue-600 font-bold hover:underline">
                         Começar Cadastro
                     </button>
@@ -411,7 +352,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                     <div className="p-4 bg-blue-50 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all duration-500">
                                         <FileText className="w-6 h-6" />
                                     </div>
-                                    <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
                                         <Button
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -482,90 +423,89 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     ))}
                 </div>
             ) : (
-                <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse min-w-max">
+                        <table className="w-full text-left border-collapse">
+                            {/* thead em sentence case (§6.2) — escala compacta; uppercase={false} porque
+                                SortableHeader força uppercase internamente por padrão. */}
                             <thead>
-                                <tr className="bg-gray-50/50">
-                                    {tableColumns.visibleColumns.includes('number') && <SortableHeader colKey="number" label="Código" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} />}
-                                    {tableColumns.visibleColumns.includes('title') && <SortableHeader colKey="title" label="Contrato" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} />}
-                                    {tableColumns.visibleColumns.includes('project') && <SortableHeader colKey="project" label="Obra" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} />}
-                                    {tableColumns.visibleColumns.includes('supplier') && <SortableHeader colKey="supplier" label={direction === 'OUTGOING' ? 'Cliente' : 'Fornecedor'} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} />}
-                                    {tableColumns.visibleColumns.includes('date') && <SortableHeader colKey="date" label="Vigência" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} />}
-                                    {tableColumns.visibleColumns.includes('status') && <SortableHeader colKey="status" label="Status" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} />}
-                                    {tableColumns.visibleColumns.includes('value') && <SortableHeader colKey="value" label="Valor Atual" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-4 text-right" />}
-                                    <th className="px-6 py-4 w-10"></th>
+                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {tableColumns.visibleColumns.includes('number') && <SortableHeader colKey="number" label="Código" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />}
+                                    {tableColumns.visibleColumns.includes('title') && <SortableHeader colKey="title" label="Contrato" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {tableColumns.visibleColumns.includes('project') && <SortableHeader colKey="project" label="Obra" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />}
+                                    {tableColumns.visibleColumns.includes('supplier') && <SortableHeader colKey="supplier" label={direction === 'OUTGOING' ? 'Cliente' : 'Fornecedor'} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />}
+                                    {tableColumns.visibleColumns.includes('date') && <SortableHeader colKey="date" label="Vigência" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />}
+                                    {tableColumns.visibleColumns.includes('status') && <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {tableColumns.visibleColumns.includes('value') && <SortableHeader colKey="value" label="Valor Atual" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-right" />}
+                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-50">
+                            <tbody className="divide-y divide-gray-200">
                                 {filteredContracts.map((contract) => (
                                     <tr
                                         key={contract.id}
-                                        className="hover:bg-blue-50/30 transition-colors cursor-pointer group"
+                                        className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                                         onClick={() => onViewDetails(contract.id)}
                                     >
                                         {tableColumns.visibleColumns.includes('number') && (
-                                            <td className="px-6 py-5">
-                                                <span className="text-sm font-normal text-gray-500">{contract.number || '—'}</span>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                {contract.number || '—'}
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('title') && (
-                                            <td className="px-6 py-5">
-                                                <span className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">{contract.title}</span>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">
+                                                {contract.title}
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('project') && (
-                                            <td className="px-6 py-5">
-                                                <span className="text-sm font-normal text-gray-600">
-                                                    {contract.project_id ? (projectMap[contract.project_id] ?? '—') : '—'}
-                                                </span>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                {contract.project_id ? (projectMap[contract.project_id] ?? '—') : '—'}
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('supplier') && (
-                                            <td className="px-6 py-5">
-                                                <span className="text-sm font-normal text-gray-600">
-                                                    {direction === 'OUTGOING'
-                                                        ? (contract.client_id ? (clientMap[contract.client_id] ?? '—') : '—')
-                                                        : (contract.supplier_id ? (supplierMap[contract.supplier_id] ?? '—') : '—')}
-                                                </span>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                {direction === 'OUTGOING'
+                                                    ? (contract.client_id ? (clientMap[contract.client_id] ?? '—') : '—')
+                                                    : (contract.supplier_id ? (supplierMap[contract.supplier_id] ?? '—') : '—')}
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('date') && (
-                                            <td className="px-6 py-5">
-                                                <span className="text-sm font-normal text-gray-600">{new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} a {contract.end_date ? new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado'}</span>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                {new Date(contract.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} a {contract.end_date ? new Date(contract.end_date + 'T12:00:00').toLocaleDateString('pt-BR') : 'Indeterminado'}
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('status') && (
-                                            <td className="px-6 py-5">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 <StatusBadge status={contract.status} />
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('value') && (
-                                            <td className="px-6 py-5 text-right font-medium text-gray-900">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
                                                 R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                             </td>
                                         )}
-                                        <td className="px-6 py-5 text-right">
-                                            <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <td className="px-6 py-2.5 text-right">
+                                            <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
                                                 <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onViewDetails(contract.id);
-                                                    }}
-                                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                    title="Ver Detalhes"
-                                                >
-                                                    <List className="w-5 h-5" />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onViewDetails(contract.id);
-                                                    }}
-                                                    className="text-blue-600 font-semibold hover:underline text-sm"
+                                                    onClick={(e) => { e.stopPropagation(); onViewDetails(contract.id); }}
+                                                    className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
                                                 >
                                                     Ver Detalhes
                                                 </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); onEdit?.(contract); }}
+                                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors ml-1"
+                                                    title="Ajustar Contrato"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </button>
+                                                <InlineDisclosureMenu
+                                                    menuItems={[
+                                                        { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar Contrato', onClick: () => performDuplicate(contract.id) },
+                                                    ]}
+                                                    showDelete
+                                                    onDelete={() => performDelete(contract.id)}
+                                                />
                                             </div>
                                         </td>
                                     </tr>

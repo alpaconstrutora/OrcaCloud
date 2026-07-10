@@ -221,123 +221,122 @@ export default function ClientChargesModule({ organizationId }: Props) {
     }
 
     return (
-        <div className="w-full min-h-screen bg-gray-50/50 p-4 sm:p-8">
-            <div className="max-w-[1600px] mx-auto space-y-6">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-600/20">
-                            <Landmark className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Cobranças</h1>
-                            <p className="text-sm font-medium text-gray-500 mt-1">Boletos e PIX emitidos aos clientes via Asaas</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <button onClick={load} className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 hover:border-gray-300 text-gray-700 text-sm font-bold rounded-[1.25rem] transition-all active:scale-95 shadow-sm" title="Atualizar">
-                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                            <span className="hidden sm:inline">Atualizar</span>
-                        </button>
-                    </div>
+        <div className="space-y-6">
+            {/* Header — §20 */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Cobranças</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Boletos e PIX emitidos aos clientes via Asaas</p>
                 </div>
+                <button
+                    onClick={load}
+                    className="h-9 w-9 flex items-center justify-center bg-emerald-50 text-emerald-600 rounded-[6px] hover:bg-emerald-600 hover:text-white transition-all active:scale-95"
+                    title="Atualizar"
+                >
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+            </div>
 
-                {/* KPIs */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <KpiCard label="Total Emitido" value={fmt(kpis.emitido)}  sub={`${rows.filter(c => c.status !== 'CANCELLED').length} cobranças`} icon={<Landmark className="w-5 h-5" />} color="gray" />
-                    <KpiCard label="Recebido"      value={fmt(kpis.recebido)} sub={`${rows.filter(c => PAID.includes(c.status)).length} pagas`}     icon={<Check className="w-5 h-5" />}    color="emerald" />
-                    <KpiCard label="Pendente"      value={fmt(kpis.pendente)} sub={`${rows.filter(c => c.status === 'PENDING').length} aguardando`}  icon={<RefreshCw className="w-5 h-5" />} color="blue" />
-                    <KpiCard label="Vencido"       value={fmt(kpis.vencido)}  sub={`${rows.filter(c => c.status === 'OVERDUE').length} em atraso`}   icon={<AlertCircle className="w-5 h-5" />} color={kpis.vencido > 0 ? 'red' : 'gray'} />
+            {/* KPIs */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <KpiCard shadow={false} size="sm" label="Total Emitido" value={fmt(kpis.emitido)}  sub={`${rows.filter(c => c.status !== 'CANCELLED').length} cobranças`} icon={<Landmark className="w-4 h-4" />} color="gray" />
+                <KpiCard shadow={false} size="sm" label="Recebido"      value={fmt(kpis.recebido)} sub={`${rows.filter(c => PAID.includes(c.status)).length} pagas`}     icon={<Check className="w-4 h-4" />}    color="emerald" />
+                <KpiCard shadow={false} size="sm" label="Pendente"      value={fmt(kpis.pendente)} sub={`${rows.filter(c => c.status === 'PENDING').length} aguardando`}  icon={<RefreshCw className="w-4 h-4" />} color="blue" />
+                <KpiCard shadow={false} size="sm" label="Vencido"       value={fmt(kpis.vencido)}  sub={`${rows.filter(c => c.status === 'OVERDUE').length} em atraso`}   icon={<AlertCircle className="w-4 h-4" />} color={kpis.vencido > 0 ? 'red' : 'gray'} />
+            </div>
+
+            {/* Toolbar — §5.1 (variante desaninhada, escala compacta §16) */}
+            <div className="flex flex-col xl:flex-row gap-2.5 items-center">
+                <div className="relative flex-1 w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="Buscar por cliente, descrição ou ID Asaas..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
+                    />
                 </div>
-
-                {/* Toolbar e Search */}
-                <div className="bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col xl:flex-row gap-4 items-center mb-6">
-                    <div className="relative flex-1 w-full group">
-                        <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-emerald-500 transition-colors" />
-                        <input
-                            type="text"
-                            placeholder="Buscar por cliente, descrição ou ID Asaas..."
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-transparent rounded-[1.5rem] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
-                        />
-                    </div>
-                    <div className="flex items-center gap-2 overflow-x-auto pb-4 xl:pb-0 scrollbar-hide shrink-0 w-full xl:w-auto">
-                        {FILTERS.map(f => {
-                            const isActive = filter === f.id;
-                            return (
-                                <button
-                                    key={f.id}
-                                    onClick={() => setFilter(f.id)}
-                                    className={`flex items-center gap-2 px-4 py-4 rounded-[1.25rem] transition-all active:scale-95 shadow-sm text-sm font-semibold uppercase tracking-wider whitespace-nowrap ${
-                                        isActive
-                                            ? 'bg-emerald-600 text-white'
-                                            : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white'
-                                    }`}
-                                >
-                                    {f.label}
-                                </button>
-                            );
-                        })}
-                    </div>
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide shrink-0 w-full xl:w-auto">
+                    {FILTERS.map(f => {
+                        const isActive = filter === f.id;
+                        return (
+                            <button
+                                key={f.id}
+                                onClick={() => setFilter(f.id)}
+                                className={`h-9 px-3 rounded-[6px] transition-all active:scale-95 text-sm font-medium whitespace-nowrap ${
+                                    isActive
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white'
+                                }`}
+                            >
+                                {f.label}
+                            </button>
+                        );
+                    })}
                 </div>
+            </div>
 
-            {/* Barra de ação em massa (F3) */}
+            {/* Barra de ação em massa (§10) */}
             {selectedVisible.length > 0 && (
-                <div className="flex items-center gap-4 bg-red-600 text-white px-6 py-4 rounded-[1.5rem] flex-shrink-0 shadow-lg animate-in fade-in slide-in-from-bottom-4 z-50">
-                    <span className="text-sm font-semibold">
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                    <span className="flex-1 text-sm font-bold whitespace-nowrap">
                         {selectedVisible.length} selecionada{selectedVisible.length !== 1 ? 's' : ''}
-                        <span className="ml-2 font-normal text-red-100">{fmt(selectedTotal)}</span>
+                        <span className="ml-2 font-normal opacity-75">· {fmt(selectedTotal)}</span>
                     </span>
-                    <div className="flex-1" />
                     <button
                         onClick={handleBulkCancel}
                         disabled={bulkLoading}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white text-red-700 text-sm font-bold hover:bg-red-50 disabled:opacity-60 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white text-blue-700 text-sm font-semibold hover:bg-blue-50 disabled:opacity-60 transition-colors"
                     >
-                        {bulkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Slash className="w-4 h-4" />}
+                        {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Slash className="w-3.5 h-3.5" />}
                         Cancelar
                     </button>
                     <button
                         onClick={clearSelection}
-                        className="flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-bold text-red-100 hover:text-white hover:bg-red-500 transition-colors"
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-blue-400 transition-colors"
                     >
-                        Limpar
+                        Desmarcar
                     </button>
                 </div>
             )}
 
             {/* Table */}
-            <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                 {error && (
                     <div className="m-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold">{error}</div>
                 )}
                 {loading ? (
-                    <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-emerald-500" /></div>
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                        <p className="mt-2 text-gray-500">Carregando cobranças...</p>
+                    </div>
                 ) : filtered.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                        <Landmark className="w-12 h-12 mb-3 opacity-30" />
-                        <p className="text-base font-semibold">Nenhuma cobrança encontrada</p>
-                        <p className="text-sm mt-1">Emita boletos/PIX em Contas a Receber</p>
+                    <div className="text-center py-12">
+                        <Landmark className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma cobrança encontrada</h3>
+                        <p className="text-sm text-gray-500">Emita boletos/PIX em Contas a Receber</p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
+                            {/* thead em sentence case (§6.2) — escala compacta */}
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
+                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     <th className="w-10 px-6 py-2 text-center border-r border-gray-100">
                                         <input
                                             type="checkbox"
-                                            className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer disabled:opacity-40"
+                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
                                             checked={allVisibleSelected}
                                             disabled={selectableVisible.length === 0}
                                             onChange={toggleAllVisible}
                                             title="Selecionar todas (canceláveis)"
                                         />
                                     </th>
-                                    {['Cliente', 'Descrição', 'Tipo', 'Vencimento', 'Valor', 'Status', 'Ações'].map(h => (
+                                    {['Cliente', 'Descrição', 'Tipo', 'Vencimento', 'Valor', 'Status'].map(h => (
                                         <th key={h} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-left">{h}</th>
                                     ))}
+                                    <th className="px-6 py-2 text-left text-table-header font-semibold text-gray-500">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 bg-white">
@@ -347,12 +346,12 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                     const active = !isCancelled && !PAID.includes(c.status);
                                     return (
                                         <React.Fragment key={c.id}>
-                                            <tr className={`group hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 ${selectedIds.has(c.id) ? 'bg-red-50/60 hover:bg-red-50' : isOverdue ? 'bg-red-50/10' : ''} ${isCancelled ? 'opacity-50' : ''}`}>
+                                            <tr className={`group hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-0 ${selectedIds.has(c.id) ? 'bg-blue-50/60 hover:bg-blue-50' : isOverdue ? 'bg-red-50/10' : ''} ${isCancelled ? 'opacity-50' : ''}`}>
                                                 <td className="w-10 px-6 py-2.5 text-center border-r border-gray-100">
                                                     {isSelectable(c) ? (
                                                         <input
                                                             type="checkbox"
-                                                            className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                             checked={selectedIds.has(c.id)}
                                                             onChange={() => toggleRow(c.id)}
                                                         />
@@ -366,18 +365,18 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                                 <td className="px-6 py-2.5 border-r border-gray-100">
                                                     <StatusBadge status={c.status} />
                                                 </td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    <div className="flex items-center gap-1.5">
+                                                <td className="px-6 py-2.5">
+                                                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                         {(c.bank_slip_url || c.invoice_url || c.pix_payload) && (
                                                             <button onClick={() => setExpanded(expanded === c.id ? null : c.id)}
-                                                                className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors flex items-center gap-1">
-                                                                {expanded === c.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />} Links
+                                                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1">
+                                                                {expanded === c.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />} Links
                                                             </button>
                                                         )}
                                                         {active && (
                                                             <button onClick={() => handleCancel(c)} disabled={cancelling === c.id}
-                                                                className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold uppercase tracking-wider rounded-lg transition-colors flex items-center gap-1">
-                                                                {cancelling === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Slash className="w-3 h-3" />} Cancelar
+                                                                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex items-center gap-1 text-sm font-medium">
+                                                                {cancelling === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Slash className="w-3.5 h-3.5" />} Cancelar
                                                             </button>
                                                         )}
                                                     </div>
@@ -439,11 +438,10 @@ export default function ClientChargesModule({ organizationId }: Props) {
 
             {/* Footer */}
             {!loading && (
-                <div className="flex justify-center mt-6">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{filtered.length} cobrança{filtered.length !== 1 ? 's' : ''}</p>
+                <div className="flex justify-center">
+                    <p className="text-xs text-gray-400">{filtered.length} cobrança{filtered.length !== 1 ? 's' : ''}</p>
                 </div>
             )}
-            </div>
 
             {/* Toast de Notificação — padrão guia seção 13 */}
             {notification && (

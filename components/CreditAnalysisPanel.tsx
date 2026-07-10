@@ -90,6 +90,7 @@ export const CreditAnalysisPanel: React.FC<Props> = ({ dealId, organizationId, c
 
             {/* Header — clicável para expandir */}
             <button
+                type="button"
                 onClick={() => setExpanded(e => !e)}
                 className="w-full flex items-center gap-3 px-5 py-4 bg-white hover:bg-gray-50 transition-colors text-left"
             >
@@ -123,6 +124,7 @@ export const CreditAnalysisPanel: React.FC<Props> = ({ dealId, organizationId, c
                                 <span className="text-xs text-gray-400">/100</span>
                                 {suggested !== result && (
                                     <button
+                                        type="button"
                                         onClick={() => setResult(suggested)}
                                         className="text-xs text-blue-600 hover:underline"
                                     >
@@ -169,6 +171,7 @@ export const CreditAnalysisPanel: React.FC<Props> = ({ dealId, organizationId, c
                             {(['PENDENTE', 'EM_ANALISE', 'APROVADO', 'REPROVADO'] as CreditResult[]).map(r => (
                                 <button
                                     key={r}
+                                    type="button"
                                     onClick={() => setResult(r)}
                                     className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${
                                         result === r
@@ -218,6 +221,7 @@ export const CreditAnalysisPanel: React.FC<Props> = ({ dealId, organizationId, c
                     {/* Actions */}
                     <div className="flex gap-3 pt-1">
                         <Button
+                            type="button"
                             variant="primary"
                             size="lg"
                             onClick={handleSave}

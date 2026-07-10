@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { UploadCloud, FileText, ListChecks, Tags, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getPipelineHealth } from '../../services/nfeService';
 import { FISCAL_CSS } from './fiscalCss';
@@ -12,18 +13,28 @@ export type FiscalPage = 'upload' | 'documents' | 'admin' | 'rules';
 
 interface ToastState { msg: string; type: 'ok' | 'err'; }
 
+// Toast — padrão ui_ux_standard_guide.md §13
 function FiscalToast({ msg, type, onClose }: ToastState & { onClose: () => void }) {
   useEffect(() => {
-    const t = setTimeout(onClose, 4000);
+    const t = setTimeout(onClose, 4500);
     return () => clearTimeout(t);
   }, [onClose]);
   return (
-    <div className={`f-toast f-toast-${type}`}>
-      <span>{type === 'ok' ? '✓' : '✕'}</span>
-      <span>{msg}</span>
+    <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+      type === 'ok' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+    }`}>
+      {type === 'ok' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+      {msg}
     </div>
   );
 }
+
+const NAV: { id: FiscalPage; label: string; icon: React.ReactNode }[] = [
+  { id: 'upload', label: 'Upload NF-e', icon: <UploadCloud className="w-4 h-4" /> },
+  { id: 'documents', label: 'Documentos', icon: <FileText className="w-4 h-4" /> },
+  { id: 'admin', label: 'Fila & Jobs', icon: <ListChecks className="w-4 h-4" /> },
+  { id: 'rules', label: 'Classificação', icon: <Tags className="w-4 h-4" /> },
+];
 
 export function FiscalModule() {
   const { activeOrganizationId, organizations, session } = useStore();
@@ -44,47 +55,31 @@ export function FiscalModule() {
     getPipelineHealth(orgId).then(setHealth).catch(() => null);
   }, [orgId, page]);
 
-  const rate = health
-    ? Math.round(health.success_rate_pct)
-    : 0;
-
-  const nav: { id: FiscalPage; label: string; icon: React.ReactNode }[] = [
-    {
-      id: 'upload', label: 'Upload NF-e',
-      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>,
-    },
-    {
-      id: 'documents', label: 'Documentos',
-      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>,
-    },
-    {
-      id: 'admin', label: 'Fila & Jobs',
-      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>,
-    },
-    {
-      id: 'rules', label: 'Classificação',
-      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>,
-    },
-  ];
+  const rate = health ? Math.round(health.success_rate_pct) : 0;
+  const rateColor = rate >= 80 ? 'bg-emerald-500' : rate >= 50 ? 'bg-amber-500' : 'bg-red-500';
 
   return (
     <>
+      {/* FISCAL_CSS ainda é injetado — TaxValidationPanel/JournalEntryCard (renderizados
+          dentro de FiscalDocuments) continuam usando as classes f-* legadas; fora do
+          escopo desta migração. A classe .fiscal-root só fornece as CSS custom
+          properties (--fred, --fgreen etc.) que esses dois componentes consomem. */}
       <style dangerouslySetInnerHTML={{ __html: FISCAL_CSS }} />
-      <div className="fiscal-root">
-        <div className="f-main">
-          {/* Header */}
-          <div className="f-module-header">
-            <div className="f-module-title-row">
+      <div className="fiscal-root h-full flex flex-col overflow-hidden" style={{ background: '#f9fafb' }}>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Header do módulo */}
+          <div className="bg-white border-b border-gray-100 px-7 pt-5 shrink-0">
+            <div className="flex items-start justify-between gap-4 mb-4">
               <div>
-                <h1 className="f-module-title">Módulo Fiscal</h1>
-                <p className="f-module-sub">Pipeline de NF-e e classificação de documentos</p>
+                <h1 className="text-2xl font-black text-gray-900 tracking-tight">Módulo Fiscal</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Pipeline de NF-e e classificação de documentos.</p>
               </div>
-              <div className="f-module-header-right">
+              <div className="flex items-center gap-3 shrink-0">
                 <select
                   value={moduleOrgId}
                   onChange={e => setModuleOrgId(e.target.value)}
-                  className="f-org-select"
                   title="Organização"
+                  className="h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all min-w-[200px]"
                 >
                   <option value="">Todas as organizações</option>
                   {organizations.map(org => (
@@ -92,20 +87,18 @@ export function FiscalModule() {
                   ))}
                 </select>
                 {health && (
-                  <div className="f-health-chips">
-                    <span className="f-health-chip">
-                      <span className="f-health-chip-dot" style={{ background: rate >= 80 ? 'var(--fgreen)' : rate >= 50 ? 'var(--famber)' : 'var(--fred)' }} />
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${rateColor}`} />
                       Sucesso {rate}%
                     </span>
                     {(health.dead_letter ?? 0) > 0 && (
-                      <span className="f-health-chip f-health-chip-warn">
-                        ⚠ {health.dead_letter} dead letter
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600">
+                        <AlertCircle className="w-3.5 h-3.5" /> {health.dead_letter} dead letter
                       </span>
                     )}
                     {(health.queued ?? 0) > 0 && (
-                      <span className="f-health-chip">
-                        {health.queued} na fila
-                      </span>
+                      <span className="text-xs font-medium text-gray-500">{health.queued} na fila</span>
                     )}
                   </div>
                 )}
@@ -113,20 +106,20 @@ export function FiscalModule() {
             </div>
 
             {isConsolidated && (page === 'upload' || page === 'rules') && (
-              <div className="f-consolidated-banner">
-                <span>
-                  Visão consolidada — selecione uma organização específica acima para {page === 'upload' ? 'enviar NF-e' : 'criar regras'}.
-                </span>
+              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-[10px] px-4 py-2.5 text-sm font-medium mb-4">
+                Visão consolidada — selecione uma organização específica acima para {page === 'upload' ? 'enviar NF-e' : 'criar regras'}.
               </div>
             )}
 
-            {/* Tabs */}
-            <div className="f-tabs">
-              {nav.map(n => (
+            {/* Navegação de abas do módulo — escala compacta (§16/§19) */}
+            <div className="inline-flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 mb-0">
+              {NAV.map(n => (
                 <button
                   key={n.id}
-                  className={`f-tab ${page === n.id ? 'active' : ''}`}
                   onClick={() => setPage(n.id)}
+                  className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all ${
+                    page === n.id ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-700'
+                  }`}
                 >
                   {n.icon} {n.label}
                 </button>
@@ -134,8 +127,8 @@ export function FiscalModule() {
             </div>
           </div>
 
-          {/* Content */}
-          <div className="f-tab-content">
+          {/* Conteúdo da aba ativa */}
+          <div className="flex-1 overflow-y-auto px-7 py-6">
             {page === 'upload' && (
               orgId ? (
                 <FiscalUpload
@@ -145,7 +138,7 @@ export function FiscalModule() {
                   onNavigate={setPage}
                 />
               ) : (
-                <div className="f-tab-empty">Selecione uma organização acima para enviar NF-e.</div>
+                <div className="text-center py-16 text-sm text-gray-400">Selecione uma organização acima para enviar NF-e.</div>
               )
             )}
             {page === 'documents' && (

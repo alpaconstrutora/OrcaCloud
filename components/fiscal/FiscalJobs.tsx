@@ -1,14 +1,28 @@
 import { useState, useEffect, useCallback } from 'react';
+import { ListChecks, Search, AlertTriangle, RotateCw, Zap } from 'lucide-react';
 import { listProcessingJobs, replayDeadLetter } from '../../services/nfeService';
 import type { ProcessingJobWithDoc } from '../../types/fiscal';
+import { KpiCard } from '../ui/KpiCard';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 
 interface Props {
   organizationId: string | null;
   onToast: (msg: string, type: 'ok' | 'err') => void;
 }
 
-function Badge({ status }: { status: string }) {
-  return <span className={`f-badge f-badge-${status}`}>⬤ {status.replace('_', ' ')}</span>;
+const STATUS_COLORS: Record<string, string> = {
+  queued: 'text-gray-500',
+  processing: 'text-amber-600',
+  parsed: 'text-purple-600',
+  normalized: 'text-teal-600',
+  completed: 'text-emerald-700',
+  failed: 'text-red-600',
+  dead_letter: 'text-rose-700',
+  duplicated: 'text-gray-400',
+};
+
+function StatusText({ status }: { status: string }) {
+  return <span className={`text-sm font-normal ${STATUS_COLORS[status] ?? 'text-gray-600'}`}>{status.replace('_', ' ')}</span>;
 }
 
 const RUNBOOK = [
@@ -30,11 +44,24 @@ const RUNBOOK = [
   },
 ] as const;
 
+const COLUMNS: ColumnConfig[] = [
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'document', label: 'Documento', sortable: true },
+  { key: 'type', label: 'Tipo', sortable: true },
+  { key: 'retries', label: 'Retries', sortable: true },
+  { key: 'failure', label: 'Falha', sortable: true },
+  { key: 'error', label: 'Erro', sortable: true },
+  { key: 'duration', label: 'Duração', sortable: true },
+  { key: 'actions', label: 'Ação', sortable: false },
+];
+
 export function FiscalJobs({ organizationId, onToast }: Props) {
   const [jobs, setJobs] = useState<ProcessingJobWithDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [replaying, setReplaying] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = usePersistedState<string>('fiscalJobs:search', '');
+  const tableColumns = useTableColumns(COLUMNS, 'fiscalJobsColumns');
 
   const loadJobs = useCallback(() => {
     setLoading(true);
@@ -60,182 +87,238 @@ export function FiscalJobs({ organizationId, onToast }: Props) {
   };
 
   const counts = {
-    all:         jobs.length,
-    completed:   jobs.filter(j => j.status === 'completed').length,
-    failed:      jobs.filter(j => j.status === 'failed').length,
+    all: jobs.length,
+    completed: jobs.filter(j => j.status === 'completed').length,
+    failed: jobs.filter(j => j.status === 'failed').length,
     dead_letter: jobs.filter(j => j.status === 'dead_letter').length,
   };
 
-  const shown = jobs.filter(j =>
-    filter === 'all'         ? true :
-    filter === 'dead_letter' ? j.status === 'dead_letter' :
-    filter === 'failed'      ? j.status === 'failed' :
-    j.status === filter
-  );
+  const FILTERS = [
+    { k: 'all', label: 'Todos', count: counts.all },
+    { k: 'completed', label: 'Concluídos', count: counts.completed },
+    { k: 'failed', label: 'Com falha', count: counts.failed },
+    { k: 'dead_letter', label: 'Dead letter', count: counts.dead_letter },
+  ];
 
   const duration = (job: ProcessingJobWithDoc) => {
-    if (!job.started_at || !job.finished_at) return '—';
-    const ms = new Date(job.finished_at).getTime() - new Date(job.started_at).getTime();
-    return `${(ms / 1000).toFixed(1)}s`;
+    if (!job.started_at || !job.finished_at) return null;
+    return (new Date(job.finished_at).getTime() - new Date(job.started_at).getTime()) / 1000;
+  };
+  const durationLabel = (job: ProcessingJobWithDoc) => {
+    const s = duration(job);
+    return s === null ? '—' : `${s.toFixed(1)}s`;
   };
 
+  const term = searchTerm.trim().toLowerCase();
+  const filtered = jobs.filter(j => {
+    if (filter !== 'all' && j.status !== filter) return false;
+    if (term && !(j.raw_document?.access_key ?? '').toLowerCase().includes(term) && !j.id.toLowerCase().includes(term)) return false;
+    return true;
+  });
+
+  const shown = [...filtered].sort((a, b) => {
+    if (tableColumns.sortColumn) {
+      const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+      switch (tableColumns.sortColumn) {
+        case 'status': return a.status.localeCompare(b.status) * dir;
+        case 'document': return (a.raw_document?.access_key ?? '').localeCompare(b.raw_document?.access_key ?? '') * dir;
+        case 'type': return a.job_type.localeCompare(b.job_type) * dir;
+        case 'retries': return (a.retry_count - b.retry_count) * dir;
+        case 'failure': return (a.failure_type ?? '').localeCompare(b.failure_type ?? '') * dir;
+        case 'error': return (a.error_code ?? '').localeCompare(b.error_code ?? '') * dir;
+        case 'duration': return ((duration(a) ?? -1) - (duration(b) ?? -1)) * dir;
+      }
+    }
+    return b.created_at.localeCompare(a.created_at); // default: mais recente primeiro
+  });
+
   return (
-    <div className="f-page">
-      <div className="f-page-header">
-        <div className="f-page-title">Fila de processamento</div>
-        <div className="f-page-sub">Visibilidade operacional dos jobs • Gerenciamento de dead letter</div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Fila de processamento</h1>
+        <p className="text-gray-400 text-sm mt-1.5 font-medium">Visibilidade operacional dos jobs e gerenciamento de dead letter.</p>
       </div>
 
-      <div className="f-stats-grid">
-        {[
-          { label: 'Jobs totais',  val: counts.all,         color: 'var(--ftext)' },
-          { label: 'Concluídos',   val: counts.completed,   color: 'var(--fgreen)' },
-          { label: 'Falhas',       val: counts.failed,      color: 'var(--famber)' },
-          { label: 'Dead letter',  val: counts.dead_letter, color: 'var(--fred)' },
-        ].map(s => (
-          <div key={s.label} className="f-stat-card">
-            <div className="f-stat-val" style={{ color: s.color }}>{s.val}</div>
-            <div className="f-stat-label">{s.label}</div>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <KpiCard shadow={false} size="lg" className="col-span-2" label="Jobs totais" value={counts.all} icon={<ListChecks className="w-4 h-4" />} color="blue" />
+        <KpiCard shadow={false} size="sm" label="Concluídos" value={counts.completed} icon={<Zap className="w-4 h-4" />} color="emerald" />
+        <KpiCard shadow={false} size="sm" label="Falhas" value={counts.failed} icon={<AlertTriangle className="w-4 h-4" />} color="amber" />
+        <KpiCard shadow={false} size="sm" label="Dead letter" value={counts.dead_letter} icon={<AlertTriangle className="w-4 h-4" />} color="red" />
       </div>
 
       {counts.dead_letter > 0 && (
-        <div style={{
-          background: 'var(--fred-bg)', border: '1px solid #3d0f0f',
-          borderRadius: 'var(--fradius-lg)', padding: '12px 16px', marginBottom: 16,
-          display: 'flex', alignItems: 'center', gap: 12,
-        }}>
-          <span style={{ color: 'var(--fred)', fontSize: 16 }}>⚠</span>
+        <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-[10px] px-4 py-3">
+          <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
           <div>
-            <div style={{ fontWeight: 700, color: 'var(--fred)', fontSize: 13 }}>
-              {counts.dead_letter} documento(s) em dead letter
-            </div>
-            <div style={{ fontSize: 12, color: '#f87171', marginTop: 2 }}>
-              Requerem revisão manual. NF-e com falha de dados não são reprocessadas automaticamente.
-            </div>
+            <div className="text-sm font-bold text-red-700">{counts.dead_letter} documento(s) em dead letter</div>
+            <div className="text-xs text-red-500 mt-0.5">Requerem revisão manual. NF-e com falha de dados não são reprocessadas automaticamente.</div>
           </div>
         </div>
       )}
 
-      <div className="f-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div className="f-filters" style={{ marginBottom: 0 }}>
-            {([
-              ['all',         'Todos',        counts.all],
-              ['completed',   'Concluídos',   counts.completed],
-              ['failed',      'Com falha',    counts.failed],
-              ['dead_letter', 'Dead letter',  counts.dead_letter],
-            ] as [string, string, number][]).map(([k, label, count]) => (
-              <button
-                key={k}
-                className={`f-filter-chip ${filter === k ? 'active' : ''}`}
-                onClick={() => setFilter(k)}
-              >
-                {label}{' '}
-                <span style={{ opacity: 0.6, fontFamily: 'monospace', fontSize: 10, marginLeft: 4 }}>{count}</span>
-              </button>
-            ))}
-          </div>
-          <button className="f-btn f-btn-ghost f-btn-sm" onClick={loadJobs}>↺ Atualizar</button>
+      <div className="flex flex-col md:flex-row gap-2.5 items-center">
+        <div className="flex-1 relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar por chave de acesso ou ID do job..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+          />
         </div>
+        <button onClick={loadJobs} className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95">
+          <RotateCw className="w-4 h-4" />
+        </button>
+        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+          <ColumnConfigButton
+            columns={COLUMNS.filter(c => c.key !== 'actions')}
+            visibleColumns={tableColumns.visibleColumns}
+            showColumnConfig={tableColumns.showColumnConfig}
+            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+            onToggleColumn={tableColumns.toggleColumn}
+            onReset={tableColumns.resetColumns}
+          />
+        </div>
+      </div>
 
-        {loading ? (
-          <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ftext3)' }}>Carregando…</div>
-        ) : (
-          <div className="f-table-wrap">
-            <table className="f-table">
+      <div className="inline-flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1">
+        {FILTERS.map(f => (
+          <button
+            key={f.k}
+            onClick={() => setFilter(f.k)}
+            className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all ${filter === f.k ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            {f.label} <span className="opacity-60 text-xs ml-1">{f.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-500 text-sm">Carregando...</p>
+        </div>
+      ) : shown.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+          <ListChecks className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum job encontrado</h3>
+          <p className="text-sm text-gray-500">Ajuste os filtros ou a busca.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr>
-                  <th>Status</th>
-                  <th>Documento</th>
-                  <th>Tipo</th>
-                  <th>Retries</th>
-                  <th>Falha</th>
-                  <th>Erro</th>
-                  <th>Duração</th>
-                  <th>Ação</th>
+                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                  {tableColumns.visibleColumns.includes('status') && (
+                    <SortableHeader colKey="status" label="Status" uppercase={false}
+                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                      className="px-6 py-2 border-r border-gray-100" />
+                  )}
+                  {tableColumns.visibleColumns.includes('document') && (
+                    <SortableHeader colKey="document" label="Documento" uppercase={false}
+                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                      className="px-6 py-2 border-r border-gray-100" />
+                  )}
+                  {tableColumns.visibleColumns.includes('type') && (
+                    <SortableHeader colKey="type" label="Tipo" uppercase={false}
+                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                      className="px-6 py-2 border-r border-gray-100" />
+                  )}
+                  {tableColumns.visibleColumns.includes('retries') && (
+                    <SortableHeader colKey="retries" label="Retries" uppercase={false}
+                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                      className="px-6 py-2 border-r border-gray-100" />
+                  )}
+                  {tableColumns.visibleColumns.includes('failure') && (
+                    <SortableHeader colKey="failure" label="Falha" uppercase={false}
+                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                      className="px-6 py-2 border-r border-gray-100" />
+                  )}
+                  {tableColumns.visibleColumns.includes('error') && (
+                    <SortableHeader colKey="error" label="Erro" uppercase={false}
+                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                      className="px-6 py-2 border-r border-gray-100" />
+                  )}
+                  {tableColumns.visibleColumns.includes('duration') && (
+                    <SortableHeader colKey="duration" label="Duração" uppercase={false}
+                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                      className="px-6 py-2 border-r border-gray-100" />
+                  )}
+                  {tableColumns.visibleColumns.includes('actions') && (
+                    <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ação</th>
+                  )}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-200">
                 {shown.map(job => (
-                  <tr key={job.id}>
-                    <td><Badge status={job.status} /></td>
-                    <td>
-                      <div style={{ fontWeight: 600, fontSize: 12 }}>
-                        {job.raw_document?.access_key?.substring(0, 20)}…
-                      </div>
-                      <div className="f-mono" style={{ color: 'var(--ftext3)', fontSize: 10, marginTop: 2 }}>
-                        {job.id}
-                      </div>
-                    </td>
-                    <td><span className="f-tag">{job.job_type}</span></td>
-                    <td>
-                      <span className="f-mono" style={{
-                        color: job.retry_count >= job.max_retries ? 'var(--fred)' : 'var(--ftext2)',
-                      }}>
+                  <tr key={job.id} className="hover:bg-blue-50/50 transition-colors">
+                    {tableColumns.visibleColumns.includes('status') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0"><StatusText status={job.status} /></td>
+                    )}
+                    {tableColumns.visibleColumns.includes('document') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                        <div className="text-sm font-normal text-gray-700">{job.raw_document?.access_key?.substring(0, 20)}…</div>
+                        <div className="text-xs text-gray-400 mt-0.5">{job.id}</div>
+                      </td>
+                    )}
+                    {tableColumns.visibleColumns.includes('type') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{job.job_type}</td>
+                    )}
+                    {tableColumns.visibleColumns.includes('retries') && (
+                      <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal ${job.retry_count >= job.max_retries ? 'text-red-600' : 'text-gray-600'}`}>
                         {job.retry_count}/{job.max_retries}
-                      </span>
-                    </td>
-                    <td>
-                      {job.failure_type ? (
-                        <span style={{
-                          fontSize: 11,
-                          color: job.failure_type === 'data_failure' ? 'var(--fred)' : 'var(--famber)',
-                        }}>
-                          {job.failure_type === 'data_failure' ? 'dados' : 'técnica'}
-                        </span>
-                      ) : <span style={{ color: 'var(--ftext3)' }}>—</span>}
-                    </td>
-                    <td>
-                      {job.error_code ? (
-                        <span className="f-mono" style={{ fontSize: 10, color: 'var(--fred)' }}>
-                          {job.error_code}
-                        </span>
-                      ) : <span style={{ color: 'var(--ftext3)' }}>—</span>}
-                    </td>
-                    <td><span className="f-mono" style={{ fontSize: 11 }}>{duration(job)}</span></td>
-                    <td>
-                      {(job.status === 'dead_letter' || job.status === 'failed') && (
-                        <button
-                          className="f-btn f-btn-ghost f-btn-sm"
-                          disabled={replaying === job.id}
-                          onClick={() => handleReplay(job.id)}
-                        >
-                          {replaying === job.id
-                            ? <span className="f-spin">⟳</span>
-                            : '↺ Replay'}
-                        </button>
-                      )}
-                    </td>
+                      </td>
+                    )}
+                    {tableColumns.visibleColumns.includes('failure') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
+                        {job.failure_type
+                          ? <span className={job.failure_type === 'data_failure' ? 'text-red-600' : 'text-amber-600'}>
+                              {job.failure_type === 'data_failure' ? 'dados' : 'técnica'}
+                            </span>
+                          : <span className="text-gray-400">—</span>}
+                      </td>
+                    )}
+                    {tableColumns.visibleColumns.includes('error') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
+                        {job.error_code
+                          ? <span className="text-red-600">{job.error_code}</span>
+                          : <span className="text-gray-400">—</span>}
+                      </td>
+                    )}
+                    {tableColumns.visibleColumns.includes('duration') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{durationLabel(job)}</td>
+                    )}
+                    {tableColumns.visibleColumns.includes('actions') && (
+                      <td className="px-6 py-2.5 text-right">
+                        {(job.status === 'dead_letter' || job.status === 'failed') && (
+                          <button
+                            disabled={replaying === job.id}
+                            onClick={() => handleReplay(job.id)}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all disabled:opacity-50"
+                          >
+                            {replaying === job.id ? <RotateCw className="w-4 h-4 animate-spin inline" /> : 'Replay'}
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
-            {shown.length === 0 && (
-              <div className="f-empty" style={{ padding: '40px 0' }}>
-                <div className="f-empty-title">Nenhum job encontrado</div>
-              </div>
-            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="f-card">
-        <div className="f-section-title">Runbook operacional — respostas rápidas</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6">
+        <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-4 pb-2.5 border-b border-gray-100">Runbook operacional — respostas rápidas</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {RUNBOOK.map(({ trigger, action }) => (
-            <div key={trigger} style={{
-              background: 'var(--fbg3)', borderRadius: 'var(--fradius)',
-              padding: 14, border: '1px solid var(--fborder)',
-            }}>
-              <div style={{
-                fontFamily: 'monospace', fontSize: 10, color: 'var(--famber)',
-                marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1,
-              }}>
-                ⚡ {trigger}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--ftext2)', lineHeight: 1.6 }}>{action}</div>
+            <div key={trigger} className="bg-gray-50 rounded-[10px] border border-gray-100 p-3.5">
+              <div className="text-[10px] uppercase tracking-wide text-amber-600 font-semibold mb-1.5">{trigger}</div>
+              <div className="text-sm text-gray-600 leading-relaxed">{action}</div>
             </div>
           ))}
         </div>

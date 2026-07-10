@@ -39,7 +39,6 @@ const SupplyChainQuotationList = React.lazy(() => import('./SupplyChainQuotation
 const SupplyChainQuotationComparison = React.lazy(() => import('./SupplyChainQuotationComparison'));
 const SupplyChainContractList = React.lazy(() => import('./SupplyChainContractList'));
 const ContractDetailView    = React.lazy(() => import('./ContractDetailView'));
-const ContractsDashboard    = React.lazy(() => import('./ContractsDashboard'));
 const ContractTemplateManager = React.lazy(() => import('./ContractTemplateManager'));
 const ContractIndexManager  = React.lazy(() => import('./ContractIndexManager'));
 const SupplyChainReceiptManager = React.lazy(() => import('./SupplyChainReceiptManager'));
@@ -1389,7 +1388,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
 };
 
 // ─── ContractsDashboardShell ──────────────────────────────────────────────────
-// Wrapper com tabs "Carteira" (dashboard org) / "Por Obra" (lista por projeto)
+// Wrapper com tabs "Por Obra" (lista por projeto) / "Templates" / "Índices"
 interface ShellProps {
     organizationId: string;
     projectId: string;
@@ -1405,10 +1404,9 @@ const ContractsDashboardShell: React.FC<ShellProps> = ({
     organizationId, projectId, contractsVersion, setContractsVersion,
     setSelectedContractId, setIsCreatingContract, setEditingContract,
 }) => {
-    const [tab, setTab] = React.useState<'carteira' | 'obra' | 'templates' | 'indices'>('carteira');
+    const [tab, setTab] = React.useState<'obra' | 'templates' | 'indices'>('obra');
 
     const TABS = [
-        { id: 'carteira',  label: 'Carteira' },
         { id: 'obra',      label: 'Por Obra' },
         { id: 'templates', label: 'Templates' },
         { id: 'indices',   label: 'Índices' },
@@ -1429,13 +1427,6 @@ const ContractsDashboardShell: React.FC<ShellProps> = ({
                 ))}
             </div>
             <div className="flex-1 overflow-auto">
-                {tab === 'carteira' && (
-                    <ContractsDashboard
-                        organizationId={organizationId}
-                        onViewContract={(id) => setSelectedContractId(id)}
-                        direction="INCOMING"
-                    />
-                )}
                 {tab === 'obra' && (
                     <SupplyChainContractList
                         projectId={projectId}

@@ -10,10 +10,16 @@ export function validateFileNameAgainstMask(fileName: string, mask: string): boo
 
   const pattern = mask
     .replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') // Escapa caracteres especiais de Regex
-    .replace(/\\\[OBRA\\\]/g, '([A-Z0-9]+)')
-    .replace(/\\\[DISCIPLINA\\\]/g, '([A-Z]+)')
-    .replace(/\\\[NUMERO\\\]/g, '([0-9]+)')
-    .replace(/\\\[REVISAO\\\]/g, '([A-Z0-9]+)');
+    // Substitui tokens com chaves de tamanho específico
+    .replace(/\\\[OBRA\\\{([0-9,]+)\\\}\\\]/gi, '([A-Z0-9]{$1})')
+    .replace(/\\\[DISCIPLINA\\\{([0-9,]+)\\\}\\\]/gi, '([A-Z]{$1})')
+    .replace(/\\\[NUMERO\\\{([0-9,]+)\\\}\\\]/gi, '([0-9]{$1})')
+    .replace(/\\\[REVISAO\\\{([0-9,]+)\\\}\\\]/gi, '([A-Z0-9]{$1})')
+    // Substitui tokens sem chaves
+    .replace(/\\\[OBRA\\\]/gi, '([A-Z0-9]+)')
+    .replace(/\\\[DISCIPLINA\\\]/gi, '([A-Z]+)')
+    .replace(/\\\[NUMERO\\\]/gi, '([0-9]+)')
+    .replace(/\\\[REVISAO\\\]/gi, '([A-Z0-9]+)');
 
   const regex = new RegExp(`^${pattern}$`, 'i');
   
@@ -34,21 +40,30 @@ export function extractTokenFromFileName(
   if (!mask) return null;
 
   const tokensInOrder: string[] = [];
-  const regexTokens = /\[OBRA\]|\[DISCIPLINA\]|\[NUMERO\]|\[REVISAO\]/g;
+  // Regex que aceita tanto [OBRA] quanto [OBRA{3}]
+  const regexTokens = /\[(OBRA|DISCIPLINA|NUMERO|REVISAO)(?:\{[0-9,]+\})?\]/gi;
   let match;
   while ((match = regexTokens.exec(mask)) !== null) {
-    tokensInOrder.push(match[0]);
+    tokensInOrder.push(match[0].toUpperCase()); // Normaliza para maiúsculo
   }
 
-  const targetIndex = tokensInOrder.indexOf(token);
+  // Acha o index do token que contém o nome procurado (ex: "DISCIPLINA")
+  const cleanTokenName = token.replace(/[\[\]]/g, '').toUpperCase(); // ex: "DISCIPLINA"
+  const targetIndex = tokensInOrder.findIndex(t => t.includes(cleanTokenName));
   if (targetIndex === -1) return null;
 
   const pattern = mask
-    .replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
-    .replace(/\\\[OBRA\\\]/g, '([A-Z0-9]+)')
-    .replace(/\\\[DISCIPLINA\\\]/g, '([A-Z]+)')
-    .replace(/\\\[NUMERO\\\]/g, '([0-9]+)')
-    .replace(/\\\[REVISAO\\\]/g, '([A-Z0-9]+)');
+    .replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') // Escapa tudo
+    // Substitui tokens com chaves
+    .replace(/\\\[OBRA\\\{([0-9,]+)\\\}\\\]/gi, '([A-Z0-9]{$1})')
+    .replace(/\\\[DISCIPLINA\\\{([0-9,]+)\\\}\\\]/gi, '([A-Z]{$1})')
+    .replace(/\\\[NUMERO\\\{([0-9,]+)\\\}\\\]/gi, '([0-9]{$1})')
+    .replace(/\\\[REVISAO\\\{([0-9,]+)\\\}\\\]/gi, '([A-Z0-9]{$1})')
+    // Substitui tokens sem chaves
+    .replace(/\\\[OBRA\\\]/gi, '([A-Z0-9]+)')
+    .replace(/\\\[DISCIPLINA\\\]/gi, '([A-Z]+)')
+    .replace(/\\\[NUMERO\\\]/gi, '([0-9]+)')
+    .replace(/\\\[REVISAO\\\]/gi, '([A-Z0-9]+)');
 
   const regex = new RegExp(`^${pattern}$`, 'i');
   const fileNameWithoutExt = fileName.split('.').slice(0, -1).join('.');

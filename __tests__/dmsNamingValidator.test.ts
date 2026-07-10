@@ -47,4 +47,18 @@ describe('validateFileNameAgainstMask', () => {
     // Casos inválidos
     expect(validateFileNameAgainstMask('ALPA-ESTR-001-R2.pdf', mask)).toBe(false); // Usa R em vez de V
   });
+
+  it('Máscara com comprimentos específicos: [OBRA{3}]-[DISCIPLINA{3}]-[NUMERO{3}]-R[REVISAO{2}]', () => {
+    const mask = '[OBRA{3}]-[DISCIPLINA{3}]-[NUMERO{3}]-R[REVISAO{2}]';
+
+    // Casos válidos
+    expect(validateFileNameAgainstMask('ALP-EST-001-R02.pdf', mask)).toBe(true);
+    expect(validateFileNameAgainstMask('123-ARQ-999-R10.dwg', mask)).toBe(true);
+
+    // Casos inválidos
+    expect(validateFileNameAgainstMask('ALPA-EST-001-R02.pdf', mask)).toBe(false); // OBRA tem 4 em vez de 3
+    expect(validateFileNameAgainstMask('ALP-ESTR-001-R02.pdf', mask)).toBe(false); // DISCIPLINA tem 4 em vez de 3
+    expect(validateFileNameAgainstMask('ALP-EST-0001-R02.pdf', mask)).toBe(false); // NUMERO tem 4 em vez de 3
+    expect(validateFileNameAgainstMask('ALP-EST-001-R2.pdf', mask)).toBe(false);   // REVISAO tem 1 em vez de 2
+  });
 });

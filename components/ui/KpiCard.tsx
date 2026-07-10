@@ -58,7 +58,7 @@ interface KpiCardProps {
 
 const SIZE_MAP: Record<'sm' | 'md' | 'lg', { value: string; padding: string; radius: string; bareIcon: boolean }> = {
     sm: { value: 'text-lg',  padding: 'px-3.5 py-2.5', radius: 'rounded-[10px]', bareIcon: true },
-    md: { value: 'text-2xl', padding: 'p-5',           radius: 'rounded-[1.5rem]', bareIcon: false },
+    md: { value: 'text-2xl', padding: 'p-5',           radius: 'rounded-[10px]', bareIcon: false },
     lg: { value: 'text-3xl', padding: 'px-4 py-2.5',   radius: 'rounded-[10px]', bareIcon: true },
 };
 
@@ -100,7 +100,7 @@ export function KpiCard({
             {/* Ícone — bloco circular (md, padrão histórico) ou solto/inline (sm, lg) */}
             {icon && !s.bareIcon && (
                 <div className={[
-                    'p-3.5 rounded-[1.25rem] shrink-0',
+                    'p-3.5 rounded-[6px] shrink-0',
                     'group-hover:scale-110 transition-transform',
                     c.bg, c.text,
                 ].join(' ')}>

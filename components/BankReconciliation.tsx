@@ -24,6 +24,7 @@ import { useStore } from '../store/useStore';
 import { useConfirm } from './ui/confirm';
 import { formatMoney, formatDateBR } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { KpiCard } from './ui/KpiCard';
 import ReconciliationDashboardView from './ReconciliationDashboard';
 import DivergencesPanel from './DivergencesPanel';
@@ -34,6 +35,20 @@ import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
 import BankStatementImportDrawer from './BankStatementImportDrawer';
 
 type ReconciliationView = 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'statement' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close';
+
+// Título/subtítulo de tela por aba — guia §20 (toda tela com título tem que TER um título).
+const VIEW_HEADERS: Record<ReconciliationView, { title: string; subtitle: string }> = {
+    dashboard: { title: 'Conciliação Bancária', subtitle: 'Visão geral da automação e saúde da conciliação.' },
+    statement: { title: 'Extrato Bancário', subtitle: 'Lançamentos importados do banco, prontos para categorizar e conciliar.' },
+    center: { title: 'Central de Conciliação', subtitle: 'Vincule manualmente extrato bancário e lançamentos internos.' },
+    divergences: { title: 'Divergências', subtitle: 'Diferenças entre extrato bancário e lançamentos internos.' },
+    anomalies: { title: 'Anomalias', subtitle: 'Padrões incomuns identificados na conciliação.' },
+    pending: { title: 'Pendentes', subtitle: 'Extrato bancário e lançamentos internos aguardando conciliação.' },
+    conciliated: { title: 'Conciliados', subtitle: 'Vínculos já confirmados entre extrato e lançamentos internos.' },
+    rules: { title: 'Regras de Automação', subtitle: 'Critérios que conciliam lançamentos automaticamente.' },
+    categories: { title: 'Categorias', subtitle: 'Categorias usadas para classificar lançamentos.' },
+    close: { title: 'Fechamento Financeiro', subtitle: 'Feche o período após a conciliação estar completa.' },
+};
 
 interface BankReconciliationProps {
     organizationId: string;
@@ -48,13 +63,39 @@ const STATEMENT_COLUMNS: ColumnConfig[] = [
     { key: 'description',  label: 'Descrição',          sortable: true },
     { key: 'counterparty', label: 'Cliente/Fornecedor', sortable: true },
     { key: 'category',     label: 'Categoria',          sortable: true },
-    { key: 'project',      label: 'Obra',               sortable: false },
-    { key: 'costCenter',   label: 'Centro de Custo',    sortable: false },
+    { key: 'project',      label: 'Obra',               sortable: true },
+    { key: 'costCenter',   label: 'Centro de Custo',    sortable: true },
     { key: 'date',         label: 'Data',               sortable: true },
     { key: 'amount',       label: 'Valor',              sortable: true },
+    // Status mistura dado (situação da conciliação) com ação inline (Aceitar/Rejeitar
+    // quando RULE_APPLIED) — não é um valor único comparável, guia §6.3.
     { key: 'status',       label: 'Status',             sortable: false },
     { key: 'actions',      label: 'Ações',              sortable: false },
 ];
+
+// Filtro avançado do Extrato (guia §5.1 / paridade com SupplierList.tsx). Cobre
+// campos que os chips de categoria/contraparte/fluxo/data não cobrem (descrição,
+// valor) — permite regras tipo "valor > 1000" ou "descrição contém PIX".
+const STATEMENT_FILTER_FIELDS: FilterFieldConfig[] = [
+    { key: 'description',  label: 'Descrição',          type: 'text'   },
+    { key: 'counterparty', label: 'Cliente/Fornecedor', type: 'text'   },
+    { key: 'category',     label: 'Categoria',          type: 'text'   },
+    { key: 'amount',       label: 'Valor',              type: 'number' },
+    { key: 'direction',    label: 'Tipo', type: 'select', options: [
+        { value: 'CREDIT', label: 'Entrada (crédito)' }, { value: 'DEBIT', label: 'Saída (débito)' },
+    ] },
+];
+
+function getBankTxFilterValue(tx: BankTransaction, key: string): unknown {
+    switch (key) {
+        case 'description':  return tx.description_normalized || tx.description_raw || '';
+        case 'counterparty': return tx.counterparty_name ?? '';
+        case 'category':     return tx.category ?? '';
+        case 'amount':       return tx.amount ?? 0;
+        case 'direction':    return tx.direction ?? '';
+        default: return null;
+    }
+}
 
 // Colunas da tabela de Extrato Bancário na aba Pendentes (visualização em linha).
 // sortable:true só nas colunas que o campo de ordenação da toolbar (bankSortField) suporta.
@@ -180,6 +221,22 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const categoriesLoadedForOrg = useRef<string | null>(null);
     const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
     const [selectedBankTxIds, setSelectedBankTxIds] = useState<Set<string>>(new Set());
+    // Âncora do Shift+clique no Extrato (guia §10.1) — só avança em clique sem Shift.
+    const [lastCheckedStatementIndex, setLastCheckedStatementIndex] = useState<number | null>(null);
+    const handleStatementRowCheck = (id: string, index: number, checked: boolean, shiftKey: boolean) => {
+        if (shiftKey && lastCheckedStatementIndex !== null) {
+            const [start, end] = lastCheckedStatementIndex < index ? [lastCheckedStatementIndex, index] : [index, lastCheckedStatementIndex];
+            const rangeIds = sortedBankTransactions.slice(start, end + 1).map(tx => tx.id);
+            setSelectedBankTxIds(prev => new Set([...prev, ...rangeIds]));
+        } else {
+            setSelectedBankTxIds(prev => {
+                const next = new Set(prev);
+                if (checked) next.add(id); else next.delete(id);
+                return next;
+            });
+            setLastCheckedStatementIndex(index);
+        }
+    };
     const [selectedInternalTxIds, setSelectedInternalTxIds] = useState<Set<string>>(new Set());
     const [isLoteEditOpen, setIsLoteEditOpen] = useState(false);
     const [showImportDrawer, setShowImportDrawer] = useState(false);
@@ -258,6 +315,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     }, [defaultView]);
 
     const tableColumns = useTableColumns(STATEMENT_COLUMNS, 'extratoBancarioColumns');
+    const statementAdvancedFilters = useAdvancedFilters(STATEMENT_FILTER_FIELDS, 'extratoBancario:advancedFilters');
     const pendingBankColumns = useTableColumns(PENDING_BANK_COLUMNS, 'conciliacaoPendentesBankColumns');
     const pendingInternalColumns = useTableColumns(PENDING_INTERNAL_COLUMNS, 'conciliacaoPendentesInternalColumns');
     const pendingBankResize = useResizableColumns(DEFAULT_PENDING_BANK_COL_WIDTHS, 'conciliacaoPendentesBankColWidths');
@@ -273,6 +331,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const statementColResizeRef = useRef<{ colKey: string; startX: number; startW: number } | null>(null);
     const statementTableRef = useRef<HTMLTableElement>(null);
     const getStatementColWidth = (key: string) => statementColWidths[key] ?? DEFAULT_STATEMENT_COL_WIDTHS[key] ?? 150;
+    // Largura explícita da tabela = soma das colunas visíveis — nunca w-full com
+    // table-layout:fixed, senão o navegador redistribui espaço entre colunas ao
+    // arrastar (bug real documentado em ui_ux_standard_guide.md §6.1).
+    const statementTableTotalWidth = 40 // checkbox
+        + STATEMENT_COLUMNS.filter(c => c.key !== 'actions')
+            .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? getStatementColWidth(c.key) : 0), 0)
+        + (tableColumns.visibleColumns.includes('actions') ? 90 : 0);
 
     const handleStatementColResizeStart = (colKey: string, e: React.MouseEvent) => {
         e.preventDefault();
@@ -404,7 +469,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     });
     const [internalEntityDropdownOpen, setInternalEntityDropdownOpen] = useState(false);
     const [bankSortOrder, setBankSortOrder] = useState<'desc' | 'asc'>('desc');
-    const [bankSortField, setBankSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'counterparty'>('date');
+    const [bankSortField, setBankSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'counterparty' | 'project' | 'costCenter'>('date');
     const [internalSortOrder, setInternalSortOrder] = useState<'desc' | 'asc'>('desc');
     const [internalSortField, setInternalSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'entity'>('date');
     const [matchSortOrder, setMatchSortOrder] = useState<'desc' | 'asc'>('desc');
@@ -436,10 +501,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             filtered = filtered.filter(tx => bankCounterpartyFilter.includes(tx.counterparty_name ?? ''));
         }
         if (flowFilter !== 'ALL') {
-            filtered = filtered.filter(tx => 
+            filtered = filtered.filter(tx =>
                 flowFilter === 'INCOME' ? tx.direction === 'CREDIT' : tx.direction === 'DEBIT'
             );
         }
+        // Filtro avançado (regras compostas — descrição/valor/tipo etc.)
+        filtered = applyFilterRules(filtered, statementAdvancedFilters.rules, STATEMENT_FILTER_FIELDS, getBankTxFilterValue);
         return filtered.sort((a, b) => {
             let valA: string | number = '';
             let valB: string | number = '';
@@ -458,12 +525,18 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             } else if (bankSortField === 'counterparty') {
                 valA = (a.counterparty_name || '').toLowerCase();
                 valB = (b.counterparty_name || '').toLowerCase();
+            } else if (bankSortField === 'project') {
+                valA = (masterProjects.find(p => p.id === a.project_id)?.name || '').toLowerCase();
+                valB = (masterProjects.find(p => p.id === b.project_id)?.name || '').toLowerCase();
+            } else if (bankSortField === 'costCenter') {
+                valA = (masterCostCenters.find(c => c.id === a.cost_center_id)?.name || '').toLowerCase();
+                valB = (masterCostCenters.find(c => c.id === b.cost_center_id)?.name || '').toLowerCase();
             }
             if (valA < valB) return bankSortOrder === 'asc' ? -1 : 1;
             if (valA > valB) return bankSortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter]);
+    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, statementAdvancedFilters.rules]);
 
     const sortedInternalTransactions = useMemo(() => {
         let filtered = [...internalTransactions];
@@ -3126,46 +3199,62 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 </div>
             )}
 
-            {/* Header / Stats */}
+            {/* Cabeçalho de tela — guia §20 */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{VIEW_HEADERS[activeView].title}</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[activeView].subtitle}</p>
+            </div>
+
+            {/* Header / Stats — variante flat (bare icon, sentence case, sem sombra),
+                igual à tela de referência SupplierList.tsx. Grade simétrica: os 4 KPIs
+                são métricas independentes, sem relação total→decomposição (guia §4.2). */}
             <div className="relative">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <KpiCard
+                        shadow={false}
+                        size="sm"
                         label="Pendentes"
                         value={bankTransactions.length}
                         sub="Transações no extrato"
-                        icon={<ArrowRightLeft className="w-5 h-5" />}
+                        icon={<ArrowRightLeft className="w-4 h-4" />}
                         color="blue"
                     />
                     <KpiCard
+                        shadow={false}
+                        size="sm"
                         label="Automação"
                         value={`${stats.automationRate}%`}
                         sub="Conciliadas por regra"
-                        icon={<Zap className="w-5 h-5" />}
+                        icon={<Zap className="w-4 h-4" />}
                         color="emerald"
                     />
                     <KpiCard
-                        label="Regras Ativas"
+                        shadow={false}
+                        size="sm"
+                        label="Regras ativas"
                         value={rules.length}
                         sub="Regras de conciliação"
-                        icon={<ShieldCheck className="w-5 h-5" />}
+                        icon={<ShieldCheck className="w-4 h-4" />}
                         color="purple"
                     />
                     <KpiCard
+                        shadow={false}
+                        size="sm"
                         label="Atenção"
                         value={internalTransactions.length}
                         sub="Lançamentos internos pendentes"
-                        icon={<AlertCircle className="w-5 h-5" />}
+                        icon={<AlertCircle className="w-4 h-4" />}
                         color="amber"
                     />
             </div>
         </div>
 
-            {/* Toolbar */}
-            <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm">
-                <div className="flex flex-wrap items-center gap-3">
-                    <select 
+            {/* Toolbar — escala compacta (guia §5/§16) */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                    <select
                         value={selectedAccountId || ''}
-                        className="pl-4 pr-10 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-form-input uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
+                        className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
                         onChange={(e) => setSelectedAccountId(e.target.value)}
                     >
                         <option value="">Selecione uma conta...</option>
@@ -3173,81 +3262,77 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             <option key={acc.id} value={acc.id}>{acc.name} - {acc.account_number}</option>
                         ))}
                     </select>
-                    
-                    <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100 h-fit">
-                        <button 
+
+                    <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[6px] border border-gray-100">
+                        <button
                             onClick={() => setFlowFilter('ALL')}
-                            className={`px-3 py-1.5 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all ${flowFilter === 'ALL' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'ALL' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                         >
                             Tudo
                         </button>
-                        <button 
+                        <button
                             onClick={() => setFlowFilter('INCOME')}
-                            className={`px-3 py-1.5 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all ${flowFilter === 'INCOME' ? 'bg-emerald-500 text-white shadow-sm' : 'text-emerald-600/60 hover:text-emerald-600'}`}
+                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'INCOME' ? 'bg-emerald-500 text-white' : 'text-emerald-600/60 hover:text-emerald-600'}`}
                         >
                             Receitas
                         </button>
-                        <button 
+                        <button
                             onClick={() => setFlowFilter('EXPENSE')}
-                            className={`px-3 py-1.5 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all ${flowFilter === 'EXPENSE' ? 'bg-red-500 text-white shadow-sm' : 'text-red-400 hover:text-red-500'}`}
+                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'EXPENSE' ? 'bg-red-500 text-white' : 'text-red-400 hover:text-red-500'}`}
                         >
                             Despesas
                         </button>
                     </div>
 
                     {/* Filtro de competência mensal */}
-                    <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
-                        <div className="flex flex-col">
-                            <label className="text-[8px] font-black text-indigo-400 uppercase ml-1 mb-0.5">Competência</label>
-                            <div className="flex gap-1">
-                                <select
-                                    value={competencia ? competencia.split('-')[0] : ''}
-                                    onChange={(e) => {
-                                        const year = e.target.value;
-                                        const month = competencia ? competencia.split('-')[1] : '01';
-                                        if (year && month) {
-                                            const val = `${year}-${month}`;
-                                            setCompetencia(val);
-                                            const [y, m] = [parseInt(year), parseInt(month)];
-                                            const lastDay = new Date(y, m, 0).getDate();
-                                            setStartDate(`${val}-01`);
-                                            setEndDate(`${val}-${String(lastDay).padStart(2, '0')}`);
-                                        }
-                                    }}
-                                    className="bg-transparent border-none text-xs font-black text-indigo-700 focus:ring-0 p-0 w-16"
-                                >
-                                    <option value="">Ano</option>
-                                    {Array.from({length: 10}, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
-                                        <option key={year} value={String(year)}>{year}</option>
-                                    ))}
-                                </select>
-                                <select
-                                    value={competencia ? competencia.split('-')[1] : ''}
-                                    onChange={(e) => {
-                                        const month = e.target.value;
-                                        const year = competencia ? competencia.split('-')[0] : String(new Date().getFullYear());
-                                        if (year && month) {
-                                            const val = `${year}-${month}`;
-                                            setCompetencia(val);
-                                            const [y, m] = [parseInt(year), parseInt(month)];
-                                            const lastDay = new Date(y, m, 0).getDate();
-                                            setStartDate(`${val}-01`);
-                                            setEndDate(`${val}-${String(lastDay).padStart(2, '0')}`);
-                                        }
-                                    }}
-                                    className="bg-transparent border-none text-xs font-black text-indigo-700 focus:ring-0 p-0 w-14"
-                                >
-                                    <option value="">Mês</option>
-                                    {['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'].map((m, i) => (
-                                        <option key={i} value={String(i + 1).padStart(2, '0')}>{m}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
+                    <div className="flex items-center gap-1.5 h-9 bg-indigo-50 px-2.5 rounded-[6px] border border-indigo-100">
+                        <span className="text-xs font-medium text-indigo-400">Competência</span>
+                        <select
+                            value={competencia ? competencia.split('-')[0] : ''}
+                            onChange={(e) => {
+                                const year = e.target.value;
+                                const month = competencia ? competencia.split('-')[1] : '01';
+                                if (year && month) {
+                                    const val = `${year}-${month}`;
+                                    setCompetencia(val);
+                                    const [y, m] = [parseInt(year), parseInt(month)];
+                                    const lastDay = new Date(y, m, 0).getDate();
+                                    setStartDate(`${val}-01`);
+                                    setEndDate(`${val}-${String(lastDay).padStart(2, '0')}`);
+                                }
+                            }}
+                            className="bg-transparent border-none text-xs font-semibold text-indigo-700 focus:ring-0 p-0 w-14 cursor-pointer"
+                        >
+                            <option value="">Ano</option>
+                            {Array.from({length: 10}, (_, i) => new Date().getFullYear() - 5 + i).map(year => (
+                                <option key={year} value={String(year)}>{year}</option>
+                            ))}
+                        </select>
+                        <select
+                            value={competencia ? competencia.split('-')[1] : ''}
+                            onChange={(e) => {
+                                const month = e.target.value;
+                                const year = competencia ? competencia.split('-')[0] : String(new Date().getFullYear());
+                                if (year && month) {
+                                    const val = `${year}-${month}`;
+                                    setCompetencia(val);
+                                    const [y, m] = [parseInt(year), parseInt(month)];
+                                    const lastDay = new Date(y, m, 0).getDate();
+                                    setStartDate(`${val}-01`);
+                                    setEndDate(`${val}-${String(lastDay).padStart(2, '0')}`);
+                                }
+                            }}
+                            className="bg-transparent border-none text-xs font-semibold text-indigo-700 focus:ring-0 p-0 w-12 cursor-pointer"
+                        >
+                            <option value="">Mês</option>
+                            {['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'].map((m, i) => (
+                                <option key={i} value={String(i + 1).padStart(2, '0')}>{m}</option>
+                            ))}
+                        </select>
                         {competencia && (
                             <button
                                 onClick={() => { setCompetencia(''); setStartDate(''); setEndDate(''); }}
-                                className="p-1.5 text-indigo-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                className="text-indigo-300 hover:text-red-500 hover:bg-red-50 rounded-[4px] transition-all"
                                 title="Limpar competência"
                             >
                                 <X className="w-3.5 h-3.5" />
@@ -3256,30 +3341,26 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     </div>
 
                     {/* Filtro de período livre */}
-                    <div className="flex gap-2 items-center bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100">
-                        <div className="flex flex-col">
-                            <label className="text-[8px] font-black text-gray-400 uppercase ml-1 mb-0.5">Início</label>
-                            <input
-                                type="date"
-                                value={startDate}
-                                onChange={(e) => { setStartDate(e.target.value); setCompetencia(''); }}
-                                className="bg-transparent border-none text-xs font-black text-gray-900 focus:ring-0 p-0 uppercase"
-                            />
-                        </div>
-                        <div className="w-[1px] h-6 bg-gray-200 mx-1" />
-                        <div className="flex flex-col">
-                            <label className="text-[8px] font-black text-gray-400 uppercase ml-1 mb-0.5">Fim</label>
-                            <input
-                                type="date"
-                                value={endDate}
-                                onChange={(e) => { setEndDate(e.target.value); setCompetencia(''); }}
-                                className="bg-transparent border-none text-xs font-black text-gray-900 focus:ring-0 p-0 uppercase"
-                            />
-                        </div>
+                    <div className="flex gap-1.5 items-center h-9 bg-gray-50 px-2.5 rounded-[6px] border border-gray-100">
+                        <input
+                            type="date"
+                            title="Início"
+                            value={startDate}
+                            onChange={(e) => { setStartDate(e.target.value); setCompetencia(''); }}
+                            className="bg-transparent border-none text-xs font-semibold text-gray-700 focus:ring-0 p-0 w-[92px]"
+                        />
+                        <div className="w-px h-5 bg-gray-200" />
+                        <input
+                            type="date"
+                            title="Fim"
+                            value={endDate}
+                            onChange={(e) => { setEndDate(e.target.value); setCompetencia(''); }}
+                            className="bg-transparent border-none text-xs font-semibold text-gray-700 focus:ring-0 p-0 w-[92px]"
+                        />
                         {(startDate || endDate) && !competencia && (
                             <button
                                 onClick={() => { setStartDate(''); setEndDate(''); }}
-                                className="ml-2 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                className="text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-[4px] transition-all"
                                 title="Limpar Filtros"
                             >
                                 <X className="w-3.5 h-3.5" />
@@ -3288,20 +3369,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     </div>
 
                     {activeView === 'pending' && (
-                        <button 
+                        <button
                             onClick={handleApplyRulesManually}
                             disabled={isLoading || !selectedAccountId}
-                            className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all disabled:opacity-50 border border-blue-100/50"
+                            className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-100 transition-all disabled:opacity-50 border border-blue-100/50"
                             title="Aplicar Regras Manualmente"
                         >
                             <Zap className="w-4 h-4" />
                         </button>
                     )}
 
+                    {/* Botão primário — variante compacta (guia §17) */}
                     <button
                         onClick={() => setShowImportDrawer(true)}
                         disabled={isImporting}
-                        className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isImporting ? (
                             <>
@@ -3310,71 +3392,75 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             </>
                         ) : (
                             <>
-                                <Upload className="w-4 h-4" />
-                                <span>Importar Extrato</span>
+                                <Upload className="w-[15px] h-[15px]" />
+                                <span>Importar extrato</span>
                             </>
                         )}
                     </button>
                 </div>
 
-                <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100">
+                {/* Barra de abas local — escala compacta (guia §19). flex-wrap em vez de
+                    overflow-x-auto: com 9 abas, rolagem horizontal (mesmo sem scrollbar
+                    visível) corta texto no meio sem nenhum indício de que há mais abas —
+                    quebra de linha garante que todas ficam sempre visíveis. */}
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     <button
                         onClick={() => setActiveView('dashboard')}
-                        className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${activeView === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         Dashboard
                     </button>
                     <button
                         onClick={() => setActiveView('statement')}
-                        className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${activeView === 'statement' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'statement' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         Extrato
                     </button>
                     <button
                         onClick={() => setActiveView('center')}
-                        className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${activeView === 'center' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'center' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         Central
                     </button>
                     <button
                         onClick={() => setActiveView('divergences')}
-                        className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${activeView === 'divergences' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'divergences' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         Divergências
                     </button>
                     <button
                         onClick={() => setActiveView('anomalies')}
-                        className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${activeView === 'anomalies' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'anomalies' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         Anomalias
                     </button>
                     <button
                         onClick={() => setActiveView('pending')}
-                        className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${activeView === 'pending' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'pending' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         Pendentes
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveView('conciliated')}
-                        className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${activeView === 'conciliated' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'conciliated' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         Conciliados
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveView('rules')}
-                        className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${activeView === 'rules' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'rules' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         Regras
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveView('categories')}
-                        className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${activeView === 'categories' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'categories' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         Categorias
                     </button>
                     <button
                         onClick={() => setActiveView('close')}
-                        className={`px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${activeView === 'close' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'close' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         Fechamento
                     </button>
@@ -3998,7 +4084,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     {/* Left: Bank Statement */}
                     <div className="space-y-4">
                         <div className={activeView === 'statement'
-                            ? "bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-3 items-center"
+                            ? "flex flex-col md:flex-row gap-2.5 items-center"
                             : "flex justify-between items-center px-4"}>
                             {activeView !== 'statement' && (
                             <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
@@ -4008,13 +4094,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             )}
                             {activeView === 'statement' && (
                             <div className="flex-1 relative w-full order-1">
-                                <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
                                     type="text"
                                     placeholder="Buscar por descrição, categoria ou cliente/fornecedor..."
                                     value={bankSearch}
                                     onChange={(e) => setBankSearch(e.target.value)}
-                                    className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-transparent rounded-[1.5rem] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                 />
                             </div>
                             )}
@@ -4022,16 +4108,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 <div className="relative">
                                     <button
                                         onClick={() => { setBankCatDropdownOpen(o => !o); setInternalCatDropdownOpen(false); setBankCpDropdownOpen(false); }}
-                                        className={`px-3 py-1.5 border rounded-full text-xs font-bold focus:outline-none cursor-pointer flex items-center gap-1.5 ${bankCategoryFilter.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
+                                        className={`h-9 px-2.5 border rounded-[6px] text-xs font-medium focus:outline-none cursor-pointer flex items-center gap-1.5 ${bankCategoryFilter.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
                                     >
-                                        {bankCategoryFilter.length > 0 ? `${bankCategoryFilter.length} categoria${bankCategoryFilter.length > 1 ? 's' : ''}` : 'Todas Categorias'}
+                                        {bankCategoryFilter.length > 0 ? `${bankCategoryFilter.length} categoria${bankCategoryFilter.length > 1 ? 's' : ''}` : 'Todas categorias'}
                                         <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                     </button>
                                     {bankCatDropdownOpen && (
-                                        <div onMouseDown={(e) => e.stopPropagation()} className="absolute top-full mt-1 left-0 z-50 bg-white border border-gray-100 rounded-2xl shadow-xl min-w-[200px] py-1 max-h-64 overflow-y-auto">
+                                        <div onMouseDown={(e) => e.stopPropagation()} className="absolute top-full mt-1 left-0 z-50 bg-white border border-gray-100 rounded-[10px] shadow-xl min-w-[200px] py-1 max-h-64 overflow-y-auto">
                                             <div className="flex border-b border-gray-100 mb-1">
-                                                <button onClick={() => setBankCategoryFilter(['__none__', ...uniqueCategories])} className="flex-1 px-3 py-1.5 text-xs font-black text-blue-500 hover:bg-blue-50 uppercase tracking-wider text-left">Selecionar todos</button>
-                                                <button onClick={() => setBankCategoryFilter([])} className="flex-1 px-3 py-1.5 text-xs font-black text-red-500 hover:bg-red-50 uppercase tracking-wider text-right">Limpar</button>
+                                                <button onClick={() => setBankCategoryFilter(['__none__', ...uniqueCategories])} className="flex-1 px-3 py-1.5 text-xs font-semibold text-blue-500 hover:bg-blue-50 text-left">Selecionar todos</button>
+                                                <button onClick={() => setBankCategoryFilter([])} className="flex-1 px-3 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50 text-right">Limpar</button>
                                             </div>
                                             {[{ value: '__none__', label: '— Sem categoria' }, ...uniqueCategories.map(c => ({ value: c, label: c }))].map(({ value, label }) => (
                                                 <label key={value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
@@ -4041,7 +4127,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         onChange={() => setBankCategoryFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])}
                                                         className="w-3.5 h-3.5 rounded text-blue-500 focus:ring-0"
                                                     />
-                                                    <span className="text-xs font-bold text-gray-700 uppercase truncate">{label}</span>
+                                                    <span className="text-sm font-normal text-gray-700 truncate">{label}</span>
                                                 </label>
                                             ))}
                                         </div>
@@ -4050,19 +4136,19 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 <div className="relative">
                                     <button
                                         onClick={() => { setBankCpDropdownOpen(o => !o); setBankCatDropdownOpen(false); setInternalCatDropdownOpen(false); }}
-                                        className={`px-3 py-1.5 border rounded-full text-xs font-bold focus:outline-none cursor-pointer flex items-center gap-1.5 ${bankCounterpartyFilter.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
+                                        className={`h-9 px-2.5 border rounded-[6px] text-xs font-medium focus:outline-none cursor-pointer flex items-center gap-1.5 ${bankCounterpartyFilter.length > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}
                                     >
-                                        {bankCounterpartyFilter.length > 0 ? `${bankCounterpartyFilter.length} contraparte${bankCounterpartyFilter.length > 1 ? 's' : ''}` : 'Cliente/Fornecedor'}
+                                        {bankCounterpartyFilter.length > 0 ? `${bankCounterpartyFilter.length} contraparte${bankCounterpartyFilter.length > 1 ? 's' : ''}` : 'Cliente/fornecedor'}
                                         <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                     </button>
                                     {bankCpDropdownOpen && (
-                                        <div onMouseDown={(e) => e.stopPropagation()} className="absolute top-full mt-1 left-0 z-50 bg-white border border-gray-100 rounded-2xl shadow-xl min-w-[200px] py-1 max-h-64 overflow-y-auto">
+                                        <div onMouseDown={(e) => e.stopPropagation()} className="absolute top-full mt-1 left-0 z-50 bg-white border border-gray-100 rounded-[10px] shadow-xl min-w-[200px] py-1 max-h-64 overflow-y-auto">
                                             <div className="flex border-b border-gray-100 mb-1">
-                                                <button onClick={() => setBankCounterpartyFilter(['__none__', ...uniqueBankCounterparties])} className="flex-1 px-3 py-1.5 text-xs font-black text-blue-500 hover:bg-blue-50 uppercase tracking-wider text-left">Selecionar todos</button>
-                                                <button onClick={() => setBankCounterpartyFilter([])} className="flex-1 px-3 py-1.5 text-xs font-black text-red-500 hover:bg-red-50 uppercase tracking-wider text-right">Limpar</button>
+                                                <button onClick={() => setBankCounterpartyFilter(['__none__', ...uniqueBankCounterparties])} className="flex-1 px-3 py-1.5 text-xs font-semibold text-blue-500 hover:bg-blue-50 text-left">Selecionar todos</button>
+                                                <button onClick={() => setBankCounterpartyFilter([])} className="flex-1 px-3 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50 text-right">Limpar</button>
                                             </div>
                                             {uniqueBankCounterparties.length === 0 && (
-                                                <div className="px-3 py-2 text-xs font-bold text-gray-400 uppercase">Nenhuma contraparte no extrato</div>
+                                                <div className="px-3 py-2 text-xs font-medium text-gray-400">Nenhuma contraparte no extrato</div>
                                             )}
                                             {[{ value: '__none__', label: '— Sem cliente/fornecedor' }, ...uniqueBankCounterparties.map(c => ({ value: c, label: c }))].map(({ value, label }) => (
                                                 <label key={value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
@@ -4072,12 +4158,26 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         onChange={() => setBankCounterpartyFilter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value])}
                                                         className="w-3.5 h-3.5 rounded text-blue-500 focus:ring-0"
                                                     />
-                                                    <span className="text-xs font-bold text-gray-700 uppercase truncate">{label}</span>
+                                                    <span className="text-sm font-normal text-gray-700 truncate">{label}</span>
                                                 </label>
                                             ))}
                                         </div>
                                     )}
                                 </div>
+                                {activeView === 'statement' && (
+                                    <div className="flex items-center h-9">
+                                        <AdvancedFilterPanel fields={STATEMENT_FILTER_FIELDS} state={statementAdvancedFilters} />
+                                    </div>
+                                )}
+                                {activeView === 'statement' && (
+                                    <button
+                                        onClick={loadTransactions}
+                                        className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0"
+                                        title="Atualizar"
+                                    >
+                                        <RefreshCw className="w-4 h-4" />
+                                    </button>
+                                )}
                                 {activeView !== 'statement' && (
                                 <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-full px-3 py-1.5">
                                     <ArrowUpDown className="w-3 h-3 text-gray-400 shrink-0" />
@@ -4123,7 +4223,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 </div>
                                 )}
                                 {activeView === 'statement' && (
-                                    <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                         <ColumnConfigButton
                                             columns={STATEMENT_COLUMNS.filter(c => c.key !== 'actions')}
                                             visibleColumns={tableColumns.visibleColumns}
@@ -4132,7 +4232,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             onToggleColumn={tableColumns.toggleColumn}
                                             onReset={tableColumns.resetColumns}
                                         />
-                                        <div className="w-px bg-gray-200 mx-1 my-1"></div>
                                     </div>
                                 )}
                                 {activeView === 'pending' && pendentesViewMode === 'list' && (
@@ -4158,14 +4257,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         <p className="mt-2 text-gray-500">Carregando extrato...</p>
                                     </div>
                                 ) : bankTransactions.length === 0 ? (
-                                    <div className="text-center py-12 bg-white rounded-[2.5rem] shadow-sm border border-gray-100">
+                                    <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
                                         <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                         <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum extrato importado</h3>
                                         <p className="text-sm text-gray-500">Importe um arquivo OFX, CSV, CNAB ou Excel (XLSX) para começar.</p>
                                     </div>
                                 ) : (
-                                    <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden overflow-x-auto">
-                                        <table ref={statementTableRef} className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+                                    <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
+                                        <div className="overflow-auto max-h-[70vh]">
+                                        <table ref={statementTableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: statementTableTotalWidth }}>
                                             <colgroup>
                                                 <col style={{ width: '40px' }} />
                                                 {STATEMENT_COLUMNS.filter(c => c.key !== 'actions').map(c => (
@@ -4175,8 +4275,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 ))}
                                                 {tableColumns.visibleColumns.includes('actions') && <col style={{ width: '90px' }} />}
                                             </colgroup>
-                                            <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
-                                                <tr>
+                                            <thead>
+                                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                                     <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                                         <input
                                                             type="checkbox"
@@ -4195,7 +4295,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     </th>
                                                     {tableColumns.visibleColumns.includes('description') && (
                                                         <SortableHeader
-                                                            colKey="description" label="Descrição"
+                                                            colKey="description" label="Descrição" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'description' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('description'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 overflow-hidden"
@@ -4205,7 +4305,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     )}
                                                     {tableColumns.visibleColumns.includes('counterparty') && (
                                                         <SortableHeader
-                                                            colKey="counterparty" label="Cliente/Fornecedor"
+                                                            colKey="counterparty" label="Cliente/Fornecedor" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'counterparty' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('counterparty'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 overflow-hidden"
@@ -4215,7 +4315,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     )}
                                                     {tableColumns.visibleColumns.includes('category') && (
                                                         <SortableHeader
-                                                            colKey="category" label="Categoria"
+                                                            colKey="category" label="Categoria" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'category' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('category'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 overflow-hidden"
@@ -4224,18 +4324,28 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         </SortableHeader>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('project') && (
-                                                        <SortableHeader colKey="project" label="Obra" sortable={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <SortableHeader
+                                                            colKey="project" label="Obra" uppercase={false}
+                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
+                                                            onSort={() => bankSortField === 'project' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('project'), setBankSortOrder('asc'))}
+                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                                        >
                                                             <StatementResizeHandle colKey="project" />
                                                         </SortableHeader>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('costCenter') && (
-                                                        <SortableHeader colKey="costCenter" label="Centro de Custo" sortable={false} className="px-6 py-2 border-r border-gray-100 overflow-hidden">
+                                                        <SortableHeader
+                                                            colKey="costCenter" label="Centro de custo" uppercase={false}
+                                                            sortColumn={bankSortField} sortDirection={bankSortOrder}
+                                                            onSort={() => bankSortField === 'costCenter' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('costCenter'), setBankSortOrder('asc'))}
+                                                            className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                                        >
                                                             <StatementResizeHandle colKey="costCenter" />
                                                         </SortableHeader>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('date') && (
                                                         <SortableHeader
-                                                            colKey="date" label="Data"
+                                                            colKey="date" label="Data" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'date' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('date'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden"
@@ -4245,7 +4355,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     )}
                                                     {tableColumns.visibleColumns.includes('amount') && (
                                                         <SortableHeader
-                                                            colKey="amount" label="Valor"
+                                                            colKey="amount" label="Valor" uppercase={false}
                                                             sortColumn={bankSortField} sortDirection={bankSortOrder}
                                                             onSort={() => bankSortField === 'amount' ? setBankSortOrder(o => o === 'asc' ? 'desc' : 'asc') : (setBankSortField('amount'), setBankSortOrder('asc'))}
                                                             className="px-6 py-2 border-r border-gray-100 text-right overflow-hidden"
@@ -4254,17 +4364,17 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         </SortableHeader>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('status') && (
-                                                        <SortableHeader colKey="status" label="Status" sortable={false} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden">
+                                                        <SortableHeader colKey="status" label="Status" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100 text-center overflow-hidden">
                                                             <StatementResizeHandle colKey="status" />
                                                         </SortableHeader>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('actions') && (
-                                                        <th className="px-6 py-2 text-right">Ações</th>
+                                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                                     )}
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-200">
-                                                {sortedBankTransactions.map(tx => {
+                                                {sortedBankTransactions.map((tx, rowIndex) => {
                                                     const cpKey = (tx.counterparty_name || '').trim().toLowerCase();
                                                     const cpRegistered = tx.direction === 'DEBIT' ? masterSuppliersLower.has(cpKey) : masterClientsLower.has(cpKey);
                                                     return (
@@ -4272,13 +4382,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             <td className="px-4 py-2.5 border-r border-gray-100 text-center">
                                                                 <input
                                                                     type="checkbox"
+                                                                    title="Dica: segure Shift e clique para selecionar um intervalo"
                                                                     className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                                     checked={selectedBankTxIds.has(tx.id)}
-                                                                    onChange={(e) => {
-                                                                        const next = new Set(selectedBankTxIds);
-                                                                        if (e.target.checked) next.add(tx.id); else next.delete(tx.id);
-                                                                        setSelectedBankTxIds(next);
-                                                                    }}
+                                                                    onChange={(e) => handleStatementRowCheck(tx.id, rowIndex, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
                                                                 />
                                                             </td>
                                                             {tableColumns.visibleColumns.includes('description') && (
@@ -4401,6 +4508,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 })}
                                             </tbody>
                                         </table>
+                                        </div>
                                     </div>
                                 )
                             ) : bankTransactions.length === 0 ? (

@@ -1,10 +1,17 @@
 # Padrão Global de UI e UX — OrçaCloud SaaS
 
-> **FONTE DA VERDADE:** `components/SupplyChainOrderList.tsx`
+> **FONTE DA VERDADE:** `components/ClientList.tsx` (escala compacta, §16 — padrão
+> único desde 2026-07-10) e `components/SupplyChainOrderList.tsx` (estrutura de
+> KPI/tabela/toolbar/ações — mecânica geral, já migrado para a escala compacta).
 >
-> Este guia contém snippets reais copiados diretamente do componente de referência.
+> Este guia contém snippets reais copiados diretamente dos componentes de referência.
 > Ao aplicar o padrão em qualquer tela, **copie os snippets abaixo e adapte apenas os dados**
 > (nomes de colunas, labels, ícones específicos). Não interprete — cole.
+> ⚠️ Onde um snippet abaixo ainda mostrar a escala de radius grande (`rounded-[2.5rem]`,
+> `rounded-[1.25rem]`, `py-4`) — seções 4–9, mantidas como estavam por serem a origem
+> histórica da estrutura — **use a versão compacta equivalente do §16**, não o
+> radius literal do snippet. O §16 é quem manda sobre radius/altura; as seções 4–9
+> mandam sobre estrutura/tipografia/conteúdo.
 
 ---
 
@@ -64,7 +71,7 @@ suficiente).
 - [ ] §5 Toolbar (+ §5.1 variante desaninhada — qual das duas foi escolhida e por quê)
 - [ ] §6 Tabela — container e `<thead>`
 - [ ] §6.1 Redimensionamento de colunas — decisão explícita (tem ou não tem, por quê)
-- [ ] §6.2 `<thead>` sentence case vs uppercase — decisão explícita (qual escala, por quê)
+- [ ] §6.2 `<thead>` sentence case (padrão único desde §16 fechado — ❌ se ainda uppercase, não é mais decisão)
 - [ ] §6.3 Toda coluna de valor único é ordenável — conferir cada coluna, exceções documentadas
 - [ ] §6.4 Sem dropdown de ordenação fora do `<thead>`
 - [ ] §6.5 Cabeçalho fixo (sticky) — decisão explícita
@@ -79,8 +86,8 @@ suficiente).
 - [ ] §13 Toast de notificação
 - [ ] §14 Modal de confirmação (`useConfirm()`, nunca `confirm()`/`window.confirm()` nativo)
 - [ ] §15 Responsividade
-- [ ] §16 Escala de radius — padrão vs compacta (qual foi usada, consistente na tela toda?)
-- [ ] §17 Botão primário — variante compacta vs padrão (decisão explícita, não default herdado de componente compartilhado)
+- [ ] §16 Escala de radius — compacta é o padrão único (❌ se a tela ainda usa `rounded-[2.5rem]`/`[1.25rem]`; consistente na tela toda?)
+- [ ] §17 Botão primário — variante compacta é a única válida (❌ se herdou o estilo pesado de um componente compartilhado sem perceber)
 - [ ] §18 Não duplicar contexto já visível no shell
 - [ ] §19 Navegação de módulos — se a tela pertencer a um módulo com navegação de nível de módulo, conferir se é via sidebar (padrão atual) ou, em módulos legados, se a barra de abas local bate com a escala de radius/tamanho da página
 - [ ] §20 Cabeçalho de tela (título + subtítulo + KPIs) — `space-y-6`, `h1` + `p mt-1.5` direto (sem card/hero, a menos que seja decisão documentada), grid de KPI logo em seguida
@@ -541,26 +548,23 @@ const tableTotalWidth = 40 // checkbox
 > correção, ao adicionar uma coluna nova em `SupplierList.tsx` sem atualizar
 > o `<colgroup>`).
 
-### 6.2 Variante `<thead>` sentence case (densidade alta)
+### 6.2 `<thead>` sentence case (padrão único, consequência do §16)
 
-**Regra:** toda tela que adota a escala de radius compacta (§16) usa `<thead>`
-em sentence case — não é mais "teste e decida", é acoplado. `SupplierList.tsx`
-e `ClientList.tsx` já seguem isso; `InvestorList.tsx` ficou pra trás numa
-correção (2026-07-10) — a escala compacta foi migrada mas o `<thead>` continuou
-`uppercase`, gerando inconsistência visível entre telas irmãs do mesmo módulo
-(Fornecedores/Clientes em sentence case, Investidores em caixa alta). Antes
-disso, o `<thead>` da seção 6 (`uppercase text-xs tracking-wider`) era o
-"padrão oficial e continua valendo por padrão" — texto que deixava a decisão
-solta demais e permitiu a inconsistência. Não decida "por tela" sem comparar
-com as telas do mesmo módulo/nível — a régua abaixo é a régua nova:
-
-- Escala **padrão** (§16) → `<thead>` uppercase (seção 6, sem mudança).
-- Escala **compacta** (§16) → `<thead>` sentence case (esta seção), sempre.
+**Regra:** desde que o §16 fechou a escala compacta como padrão único, toda
+tela usa `<thead>` em sentence case — não é mais condicional a qual escala a
+tela "escolheu". `SupplierList.tsx` e `ClientList.tsx` já seguem isso;
+`InvestorList.tsx` ficou pra trás numa correção (2026-07-10) — a escala
+compacta foi migrada mas o `<thead>` continuou `uppercase`, gerando
+inconsistência visível entre telas irmãs do mesmo módulo (Fornecedores/
+Clientes em sentence case, Investidores em caixa alta). O `<thead>`
+`uppercase text-xs tracking-wider` da seção 6 é o padrão **antigo**,
+deprecado junto com a escala de radius grande do §16 — só aparece hoje em
+telas ainda não migradas.
 
 Cada tabela ainda define seu próprio `<thead>` no código (não é componente
-compartilhado), então a troca continua sendo local a um arquivo — só o
-critério de quando trocar deixou de ser "teste e veja" e virou consequência
-direta da escolha de escala do §16.
+compartilhado), então a migração continua sendo local a um arquivo — mas não
+é mais uma decisão de design, é o mesmo tipo de correção que qualquer outro
+item do `CHECKLIST DE AUDITORIA COMPLETA`.
 
 > ⚠️ **`SortableHeader` força `uppercase tracking-wider` internamente** —
 > trocar só a classe do `<tr>`/`<thead>` não muda nada nas colunas ordenáveis
@@ -1044,41 +1048,53 @@ async function handleDelete(id: string) {
 
 ---
 
-## 16. ESCALA DE RADIUS — padrão vs compacta
+## 16. ESCALA DE RADIUS — compacta (padrão único do app)
 
-O padrão histórico (seções 4–9, `SupplyChainOrderList.tsx`) usa uma escala de
-radius grande — `rounded-[2.5rem]` em containers, `rounded-[1.25rem]`/`[1.5rem]`
-em inputs e botões. Isso lê como identidade "pill"/consumer app. Testado em
-`components/SupplierList.tsx`, existe uma escala alternativa mais compacta,
-mais próxima de um ERP denso:
+**Critério fechado em 2026-07-10:** a escala compacta é o padrão único do
+OrçaCloud. Não é mais "decisão por tela" — é a escala que toda tela nova ou
+corrigida deve usar, sem exceção não documentada. A escala antiga (radius
+grande, `rounded-[2.5rem]`) fica **deprecated**: só existe hoje nas telas
+ainda não migradas, e aparece nas seções 4–9 deste guia por ser a origem
+histórica da estrutura — não porque ainda seja uma opção válida.
 
-| Elemento | Escala padrão (§4–9) | Escala compacta |
+**Motivo da virada:** com duas escalas ambas "corretas" e a decisão deixada
+por tela, o app acabou com módulos vizinhos (ex: Suprimentos > Pedidos vs.
+Minha Organização > Clientes) parecendo dois produtos diferentes — mesmo
+cada tela isoladamente batendo com alguma seção do guia. Consistência
+*entre* telas importa tanto quanto conformidade *dentro* de uma tela; a
+ambiguidade do critério antigo permitia a primeira falhar mesmo com a
+segunda em dia.
+
+| Elemento | Escala compacta (padrão único) | Escala antiga (deprecated) |
 |---|---|---|
-| Containers (tabela, cards, toolbar agrupada) | `rounded-[2.5rem]` / `rounded-2xl` | `rounded-[10px]` |
-| Inputs, botões, chips | `rounded-[1.25rem]` / `rounded-xl` | `rounded-[6px]` |
-| Altura dos controles da toolbar | `py-3`/`py-4` (variável) | `h-9` (36px) uniforme |
+| Containers (tabela, cards, toolbar agrupada) | `rounded-[10px]` | `rounded-[2.5rem]` / `rounded-2xl` |
+| Inputs, botões, chips | `rounded-[6px]` | `rounded-[1.25rem]` / `rounded-xl` |
+| Altura dos controles da toolbar | `h-9` (36px) uniforme | `py-3`/`py-4` (variável) |
 
-> ✅ **Escolha uma escala por tela, não misture.** Uma tabela com
-> `rounded-[10px]` ao lado de um modal `rounded-2xl` na mesma tela é
-> inconsistência nova, não economia de esforço.
-> ℹ️ Nenhuma das duas está "errada" — a compacta ganha em telas com muita
-> densidade de dado (listas grandes, tabelas), a padrão funciona bem em telas
-> com menos itens por tela. Ainda não há critério fechado de quando usar
-> qual — hoje é decisão por tela, avaliar caso a caso.
-> ⚠️ Isto é uma **segunda escala documentada**, não uma substituição da
-> seção 4–9. Só migre uma tela existente para a compacta com decisão
-> explícita — não é o novo default silencioso.
+> ✅ **Toda tela usa a escala compacta.** Migrar uma tela da escala antiga
+> para a compacta não é mais uma decisão de design a justificar — é correção
+> de padrão, no mesmo nível que os outros itens do `CHECKLIST DE AUDITORIA
+> COMPLETA`. O único julgamento que resta é de sequenciamento (qual tela
+> migrar primeiro), não de "se".
+> ✅ Referência completa de migração: `components/SupplyChainOrderList.tsx`
+> (Suprimentos > Pedidos, migrado em 2026-07-10) e `components/ClientList.tsx`
+> (Minha Organização > Clientes, já nascida na escala compacta).
+> ⚠️ Não misturar as duas escalas dentro da mesma tela em nenhuma hipótese —
+> isso já valia antes e continua valendo.
+> ℹ️ Telas ainda não migradas não são "N/A" numa auditoria — são ❌ pendentes
+> de migração. Documentar a pendência (com prioridade, se souber) em vez de
+> tratar como decisão fechada por tela.
 
 ---
 
-## 17. BOTÃO PRIMÁRIO — variante compacta
+## 17. BOTÃO PRIMÁRIO — variante compacta (padrão único, consequência do §16)
 
-O CTA primário padrão (`px-6 py-3 rounded-[1.25rem] uppercase tracking-widest
+O CTA primário antigo (`px-6 py-3 rounded-[1.25rem] uppercase tracking-widest
 shadow-xl`) fica ~265×50px com o texto "Novo Fornecedor" — pesado o bastante
-para competir com o próprio título da página. Numa tela cujo trabalho
-principal é consultar registros (não criar), isso é ruído. Variante testada,
-~150×40px (ou `h-9` se o botão mora dentro da régua de controles da §5.1, não
-isolado no cabeçalho):
+para competir com o próprio título da página, e usa o radius grande que o
+§16 já deprecou. Não é mais uma variante opcional: **é o único botão primário
+válido**, ~150×40px (ou `h-9` se o botão mora dentro da régua de controles da
+§5.1, não isolado no cabeçalho):
 
 ```tsx
 <button className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95">

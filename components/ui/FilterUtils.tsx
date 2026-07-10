@@ -171,6 +171,10 @@ export function useAdvancedFilters(fields: FilterFieldConfig[], storageKey: stri
 interface AdvancedFilterPanelProps {
   fields: FilterFieldConfig[];
   state: ReturnType<typeof useAdvancedFilters>;
+  /** Escala de radius do botão-gatilho (ui_ux_standard_guide.md §16). 'compact' (default,
+   *  inalterado) para telas na escala compacta (h-9/rounded-[6px]). 'padrão' para telas que
+   *  ainda usam a escala grande (rounded-[2.5rem]/py-4) — ver SupplyChainOrderList.tsx. */
+  triggerSize?: 'compact' | 'padrão';
 }
 
 /**
@@ -178,7 +182,7 @@ interface AdvancedFilterPanelProps {
  * de abre/fecha do ColumnConfigButton (click fora + Escape) em vez de um Sheet —
  * é um controle transitório sobre a lista atual, não edição de item (UI_PATTERNS.md).
  */
-export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields, state }) => {
+export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields, state, triggerSize = 'compact' }) => {
   const panelRef = React.useRef<HTMLDivElement>(null);
   const [savingName, setSavingName] = React.useState<string | null>(null);
   const [showSaved, setShowSaved] = React.useState(false);
@@ -206,11 +210,17 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
     <div className="relative" ref={panelRef}>
       <button
         onClick={() => state.setShowPanel(v => !v)}
-        className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-button font-semibold transition-colors ${
-          state.activeCount > 0 ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-        }`}
+        className={
+          triggerSize === 'padrão'
+            ? `flex items-center gap-2 px-4 py-4 rounded-[1.25rem] border transition-all active:scale-95 shadow-sm text-sm font-semibold whitespace-nowrap ${
+                state.activeCount > 0 ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-transparent bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'
+              }`
+            : `flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-button font-semibold transition-colors ${
+                state.activeCount > 0 ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`
+        }
       >
-        <Filter className="w-3.5 h-3.5" />
+        <Filter className={triggerSize === 'padrão' ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
         Filtro avançado
         {state.activeCount > 0 && (
           <span className="ml-0.5 bg-blue-600 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center">

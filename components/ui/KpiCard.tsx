@@ -52,6 +52,8 @@ interface KpiCardProps {
     shadow?: boolean;
     /** Tamanho do valor/ícone. Default 'md' (padrão histórico, text-2xl). 'lg' destaca um KPI principal; 'sm' para KPIs secundários. */
     size?: 'sm' | 'md' | 'lg';
+    /** Pulsa o ponto indicador (mesmo `animate-pulse` do Tailwind) — para chamar atenção a um estado pendente/aguardando ação. Default false. */
+    pulse?: boolean;
 }
 
 const SIZE_MAP: Record<'sm' | 'md' | 'lg', { value: string; padding: string; radius: string; bareIcon: boolean }> = {
@@ -75,6 +77,7 @@ export function KpiCard({
     onClick,
     shadow = true,
     size = 'md',
+    pulse = false,
 }: KpiCardProps) {
     const c = COLOR_MAP[color];
     const s = SIZE_MAP[size];
@@ -116,7 +119,7 @@ export function KpiCard({
                 </p>
                 {sub && (
                     <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot} ${pulse ? 'animate-pulse' : ''}`} />
                         <p className="text-xs text-gray-400 font-medium truncate">{sub}</p>
                     </div>
                 )}

@@ -1,9 +1,10 @@
 import React from 'react';
-import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, Pencil, FileCheck } from 'lucide-react';
+import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, Pencil, FileCheck, X, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
-import Button from './ui/Button';
+import { KpiCard } from './ui/KpiCard';
+import { useConfirm } from './ui/confirm';
 import { formatMoney, formatDateBR } from './ui/Format';
 
 const COLUMNS: ColumnConfig[] = [
@@ -66,19 +67,16 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainOrderColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplyChainOrderFilters:advanced');
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
-    const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
+    const confirm = useConfirm();
     const [linkedNfeOrderIds, setLinkedNfeOrderIds] = React.useState<Set<string>>(new Set());
     const [nfFilter, setNfFilter] = usePersistedState<'all' | 'sem-nf'>('supplyChainOrderFilters:nf', 'all');
     const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+    const [lastCheckedIndex, setLastCheckedIndex] = React.useState<number | null>(null);
     const [bulkLoading, setBulkLoading] = React.useState(false);
 
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 4500);
-    };
-
-    const askConfirm = (message: string, onConfirm: () => void) => {
-        setPendingConfirm({ message, onConfirm });
     };
 
     React.useEffect(() => {
@@ -123,21 +121,24 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
         }
     };
 
-    const handleDelete = (id: string, number: string) => {
-        askConfirm(`Deseja realmente excluir o pedido ${number}? Esta ação não pode ser desfeita.`, () => {
-            (async () => {
-                try {
-                    setLoading(true);
-                    await orderService.deleteOrder(id);
-                    await loadOrders();
-                } catch (error: any) {
-                    console.error("Erro ao excluir pedido:", error);
-                    notify(`Erro ao excluir pedido: ${error.message || 'Erro desconhecido'}`, "error");
-                } finally {
-                    setLoading(false);
-                }
-            })();
+    const handleDelete = async (id: string, number: string) => {
+        const ok = await confirm({
+            title: `Excluir o pedido ${number}?`,
+            message: 'Esta ação não pode ser desfeita.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
         });
+        if (!ok) return;
+        try {
+            setLoading(true);
+            await orderService.deleteOrder(id);
+            await loadOrders();
+        } catch (error: any) {
+            console.error("Erro ao excluir pedido:", error);
+            notify(`Erro ao excluir pedido: ${error.message || 'Erro desconhecido'}`, "error");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const canDeleteOrder = (status: string) =>
@@ -244,6 +245,19 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             return next;
         });
     }
+    // §10.1: Shift+clique seleciona o intervalo entre a última linha marcada e a atual.
+    function handleRowCheck(id: string, index: number, shiftKey: boolean) {
+        if (shiftKey && lastCheckedIndex !== null) {
+            const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
+            const rangeIds = filteredOrders.slice(start, end + 1)
+                .filter(o => canDeleteOrder(o.status))
+                .map(o => o.id);
+            setSelectedIds(prev => new Set([...prev, ...rangeIds]));
+        } else {
+            toggleRow(id);
+            setLastCheckedIndex(index);
+        }
+    }
     function toggleAllVisible() {
         setSelectedIds(prev => {
             if (allVisibleSelected) {
@@ -258,222 +272,174 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     }
     const clearSelection = () => setSelectedIds(new Set());
 
-    function handleBulkDelete() {
+    async function handleBulkDelete() {
         const alvos = selectedVisible;
         if (alvos.length === 0) return;
-        askConfirm(`Deseja realmente excluir ${alvos.length} pedido${alvos.length !== 1 ? 's' : ''}? Esta ação não pode ser desfeita.`, async () => {
-            setBulkLoading(true);
-            const falhas: string[] = [];
-            let okCount = 0;
-            for (const o of alvos) {
-                try {
-                    await orderService.deleteOrder(o.id);
-                    okCount++;
-                } catch {
-                    falhas.push(o.number || o.id);
-                }
-            }
-            setSelectedIds(new Set());
-            await loadOrders();
-            setBulkLoading(false);
-            if (falhas.length) {
-                notify(`${okCount} excluído(s). Falha em ${falhas.length}: ${falhas.join(', ')}`, 'error');
-            } else {
-                notify(`${okCount} pedido(s) excluído(s) com sucesso.`);
-            }
+        const ok = await confirm({
+            title: `Excluir ${alvos.length} pedido${alvos.length !== 1 ? 's' : ''}?`,
+            message: 'Esta ação não pode ser desfeita.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
         });
+        if (!ok) return;
+        setBulkLoading(true);
+        const falhas: string[] = [];
+        let okCount = 0;
+        for (const o of alvos) {
+            try {
+                await orderService.deleteOrder(o.id);
+                okCount++;
+            } catch {
+                falhas.push(o.number || o.id);
+            }
+        }
+        setSelectedIds(new Set());
+        await loadOrders();
+        setBulkLoading(false);
+        if (falhas.length) {
+            notify(`${okCount} excluído(s). Falha em ${falhas.length}: ${falhas.join(', ')}`, 'error');
+        } else {
+            notify(`${okCount} pedido(s) excluído(s) com sucesso.`);
+        }
     }
 
     return (
         <>
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Pedidos de Compra</h1>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Pedidos de Compra</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie suas cotações e pedidos de materiais com precisão executiva.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button
+                    <button
                         onClick={onCreateNew}
-                        size="lg"
-                        className="gap-3 rounded-[1.25rem] shadow-xl shadow-blue-900/20"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                     >
-                        <Plus className="w-4 h-4" />
-                        <span>Novo Pedido</span>
-                    </Button>
+                        <Plus className="w-[15px] h-[15px]" />
+                        Novo pedido
+                    </button>
                 </div>
             </div>
 
             {/* Dashboard Cards */}
             {(() => {
                 const kpis = kpiService.compute(orders);
+                const valorTotal = orders.reduce((sum, order) => sum + (order.items?.reduce((is: number, i: any) => is + (i.total || 0), 0) || 0), 0);
+                const divergenceHigh = kpis.divergenceRate !== null && kpis.divergenceRate > 20;
                 return (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Total de Pedidos */}
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-blue-100 transition-all">
-                    <div className="p-3.5 bg-blue-50 text-blue-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <Package className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Total de Pedidos</p>
-                        <p className="text-2xl font-bold text-gray-900">{orders.length}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></span>
-                            <p className="text-xs text-gray-400 font-medium truncate">Todos os pedidos registrados</p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Valor Total */}
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-green-100 transition-all">
-                    <div className="p-3.5 bg-green-50 text-green-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <DollarSign className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Valor Total</p>
-                        <p className="text-2xl font-bold text-gray-900 truncate">
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(
-                                orders.reduce((sum, order) => sum + (order.items?.reduce((is: number, i: any) => is + (i.total || 0), 0) || 0), 0)
-                            )}
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full shrink-0"></span>
-                            <p className="text-xs text-gray-400 font-medium truncate">Soma de todos os pedidos</p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Em Aberto */}
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-yellow-100 transition-all">
-                    <div className="p-3.5 bg-yellow-50 text-yellow-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <Filter className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Em Aberto</p>
-                        <p className="text-2xl font-bold text-gray-900">
-                            {orders.filter(o => ['Rascunho', 'Enviado'].includes(o.status)).length}
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full shrink-0 animate-pulse"></span>
-                            <p className="text-xs text-gray-400 font-medium truncate">Rascunhos e Enviados</p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Confirmados */}
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-purple-100 transition-all">
-                    <div className="p-3.5 bg-purple-50 text-purple-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <Package className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Confirmados</p>
-                        <p className="text-2xl font-bold text-gray-900">
-                            {orders.filter(o => o.status === 'Confirmado').length}
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 bg-purple-500 rounded-full shrink-0"></span>
-                            <p className="text-xs text-gray-400 font-medium truncate">Pedidos confirmados/entregues</p>
-                        </div>
-                    </div>
-                </div>
-                        {/* Lead Time */}
-                        <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-blue-100 transition-all">
-                            <div className="p-3.5 bg-blue-50 text-blue-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                                <TrendingUp className="w-5 h-5" />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Lead Time Médio</p>
-                                <p className="text-2xl font-bold text-gray-900">
-                                    {kpis.leadTimeDays !== null ? `${kpis.leadTimeDays} dias` : '—'}
-                                </p>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                    <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></span>
-                                    <p className="text-xs text-gray-400 font-medium truncate">
-                                        {kpis.receivedCount > 0
-                                            ? `Baseado em ${kpis.receivedCount + kpis.divergenceCount} pedido(s) concluído(s)`
-                                            : 'Nenhum pedido concluído ainda'}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Taxa Divergência */}
-                        <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-red-100 transition-all">
-                            <div className={`p-3.5 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform ${kpis.divergenceRate !== null && kpis.divergenceRate > 20 ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>
-                                <AlertTriangle className="w-5 h-5" />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Taxa de Divergência</p>
-                                <p className={`text-2xl font-bold ${kpis.divergenceRate !== null && kpis.divergenceRate > 20 ? 'text-red-600' : 'text-gray-900'}`}>
-                                    {kpis.divergenceRate !== null ? `${kpis.divergenceRate}%` : '—'}
-                                </p>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${kpis.divergenceRate !== null && kpis.divergenceRate > 20 ? 'bg-red-500' : 'bg-amber-500'}`}></span>
-                                    <p className="text-xs text-gray-400 font-medium truncate">
-                                        {kpis.divergenceCount} divergência(s) em {kpis.divergenceCount + kpis.receivedCount} pedido(s)
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Aprovação Financeira */}
-                        <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-green-100 transition-all">
-                            <div className="p-3.5 bg-green-50 text-green-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                                <CheckCircle2 className="w-5 h-5" />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Aprovação Financeira</p>
-                                <p className="text-2xl font-bold text-gray-900">
-                                    {kpis.financialApprovalRate !== null ? `${kpis.financialApprovalRate}%` : '—'}
-                                </p>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full shrink-0"></span>
-                                    <p className="text-xs text-gray-400 font-medium truncate">
-                                        {kpis.approvedCount} de {kpis.completedCount} pedido(s) aprovado(s)
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <KpiCard
+                            shadow={false}
+                            size="sm"
+                            label="Total de Pedidos"
+                            value={orders.length}
+                            sub="Todos os pedidos registrados"
+                            icon={<Package className="w-4 h-4" />}
+                            color="blue"
+                        />
+                        <KpiCard
+                            shadow={false}
+                            size="sm"
+                            label="Valor Total"
+                            value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(valorTotal)}
+                            sub="Soma de todos os pedidos"
+                            icon={<DollarSign className="w-4 h-4" />}
+                            color="emerald"
+                        />
+                        <KpiCard
+                            shadow={false}
+                            size="sm"
+                            label="Em Aberto"
+                            value={orders.filter(o => ['Rascunho', 'Enviado'].includes(o.status)).length}
+                            sub="Rascunhos e Enviados"
+                            icon={<Filter className="w-4 h-4" />}
+                            color="amber"
+                            pulse
+                        />
+                        <KpiCard
+                            shadow={false}
+                            size="sm"
+                            label="Confirmados"
+                            value={orders.filter(o => o.status === 'Confirmado').length}
+                            sub="Pedidos confirmados/entregues"
+                            icon={<Package className="w-4 h-4" />}
+                            color="purple"
+                        />
+                        <KpiCard
+                            shadow={false}
+                            size="sm"
+                            label="Lead Time Médio"
+                            value={kpis.leadTimeDays !== null ? `${kpis.leadTimeDays} dias` : '—'}
+                            sub={kpis.receivedCount > 0
+                                ? `Baseado em ${kpis.receivedCount + kpis.divergenceCount} pedido(s) concluído(s)`
+                                : 'Nenhum pedido concluído ainda'}
+                            icon={<TrendingUp className="w-4 h-4" />}
+                            color="blue"
+                        />
+                        <KpiCard
+                            shadow={false}
+                            size="sm"
+                            label="Taxa de Divergência"
+                            value={kpis.divergenceRate !== null ? `${kpis.divergenceRate}%` : '—'}
+                            sub={`${kpis.divergenceCount} divergência(s) em ${kpis.divergenceCount + kpis.receivedCount} pedido(s)`}
+                            icon={<AlertTriangle className="w-4 h-4" />}
+                            color={divergenceHigh ? 'red' : 'amber'}
+                        />
+                        <KpiCard
+                            shadow={false}
+                            size="sm"
+                            label="Aprovação Financeira"
+                            value={kpis.financialApprovalRate !== null ? `${kpis.financialApprovalRate}%` : '—'}
+                            sub={`${kpis.approvedCount} de ${kpis.completedCount} pedido(s) aprovado(s)`}
+                            icon={<CheckCircle2 className="w-4 h-4" />}
+                            color="emerald"
+                        />
                     </div>
                 );
             })()}
 
-            {/* Filters */}
-            <div className="bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+            {/* Filters — §5.1 (variante desaninhada, escala compacta §16), igual a ClientList.tsx */}
+            <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
-                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
                         placeholder="Buscar por número ou fornecedor..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-transparent rounded-[1.5rem] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setNfFilter(f => f === 'sem-nf' ? 'all' : 'sem-nf')}
-                        title={nfFilter === 'sem-nf' ? 'Mostrando apenas pedidos sem NF-e — clique para ver todos' : 'Filtrar pedidos sem NF-e vinculada'}
-                        className={`flex items-center gap-2 px-4 py-4 rounded-[1.25rem] transition-all active:scale-95 shadow-sm text-sm font-semibold uppercase tracking-wider whitespace-nowrap ${
-                            nfFilter === 'sem-nf'
-                                ? 'bg-amber-500 text-white'
-                                : 'bg-amber-50 text-amber-600 hover:bg-amber-500 hover:text-white'
-                        }`}
-                    >
-                        <FileCheck className="w-4 h-4" />
-                        Sem NF-e
-                    </button>
-                    <button
-                        onClick={loadOrders}
-                        className="p-4 bg-blue-50 text-blue-600 rounded-[1.25rem] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shadow-sm"
-                    >
-                        <Filter className="w-4 h-4" />
-                    </button>
+                <button
+                    onClick={() => setNfFilter(f => f === 'sem-nf' ? 'all' : 'sem-nf')}
+                    title={nfFilter === 'sem-nf' ? 'Mostrando apenas pedidos sem NF-e — clique para ver todos' : 'Filtrar pedidos sem NF-e vinculada'}
+                    className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] transition-all active:scale-95 text-sm font-medium whitespace-nowrap ${
+                        nfFilter === 'sem-nf'
+                            ? 'bg-amber-500 text-white'
+                            : 'bg-amber-50 text-amber-600 hover:bg-amber-500 hover:text-white'
+                    }`}
+                >
+                    <FileCheck className="w-4 h-4" />
+                    Sem NF-e
+                </button>
+
+                <button
+                    onClick={loadOrders}
+                    className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                    title="Atualizar"
+                >
+                    <RefreshCw className="w-4 h-4" />
+                </button>
+
+                <div className="flex items-center h-9">
+                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 </div>
 
-                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                     <ColumnConfigButton
                         columns={COLUMNS.filter(c => c.key !== 'actions')}
                         visibleColumns={tableColumns.visibleColumns}
@@ -482,50 +448,53 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                         onToggleColumn={tableColumns.toggleColumn}
                         onReset={tableColumns.resetColumns}
                     />
-                    <div className="w-px bg-gray-200 mx-1 my-1"></div>
+                    <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                     <button
                         onClick={() => setViewMode('grid')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid'
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid'
+                            ? 'bg-blue-600 text-white'
                             : 'text-gray-400 hover:text-gray-600'
                             }`}
                         title="Visualização em Grade"
                     >
-                        <LayoutDashboard className="w-5 h-5" />
+                        <LayoutDashboard className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'list'
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list'
+                            ? 'bg-blue-600 text-white'
                             : 'text-gray-400 hover:text-gray-600'
                             }`}
                         title="Visualização em Lista"
                     >
-                        <Table2 className="w-5 h-5" />
+                        <Table2 className="w-4 h-4" />
                     </button>
                 </div>
             </div>
 
-            {/* Barra de ação em massa (F3, só na visão em lista) */}
+            {/* Barra de ação em massa (F3, só na visão em lista) — fixa no rodapé, fora do fluxo (§10) */}
             {viewMode === 'list' && selectedVisible.length > 0 && (
-                <div className="flex items-center gap-4 bg-red-600 text-white px-6 py-3 rounded-[1.5rem] shadow-sm">
-                    <span className="text-sm font-semibold">
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                    <span className="flex-1 text-sm font-bold whitespace-nowrap">
                         {selectedVisible.length} selecionado{selectedVisible.length !== 1 ? 's' : ''}
+                        <span className="ml-2 font-normal opacity-75">
+                            · {formatMoney(selectedVisible.reduce((sum, o) => sum + (o.items?.reduce((is: number, i: any) => is + (i.total || 0), 0) || 0), 0))}
+                        </span>
                     </span>
-                    <div className="flex-1" />
                     <button
                         onClick={handleBulkDelete}
                         disabled={bulkLoading}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-red-700 text-sm font-semibold hover:bg-red-50 disabled:opacity-60 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white text-blue-700 text-sm font-semibold hover:bg-blue-50 disabled:opacity-60 transition-colors"
                     >
                         <Trash2 className="w-3.5 h-3.5" />
                         Excluir
                     </button>
                     <button
                         onClick={clearSelection}
-                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium text-red-100 hover:text-white hover:bg-red-500 transition-colors"
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-blue-400 transition-colors"
                     >
-                        Limpar
+                        <X className="w-3.5 h-3.5" />
+                        Desmarcar
                     </button>
                 </div>
             )}
@@ -538,14 +507,17 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                 </div>
             ) : filteredOrders.length > 0 ? (
                 viewMode === 'list' ? (
-                    <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                        <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
-                            <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
-                                <tr>
+                            {/* thead em sentence case (§6.2) — escala compacta; uppercase={false} porque
+                                SortableHeader força uppercase internamente por padrão. */}
+                            <thead>
+                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                         <input
                                             type="checkbox"
-                                            className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer disabled:opacity-40"
+                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
                                             checked={allVisibleSelected}
                                             disabled={selectableVisible.length === 0}
                                             onChange={toggleAllVisible}
@@ -553,53 +525,54 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                         />
                                     </th>
                                     {tableColumns.visibleColumns.includes('number') && (
-                                        <SortableHeader colKey="number" label="Número" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="number" label="Número" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('obra') && (
-                                        <SortableHeader colKey="obra" label="Obra" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                        <SortableHeader colKey="obra" label="Obra" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                                     )}
                                     {tableColumns.visibleColumns.includes('orcamento') && (
-                                        <SortableHeader colKey="orcamento" label="Orçamento" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                        <SortableHeader colKey="orcamento" label="Orçamento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                                     )}
                                     {tableColumns.visibleColumns.includes('supplier') && (
-                                        <SortableHeader colKey="supplier" label="Fornecedor" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="supplier" label="Fornecedor" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader colKey="status" label="Status" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('date') && (
-                                        <SortableHeader colKey="date" label="Data do Pedido" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="date" label="Data do Pedido" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('value') && (
-                                        <SortableHeader colKey="value" label="Valor Total" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="value" label="Valor Total" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('items') && (
-                                        <SortableHeader colKey="items" label="Itens" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="items" label="Itens" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('actions') && (
-                                        <th className="px-6 py-2 text-right">Ações</th>
+                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                     )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filteredOrders.map(order => (
+                                {filteredOrders.map((order, rowIndex) => (
                                     <tr
                                         key={order.id}
-                                        className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedIds.has(order.id) ? 'bg-red-50/60' : ''}`}
+                                        className={`hover:bg-blue-50/50 transition-colors cursor-pointer group ${selectedIds.has(order.id) ? 'bg-blue-50/60' : ''}`}
                                         onClick={() => onViewDetails(order.id)}
                                     >
                                         <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center" onClick={e => e.stopPropagation()}>
                                             {canDeleteOrder(order.status) ? (
                                                 <input
                                                     type="checkbox"
-                                                    className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                    title="Dica: segure Shift e clique para selecionar um intervalo"
                                                     checked={selectedIds.has(order.id)}
-                                                    onChange={() => toggleRow(order.id)}
+                                                    onChange={(e) => handleRowCheck(order.id, rowIndex, (e.nativeEvent as MouseEvent).shiftKey)}
                                                 />
                                             ) : null}
                                         </td>
                                         {tableColumns.visibleColumns.includes('number') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm text-gray-600">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                 {order.number || order.id.slice(0, 8)}
                                             </td>
                                         )}
@@ -698,6 +671,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -808,12 +782,10 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     </div>
                 )
             ) : (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 flex flex-col items-center justify-center text-center">
-                    <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mb-4">
-                        <Package className="w-8 h-8 text-blue-500" />
-                    </div>
+                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                    <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum pedido encontrado</h3>
-                    <p className="text-gray-500 max-w-md mx-auto mb-6">Comece criando um novo pedido de compra para suas obras.</p>
+                    <p className="text-sm text-gray-500 mb-6">Comece criando um novo pedido de compra para suas obras.</p>
                     <button
                         onClick={onCreateNew}
                         className="text-blue-600 font-bold hover:underline"
@@ -829,30 +801,6 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 {notification.message}
-            </div>
-        )}
-
-        {/* Inline confirm modal */}
-        {pendingConfirm && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
-                <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 border border-gray-100 animate-in zoom-in-95 duration-200">
-                    <p className="text-sm font-normal text-gray-700 mb-6 leading-relaxed">{pendingConfirm.message}</p>
-                    <div className="flex justify-end gap-3">
-                        <button
-                            onClick={() => setPendingConfirm(null)}
-                            className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-semibold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-all"
-                        >
-                            Cancelar
-                        </button>
-                        <Button
-                            variant="danger"
-                            onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }}
-                            className="rounded-2xl"
-                        >
-                            Confirmar
-                        </Button>
-                    </div>
-                </div>
             </div>
         )}
         </>

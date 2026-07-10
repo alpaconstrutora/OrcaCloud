@@ -90,7 +90,7 @@ function ApproveModal({
   const [purchaseOrderId, setPurchaseOrderId] = useState(invoice.purchase_order_id ?? '');
   const [orderMode, setOrderMode] = useState<'none' | 'existing' | 'new'>(invoice.purchase_order_id ? 'existing' : 'none');
   const [orders, setOrders] = useState<{ id: string; number: string }[]>([]);
-  const [dueDate, setDueDate] = useState('');
+  const [dueDate, setDueDate] = useState(invoice.issue_date ?? '');
 
   // Aba: Vincular Existente
   const [existingTxs, setExistingTxs] = useState<{ id: string; description: string; amount: number; transaction_date: string; entity_name: string }[]>([]);

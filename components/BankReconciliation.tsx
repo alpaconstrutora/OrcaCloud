@@ -31,6 +31,7 @@ import FinancialClosePanel from './FinancialClosePanel';
 import AnomaliesPanel from './AnomaliesPanel';
 import SmartReconciliationCenter from './SmartReconciliationCenter';
 import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
+import BankStatementImportDrawer from './BankStatementImportDrawer';
 
 type ReconciliationView = 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'statement' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close';
 
@@ -176,12 +177,12 @@ const LazySelect: React.FC<{
 const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId, defaultView }) => {
     const confirm = useConfirm();
     const navigateToFocus = useStore(s => s.navigateToFocus);
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const categoriesLoadedForOrg = useRef<string | null>(null);
     const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
     const [selectedBankTxIds, setSelectedBankTxIds] = useState<Set<string>>(new Set());
     const [selectedInternalTxIds, setSelectedInternalTxIds] = useState<Set<string>>(new Set());
     const [isLoteEditOpen, setIsLoteEditOpen] = useState(false);
+    const [showImportDrawer, setShowImportDrawer] = useState(false);
     const [selectedRuleIds, setSelectedRuleIds] = useState<Set<string>>(new Set());
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
     const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
@@ -2316,9 +2317,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         }
     };
 
-    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const files = event.target.files;
-        if (!files || files.length === 0 || !selectedAccountId) return;
+    const importFiles = async (fileList: FileList | File[]) => {
+        const files = Array.from(fileList);
+        if (files.length === 0 || !selectedAccountId) return;
 
         setIsImporting(true);
         if (files.length > 1) {
@@ -2329,8 +2330,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             const orgId = effectiveOrgId || organizationId;
             if (!orgId) throw new Error('ID da organização não identificado. Selecione uma conta bancária.');
 
-            const fileArray = Array.from(files);
-            const result = await bankReconciliationService.ingestMultipleFiles(fileArray, selectedAccountId, orgId);
+            const result = await bankReconciliationService.ingestMultipleFiles(files, selectedAccountId, orgId);
             await bankReconciliationService.runMatchingEngine(selectedAccountId, orgId);
 
             await loadTransactions();
@@ -2347,10 +2347,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             alert('Erro na importação: ' + error.message);
+            throw error;
         } finally {
             setIsImporting(false);
             setImportingMessage(null);
-            if (event.target) event.target.value = '';
         }
     };
 
@@ -3095,14 +3095,25 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     </div>
                 </div>
             )}
-            {/* Hidden Input for Files */}
-            <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                accept=".ofx,.csv,.txt,.ret,.cnab,.xlsx,.xls"
-                onChange={handleFileUpload}
-                multiple
+            <BankStatementImportDrawer
+                open={showImportDrawer}
+                onClose={() => setShowImportDrawer(false)}
+                accounts={accounts}
+                selectedAccountId={selectedAccountId}
+                onSelectAccount={setSelectedAccountId}
+                competencia={competencia}
+                onSelectCompetencia={(year, month) => {
+                    const val = `${year}-${month}`;
+                    setCompetencia(val);
+                    const [y, m] = [parseInt(year), parseInt(month)];
+                    const lastDay = new Date(y, m, 0).getDate();
+                    setStartDate(`${val}-01`);
+                    setEndDate(`${val}-${String(lastDay).padStart(2, '0')}`);
+                }}
+                onClearCompetencia={() => { setCompetencia(''); setStartDate(''); setEndDate(''); }}
+                isImporting={isImporting}
+                importingMessage={importingMessage}
+                onImportFiles={importFiles}
             />
 
             {/* Toast de Notificação — padrão guia seção 13 */}
@@ -3287,9 +3298,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         </button>
                     )}
 
-                    <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={!selectedAccountId || isImporting}
+                    <button
+                        onClick={() => setShowImportDrawer(true)}
+                        disabled={isImporting}
                         className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isImporting ? (

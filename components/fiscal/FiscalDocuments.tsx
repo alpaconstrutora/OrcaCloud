@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  FileText, Search, RefreshCw, CheckCircle2, Clock, AlertTriangle, ArrowLeft, Plus,
+  FileText, Search, RefreshCw, CheckCircle2, Clock, AlertTriangle, ArrowLeft, Plus, UploadCloud,
 } from 'lucide-react';
 import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink, linkExistingTransaction, createOrderFromNfe } from '../../services/nfeService';
 import { projectService } from '../../services/projectService';
@@ -17,6 +17,8 @@ import { useConfirm } from '../ui/confirm';
 interface Props {
   organizationId: string | null;
   onToast: (msg: string, type: 'ok' | 'err') => void;
+  /** Ausente (undefined) quando nenhuma organização está selecionada — some o botão. */
+  onOpenUpload?: () => void;
 }
 
 const fmt = (v: number) =>
@@ -565,7 +567,7 @@ function DocumentDetail({
 }
 
 // ── Lista de NF-es ────────────────────────────────────────────────────────────
-export function FiscalDocuments({ organizationId, onToast }: Props) {
+export function FiscalDocuments({ organizationId, onToast, onOpenUpload }: Props) {
   const [invoices, setInvoices] = useState<NfeInvoice[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -643,7 +645,7 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Documentos fiscais</h1>
+        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Documentos fiscais</h1>
         <p className="text-gray-400 text-sm mt-1.5 font-medium">
           {counts.all} NF-e registradas • {counts.completed} processadas • {counts.linked} com título gerado
         </p>
@@ -681,6 +683,14 @@ export function FiscalDocuments({ organizationId, onToast }: Props) {
             onReset={tableColumns.resetColumns}
           />
         </div>
+        {onOpenUpload && (
+          <button
+            onClick={onOpenUpload}
+            className="h-9 px-4 rounded-[6px] text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-all inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap"
+          >
+            <UploadCloud className="w-4 h-4" /> Enviar NF-e
+          </button>
+        )}
       </div>
 
       <div className="inline-flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1">

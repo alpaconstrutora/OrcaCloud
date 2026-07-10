@@ -1,7 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { UploadCloud, FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { uploadNFe } from '../../services/nfeService';
-import type { FiscalPage } from './FiscalModule';
 
 interface FileEntry {
   name: string;
@@ -15,7 +14,6 @@ interface Props {
   organizationId: string;
   userId: string;
   onToast: (msg: string, type: 'ok' | 'err') => void;
-  onNavigate: (page: FiscalPage) => void;
 }
 
 const INGESTION_RULES = [
@@ -94,11 +92,6 @@ export function FiscalUpload({ organizationId, userId, onToast }: Props) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Upload NF-e</h1>
-        <p className="text-gray-400 text-sm mt-1.5 font-medium">Envie arquivos XML de nota fiscal eletrônica para processamento automático.</p>
-      </div>
-
       <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6">
         <div
           className={`border-2 border-dashed rounded-[10px] px-8 py-14 text-center cursor-pointer transition-all ${

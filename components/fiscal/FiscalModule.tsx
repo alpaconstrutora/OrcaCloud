@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UploadCloud, FileText, ListChecks, Tags, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { FileText, ListChecks, Tags, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getPipelineHealth } from '../../services/nfeService';
 import { FISCAL_CSS } from './fiscalCss';
@@ -7,9 +7,10 @@ import { FiscalUpload } from './FiscalUpload';
 import { FiscalDocuments } from './FiscalDocuments';
 import { FiscalJobs } from './FiscalJobs';
 import { FiscalRules } from './FiscalRules';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import type { PipelineHealth } from '../../types/fiscal';
 
-export type FiscalPage = 'upload' | 'documents' | 'admin' | 'rules';
+export type FiscalPage = 'documents' | 'admin' | 'rules';
 
 interface ToastState { msg: string; type: 'ok' | 'err'; }
 
@@ -30,7 +31,6 @@ function FiscalToast({ msg, type, onClose }: ToastState & { onClose: () => void 
 }
 
 const NAV: { id: FiscalPage; label: string; icon: React.ReactNode }[] = [
-  { id: 'upload', label: 'Upload NF-e', icon: <UploadCloud className="w-4 h-4" /> },
   { id: 'documents', label: 'Documentos', icon: <FileText className="w-4 h-4" /> },
   { id: 'admin', label: 'Fila & Jobs', icon: <ListChecks className="w-4 h-4" /> },
   { id: 'rules', label: 'Classificação', icon: <Tags className="w-4 h-4" /> },
@@ -38,7 +38,8 @@ const NAV: { id: FiscalPage; label: string; icon: React.ReactNode }[] = [
 
 export function FiscalModule() {
   const { activeOrganizationId, organizations, session } = useStore();
-  const [page, setPage] = useState<FiscalPage>('upload');
+  const [page, setPage] = useState<FiscalPage>('documents');
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [health, setHealth] = useState<PipelineHealth | null>(null);
   // Seletor próprio do módulo Fiscal — independe do seletor global do app.
@@ -71,7 +72,7 @@ export function FiscalModule() {
           <div className="bg-white border-b border-gray-100 px-7 pt-5 shrink-0">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
-                <h1 className="text-2xl font-black text-gray-900 tracking-tight">Módulo Fiscal</h1>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Módulo Fiscal</h1>
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Pipeline de NF-e e classificação de documentos.</p>
               </div>
               <div className="flex items-center gap-3 shrink-0">
@@ -105,9 +106,9 @@ export function FiscalModule() {
               </div>
             </div>
 
-            {isConsolidated && (page === 'upload' || page === 'rules') && (
+            {isConsolidated && page === 'rules' && (
               <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-[10px] px-4 py-2.5 text-sm font-medium mb-4">
-                Visão consolidada — selecione uma organização específica acima para {page === 'upload' ? 'enviar NF-e' : 'criar regras'}.
+                Visão consolidada — selecione uma organização específica acima para criar regras.
               </div>
             )}
 
@@ -129,22 +130,11 @@ export function FiscalModule() {
 
           {/* Conteúdo da aba ativa */}
           <div className="flex-1 overflow-y-auto px-7 py-6">
-            {page === 'upload' && (
-              orgId ? (
-                <FiscalUpload
-                  organizationId={orgId}
-                  userId={session?.user?.id ?? ''}
-                  onToast={showToast}
-                  onNavigate={setPage}
-                />
-              ) : (
-                <div className="text-center py-16 text-sm text-gray-400">Selecione uma organização acima para enviar NF-e.</div>
-              )
-            )}
             {page === 'documents' && (
               <FiscalDocuments
                 organizationId={orgId}
                 onToast={showToast}
+                onOpenUpload={orgId ? () => setUploadOpen(true) : undefined}
               />
             )}
             {page === 'admin' && (
@@ -163,6 +153,22 @@ export function FiscalModule() {
           </div>
         </div>
       </div>
+
+      {orgId && (
+        <Sheet open={uploadOpen} onClose={() => setUploadOpen(false)}>
+          <SheetHeader onClose={() => setUploadOpen(false)}>
+            <SheetTitle>Upload NF-e</SheetTitle>
+            <SheetDescription>Envie arquivos XML de nota fiscal eletrônica para processamento automático.</SheetDescription>
+          </SheetHeader>
+          <SheetPanel className="px-6 py-5">
+            <FiscalUpload
+              organizationId={orgId}
+              userId={session?.user?.id ?? ''}
+              onToast={showToast}
+            />
+          </SheetPanel>
+        </Sheet>
+      )}
 
       {toast && (
         <FiscalToast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />

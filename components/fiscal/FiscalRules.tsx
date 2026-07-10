@@ -138,7 +138,7 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast }: Pr
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Regras de classificação</h1>
+        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Regras de classificação</h1>
         <p className="text-gray-400 text-sm mt-1.5 font-medium">Regras heurísticas configuráveis — NCM, CFOP e palavras-chave. Sem código hardcoded.</p>
       </div>
 

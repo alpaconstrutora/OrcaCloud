@@ -135,7 +135,7 @@ export function FiscalJobs({ organizationId, onToast }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-black text-gray-900 tracking-tight">Fila de processamento</h1>
+        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Fila de processamento</h1>
         <p className="text-gray-400 text-sm mt-1.5 font-medium">Visibilidade operacional dos jobs e gerenciamento de dead letter.</p>
       </div>
 

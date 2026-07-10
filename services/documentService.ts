@@ -15,6 +15,22 @@ import {
 } from '../types';
 import { notificationService } from './notificationService';
 
+export interface OpuraDmsDiscipline {
+  id: string;
+  organization_id: string;
+  code: string;
+  name: string;
+  created_at: string;
+}
+
+export interface OpuraDmsNamingPattern {
+  id: string;
+  organization_id: string;
+  name: string;
+  mask: string;
+  created_at: string;
+}
+
 function generateUUID(): string {
   if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
     return window.crypto.randomUUID();
@@ -1281,5 +1297,87 @@ export const documentService = {
 
     if (!data || data.length === 0) return null;
     return data[0];
+  },
+
+  // ─── CRUD DE DISCIPLINAS ─────────────────────────────────────
+  async listDisciplines(orgId: string): Promise<OpuraDmsDiscipline[]> {
+    const { data, error } = await supabase
+      .from('opura_dms_disciplines')
+      .select('*')
+      .eq('organization_id', orgId)
+      .order('code', { ascending: true });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao listar disciplinas:', error);
+      throw new Error(`Erro ao listar disciplinas: ${error.message}`);
+    }
+    return (data || []) as OpuraDmsDiscipline[];
+  },
+
+  async createDiscipline(orgId: string, code: string, name: string): Promise<OpuraDmsDiscipline> {
+    const { data, error } = await supabase
+      .from('opura_dms_disciplines')
+      .insert({ organization_id: orgId, code: code.toUpperCase().trim(), name: name.trim() })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DocumentService] Erro ao criar disciplina:', error);
+      throw new Error(`Erro ao criar disciplina: ${error.message}`);
+    }
+    return data as OpuraDmsDiscipline;
+  },
+
+  async deleteDiscipline(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_dms_disciplines')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('[DocumentService] Erro ao excluir disciplina:', error);
+      throw new Error(`Erro ao excluir disciplina: ${error.message}`);
+    }
+  },
+
+  // ─── CRUD DE PADRÕES DE NOMENCLATURA ─────────────────────────
+  async listNamingPatterns(orgId: string): Promise<OpuraDmsNamingPattern[]> {
+    const { data, error } = await supabase
+      .from('opura_dms_naming_patterns')
+      .select('*')
+      .eq('organization_id', orgId)
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao listar padrões de nomenclatura:', error);
+      throw new Error(`Erro ao listar padrões de nomenclatura: ${error.message}`);
+    }
+    return (data || []) as OpuraDmsNamingPattern[];
+  },
+
+  async createNamingPattern(orgId: string, name: string, mask: string): Promise<OpuraDmsNamingPattern> {
+    const { data, error } = await supabase
+      .from('opura_dms_naming_patterns')
+      .insert({ organization_id: orgId, name: name.trim(), mask: mask.trim() })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DocumentService] Erro ao criar padrão de nomenclatura:', error);
+      throw new Error(`Erro ao criar padrão de nomenclatura: ${error.message}`);
+    }
+    return data as OpuraDmsNamingPattern;
+  },
+
+  async deleteNamingPattern(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_dms_naming_patterns')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('[DocumentService] Erro ao excluir padrão de nomenclatura:', error);
+      throw new Error(`Erro ao excluir padrão de nomenclatura: ${error.message}`);
+    }
   },
 };

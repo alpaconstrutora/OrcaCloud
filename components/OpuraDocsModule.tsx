@@ -34,9 +34,13 @@ import {
   Eye,
   Filter,
 } from 'lucide-react';
-import { documentService } from '../services/documentService';
+import { 
+  documentService,
+  OpuraDmsDiscipline,
+  OpuraDmsNamingPattern
+} from '../services/documentService';
 import { DocumentMarkupViewer } from './ui/DocumentMarkupViewer';
-import { validateFileNameAgainstMask } from '../utils/dmsUtils';
+import { validateFileNameAgainstMask, extractTokenFromFileName } from '../utils/dmsUtils';
 import {
   OpuraDocument,
   OpuraDocumentVersion,
@@ -103,6 +107,15 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [showAdvancedFilters, setShowAdvancedFilters] = React.useState(false);
   const [filterStatus, setFilterStatus] = React.useState<string>('all');
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
+  const [disciplines, setDisciplines] = React.useState<OpuraDmsDiscipline[]>([]);
+  const [namingPatterns, setNamingPatterns] = React.useState<OpuraDmsNamingPattern[]>([]);
+  const [showSettingsModal, setShowSettingsModal] = React.useState(false);
+  const [settingsTab, setSettingsTab] = React.useState<'disciplines' | 'patterns'>('disciplines');
+  const [newDiscCode, setNewDiscCode] = React.useState('');
+  const [newDiscName, setNewDiscName] = React.useState('');
+  const [newPatName, setNewPatName] = React.useState('');
+  const [newPatMask, setNewPatMask] = React.useState('');
+  const [selectedFolderDisciplines, setSelectedFolderDisciplines] = React.useState<string[]>([]);
 
   // Estados locais da Onda 1 (Pastas Virtuais e Movimentação)
   const [folders, setFolders] = React.useState<OpuraFolder[]>([]);
@@ -369,6 +382,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     fetchFolders();
     fetchPendingApprovals();
     fetchOrgMembers();
+    fetchDmsSettings();
   }, [activeOrganizationId, selectedProjectId, activeTab, currentFolderId, currentProfile]);
 
   // Sincronizar parâmetros de rota de notificação (Onda 3)
@@ -435,10 +449,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         parent_id: currentFolderId || undefined,
         categoria: activeTab,
         naming_mask: folderNamingMask || undefined,
+        disciplines: selectedFolderDisciplines.length > 0 ? selectedFolderDisciplines : undefined,
       });
       setNewFolderName('');
       setFolderNamingMask('');
       setSelectedMaskPreset('none');
+      setSelectedFolderDisciplines([]);
       setCreateFolderModalOpen(false);
       fetchFolders();
     } catch (err: any) {
@@ -469,6 +485,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setEditingFolder(folder);
     setEditFolderName(folder.name);
     setEditFolderMask(folder.naming_mask || '');
+    setSelectedFolderDisciplines(folder.disciplines || []);
     if (!folder.naming_mask) {
       setEditFolderMaskPreset('none');
     } else if (folder.naming_mask === '[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]') {
@@ -494,12 +511,105 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       await documentService.updateFolder(editingFolder.id, {
         name: editFolderName,
         naming_mask: finalMask || undefined,
+        disciplines: selectedFolderDisciplines.length > 0 ? selectedFolderDisciplines : [],
       });
 
       setEditingFolder(null);
       fetchFolders();
     } catch (err: any) {
       alert('Erro ao atualizar pasta: ' + err.message);
+    }
+  };
+
+  // Buscar Ajustes Gerais do GED (Disciplinas e Padrões) com injeção automática de presets
+  const fetchDmsSettings = async () => {
+    if (!activeOrganizationId) return;
+    try {
+      let discs = await documentService.listDisciplines(activeOrganizationId);
+      let pats = await documentService.listNamingPatterns(activeOrganizationId);
+
+      // Se a organização não tiver nenhuma disciplina cadastrada, injetar presets default
+      if (discs.length === 0) {
+        const defaultDiscs = [
+          { code: 'ARQ', name: 'Arquitetura' },
+          { code: 'ESTR', name: 'Estrutural' },
+          { code: 'ELEC', name: 'Elétrica' },
+          { code: 'HYDR', name: 'Hidráulica' },
+          { code: 'SANI', name: 'Sanitária' },
+          { code: 'PREV', name: 'Prevenção de Incêndio' },
+        ];
+        for (const d of defaultDiscs) {
+          await documentService.createDiscipline(activeOrganizationId, d.code, d.name).catch(() => {});
+        }
+        discs = await documentService.listDisciplines(activeOrganizationId);
+      }
+
+      // Se a organização não tiver nenhum padrão cadastrado, injetar presets default
+      if (pats.length === 0) {
+        const defaultPats = [
+          { name: 'Padrão ALPA', mask: '[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]' },
+          { name: 'Padrão Simples', mask: '[DISCIPLINA]-[NUMERO]' },
+        ];
+        for (const p of defaultPats) {
+          await documentService.createNamingPattern(activeOrganizationId, p.name, p.mask).catch(() => {});
+        }
+        pats = await documentService.listNamingPatterns(activeOrganizationId);
+      }
+
+      setDisciplines(discs);
+      setNamingPatterns(pats);
+    } catch (err) {
+      console.error('[OpuraDocsModule] Erro ao carregar configurações do GED:', err);
+    }
+  };
+
+  // Criar nova disciplina
+  const handleCreateDisciplineSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeOrganizationId || !newDiscCode || !newDiscName) return;
+    try {
+      await documentService.createDiscipline(activeOrganizationId, newDiscCode, newDiscName);
+      setNewDiscCode('');
+      setNewDiscName('');
+      fetchDmsSettings();
+    } catch (err: any) {
+      alert('Erro ao criar disciplina: ' + err.message);
+    }
+  };
+
+  // Excluir disciplina
+  const handleDeleteDiscipline = async (id: string) => {
+    if (!confirm('Deseja realmente excluir esta disciplina? As pastas existentes continuarão funcionando, mas novos uploads e pastas não poderão utilizá-la.')) return;
+    try {
+      await documentService.deleteDiscipline(id);
+      fetchDmsSettings();
+    } catch (err: any) {
+      alert('Erro ao excluir disciplina: ' + err.message);
+    }
+  };
+
+  // Criar novo padrão de nomenclatura
+  const handleCreateNamingPatternSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeOrganizationId || !newPatName || !newPatMask) return;
+    try {
+      await documentService.createNamingPattern(activeOrganizationId, newPatName, newPatMask);
+      setNewPatName('');
+      setNewPatMask('');
+      fetchDmsSettings();
+    } catch (err: any) {
+      alert('Erro ao criar padrão de nomenclatura: ' + err.message);
+    }
+  };
+
+  // Excluir padrão de nomenclatura
+  const handleDeleteNamingPattern = async (id: string) => {
+    if (!confirm('Deseja realmente excluir este padrão de nomenclatura?')) return;
+    try {
+      await documentService.deleteNamingPattern(id);
+      fetchDmsSettings();
+    } catch (err: any) {
+      alert('Erro ao excluir padrão: ' + err.message);
     }
   };
 
@@ -633,6 +743,18 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         if (!validateFileNameAgainstMask(newDocFile.name, targetFolder.naming_mask)) {
           alert(`O nome do arquivo físico ("${newDocFile.name}") não atende ao padrão exigido nesta pasta:\n"${targetFolder.naming_mask}"\n\nPor favor, renomeie o arquivo de acordo com a máscara.`);
           return;
+        }
+
+        // Validação adicional de Disciplinas permitidas na pasta
+        if (targetFolder.disciplines && targetFolder.disciplines.length > 0) {
+          const extractedDisc = extractTokenFromFileName(newDocFile.name, targetFolder.naming_mask, '[DISCIPLINA]');
+          if (extractedDisc) {
+            const isAllowed = targetFolder.disciplines.some(d => d.toUpperCase() === extractedDisc.toUpperCase());
+            if (!isAllowed) {
+              alert(`A disciplina extraída do nome do arquivo ("${extractedDisc}") não é permitida nesta pasta virtual.\n\nDisciplinas permitidas: ${targetFolder.disciplines.join(', ')}`);
+              return;
+            }
+          }
         }
       }
     }
@@ -768,6 +890,18 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         if (!validateFileNameAgainstMask(dummyFileName, targetFolder.naming_mask)) {
           alert(`O nome do documento ("${editDocName}") não atende ao padrão exigido nesta pasta:\n"${targetFolder.naming_mask}"\n\nPor favor, renomeie de acordo com a máscara.`);
           return;
+        }
+
+        // Validação adicional de Disciplinas permitidas na pasta
+        if (targetFolder.disciplines && targetFolder.disciplines.length > 0) {
+          const extractedDisc = extractTokenFromFileName(dummyFileName, targetFolder.naming_mask, '[DISCIPLINA]');
+          if (extractedDisc) {
+            const isAllowed = targetFolder.disciplines.some(d => d.toUpperCase() === extractedDisc.toUpperCase());
+            if (!isAllowed) {
+              alert(`A disciplina extraída do nome do documento ("${extractedDisc}") não é permitida nesta pasta virtual.\n\nDisciplinas permitidas: ${targetFolder.disciplines.join(', ')}`);
+              return;
+            }
+          }
         }
       }
     }
@@ -978,6 +1112,15 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         >
           📊 Saúde Documental
         </button>
+
+        {isOrgAdmin && (
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="px-5 py-4 font-black text-form-input uppercase tracking-wider border-b-2 border-transparent text-slate-400 hover:text-blue-600 hover:border-blue-600 transition-all whitespace-nowrap flex items-center gap-1.5"
+          >
+            ⚙️ Ajustes do GED
+          </button>
+        )}
 
         {pendingApprovals.length > 0 && (
           <button
@@ -2101,12 +2244,40 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                 >
                   <option value="none">Sem padrão (Livre)</option>
-                  <option value="[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]">Padrão Construtora: [OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]</option>
-                  <option value="[DISCIPLINA]-[NUMERO]">Padrão Simples: [DISCIPLINA]-[NUMERO]</option>
-                  <option value="[OBRA]-[DISCIPLINA]-[NUMERO]-V[REVISAO]">Padrão Versão: [OBRA]-[DISCIPLINA]-[NUMERO]-V[REVISAO]</option>
+                  {namingPatterns.map(pat => (
+                    <option key={pat.id} value={pat.mask}>{pat.name}: {pat.mask}</option>
+                  ))}
                   <option value="custom">Outro (Personalizado...)</option>
                 </select>
               </div>
+
+              {selectedMaskPreset !== 'none' && disciplines.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Disciplinas Permitidas nesta pasta</label>
+                  <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3.5 rounded-2xl border border-slate-100 max-h-[140px] overflow-y-auto">
+                    {disciplines.map((disc) => {
+                      const isChecked = selectedFolderDisciplines.includes(disc.code);
+                      return (
+                        <label key={disc.id} className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              setSelectedFolderDisciplines(prev =>
+                                isChecked
+                                  ? prev.filter(c => c !== disc.code)
+                                  : [...prev, disc.code]
+                              );
+                            }}
+                            className="rounded text-blue-600 focus:ring-blue-500/20"
+                          />
+                          <span>{disc.code} - {disc.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {selectedMaskPreset === 'custom' && (
                 <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-200">
@@ -2537,22 +2708,53 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   onChange={(e) => {
                     const val = e.target.value;
                     setEditFolderMaskPreset(val);
-                    if (val === 'preset-alpa') {
-                      setEditFolderMask('[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]');
-                    } else if (val === 'preset-simple') {
-                      setEditFolderMask('[DISCIPLINA]-[NUMERO]');
+                    if (val === 'custom') {
+                      setEditFolderMask('');
                     } else if (val === 'none') {
                       setEditFolderMask('');
+                    } else {
+                      setEditFolderMask(val);
                     }
                   }}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-bold bg-white focus:outline-none"
                 >
                   <option value="none">Sem validação (Livre)</option>
-                  <option value="preset-alpa">Padrão Obra (OBRA-DISC-NUM-RREV)</option>
-                  <option value="preset-simple">Padrão Simples (DISC-NUM)</option>
+                  {namingPatterns.map(pat => (
+                    <option key={pat.id} value={pat.mask}>{pat.name}: {pat.mask}</option>
+                  ))}
                   <option value="custom">Fórmula Personalizada...</option>
                 </select>
+              </div>
 
+              {editFolderMaskPreset !== 'none' && disciplines.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Disciplinas Permitidas nesta pasta</label>
+                  <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3.5 rounded-2xl border border-slate-100 max-h-[140px] overflow-y-auto">
+                    {disciplines.map((disc) => {
+                      const isChecked = selectedFolderDisciplines.includes(disc.code);
+                      return (
+                        <label key={disc.id} className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              setSelectedFolderDisciplines(prev =>
+                                isChecked
+                                  ? prev.filter(c => c !== disc.code)
+                                  : [...prev, disc.code]
+                              );
+                            }}
+                            className="rounded text-blue-600 focus:ring-blue-500/20"
+                          />
+                          <span>{disc.code} - {disc.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
                 {editFolderMaskPreset === 'custom' && (
                   <input
                     type="text"
@@ -2584,6 +2786,224 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Ajustes Gerais do GED */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl border border-slate-100 overflow-hidden my-8 animate-in zoom-in-95 duration-200">
+            
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">⚙️</span>
+                <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider">Ajustes do GED</h3>
+              </div>
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Abas Internas */}
+            <div className="flex border-b border-slate-100 bg-slate-50/20 px-6">
+              <button
+                onClick={() => setSettingsTab('disciplines')}
+                className={`py-3.5 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition-all ${
+                  settingsTab === 'disciplines'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                📋 Disciplinas
+              </button>
+              <button
+                onClick={() => setSettingsTab('patterns')}
+                className={`py-3.5 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition-all ${
+                  settingsTab === 'patterns'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                🏷️ Fórmulas de Nomenclatura
+              </button>
+            </div>
+
+            <div className="p-6 max-h-[500px] overflow-y-auto space-y-6">
+              {settingsTab === 'disciplines' ? (
+                <div className="space-y-5">
+                  {/* Formulário Novo */}
+                  <form onSubmit={handleCreateDisciplineSubmit} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
+                    <h4 className="font-black text-slate-700 text-xs uppercase tracking-wider">Cadastrar Nova Disciplina</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Código (ex: ARQ)</label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={10}
+                          placeholder="ARQ"
+                          value={newDiscCode}
+                          onChange={(e) => setNewDiscCode(e.target.value.toUpperCase())}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                        />
+                      </div>
+                      <div className="space-y-1 sm:col-span-2">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nome da Disciplina (ex: Arquitetura)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            required
+                            placeholder="Arquitetura e Urbanismo"
+                            value={newDiscName}
+                            onChange={(e) => setNewDiscName(e.target.value)}
+                            className="flex-grow px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                          />
+                          <button
+                            type="submit"
+                            className="px-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap"
+                          >
+                            Adicionar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </form>
+
+                  {/* Listagem */}
+                  <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                          <th className="p-3">Código</th>
+                          <th className="p-3">Nome da Disciplina</th>
+                          <th className="p-3 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 text-xs font-semibold text-slate-700">
+                        {disciplines.length === 0 ? (
+                          <tr>
+                            <td colSpan={3} className="p-8 text-center text-slate-400 uppercase font-bold text-[10px]">Nenhuma disciplina cadastrada.</td>
+                          </tr>
+                        ) : (
+                          disciplines.map((disc) => (
+                            <tr key={disc.id} className="hover:bg-slate-50/50">
+                              <td className="p-3 font-bold text-blue-600">{disc.code}</td>
+                              <td className="p-3">{disc.name}</td>
+                              <td className="p-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteDiscipline(disc.id)}
+                                  className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-100 transition-all"
+                                  title="Excluir Disciplina"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {/* Formulário Novo */}
+                  <form onSubmit={handleCreateNamingPatternSubmit} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
+                    <h4 className="font-black text-slate-700 text-xs uppercase tracking-wider">Cadastrar Nova Fórmula</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nome do Padrão</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Padrão Obra"
+                          value={newPatName}
+                          onChange={(e) => setNewPatName(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                        />
+                      </div>
+                      <div className="space-y-1 sm:col-span-2">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Máscara / Fórmula (Tokens permitidos: [OBRA], [DISCIPLINA], [NUMERO], [REVISAO])</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            required
+                            placeholder="[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]"
+                            value={newPatMask}
+                            onChange={(e) => setNewPatMask(e.target.value)}
+                            className="flex-grow px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                          />
+                          <button
+                            type="submit"
+                            className="px-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap"
+                          >
+                            Adicionar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </form>
+
+                  {/* Listagem */}
+                  <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                          <th className="p-3">Nome</th>
+                          <th className="p-3">Máscara / Nomenclatura</th>
+                          <th className="p-3 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 text-xs font-semibold text-slate-700">
+                        {namingPatterns.length === 0 ? (
+                          <tr>
+                            <td colSpan={3} className="p-8 text-center text-slate-400 uppercase font-bold text-[10px]">Nenhuma fórmula cadastrada.</td>
+                          </tr>
+                        ) : (
+                          namingPatterns.map((pat) => (
+                            <tr key={pat.id} className="hover:bg-slate-50/50">
+                              <td className="p-3 font-bold">{pat.name}</td>
+                              <td className="p-3">
+                                <span className="font-mono text-xs text-blue-600 bg-blue-50/20 px-2 py-0.5 rounded">
+                                  {pat.mask}
+                                </span>
+                              </td>
+                              <td className="p-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteNamingPattern(pat.id)}
+                                  className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-100 transition-all"
+                                  title="Excluir Padrão"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Rodapé */}
+            <div className="flex items-center justify-end px-6 py-4 bg-slate-50/50 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowSettingsModal(false)}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-button uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95"
+              >
+                Concluir
+              </button>
+            </div>
           </div>
         </div>
       )}

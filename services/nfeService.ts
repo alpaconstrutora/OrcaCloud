@@ -267,7 +267,7 @@ export async function approveAndLink(params: {
 
   if (fetchErr || !invoice) throw new Error('NF-e não encontrada');
   if (invoice.linked_transaction_id) throw new Error('NF-e já possui título financeiro vinculado');
-  if (invoice.document_status !== 'completed') throw new Error('NF-e ainda não foi processada com sucesso');
+  if (invoice.document_status !== 'active') throw new Error('NF-e ainda não foi processada com sucesso');
 
   // 2. ID único para o par de partidas (D/C)
   const journalEntryId = crypto.randomUUID();
@@ -339,7 +339,7 @@ export async function linkExistingTransaction(params: {
 
   if (fetchErr || !invoice) throw new Error('NF-e não encontrada');
   if (invoice.linked_transaction_id) throw new Error('NF-e já possui título financeiro vinculado');
-  if (invoice.document_status !== 'completed') throw new Error('NF-e ainda não foi processada com sucesso');
+  if (invoice.document_status !== 'active') throw new Error('NF-e ainda não foi processada com sucesso');
 
   // 2. Buscar a transação existente
   const { data: tx, error: txErr } = await supabase

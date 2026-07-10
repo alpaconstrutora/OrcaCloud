@@ -51,6 +51,7 @@ const PIPELINE_STEPS = [
 
 // Colunas da tabela principal (lista de documentos)
 const COLUMNS: ColumnConfig[] = [
+  { key: 'code', label: 'Código', sortable: true },
   // Status é constante ("Processado") nesta lista — nfe_invoices só contém
   // documentos que já passaram pelo pipeline com sucesso; sem valor variável, sem ordenação.
   { key: 'status', label: 'Status', sortable: false },
@@ -637,6 +638,7 @@ export function FiscalDocuments({ organizationId, onToast, onOpenUpload }: Props
         case 'issue_date': return (new Date(a.issue_date).getTime() - new Date(b.issue_date).getTime()) * dir;
         case 'value': return (a.total_value - b.total_value) * dir;
         case 'link': return (Number(!!a.linked_transaction_id) - Number(!!b.linked_transaction_id)) * dir;
+        case 'code': return (a.code ?? '').localeCompare(b.code ?? '', 'pt-BR', { numeric: true }) * dir;
       }
     }
     return new Date(b.issue_date).getTime() - new Date(a.issue_date).getTime(); // default: mais recente primeiro
@@ -721,6 +723,11 @@ export function FiscalDocuments({ organizationId, onToast, onOpenUpload }: Props
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                {tableColumns.visibleColumns.includes('code') && (
+                  <SortableHeader colKey="code" label="Código" uppercase={false}
+                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                    className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                )}
                 {tableColumns.visibleColumns.includes('status') && (
                   <SortableHeader colKey="status" label="Status" sortable={false} uppercase={false}
                     className="px-6 py-2 border-r border-gray-100" />
@@ -757,6 +764,9 @@ export function FiscalDocuments({ organizationId, onToast, onOpenUpload }: Props
                   className="hover:bg-blue-50/50 transition-colors cursor-pointer"
                   onClick={() => setSelected(inv)}
                 >
+                  {tableColumns.visibleColumns.includes('code') && (
+                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{inv.code ?? '—'}</td>
+                  )}
                   {tableColumns.visibleColumns.includes('status') && (
                     <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-emerald-700">Processado</td>
                   )}

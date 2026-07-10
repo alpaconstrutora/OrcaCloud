@@ -105,6 +105,7 @@ export interface NfeContractItem {
 
 export interface NfeInvoice {
   id: string;
+  code: string | null;
   organization_id: string;
   raw_document_id: string;
   access_key: string;

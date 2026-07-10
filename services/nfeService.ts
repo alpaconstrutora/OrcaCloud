@@ -119,7 +119,7 @@ export async function uploadNFe(
 // INVOICES
 // ============================================================
 
-const NFE_COLS = 'id, organization_id, raw_document_id, access_key, issuer_name, issuer_cnpj, recipient_name, recipient_cnpj, issue_date, total_value, document_status, payment_status, created_at, project_id, linked_transaction_id, approved_at, approved_by, purchase_order_id';
+const NFE_COLS = 'id, code, organization_id, raw_document_id, access_key, issuer_name, issuer_cnpj, recipient_name, recipient_cnpj, issue_date, total_value, document_status, payment_status, created_at, project_id, linked_transaction_id, approved_at, approved_by, purchase_order_id';
 
 export async function listNfeInvoices(organizationId?: string | null): Promise<NfeInvoice[]> {
   let query = supabase

@@ -906,7 +906,12 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       );
 
     case 'fiscal-nfe':
-      return <FiscalModuleL />;
+      return (
+        <FiscalModuleL
+          onViewOrder={(id: string) => { setSelectedOrderId(id); setActiveView('supplies-orders'); }}
+          onViewPayable={(pid: string | null) => { setProjectId(pid); setActiveView('contas-a-pagar'); }}
+        />
+      );
 
     case 'automation':
       return <AutomationManager settings={settingsWithId} onUpdateSettings={handleUpdateSettings} organizationId={activeOrganizationId || undefined} />;

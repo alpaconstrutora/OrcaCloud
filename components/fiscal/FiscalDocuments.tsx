@@ -19,6 +19,10 @@ interface Props {
   onToast: (msg: string, type: 'ok' | 'err') => void;
   /** Ausente (undefined) quando nenhuma organização está selecionada — some o botão. */
   onOpenUpload?: () => void;
+  /** Navega para Suprimentos > Pedidos > detalhe do pedido. */
+  onViewOrder?: (orderId: string) => void;
+  /** Navega para a aba Contas a Pagar, escopada pela obra do título vinculado. */
+  onViewPayable?: (projectId: string | null) => void;
 }
 
 const fmt = (v: number) =>
@@ -59,6 +63,8 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'issue_date', label: 'Emissão', sortable: true },
   { key: 'value', label: 'Valor', sortable: true },
   { key: 'link', label: 'Título', sortable: true },
+  { key: 'order', label: 'Pedido', sortable: true },
+  { key: 'payable', label: 'Contas a Pagar', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 
@@ -568,9 +574,10 @@ function DocumentDetail({
 }
 
 // ── Lista de NF-es ────────────────────────────────────────────────────────────
-export function FiscalDocuments({ organizationId, onToast, onOpenUpload }: Props) {
+export function FiscalDocuments({ organizationId, onToast, onOpenUpload, onViewOrder, onViewPayable }: Props) {
   const [invoices, setInvoices] = useState<NfeInvoice[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [orderNumbers, setOrderNumbers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState<NfeInvoice | null>(null);
@@ -583,9 +590,19 @@ export function FiscalDocuments({ organizationId, onToast, onOpenUpload }: Props
       listNfeInvoices(organizationId),
       projectService.listProjects(undefined, organizationId ?? undefined),
     ])
-      .then(([invs, projs]) => {
+      .then(async ([invs, projs]) => {
         setInvoices(invs);
         setProjects(projs.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })));
+
+        const orderIds = [...new Set(invs.map(i => i.purchase_order_id).filter((id): id is string => !!id))];
+        if (orderIds.length > 0) {
+          const { data } = await supabase.from('purchase_orders').select('id, number').in('id', orderIds);
+          const map: Record<string, string> = {};
+          (data ?? []).forEach((o: { id: string; number: string }) => { map[o.id] = o.number; });
+          setOrderNumbers(map);
+        } else {
+          setOrderNumbers({});
+        }
       })
       .catch(() => onToast('Erro ao carregar documentos', 'err'))
       .finally(() => setLoading(false));
@@ -639,6 +656,8 @@ export function FiscalDocuments({ organizationId, onToast, onOpenUpload }: Props
         case 'value': return (a.total_value - b.total_value) * dir;
         case 'link': return (Number(!!a.linked_transaction_id) - Number(!!b.linked_transaction_id)) * dir;
         case 'code': return (a.code ?? '').localeCompare(b.code ?? '', 'pt-BR', { numeric: true }) * dir;
+        case 'order': return (orderNumbers[a.purchase_order_id ?? ''] ?? '').localeCompare(orderNumbers[b.purchase_order_id ?? ''] ?? '', 'pt-BR', { numeric: true }) * dir;
+        case 'payable': return (Number(!!a.linked_transaction_id) - Number(!!b.linked_transaction_id)) * dir;
       }
     }
     return new Date(b.issue_date).getTime() - new Date(a.issue_date).getTime(); // default: mais recente primeiro
@@ -752,6 +771,16 @@ export function FiscalDocuments({ organizationId, onToast, onOpenUpload }: Props
                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
                     className="px-6 py-2 border-r border-gray-100" />
                 )}
+                {tableColumns.visibleColumns.includes('order') && (
+                  <SortableHeader colKey="order" label="Pedido" uppercase={false}
+                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                    className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                )}
+                {tableColumns.visibleColumns.includes('payable') && (
+                  <SortableHeader colKey="payable" label="Contas a Pagar" uppercase={false}
+                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
+                    className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                )}
                 {tableColumns.visibleColumns.includes('actions') && (
                   <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                 )}
@@ -787,6 +816,34 @@ export function FiscalDocuments({ organizationId, onToast, onOpenUpload }: Props
                       {inv.linked_transaction_id
                         ? <span className="text-emerald-700">Gerado</span>
                         : <span className="text-amber-600">Pendente</span>}
+                    </td>
+                  )}
+                  {tableColumns.visibleColumns.includes('order') && (
+                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
+                      {inv.purchase_order_id && onViewOrder ? (
+                        <button
+                          onClick={e => { e.stopPropagation(); onViewOrder(inv.purchase_order_id!); }}
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          #{orderNumbers[inv.purchase_order_id] ?? '…'}
+                        </button>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                  )}
+                  {tableColumns.visibleColumns.includes('payable') && (
+                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
+                      {inv.linked_transaction_id && onViewPayable ? (
+                        <button
+                          onClick={e => { e.stopPropagation(); onViewPayable(inv.project_id); }}
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          Ver título
+                        </button>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
                     </td>
                   )}
                   {tableColumns.visibleColumns.includes('actions') && (

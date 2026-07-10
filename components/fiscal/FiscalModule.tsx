@@ -36,7 +36,14 @@ const NAV: { id: FiscalPage; label: string; icon: React.ReactNode }[] = [
   { id: 'rules', label: 'Classificação', icon: <Tags className="w-4 h-4" /> },
 ];
 
-export function FiscalModule() {
+interface Props {
+  /** Navega para Suprimentos > Pedidos > detalhe do pedido. */
+  onViewOrder?: (orderId: string) => void;
+  /** Navega para a aba Contas a Pagar, escopada pela obra do título vinculado. */
+  onViewPayable?: (projectId: string | null) => void;
+}
+
+export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
   const { activeOrganizationId, organizations, session } = useStore();
   const [page, setPage] = useState<FiscalPage>('documents');
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -135,6 +142,8 @@ export function FiscalModule() {
                 organizationId={orgId}
                 onToast={showToast}
                 onOpenUpload={orgId ? () => setUploadOpen(true) : undefined}
+                onViewOrder={onViewOrder}
+                onViewPayable={onViewPayable}
               />
             )}
             {page === 'admin' && (

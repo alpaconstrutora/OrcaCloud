@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, MoreVertical, Edit, Trash2, LayoutGrid, List, ChevronRight, ChevronDown, X, BrainCircuit, Activity, Calculator, Percent, Target, ArrowUpDown, Mail, Phone, Briefcase, FileText } from 'lucide-react';
+import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, ArrowUpDown, Mail, Phone, Briefcase, FileText, AlertCircle } from 'lucide-react';
 import { commercialService } from '../services/commercialService';
 import { Property, PropertyStatus, PropertyDeal, Client, HedonicPricingConfig } from '../types';
 import { TowerMatrixConfig, GridCellConfig, TowerNumberingConfig } from '../types/imovib';
@@ -37,6 +37,9 @@ import { ContractModal } from './ContractModal';
 import ContractDetailView from './ContractDetailView';
 import { contractService } from '../services/contractService';
 import Button from './ui/Button';
+import { KpiCard } from './ui/KpiCard';
+import { usePersistedState } from './ui/TableUtils';
+import { useConfirm } from './ui/confirm';
 
 interface SalesModuleProps {
     organizationId?: string;
@@ -53,8 +56,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     const [clients, setClients] = useState<Client[]>([]);
     const [projects, setProjects] = useState<ProjectData[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [viewMode, setViewMode] = useState<'grid' | 'list' | 'tower'>('list');
+    // F2: filtros sobrevivem a navegação/reload.
+    const [searchTerm, setSearchTerm] = usePersistedState('salesModuleFilters:search', '');
+    const [viewMode, setViewMode] = usePersistedState<'grid' | 'list' | 'tower'>('salesModuleFilters:viewMode', 'list');
     const [selectedProperties, setSelectedProperties] = useState<string[]>([]);
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(() => {
         const saved = localStorage.getItem('sales_selected_building_id');
@@ -82,6 +86,16 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     // Simulation States
     const [simMonthlySales, setSimMonthlySales] = useState<number>(2);
     const [simPriceAdjust, setSimPriceAdjust] = useState<number>(0);
+
+    const confirm = useConfirm();
+    const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
+    const [bulkPriceValue, setBulkPriceValue] = useState('');
+
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
 
     const loadData = async () => {
         console.log('[Commercial] Loading data for organization:', organizationId);
@@ -135,7 +149,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
     const handleSaveProperty = async (data: PropertyFormData) => {
         if (!organizationId && !data.organization_id) {
-            alert('Erro: Nenhuma organização ativa selecionada. Por favor, selecione uma empresa no menu lateral.');
+            notify('Erro: Nenhuma organização ativa selecionada. Por favor, selecione uma empresa no menu lateral.', 'error');
             return;
         }
 
@@ -247,9 +261,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         }
                     }
 
-                    alert(`Edifício e ${totalCount} unidades processados com sucesso!`);
+                    notify(`Edifício e ${totalCount} unidades processados com sucesso!`);
                 } else {
-                    alert('Imóvel cadastrado com sucesso! (Nenhuma unidade gerada)');
+                    notify('Imóvel cadastrado com sucesso! (Nenhuma unidade gerada)');
                 }
             } else if (propertyToSave.type === 'BUILDING' && _bulkConfig && (_bulkConfig.count ?? 0) > 0) {
                 // Fallback legado
@@ -276,9 +290,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     });
                 }
                 await commercialService.savePropertiesBatch(units);
-                alert(`Edifício e ${_bulkConfig.count} unidades cadastrados com sucesso!`);
+                notify(`Edifício e ${_bulkConfig.count} unidades cadastrados com sucesso!`);
             } else {
-                alert(editingProperty ? 'Imóvel atualizado com sucesso!' : 'Imóvel cadastrado com sucesso!');
+                notify(editingProperty ? 'Imóvel atualizado com sucesso!' : 'Imóvel cadastrado com sucesso!');
             }
 
             setIsPropertyModalOpen(false);
@@ -287,7 +301,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             console.error('[Commercial] Save Error:', error);
-            alert('Erro ao salvar imóvel: ' + error.message);
+            notify('Erro ao salvar imóvel: ' + error.message, 'error');
         }
     };
 
@@ -299,13 +313,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             // (Esta responsabilidade agora é do commercialService.ts)
 
 
-            alert('Negociação registrada com sucesso!');
+            notify('Negociação registrada com sucesso!');
             setIsDealModalOpen(false);
             setEditingDeal(undefined);
             loadData();
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
-            alert('Erro ao registrar negócio: ' + error.message);
+            notify('Erro ao registrar negócio: ' + error.message, 'error');
         }
     };
 
@@ -323,41 +337,51 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             // 3. Save to database in batch
             await commercialService.savePropertiesBatch(updatedUnits);
 
-            alert(`${updatedUnits.length} unidades precificadas com sucesso usando Inteligência Hedônica!`);
+            notify(`${updatedUnits.length} unidades precificadas com sucesso usando Inteligência Hedônica!`);
             setIsPricingModalOpen(false);
             loadData();
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             console.error('[Pricing] Error applying hedonic pricing:', error);
-            alert('Erro ao aplicar precificação: ' + error.message);
+            notify('Erro ao aplicar precificação: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
     };
 
     const handleDeleteDeal = async (id: string) => {
-        if (window.confirm('Tem certeza que deseja excluir esta negociação?')) {
-            try {
-                await commercialService.deleteDeal(id);
-                alert('Negociação excluída com sucesso!');
-                loadData();
-            } catch (err: unknown) {
-                const error = err instanceof Error ? err : new Error(String(err));
-                alert(`IMPOSSÍVEL EXCLUIR: ${error.message}`);
-            }
+        const ok = await confirm({
+            title: 'Excluir negociação?',
+            message: 'Tem certeza que deseja excluir esta negociação?',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        try {
+            await commercialService.deleteDeal(id);
+            notify('Negociação excluída com sucesso!');
+            loadData();
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            notify(`Impossível excluir: ${error.message}`, 'error');
         }
     };
 
     const handleDeleteProperty = async (id: string) => {
-        if (window.confirm('Tem certeza que deseja excluir este imóvel?')) {
-            try {
-                await commercialService.deleteProperty(id);
-                alert('Imóvel excluído!');
-                loadData();
-            } catch (err: unknown) {
-                const error = err instanceof Error ? err : new Error(String(err));
-                alert('Erro ao excluir: ' + error.message);
-            }
+        const ok = await confirm({
+            title: 'Excluir imóvel?',
+            message: 'Tem certeza que deseja excluir este imóvel?',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        try {
+            await commercialService.deleteProperty(id);
+            notify('Imóvel excluído!');
+            loadData();
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            notify('Erro ao excluir: ' + error.message, 'error');
         }
     };
 
@@ -365,7 +389,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         const targetOrgId = organizationId || currentBuilding?.organization_id;
 
         if (!targetOrgId) {
-            alert('Erro: Selecione uma organização ou um empreendimento para cadastrar o corretor.');
+            notify('Erro: Selecione uma organização ou um empreendimento para cadastrar o corretor.', 'error');
             return;
         }
 
@@ -374,23 +398,29 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 ...data,
                 organization_id: targetOrgId
             });
-            alert(data.id ? 'Corretor atualizado!' : 'Corretor cadastrado!');
+            notify(data.id ? 'Corretor atualizado!' : 'Corretor cadastrado!');
             loadData();
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
-            alert('Erro ao salvar corretor: ' + error.message);
+            notify('Erro ao salvar corretor: ' + error.message, 'error');
         }
     };
 
     const handleDeleteBroker = async (id: string) => {
-        if (window.confirm('Excluir este corretor?')) {
+        const ok = await confirm({
+            title: 'Excluir corretor?',
+            message: 'Tem certeza que deseja excluir este corretor?',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (ok) {
             try {
                 await brokerService.deleteProfile(id);
-                alert('Corretor excluído!');
+                notify('Corretor excluído!');
                 loadData();
             } catch (err: unknown) {
                 const error = err instanceof Error ? err : new Error(String(err));
-                alert('Erro ao excluir: ' + error.message);
+                notify('Erro ao excluir: ' + error.message, 'error');
             }
         }
     };
@@ -471,14 +501,15 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         };
     }, [filteredProperties, buildingDeals]);
 
+    // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
     const getStatusColor = (status: PropertyStatus) => {
         switch (status) {
-            case PropertyStatus.AVAILABLE: return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
-            case PropertyStatus.SOLD: return 'bg-red-500/10 text-red-500 border-red-500/20';
-            case PropertyStatus.RENTED: return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
-            case PropertyStatus.RESERVED: return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-            case PropertyStatus.EXCHANGED: return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
-            default: return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
+            case PropertyStatus.AVAILABLE: return 'text-emerald-600';
+            case PropertyStatus.SOLD: return 'text-red-600';
+            case PropertyStatus.RENTED: return 'text-purple-600';
+            case PropertyStatus.RESERVED: return 'text-amber-600';
+            case PropertyStatus.EXCHANGED: return 'text-blue-600';
+            default: return 'text-gray-600';
         }
     };
 
@@ -499,12 +530,12 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         try {
             setLoading(true);
             await commercialService.updatePropertiesBatch(selectedProperties, updates);
-            alert(`${selectedProperties.length} imóveis atualizados com sucesso!`);
+            notify(`${selectedProperties.length} imóveis atualizados com sucesso!`);
             setSelectedProperties([]);
             loadData();
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
-            alert('Erro na atualização em massa: ' + error.message);
+            notify('Erro na atualização em massa: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -560,7 +591,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     onRegisterDeal();
                 }
             }}
-            className={`bg-white border rounded-[2.5rem] overflow-hidden group hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] hover:-translate-y-2 transition-all duration-500 cursor-pointer ${compact ? 'scale-95 origin-top' : ''} ${selected ? 'border-blue-500 ring-4 ring-blue-500/10' : 'border-gray-200'}`}
+            className={`bg-white border rounded-[10px] overflow-hidden group hover:shadow-lg transition-all duration-300 cursor-pointer ${compact ? 'scale-95 origin-top' : ''} ${selected ? 'border-blue-500 ring-4 ring-blue-500/10' : 'border-gray-200'}`}
         >
             <div className="aspect-[16/11] bg-gray-100 relative overflow-hidden">
                 <div className="absolute top-6 left-6 z-10">
@@ -572,7 +603,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     />
                 </div>
                 <div className="absolute top-6 right-6 z-10 flex flex-col gap-2 scale-90 origin-top-right">
-                    <span className={`px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest border ${getStatusColor(property.status)} backdrop-blur-xl shadow-xl`}>
+                    <span className={`text-sm font-normal drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] ${getStatusColor(property.status)}`}>
                         {getStatusLabel(property.status)}
                     </span>
                     <div className="flex gap-2">
@@ -651,57 +682,49 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     );
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500 pb-20">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#0B1727] p-8 rounded-[2.5rem] border border-white/5 relative overflow-hidden shadow-2xl shadow-blue-900/10">
-                <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 blur-[120px] -mr-48 -mt-48 animate-pulse" />
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-600/5 blur-[100px] -ml-32 -mb-32" />
-                <div className="relative z-10">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 bg-blue-600 rounded-xl shadow-lg shadow-blue-600/20">
-                            <Building2 className="w-6 h-6 text-white" />
-                        </div>
-                        <span className="text-xs font-black text-blue-400 uppercase tracking-[0.3em]">Comercial • Vendas</span>
-                    </div>
-                    <h1 className="text-4xl font-black text-white tracking-tight">Venda de Ativos</h1>
-                    <p className="text-gray-400 font-medium mt-1">Controle de inventário de vendas, negociações e performance imobiliária.</p>
+        <div className="space-y-6 pb-20">
+            {/* Header — §20 (flat, sem hero) */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Venda de Ativos</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Controle de inventário de vendas, negociações e performance imobiliária.</p>
                 </div>
-                <div className="flex items-center gap-3 relative z-10">
+                <div className="flex items-center gap-2">
                     {selectedBuildingId && (
-                        <button 
+                        <button
                             onClick={() => {
                                 setSelectedBuildingId(null);
                                 if (viewMode === 'tower') setViewMode('grid');
                             }}
-                            className="flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black transition-all border border-white/10 group"
+                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all"
                         >
-                            <ChevronDown className="w-5 h-5 group-hover:-translate-x-1 transition-transform rotate-90" />
-                            Ver Todos Empreendimentos
+                            <ChevronDown className="w-4 h-4 rotate-90" />
+                            Ver todos empreendimentos
                         </button>
                     )}
                     {selectedBuildingId && (
                         <button
                             onClick={() => setIsPricingModalOpen(true)}
-                            className="flex items-center gap-2 px-6 py-3 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 rounded-2xl font-black transition-all border border-blue-600/20 group"
+                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all"
                         >
-                            <BrainCircuit className="w-5 h-5 text-blue-500 group-hover:rotate-12 transition-transform" />
-                            Inteligência de Preços
+                            <BrainCircuit className="w-4 h-4" />
+                            Inteligência de preços
                         </button>
                     )}
-                    <button className="flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black transition-all border border-white/10 group">
-                        <Maximize2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    <button className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">
+                        <Maximize2 className="w-4 h-4" />
                         Relatórios
                     </button>
-                    <Button
+                    <button
                         onClick={() => {
                             setEditingProperty(undefined);
                             setIsPropertyModalOpen(true);
                         }}
-                        className="!rounded-2xl shadow-xl shadow-blue-600/20 hover:scale-[1.02] group"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                     >
-                        <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform mr-2" />
-                        Novo Imóvel
-                    </Button>
+                        <Plus className="w-[15px] h-[15px]" />
+                        Novo imóvel
+                    </button>
                 </div>
             </div>
 
@@ -714,63 +737,62 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             />
 
             {selectedBuildingId && (
-                <div className="flex items-center gap-2 px-6 py-3 bg-blue-600/10 border border-blue-600/20 rounded-2xl w-fit animate-in fade-in slide-in-from-left-4 duration-500">
-                    <Building2 className="w-4 h-4 text-blue-600" />
-                    <span className="text-xs font-black text-blue-600 uppercase tracking-widest">Visualizando: {currentBuilding?.name}</span>
+                <div className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] bg-blue-50 text-blue-700 text-sm font-medium w-fit">
+                    <Building2 className="w-4 h-4" />
+                    Visualizando: {currentBuilding?.name}
                 </div>
             )}
 
-
-            {/* Tabs - Only show when a building is selected OR if we want to allow global deals later (but user asked to hide) */}
+            {/* Tabs internas do módulo (§19) — vocabulário compacto (h-9, rounded-[6px]) */}
             {selectedBuildingId && (
-                <div className={`flex p-1.5 bg-gray-200/50 backdrop-blur-md rounded-[1.5rem] w-fit border border-gray-200 shadow-inner overflow-hidden transition-all duration-500`}>
+                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 w-fit max-w-full overflow-x-auto">
                     <button
                         onClick={() => setActiveTab('inventory')}
-                        className={`flex items-center gap-2 px-8 py-3 rounded-[1.25rem] font-black tracking-tight transition-all duration-300 ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-md transform scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
-                        <HomeIcon className={`w-4 h-4 ${activeTab === 'inventory' ? 'fill-blue-600/10' : ''}`} />
-                        Unidades do Edifício
+                        <HomeIcon className="w-3.5 h-3.5" />
+                        Unidades do edifício
                     </button>
                     <button
                         onClick={() => setActiveTab('deals')}
-                        className={`flex items-center gap-2 px-8 py-3 rounded-[1.25rem] font-black tracking-tight transition-all duration-300 ${activeTab === 'deals' ? 'bg-white text-blue-600 shadow-md transform scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'deals' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
-                        <Tag className={`w-4 h-4 ${activeTab === 'deals' ? 'fill-blue-600/10' : ''}`} />
+                        <Tag className="w-3.5 h-3.5" />
                         Negociações
                     </button>
                     <button
                         onClick={() => setActiveTab('dashboard')}
-                        className={`flex items-center gap-2 px-8 py-3 rounded-[1.25rem] font-black tracking-tight transition-all duration-300 ${activeTab === 'dashboard' ? 'bg-white text-blue-600 shadow-md transform scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
-                        <TrendingUp className={`w-4 h-4 ${activeTab === 'dashboard' ? 'fill-blue-600/10' : ''}`} />
+                        <TrendingUp className="w-3.5 h-3.5" />
                         Resultados
                     </button>
                     <button
                         onClick={() => setActiveTab('simulation')}
-                        className={`flex items-center gap-2 px-8 py-3 rounded-[1.25rem] font-black tracking-tight transition-all duration-300 ${activeTab === 'simulation' ? 'bg-white text-blue-600 shadow-md transform scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'simulation' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
-                        <Activity className={`w-4 h-4 ${activeTab === 'simulation' ? 'fill-blue-600/10' : ''}`} />
+                        <Activity className="w-3.5 h-3.5" />
                         Simulação
                     </button>
                     <button
                         onClick={() => setActiveTab('price-tables')}
-                        className={`flex items-center gap-2 px-8 py-3 rounded-[1.25rem] font-black tracking-tight transition-all duration-300 ${activeTab === 'price-tables' ? 'bg-white text-blue-600 shadow-md transform scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'price-tables' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
-                        <DollarSign className={`w-4 h-4 ${activeTab === 'price-tables' ? 'fill-blue-600/10' : ''}`} />
-                        Tabela de Preços
+                        <DollarSign className="w-3.5 h-3.5" />
+                        Tabela de preços
                     </button>
                     <button
                         onClick={() => setActiveTab('brokers')}
-                        className={`flex items-center gap-2 px-8 py-3 rounded-[1.25rem] font-black tracking-tight transition-all duration-300 ${activeTab === 'brokers' ? 'bg-white text-blue-600 shadow-md transform scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'brokers' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
-                        <User className={`w-4 h-4 ${activeTab === 'brokers' ? 'fill-blue-600/10' : ''}`} />
+                        <User className="w-3.5 h-3.5" />
                         Corretores
                     </button>
                     <button
                         onClick={() => setActiveTab('contracts')}
-                        className={`flex items-center gap-2 px-8 py-3 rounded-[1.25rem] font-black tracking-tight transition-all duration-300 ${activeTab === 'contracts' ? 'bg-white text-blue-600 shadow-md transform scale-[1.02]' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'contracts' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
-                        <FileText className={`w-4 h-4 ${activeTab === 'contracts' ? 'fill-blue-600/10' : ''}`} />
+                        <FileText className="w-3.5 h-3.5" />
                         Contratos
                     </button>
                 </div>
@@ -782,57 +804,45 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             {activeTab === 'inventory' && (
                 <div className="space-y-6">
                     {/* Stats Summary Row */}
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                        {[
-                            { label: 'Estoque (Und)', value: `${stats.soldUnitsCount} / ${stats.totalVendavel}`, icon: Building2, color: 'text-blue-600', bg: 'bg-blue-50' },
-                            { label: 'VGV Vendido', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRealizado), icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                            { label: 'Sell-Through', value: `${stats.sellThrough}%`, icon: Percent, color: 'text-purple-600', bg: 'bg-purple-50' },
-                            { label: 'VGV Remanescente', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRemanescente), icon: Target, color: 'text-amber-600', bg: 'bg-amber-50' },
-                            { label: 'Ticket Médio', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.ticketMedio), icon: TrendingUp, color: 'text-blue-400', bg: 'bg-blue-50/50' }
-                        ].map((s, i) => (
-                            <div key={i} className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4 group hover:border-blue-200 transition-all duration-300">
-                                <div className={`p-3 ${s.bg} ${s.color} rounded-2xl group-hover:scale-110 transition-transform`}>
-                                    <s.icon className="w-5 h-5" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none mb-1 group-hover:text-blue-400 transition-colors">{s.label}</span>
-                                    <span className="text-lg font-black text-gray-900 leading-none">{s.value}</span>
-                                </div>
-                            </div>
-                        ))}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        <KpiCard shadow={false} size="sm" label="Estoque (und)" value={`${stats.soldUnitsCount} / ${stats.totalVendavel}`} icon={<Building2 className="w-4 h-4" />} color="blue" />
+                        <KpiCard shadow={false} size="sm" label="VGV Vendido" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRealizado)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
+                        <KpiCard shadow={false} size="sm" label="Sell-Through" value={`${stats.sellThrough}%`} icon={<Percent className="w-4 h-4" />} color="purple" />
+                        <KpiCard shadow={false} size="sm" label="VGV Remanescente" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRemanescente)} icon={<Target className="w-4 h-4" />} color="amber" />
+                        <KpiCard shadow={false} size="sm" label="Ticket Médio" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.ticketMedio)} icon={<TrendingUp className="w-4 h-4" />} color="cyan" />
                     </div>
 
-                    {/* Filters */}
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <div className="flex-1 relative group">
-                            <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    {/* Filters — §5.1 (variante desaninhada, escala compacta §16) */}
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                                 type="text"
                                 placeholder="Buscar por imóvel, endereço ou referência..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-14 pr-6 py-4 bg-white border border-gray-200 rounded-[1.5rem] focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-400"
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             />
                         </div>
-                        <button className="flex items-center gap-2 px-8 py-4 bg-white border border-gray-200 rounded-[1.5rem] font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm">
-                            <Filter className="w-5 h-5 text-gray-400" />
-                            Mais Filtros
+                        <button className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all whitespace-nowrap">
+                            <Filter className="w-4 h-4" />
+                            Mais filtros
                         </button>
 
-                        <div className="flex p-1.5 bg-gray-100 rounded-2xl border border-gray-200 shadow-inner">
-                            <button onClick={() => setViewMode('grid')} className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`} title="Grid"><LayoutGrid className="w-5 h-5" /></button>
-                            <button onClick={() => setViewMode('list')} className={`p-2.5 rounded-xl transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`} title="Lista"><List className="w-5 h-5" /></button>
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Grade"><LayoutGrid className="w-4 h-4" /></button>
+                            <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Lista"><List className="w-4 h-4" /></button>
                             {selectedBuildingId && (
-                                <button onClick={() => setViewMode('tower')} className={`p-2.5 rounded-xl transition-all ${viewMode === 'tower' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`} title="Torres"><Building2 className="w-5 h-5" /></button>
+                                <button onClick={() => setViewMode('tower')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'tower' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Torres"><Building2 className="w-4 h-4" /></button>
                             )}
                         </div>
                     </div>
 
                     {/* Property Display */}
                     {loading ? (
-                        <div className="flex flex-col items-center justify-center py-32">
-                            <div className="relative"><Building2 className="w-16 h-16 text-blue-600 animate-pulse" /><div className="absolute inset-0 bg-blue-600/20 blur-xl animate-ping rounded-full" /></div>
-                            <p className="text-gray-500 font-black mt-6 tracking-widest uppercase">Consultando Inventário...</p>
+                        <div className="text-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                            <p className="mt-2 text-gray-500">Consultando inventário...</p>
                         </div>
                     ) : filteredProperties.length > 0 ? (
                         <div className="flex flex-col gap-6">
@@ -889,29 +899,31 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             )}
 
                             {viewMode === 'list' && (
-                                <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                                <div className="bg-white border border-gray-100 rounded-[10px] overflow-hidden">
+                                    <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
-                                        <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-bold uppercase text-xs tracking-widest text-center">
-                                            <tr>
+                                        {/* thead em sentence case (§6.2) — escala compacta */}
+                                        <thead>
+                                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                                 <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-left">Imóvel</th>
-                                                <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-left">Endereço / Referência</th>
+                                                <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-left">Endereço / referência</th>
                                                 {selectedBuildingId && (
                                                     <>
-                                                        <th 
+                                                        <th
                                                             onClick={() => handleSort('block')}
                                                             className="px-6 py-2 border-r border-gray-100 last:border-r-0 cursor-pointer hover:bg-gray-100 transition-colors group"
                                                         >
-                                                            <div className="flex items-center justify-center">
+                                                            <div className="flex items-center gap-1">
                                                                 Bloco
                                                                 <SortIndicator columnKey="block" />
                                                             </div>
                                                         </th>
-                                                        <th 
+                                                        <th
                                                             onClick={() => handleSort('private_area')}
                                                             className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap cursor-pointer hover:bg-gray-100 transition-colors group"
                                                         >
-                                                            <div className="flex items-center justify-center">
-                                                                Á. Priv.
+                                                            <div className="flex items-center gap-1">
+                                                                Á. priv.
                                                                 <SortIndicator columnKey="private_area" />
                                                             </div>
                                                         </th>
@@ -921,13 +933,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                 <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 whitespace-nowrap">Vlr/m²</th>
                                                 {selectedBuildingId && (
                                                     <>
-                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Peso Pos.</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Peso Sol</th>
-                                                        <th 
+                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Peso pos.</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Peso sol</th>
+                                                        <th
                                                             onClick={() => handleSort('floor')}
                                                             className="px-6 py-2 border-r border-gray-100 last:border-r-0 cursor-pointer hover:bg-gray-100 transition-colors group"
                                                         >
-                                                            <div className="flex items-center justify-center">
+                                                            <div className="flex items-center gap-1">
                                                                 Andar
                                                                 <SortIndicator columnKey="floor" />
                                                             </div>
@@ -935,85 +947,87 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                     </>
                                                 )}
                                                 <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Status</th>
-                                                <th className="px-6 py-2 text-right">Ações</th>
+                                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-200 text-sm font-medium text-gray-700">
+                                        <tbody className="divide-y divide-gray-200">
                                             {selectedBuildingId ? (
                                                 filteredProperties.length > 0 ? (
                                                     filteredProperties.map(property => (
                                                         <tr key={property.id} className="hover:bg-blue-50/50 transition-colors">
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-mono text-sm font-bold text-gray-700">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900">
                                                                 {property.name}
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                                 {property.address || 'Resumo do Empreendimento'}
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-medium text-gray-700">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                                                 {property.block || '-'}
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-medium text-gray-600">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                                 {property.private_area ? `${property.private_area}m²` : '-'}
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-black text-gray-900">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
                                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price || 0)}
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-table-body font-bold text-gray-600">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format((property.price || 0) / (property.private_area || property.area || 1))}
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-black">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                                 <div className="flex flex-col">
-                                                                    <span className="text-gray-900 leading-none mb-1">
+                                                                    <span className="text-sm font-normal text-gray-900 leading-none mb-1">
                                                                         {property.position_type === 'FRONT' ? '1.03x' : property.position_type === 'BACK' ? '0.97x' : '1.00x'}
                                                                     </span>
-                                                                    <span className="text-gray-400 font-bold uppercase text-[8px] tracking-tighter">
+                                                                    <span className="text-xs font-normal text-gray-400">
                                                                         {property.position_type === 'FRONT' ? 'Frente' : property.position_type === 'BACK' ? 'Fundos' : 'Lateral / Base'}
                                                                     </span>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-black">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                                 <div className="flex flex-col">
-                                                                    <span className="text-gray-900 leading-none mb-1">
+                                                                    <span className="text-sm font-normal text-gray-900 leading-none mb-1">
                                                                         {property.sun_orientation === 'NORTH' ? '1.02x' : property.sun_orientation === 'EAST' ? '1.01x' : property.sun_orientation === 'WEST' ? '0.99x' : property.sun_orientation === 'SOUTH' ? '0.98x' : '1.00x'}
                                                                     </span>
-                                                                    <span className="text-gray-400 font-bold uppercase text-[8px] tracking-tighter">
+                                                                    <span className="text-xs font-normal text-gray-400">
                                                                         {property.sun_orientation === 'NORTH' ? 'Norte' : property.sun_orientation === 'EAST' ? 'Leste' : property.sun_orientation === 'WEST' ? 'Oeste' : property.sun_orientation === 'SOUTH' ? 'Sul' : 'Base'}
                                                                     </span>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-table-body font-bold text-center text-gray-500">
+                                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                                 {property.floor ? `${property.floor}º` : 'Térreo'}
                                                             </td>
                                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                                <span className={`px-2 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${getStatusColor(property.status)}`}>
+                                                                <span className={`text-sm font-normal ${getStatusColor(property.status)}`}>
                                                                     {getStatusLabel(property.status)}
                                                                 </span>
                                                             </td>
                                                             <td className="px-6 py-2.5 text-right">
-                                                                <div className="flex items-center justify-end gap-3">
-                                                                    <button onClick={(e) => { e.stopPropagation(); setEditingProperty(property); setIsPropertyModalOpen(true); }} className="text-blue-600 hover:text-blue-800 text-button font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1.5"><Edit className="w-3.5 h-3.5" />Editar</button>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteProperty(property.id); }} className="text-red-400 hover:text-red-600 text-button font-black uppercase tracking-widest p-1.5 hover:bg-red-50 rounded-lg transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                                                                <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+                                                                    <button onClick={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }} className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all">Editar</button>
+                                                                    <button onClick={() => handleDeleteProperty(property.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Trash2 className="w-4 h-4" /></button>
                                                                 </div>
                                                             </td>
                                                         </tr>
                                                     ))
                                                 ) : (
                                                     <tr>
-                                                        <td colSpan={11} className="px-6 py-10 text-center text-gray-400 font-bold italic border-b border-gray-100">Nenhuma unidade encontrada.</td>
+                                                        <td colSpan={11} className="px-6 py-10 text-center text-sm text-gray-400 border-b border-gray-100">Nenhuma unidade encontrada.</td>
                                                     </tr>
                                                 )
                                             ) : (
                                                 filteredProperties.filter(p => p.type === 'BUILDING' || !p.parent_id).map(property => (
-                                                    <tr key={property.id} className="hover:bg-blue-50/50 transition-colors cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>
-                                                        <td className="px-6 py-3 border-r border-gray-100 last:border-r-0 font-bold text-gray-900 group-hover:text-blue-600 transition-colors uppercase whitespace-nowrap">{property.name}</td>
-                                                        <td className="px-6 py-3 border-r border-gray-100 last:border-r-0 text-gray-400 text-table-body italic">{property.address || 'Resumo do Empreendimento'}</td>
-                                                        <td className="px-6 py-3 border-r border-gray-100 last:border-r-0 font-bold text-gray-900 whitespace-nowrap">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price || 0)}</td>
-                                                        <td className="px-6 py-3 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap text-table-body font-bold text-gray-400">---</td>
-                                                        <td className="px-6 py-3 border-r border-gray-100 last:border-r-0 text-center"><span className={`px-2 py-0.5 rounded uppercase tracking-widest text-[9px] font-black border ${getStatusColor(property.status)}`}>{getStatusLabel(property.status)}</span></td>
-                                                        <td className="px-6 py-3 whitespace-nowrap text-right">
-                                                            <div className="flex justify-end gap-1">
-                                                                <button onClick={(e) => { e.stopPropagation(); setEditingProperty(property); setIsPropertyModalOpen(true); }} className="p-1 text-gray-400 hover:text-blue-600"><Edit className="w-4 h-4" /></button>
-                                                                <button onClick={(e) => { e.stopPropagation(); handleDeleteProperty(property.id); }} className="p-1 text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                                                    <tr key={property.id} className="hover:bg-blue-50/50 transition-colors cursor-pointer group" onClick={() => setSelectedBuildingId(property.id)}>
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors whitespace-nowrap">{property.name}</td>
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400">{property.address || 'Resumo do Empreendimento'}</td>
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 whitespace-nowrap">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price || 0)}</td>
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400 text-center whitespace-nowrap">---</td>
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            <span className={`text-sm font-normal ${getStatusColor(property.status)}`}>{getStatusLabel(property.status)}</span>
+                                                        </td>
+                                                        <td className="px-6 py-2.5 text-right">
+                                                            <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                                                                <button onClick={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit className="w-4 h-4" /></button>
+                                                                <button onClick={() => handleDeleteProperty(property.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -1021,6 +1035,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                             )}
                                         </tbody>
                                     </table>
+                                    </div>
                                 </div>
                             )}
 
@@ -1045,96 +1060,127 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center justify-center py-32 bg-gray-50 rounded-[3.5rem] border-4 border-dashed border-gray-200">
-                            <div className="w-24 h-24 bg-white rounded-[2rem] flex items-center justify-center shadow-2xl mb-8">
-                                <Home className="w-12 h-12 text-blue-600 opacity-20" />
-                            </div>
-                            <h3 className="text-2xl font-black text-gray-900 mb-3 tracking-tight">Expandindo Horizontes...</h3>
-                            <p className="text-gray-500 font-bold text-center max-w-sm leading-relaxed">Seu portfólio está pronto para crescer. Adicione o primeiro imóvel para iniciar a gestão comercial.</p>
-                            <Button
+                        <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                            <Home className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum imóvel cadastrado</h3>
+                            <p className="text-sm text-gray-500 mb-6">Adicione o primeiro imóvel para iniciar a gestão comercial.</p>
+                            <button
                                 onClick={() => setIsPropertyModalOpen(true)}
-                                size="lg"
-                                className="mt-10 !rounded-[1.5rem] shadow-2xl shadow-blue-600/30 hover:scale-105"
+                                className="text-blue-600 font-bold hover:underline"
                             >
-                                Cadastrar Primeiro Imóvel
-                            </Button>
+                                Cadastrar primeiro imóvel
+                            </button>
                         </div>
                     )}
 
                     {/* Bulk Actions Bar */}
                     {selectedProperties.length > 0 && (
-                        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[90] flex items-center gap-6 px-10 py-6 bg-[#0B1727] border border-white/10 rounded-full shadow-2xl shadow-blue-900/40 animate-in slide-in-from-bottom-10 duration-500">
-                            <div className="flex flex-col">
-                                <span className="text-xs font-black text-blue-400 uppercase tracking-widest leading-none mb-1">Items Selecionados</span>
-                                <span className="text-xl font-black text-white leading-none">{selectedProperties.length} Imóveis</span>
-                            </div>
-
-                            <div className="w-px h-10 bg-white/10 mx-2" />
-
-                            <div className="flex items-center gap-4">
-                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Alterar para:</span>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => handleBulkUpdate({ status: PropertyStatus.AVAILABLE })}
-                                        className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 border border-emerald-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                                    >
-                                        Disponível
-                                    </button>
-                                    <button
-                                        onClick={() => handleBulkUpdate({ status: PropertyStatus.RESERVED })}
-                                        className="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                                    >
-                                        Reservar
-                                    </button>
-                                    <button
-                                        onClick={() => handleBulkUpdate({ status: PropertyStatus.EXCHANGED })}
-                                        className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                                    >
-                                        Permutar
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            const newPrice = prompt('Informe o novo preço sugerido:');
-                                            if (newPrice && !isNaN(parseFloat(newPrice))) {
-                                                handleBulkUpdate({ price: parseFloat(newPrice) });
-                                            }
-                                        }}
-                                        className="px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
-                                    >
-                                        Mudar Preço
-                                    </button>
-                                </div>
-                            </div>
-
+                        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                            <span className="flex-1 text-sm font-bold whitespace-nowrap">
+                                {selectedProperties.length} selecionado{selectedProperties.length !== 1 ? 's' : ''}
+                            </span>
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setIsBulkEditOpen(true)}
+                                className="text-blue-700 border-none hover:bg-blue-50"
+                            >
+                                <Edit className="w-3.5 h-3.5" />
+                                Editar em Lote
+                            </Button>
                             <button
                                 onClick={() => setSelectedProperties([])}
-                                className="p-3 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-2xl transition-all"
-                                title="Limpar Seleção"
+                                className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-blue-400 transition-colors"
                             >
-                                <X className="w-5 h-5" />
+                                <X className="w-3.5 h-3.5" />
+                                Desmarcar
                             </button>
+                        </div>
+                    )}
+
+                    {/* Modal de Edição em Lote (§10) */}
+                    {isBulkEditOpen && (
+                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsBulkEditOpen(false)}>
+                            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-100" onClick={(e) => e.stopPropagation()}>
+                                <h3 className="text-lg font-bold text-gray-900 mb-1">Editar {selectedProperties.length} imóve{selectedProperties.length !== 1 ? 'is' : 'l'} em lote</h3>
+                                <p className="text-sm text-gray-500 mb-5">Escolha uma ação para aplicar a todos os imóveis selecionados.</p>
+
+                                <div className="space-y-2 mb-5">
+                                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Alterar status para</span>
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            onClick={() => { handleBulkUpdate({ status: PropertyStatus.AVAILABLE }); setIsBulkEditOpen(false); }}
+                                            className="h-9 px-3 rounded-[6px] text-sm font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-all"
+                                        >
+                                            Disponível
+                                        </button>
+                                        <button
+                                            onClick={() => { handleBulkUpdate({ status: PropertyStatus.RESERVED }); setIsBulkEditOpen(false); }}
+                                            className="h-9 px-3 rounded-[6px] text-sm font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 transition-all"
+                                        >
+                                            Reservar
+                                        </button>
+                                        <button
+                                            onClick={() => { handleBulkUpdate({ status: PropertyStatus.EXCHANGED }); setIsBulkEditOpen(false); }}
+                                            className="h-9 px-3 rounded-[6px] text-sm font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 transition-all"
+                                        >
+                                            Permutar
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Mudar preço sugerido para</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="number"
+                                            value={bulkPriceValue}
+                                            onChange={(e) => setBulkPriceValue(e.target.value)}
+                                            placeholder="Novo preço (R$)"
+                                            className="flex-1 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                const price = parseFloat(bulkPriceValue);
+                                                if (!isNaN(price)) {
+                                                    handleBulkUpdate({ price });
+                                                    setBulkPriceValue('');
+                                                    setIsBulkEditOpen(false);
+                                                }
+                                            }}
+                                            disabled={!bulkPriceValue || isNaN(parseFloat(bulkPriceValue))}
+                                            className="h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Aplicar
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => setIsBulkEditOpen(false)}
+                                    className="w-full mt-6 px-6 py-2.5 bg-gray-50 text-gray-500 rounded-[6px] text-sm font-medium hover:bg-gray-100 transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
             )}
 
             {activeTab === 'simulation' && selectedBuildingId && (
-                <div className="space-y-8 animate-in slide-in-from-bottom-5 duration-500">
-                    <div className="bg-white p-10 rounded-[2.5rem] border border-gray-100 shadow-xl shadow-blue-900/5">
-                        <div className="flex justify-between items-center mb-10">
+                <div className="space-y-6">
+                    <div className="bg-white p-6 rounded-[10px] border border-gray-100">
+                        <div className="flex justify-between items-center mb-6">
                             <div>
-                                <h3 className="text-2xl font-black text-gray-900 tracking-tight">Motor de Simulação VGV</h3>
-                                <p className="text-gray-500 font-bold text-sm">Ajuste os parâmetros para projetar o futuro financeiro de {currentBuilding?.name}</p>
+                                <h3 className="text-lg font-bold text-gray-900 tracking-tight">Motor de simulação VGV</h3>
+                                <p className="text-gray-500 text-sm">Ajuste os parâmetros para projetar o futuro financeiro de {currentBuilding?.name}</p>
                             </div>
-                            <div className="flex gap-2">
-                                <div className="p-4 bg-purple-50 text-purple-600 rounded-2xl">
-                                    <BrainCircuit className="w-6 h-6" />
-                                </div>
-                            </div>
+                            <BrainCircuit className="w-5 h-5 text-purple-600" />
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-4 gap-10">
-                            <div className="lg:col-span-1 space-y-8 p-8 bg-gray-50 rounded-[2rem] border border-gray-100">
+                        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                            <div className="lg:col-span-1 space-y-6 p-5 bg-gray-50 rounded-[10px] border border-gray-100">
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
                                         <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Velocidade de Vendas</label>
@@ -1234,19 +1280,17 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             )}
 
             {activeTab === 'deals' && (
-                    <div className="space-y-8 animate-in slide-in-from-bottom-5 duration-500">
-                        <div className="flex justify-between items-center bg-gray-50/50 p-6 rounded-[2rem] border border-gray-100">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2.5 bg-blue-600 rounded-xl shadow-lg shadow-blue-600/20">
-                                    <Tag className="w-5 h-5 text-white" />
-                                </div>
-                                <h3 className="text-xl font-black text-gray-900 tracking-tight">
-                                    Registro de Negociações {selectedBuildingId && currentBuilding ? `(Filtrado: ${currentBuilding.name} - ${buildingDeals.length} de ${deals.length})` : `(Global: ${deals.length})`}
+                    <div className="space-y-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                                <Tag className="w-5 h-5 text-blue-600" />
+                                <h3 className="text-lg font-bold text-gray-900 tracking-tight">
+                                    Registro de negociações {selectedBuildingId && currentBuilding ? `— ${currentBuilding.name} (${buildingDeals.length} de ${deals.length})` : `(${deals.length})`}
                                 </h3>
                             </div>
-                            <div className="flex p-1 bg-white rounded-xl border border-gray-200 shadow-sm">
-                                <button onClick={() => setViewMode('grid')} className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`} title="Grid"><LayoutGrid className="w-4 h-4" /></button>
-                                <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`} title="Lista"><List className="w-4 h-4" /></button>
+                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Grade"><LayoutGrid className="w-4 h-4" /></button>
+                                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`} title="Lista"><List className="w-4 h-4" /></button>
                             </div>
                         </div>
 
@@ -1255,63 +1299,60 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 {buildingDeals.map(deal => {
                                     const property = properties.find(p => p.id === deal.property_id);
                                     return (
-                                        <div key={deal.id} className="bg-white p-10 rounded-[2.5rem] border border-gray-200 shadow-xl shadow-gray-200/20 relative group hover:border-blue-200 transition-colors">
-                                            <div className="absolute top-10 right-10 flex gap-2">
+                                        <div key={deal.id} className="bg-white p-6 rounded-[10px] border border-gray-100 hover:border-blue-200 transition-colors relative group">
+                                            <div className="absolute top-6 right-6 flex gap-1" onClick={(e) => e.stopPropagation()}>
                                                 <button
                                                     onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }}
-                                                    className="p-3 bg-gray-50 text-gray-400 hover:text-blue-600 rounded-2xl transition-colors"
+                                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                 >
-                                                    <Edit className="w-5 h-5" />
+                                                    <Edit className="w-4 h-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => handleDeleteDeal(deal.id)}
-                                                    className="p-3 bg-gray-50 text-gray-400 hover:text-red-500 rounded-2xl transition-colors"
+                                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                                 >
-                                                    <Trash2 className="w-5 h-5" />
+                                                    <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
-                                            <div className="flex items-center gap-2 mb-6">
-                                                <span className={`px-5 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${deal.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                                            <div className="flex items-center gap-2 mb-4">
+                                                <span className={`text-sm font-normal ${deal.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-600'}`}>
                                                     {deal.status === 'COMPLETED' ? 'Concluído' :
                                                         deal.status === 'PENDING' ? 'Pendente' :
                                                             deal.status === 'CANCELLED' ? 'Cancelado' : 'Em Negociação'}
                                                 </span>
-                                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest ml-auto">
+                                                <span className="text-xs text-gray-400 ml-auto">
                                                     {new Date(deal.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
                                                 </span>
                                             </div>
 
-                                            <div className="mb-8">
-                                                <span className={`text-xs font-black px-3 py-1 rounded-lg uppercase tracking-widest mb-2 inline-block bg-blue-600 text-white shadow-lg shadow-blue-600/20`}>
-                                                    Venda Direta
+                                            <div className="mb-6">
+                                                <span className="text-xs font-medium text-blue-600 mb-1 inline-block">
+                                                    Venda direta
                                                 </span>
-                                                <h4 className="text-2xl font-black text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || 'Imóvel em referência'}</h4>
+                                                <h4 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || 'Imóvel em referência'}</h4>
                                                 <div className="flex items-center gap-2 mt-2 text-gray-500">
                                                     <User className="w-4 h-4" />
-                                                    <span className="text-sm font-bold uppercase tracking-tight">
+                                                    <span className="text-sm font-normal">
                                                         {deal.client_id ? (clients.find(c => c.id === deal.client_id)?.name || `ID: ${deal.client_id.substring(0, 8)}`) : 'Cliente não informado'}
                                                     </span>
                                                 </div>
-                                                <div className="mt-2 text-[9px] font-mono text-gray-400 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                                                    Debug ID: {property?.id}<br/>Pai: {property?.parent_id || 'Nenhum'}<br/>B: {selectedBuildingId}
-                                                </div>
                                             </div>
 
-                                            <div className="p-8 bg-blue-50/50 rounded-[2rem] border border-blue-100 flex items-center justify-between mb-6">
+                                            <div className="p-4 bg-blue-50/50 rounded-[10px] border border-blue-100 flex items-center justify-between mb-4">
                                                 <div className="flex flex-col">
-                                                    <span className="text-xs font-black text-blue-500 uppercase tracking-widest mb-1">Valor do Contrato</span>
-                                                    <span className="text-3xl font-black text-gray-900">
+                                                    <span className="text-xs font-medium text-blue-600 mb-1">Valor do contrato</span>
+                                                    <span className="text-xl font-bold text-gray-900">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value)}
                                                     </span>
                                                 </div>
-                                                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-md">
-                                                    <DollarSign className="w-6 h-6 text-emerald-500" />
-                                                </div>
+                                                <DollarSign className="w-5 h-5 text-emerald-500" />
                                             </div>
 
-                                            <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-2xl italic text-gray-500 text-sm font-medium border-l-4 border-gray-200">
-                                                "{deal.notes}"
-                                            </div>
+                                            {deal.notes && (
+                                                <div className="p-3 bg-gray-50 rounded-[10px] italic text-gray-500 text-sm font-normal border-l-2 border-gray-200">
+                                                    "{deal.notes}"
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -1322,67 +1363,67 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                         setEditingDeal({ id: '', property_id: '', client_id: '', type: 'SALE', value: 0, date: new Date().toISOString().split('T')[0], status: 'PENDING' } as PropertyDeal);
                                         setIsDealModalOpen(true);
                                     }}
-                                    className="bg-gray-50 border-4 border-dashed border-gray-200 rounded-[2.5rem] p-10 flex flex-col items-center justify-center group hover:bg-white hover:border-blue-200 transition-all"
+                                    className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-[10px] p-6 flex flex-col items-center justify-center group hover:bg-white hover:border-blue-200 transition-all min-h-[220px]"
                                 >
-                                    <div className="w-20 h-20 bg-white rounded-[2rem] shadow-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                                        <Plus className="w-10 h-10 text-gray-300 group-hover:text-blue-600" />
-                                    </div>
-                                    <span className="text-xl font-black text-gray-400 group-hover:text-gray-900">Nova Negociação</span>
-                                    <p className="text-sm font-bold text-gray-400 text-center mt-2 px-8">Inicie o registro de uma nova venda ou aluguel de imóvel.</p>
+                                    <Plus className="w-8 h-8 text-gray-300 group-hover:text-blue-600 mb-3" />
+                                    <span className="text-sm font-bold text-gray-400 group-hover:text-gray-900">Nova negociação</span>
+                                    <p className="text-xs text-gray-400 text-center mt-1 px-4">Inicie o registro de uma nova venda de imóvel.</p>
                                 </button>
                             </div>
                         ) : (
-                            <div className="bg-white border border-gray-100 rounded-[2.5rem] overflow-hidden shadow-xl shadow-gray-200/20">
+                            <div className="bg-white border border-gray-100 rounded-[10px] overflow-hidden">
+                                <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
-                                    <thead className="bg-gray-50 border-b border-gray-100 italic">
-                                        <tr>
-                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-left">Imóvel</th>
-                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center">Bloco</th>
-                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center whitespace-nowrap">Á. Priv.</th>
-                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Preço Base</th>
-                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Vlr/m² Base</th>
-                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center">Andar</th>
-                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Vlr Venda</th>
-                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Vlr Venda/m²</th>
-                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-right whitespace-nowrap">Var. (R$)</th>
-                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center whitespace-nowrap">Var. (%)</th>
-                                            <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest">Status</th>
-                                            <th className="px-6 py-4 text-right text-xs font-black text-gray-400 uppercase tracking-widest">Ações</th>
+                                    {/* thead em sentence case (§6.2) — escala compacta */}
+                                    <thead>
+                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-left">Imóvel</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center">Bloco</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap">Á. priv.</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap">Preço base</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap">Vlr/m² base</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center">Andar</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap">Vlr venda</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap">Vlr venda/m²</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap">Var. (R$)</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap">Var. (%)</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Status</th>
+                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-50">
+                                    <tbody className="divide-y divide-gray-200">
                                         {buildingDeals.map(deal => {
                                             const property = properties.find(p => p.id === deal.property_id);
                                             const client = clients.find(c => c.id === deal.client_id);
                                             return (
-                                                <tr key={deal.id} className="hover:bg-blue-50/30 transition-colors group cursor-pointer" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }}>
-                                                    <td className="px-6 py-4">
+                                                <tr key={deal.id} className="hover:bg-blue-50/50 transition-colors cursor-pointer group" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }}>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                         <div className="flex flex-col">
-                                                            <span className="font-black text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || '---'}</span>
-                                                            <span className="text-xs font-bold text-gray-400 uppercase tracking-tighter">
+                                                            <span className="text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || '---'}</span>
+                                                            <span className="text-xs font-normal text-gray-400">
                                                                 {client?.name || 'Não vinculado'}
                                                             </span>
                                                         </div>
                                                     </td>
-                                                    <td className="px-6 py-4 text-center font-bold text-gray-600 text-table-body">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center">
                                                         {property?.block || '-'}
                                                     </td>
-                                                    <td className="px-6 py-4 text-center font-bold text-gray-600 text-table-body">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center">
                                                         {property?.private_area || property?.area || 0}m²
                                                     </td>
-                                                    <td className="px-6 py-4 text-right font-mono font-bold text-gray-500 text-table-body">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-right">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property?.price || 0)}
                                                     </td>
-                                                    <td className="px-6 py-4 text-right font-mono font-bold text-gray-400 text-table-body">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-right">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format((property?.price || 0) / (property?.private_area || property?.area || 1))}
                                                     </td>
-                                                    <td className="px-6 py-4 text-center font-bold text-gray-600 text-table-body text-center">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 text-center">
                                                         {property?.floor ? `${property.floor}º` : 'T'}
                                                     </td>
-                                                    <td className="px-6 py-4 text-right font-mono font-black text-gray-900">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 text-right">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(deal.value)}
                                                     </td>
-                                                    <td className="px-6 py-4 text-right font-mono font-black text-blue-600">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-blue-600 text-right">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(deal.value / (property?.private_area || property?.area || 1))}
                                                     </td>
                                                     {(() => {
@@ -1390,29 +1431,27 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                         const m2Venda = deal.value / (property?.private_area || property?.area || 1);
                                                         const variancia = m2Venda - m2Base;
                                                         const varianciaPct = m2Base > 0 ? (variancia / m2Base) * 100 : 0;
-                                                        
+
                                                         return (
                                                             <>
-                                                                <td className={`px-6 py-4 text-right font-mono font-bold ${variancia >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-right ${variancia >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                                                                     {variancia >= 0 ? '+' : ''}{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(variancia)}
                                                                 </td>
-                                                                <td className="px-6 py-4 text-center">
-                                                                    <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${variancia >= 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'}`}>
-                                                                        {Math.abs(varianciaPct).toFixed(1)}%
-                                                                    </span>
+                                                                <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-center ${variancia >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                                                    {Math.abs(varianciaPct).toFixed(1)}%
                                                                 </td>
                                                             </>
                                                         );
                                                     })()}
-                                                    <td className="px-6 py-4">
-                                                        <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${deal.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                        <span className={`text-sm font-normal ${deal.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-600'}`}>
                                                             {deal.status === 'COMPLETED' ? 'Concluído' : 'Pendente'}
                                                         </span>
                                                     </td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button onClick={(e) => { e.stopPropagation(); setEditingDeal(deal); setIsDealModalOpen(true); }} className="p-2 bg-gray-50 text-gray-400 hover:text-blue-600 rounded-xl transition-all"><Edit className="w-4 h-4" /></button>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteDeal(deal.id); }} className="p-2 bg-gray-50 text-gray-400 hover:text-red-500 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
+                                                    <td className="px-6 py-2.5 text-right">
+                                                        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                                                            <button onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit className="w-4 h-4" /></button>
+                                                            <button onClick={() => handleDeleteDeal(deal.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1420,15 +1459,16 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                         })}
                                     </tbody>
                                 </table>
+                                </div>
                                 <button
                                     onClick={() => {
                                         setEditingDeal({ type: 'SALE' } as PropertyDeal);
                                         setIsDealModalOpen(true);
                                     }}
-                                    className="w-full py-8 bg-gray-50/50 hover:bg-gray-50 text-gray-400 font-black uppercase tracking-[0.3em] text-button transition-all border-t border-gray-100 flex items-center justify-center gap-3 group"
+                                    className="w-full py-4 bg-gray-50/50 hover:bg-gray-50 text-gray-500 font-medium text-sm transition-all border-t border-gray-100 flex items-center justify-center gap-2"
                                 >
-                                    <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
-                                    Registrar Nova Negociação
+                                    <Plus className="w-4 h-4" />
+                                    Registrar nova negociação
                                 </button>
                             </div>
                         )}
@@ -1447,74 +1487,67 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             }
 
             {activeTab === 'brokers' && (
-                <div className="space-y-8 animate-in slide-in-from-bottom-5 duration-500">
-                    <div className="flex justify-between items-center bg-gray-50/50 p-8 rounded-[2.5rem] border border-gray-100">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-blue-600 rounded-2xl shadow-xl shadow-blue-600/20">
-                                <User className="w-6 h-6 text-white" />
-                            </div>
+                <div className="space-y-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                            <User className="w-5 h-5 text-blue-600" />
                             <div>
-                                <h3 className="text-2xl font-black text-gray-900 tracking-tight">Gestão de Corretores</h3>
-                                <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Parceiros e Comissionamento</p>
+                                <h3 className="text-lg font-bold text-gray-900 tracking-tight">Gestão de corretores</h3>
+                                <p className="text-xs text-gray-400">Parceiros e comissionamento</p>
                             </div>
                         </div>
-                        <div className="px-5 py-3 bg-amber-50 text-amber-700 border border-amber-100 rounded-[1.25rem] text-xs font-black uppercase tracking-widest">
+                        <div className="h-9 flex items-center px-3 rounded-[6px] bg-amber-50 text-amber-700 text-xs font-medium">
                             Cadastre em Minha Organização &gt; Fornecedores &gt; Corretor Imobiliário
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {brokers.filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase()) || b.email.toLowerCase().includes(searchTerm.toLowerCase())).map(broker => (
-                            <div key={broker.id} className="bg-white p-8 rounded-[2.5rem] border border-gray-200 shadow-xl shadow-gray-200/10 hover:border-blue-200 transition-all group relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-6 flex gap-2">
-                                    
-                                    
-                                </div>
-
-                                <div className="flex items-center gap-4 mb-6">
-                                    <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-all font-black text-xl">
+                            <div key={broker.id} className="bg-white p-5 rounded-[10px] border border-gray-100 hover:border-blue-200 transition-all">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-12 h-12 bg-gray-100 rounded-[10px] flex items-center justify-center text-gray-400 font-bold text-lg shrink-0">
                                         {broker.name.charAt(0)}
                                     </div>
-                                    <div className="flex flex-col">
-                                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border w-fit mb-2 ${broker.is_active ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                                    <div className="flex flex-col min-w-0">
+                                        <span className={`text-xs font-normal mb-0.5 ${broker.is_active ? 'text-emerald-600' : 'text-red-600'}`}>
                                             {broker.is_active ? 'Ativo' : 'Inativo'}
                                         </span>
-                                        <h4 className="text-xl font-black text-gray-900 truncate max-w-[180px]">{broker.name}</h4>
+                                        <h4 className="text-sm font-bold text-gray-900 truncate">{broker.name}</h4>
                                     </div>
                                 </div>
 
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-3 text-gray-500">
-                                        <Mail className="w-4 h-4 text-gray-400" />
-                                        <span className="text-sm font-bold truncate">{broker.email}</span>
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2 text-gray-500">
+                                        <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                        <span className="text-sm font-normal truncate">{broker.email}</span>
                                     </div>
                                     {broker.phone && (
-                                        <div className="flex items-center gap-3 text-gray-500">
-                                            <Phone className="w-4 h-4 text-gray-400" />
-                                            <span className="text-sm font-bold">{broker.phone}</span>
+                                        <div className="flex items-center gap-2 text-gray-500">
+                                            <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                            <span className="text-sm font-normal">{broker.phone}</span>
                                         </div>
                                     )}
-                                    <div className="flex items-center gap-3 text-gray-500">
-                                        <Briefcase className="w-4 h-4 text-gray-400" />
-                                        <span className="text-sm font-bold text-blue-600">{broker.agency_name || 'Autônomo'}</span>
+                                    <div className="flex items-center gap-2 text-gray-500">
+                                        <Briefcase className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                        <span className="text-sm font-normal text-blue-600">{broker.agency_name || 'Autônomo'}</span>
                                     </div>
                                 </div>
 
-                                <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
+                                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
                                     <div className="flex flex-col">
-                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Comissão Padrão</span>
-                                        <span className="text-2xl font-black text-gray-900">{broker.commission_rate}%</span>
+                                        <span className="text-xs text-gray-400">Comissão padrão</span>
+                                        <span className="text-lg font-bold text-gray-900">{broker.commission_rate}%</span>
                                     </div>
                                     <div className="flex flex-col items-end">
-                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">CRECI</span>
-                                        <span className="text-sm font-black text-gray-600 bg-gray-50 px-3 py-1 rounded-lg border border-gray-100">{broker.creci || '---'}</span>
+                                        <span className="text-xs text-gray-400">CRECI</span>
+                                        <span className="text-sm font-medium text-gray-600">{broker.creci || '---'}</span>
                                     </div>
                                 </div>
                             </div>
                         ))}
-                        <div className="bg-amber-50/40 border-2 border-dashed border-amber-100 rounded-[2.5rem] p-8 flex flex-col items-center justify-center min-h-[300px]">
-                            <span className="text-lg font-black text-amber-700">Cadastro centralizado</span>
-                            <p className="text-xs font-bold text-amber-600 text-center mt-2 px-10">Novos corretores devem ser fornecedores na categoria Corretor Imobiliário.</p>
+                        <div className="bg-amber-50/40 border-2 border-dashed border-amber-100 rounded-[10px] p-6 flex flex-col items-center justify-center min-h-[200px]">
+                            <span className="text-sm font-bold text-amber-700">Cadastro centralizado</span>
+                            <p className="text-xs text-amber-600 text-center mt-1 px-4">Novos corretores devem ser fornecedores na categoria Corretor Imobiliário.</p>
                         </div>
                     </div>
                 </div>
@@ -1603,6 +1636,15 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 organizationId={organizationId}
             />
 
+            {/* Toast de Notificação — §13 */}
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
+                </div>
+            )}
         </div >
     );
 };

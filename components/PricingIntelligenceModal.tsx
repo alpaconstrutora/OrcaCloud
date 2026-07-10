@@ -29,7 +29,8 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
             EAST: 1.01,
             WEST: 0.99,
             SOUTH: 0.98
-        }
+        },
+        include_exchanged: false
     });
 
     if (!isOpen) return null;
@@ -82,6 +83,18 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                                     />
                                 </div>
                             </div>
+
+                            <label className="flex items-center justify-between gap-4 p-5 bg-gray-50 rounded-3xl border border-gray-100 cursor-pointer">
+                                <span className="text-xs font-black text-gray-900 uppercase tracking-widest">
+                                    Incluir unidades permutadas no VGV
+                                </span>
+                                <input
+                                    type="checkbox"
+                                    checked={!!config.include_exchanged}
+                                    onChange={(e) => setConfig({ ...config, include_exchanged: e.target.checked })}
+                                    className="w-5 h-5 accent-blue-600 rounded"
+                                />
+                            </label>
 
                             <div className="space-y-4">
                                 <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">

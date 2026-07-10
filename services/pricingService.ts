@@ -30,8 +30,9 @@ export const pricingService = {
    * Distribui o VGV alvo entre todas as unidades de forma proporcional aos scores.
    */
   calculatePrices(properties: Property[], config: HedonicPricingConfig): Property[] {
-    // Filtrar apenas unidades que compõem o VGV (eliminando o 'BUILDING' master e unidades permutadas)
-    const units = properties.filter(p => p.type !== 'BUILDING' && p.status !== 'EXCHANGED');
+    // Filtrar apenas unidades que compõem o VGV (eliminando o 'BUILDING' master; unidades permutadas
+    // entram ou não conforme o toggle include_exchanged do usuário)
+    const units = properties.filter(p => p.type !== 'BUILDING' && (config.include_exchanged || p.status !== 'EXCHANGED'));
     
     // 1. Calcular scores individuais e total
     const unitScores = units.map(u => ({
@@ -48,8 +49,10 @@ export const pricingService = {
     return properties.map(p => {
       if (p.type === 'BUILDING') return p;
 
-      const unitScore = unitScores.find(s => s.id === p.id)?.score || 0;
-      const finalPrice = Math.round((config.target_vgv * unitScore) / totalScore);
+      const scoreEntry = unitScores.find(s => s.id === p.id);
+      if (!scoreEntry) return p; // fora do cálculo (ex.: permutado com include_exchanged=false) — preço mantido
+
+      const finalPrice = Math.round((config.target_vgv * scoreEntry.score) / totalScore);
 
       return {
         ...p,

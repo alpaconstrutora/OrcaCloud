@@ -1117,6 +1117,15 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                             )}
                                                             <td className="px-6 py-2.5 text-right">
                                                                 <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'SALE', value: property.price, date: new Date().toISOString().split('T')[0], status: 'PENDING' });
+                                                                            setIsDealModalOpen(true);
+                                                                        }}
+                                                                        className="text-emerald-600 hover:text-emerald-800 text-sm font-medium p-1.5 hover:bg-emerald-50 rounded-lg transition-all"
+                                                                    >
+                                                                        Negociação
+                                                                    </button>
                                                                     <button onClick={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }} className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all">Editar</button>
                                                                     <button onClick={() => handleDeleteProperty(property.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Trash2 className="w-4 h-4" /></button>
                                                                 </div>

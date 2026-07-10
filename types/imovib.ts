@@ -70,6 +70,7 @@ export interface Property {
 export interface HedonicPricingConfig {
     target_vgv: number;
     floor_coefficient: number;
+    include_exchanged?: boolean;
     position_weights: {
         FRONT: number;
         LATERAL: number;

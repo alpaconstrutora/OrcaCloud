@@ -220,21 +220,9 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
             )}
 
             {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{title}</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">{subtitle}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    {extraActions}
-                    <button
-                        onClick={onCreateNew}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-                    >
-                        <Plus className="w-[15px] h-[15px]" />
-                        Novo contrato
-                    </button>
-                </div>
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{title}</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">{subtitle}</p>
             </div>
 
             {/* Stats Dashboard */}
@@ -327,6 +315,15 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                         <Table2 className="w-4 h-4" />
                     </button>
                 </div>
+
+                {extraActions}
+                <button
+                    onClick={onCreateNew}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    Novo contrato
+                </button>
             </div>
 
             {/* Content List */}

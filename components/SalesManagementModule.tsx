@@ -1,5 +1,5 @@
 import React, { Suspense, useState } from 'react'
-import { Building2, Home, Briefcase, FileText, BarChart3, ArrowLeft } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import type { BrokerProfile } from '../types'
 
 // Sub-módulos carregados sob demanda (lazy) por aba
@@ -37,14 +37,6 @@ interface Props {
   onGoToProject?: (id: string, section?: string) => void
 }
 
-const TABS: Array<{ id: SalesTab; label: string; icon: React.ElementType }> = [
-  { id: 'espelho',    label: 'Vendas de Ativos',   icon: Building2 },
-  { id: 'alugueis',   label: 'Aluguéis',            icon: Home      },
-  { id: 'crm',        label: 'CRM Serviços',         icon: Briefcase },
-  { id: 'contratos',  label: 'Contratos de Serviço', icon: FileText  },
-  { id: 'viabilidade',label: 'Viabilidade',          icon: BarChart3 },
-]
-
 const Spinner = () => (
   <div className="flex items-center justify-center py-20">
     <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -68,17 +60,12 @@ const SalesManagementModule: React.FC<Props> = ({
   React.useEffect(() => {
     setActiveTab(defaultTab)
     setSelectedBroker(null)
-  }, [defaultTab])
-
-  const handleTabChange = (tab: SalesTab) => {
-    setActiveTab(tab)
-    setSelectedBroker(null)
-    if (tab !== 'viabilidade') {
+    if (defaultTab !== 'viabilidade') {
       setIsCreatingImovibStudy(false)
       setEditingImovibStudyId(null)
       setViewingImovibStudyId(null)
     }
-  }
+  }, [defaultTab])
 
   const brokerInternalTab = sourceView ? (BROKER_INTERNAL_TAB[sourceView] ?? 'estoque') : 'estoque'
 
@@ -123,31 +110,8 @@ const SalesManagementModule: React.FC<Props> = ({
 
   return (
     <div className="space-y-0">
-      {/* Barra de abas */}
-      <div className="flex items-center gap-1 border-b border-slate-200 bg-white px-4 pt-2 overflow-x-auto">
-        {TABS.map(tab => {
-          const Icon = tab.icon
-          const isActive = activeTab === tab.id
-          return (
-            <button
-              key={tab.id}
-              onClick={() => handleTabChange(tab.id)}
-              className={[
-                'flex items-center gap-2 px-4 py-2.5 text-xs font-black uppercase tracking-widest whitespace-nowrap border-b-2 transition-all -mb-px',
-                isActive
-                  ? 'border-blue-600 text-blue-700'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300',
-              ].join(' ')}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Conteúdo da aba ativa */}
-      <div className="pt-4">
+      {/* Navegação entre Vendas de Ativos/Aluguéis/CRM Serviços/Contratos de Serviço/Viabilidade
+          já existe no dropdown "Comercial" do sidebar (Layout.tsx) — não duplicar aqui (§18). */}
         <Suspense fallback={<Spinner />}>
           {activeTab === 'espelho' && (
             <SalesModule organizationId={organizationId} />
@@ -194,7 +158,6 @@ const SalesManagementModule: React.FC<Props> = ({
             )
           )}
         </Suspense>
-      </div>
     </div>
   )
 }

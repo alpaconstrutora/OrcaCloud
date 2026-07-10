@@ -370,6 +370,32 @@ export async function linkExistingTransaction(params: {
 }
 
 // ============================================================
+// EXCLUIR NF-e
+// Bloqueia exclusão se já houver título financeiro vinculado, para não
+// deixar internal_transactions órfãs (sem NF-e de origem).
+// ============================================================
+
+export async function deleteNfeInvoice(invoiceId: string): Promise<void> {
+  const { data: invoice, error: fetchErr } = await supabase
+    .from('nfe_invoices')
+    .select('id, linked_transaction_id')
+    .eq('id', invoiceId)
+    .single<{ id: string; linked_transaction_id: string | null }>();
+
+  if (fetchErr || !invoice) throw new Error('NF-e não encontrada');
+  if (invoice.linked_transaction_id) {
+    throw new Error('Não é possível excluir: NF-e já possui título financeiro vinculado');
+  }
+
+  const { error } = await supabase
+    .from('nfe_invoices')
+    .delete()
+    .eq('id', invoiceId);
+
+  if (error) throw new Error(error.message);
+}
+
+// ============================================================
 // F2 — GERAR PEDIDO DE COMPRA A PARTIR DA NF-e
 // Cria um purchase_order baseado nos dados extraídos e vincula à NF.
 // ============================================================

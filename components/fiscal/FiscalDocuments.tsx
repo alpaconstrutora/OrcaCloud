@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
-  FileText, Search, RefreshCw, CheckCircle2, Clock, AlertTriangle, ArrowLeft, Plus, UploadCloud,
+  FileText, Search, RefreshCw, CheckCircle2, Clock, AlertTriangle, ArrowLeft, Plus, UploadCloud, Trash2,
 } from 'lucide-react';
-import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink, linkExistingTransaction, createOrderFromNfe } from '../../services/nfeService';
+import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink, linkExistingTransaction, createOrderFromNfe, deleteNfeInvoice } from '../../services/nfeService';
 import { projectService } from '../../services/projectService';
 import type { NfeInvoice, NfeInvoiceWithItems } from '../../types/fiscal';
 import { supabase } from '../../lib/supabase';
@@ -583,6 +583,28 @@ export function FiscalDocuments({ organizationId, onToast, onOpenUpload, onViewO
   const [selected, setSelected] = useState<NfeInvoice | null>(null);
   const [searchTerm, setSearchTerm] = usePersistedState<string>('fiscalDocuments:search', '');
   const tableColumns = useTableColumns(COLUMNS, 'fiscalDocumentsColumns');
+  const confirm = useConfirm();
+
+  const handleDelete = async (inv: NfeInvoice) => {
+    if (inv.linked_transaction_id) {
+      onToast('Não é possível excluir: NF-e já possui título financeiro vinculado', 'err');
+      return;
+    }
+    const ok = await confirm({
+      title: 'Excluir NF-e?',
+      message: `Tem certeza que deseja excluir a NF-e de "${inv.issuer_name}"? Essa ação não pode ser desfeita.`,
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
+    try {
+      await deleteNfeInvoice(inv.id);
+      setInvoices(prev => prev.filter(i => i.id !== inv.id));
+      onToast('NF-e excluída com sucesso', 'ok');
+    } catch (e: unknown) {
+      onToast(e instanceof Error ? e.message : 'Erro ao excluir NF-e', 'err');
+    }
+  };
 
   const loadData = () => {
     setLoading(true);
@@ -848,12 +870,19 @@ export function FiscalDocuments({ organizationId, onToast, onOpenUpload, onViewO
                   )}
                   {tableColumns.visibleColumns.includes('actions') && (
                     <td className="px-6 py-2.5 text-right">
-                      <div className="flex items-center justify-end" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
                         <button
                           onClick={() => setSelected(inv)}
                           className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
                         >
                           Ver detalhes
+                        </button>
+                        <button
+                          onClick={() => handleDelete(inv)}
+                          title="Excluir NF-e"
+                          className="text-red-600 hover:text-red-800 p-1.5 hover:bg-red-50 rounded-lg transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>

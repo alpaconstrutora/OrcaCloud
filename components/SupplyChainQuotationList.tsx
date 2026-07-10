@@ -1,10 +1,10 @@
 import React from 'react';
-import { Plus, FileText, Calendar, Clock, ChevronRight, Search, Filter, LayoutDashboard, Table2, ArrowRight, AlertCircle } from 'lucide-react';
+import { Plus, FileText, Calendar, Clock, Search, RefreshCw, LayoutDashboard, Table2, ArrowRight } from 'lucide-react';
 import { QuotationRequest } from '../types';
 import { quotationService } from '../services/quotationService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
-import Button from './ui/Button';
+import { KpiCard } from './ui/KpiCard';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
@@ -52,17 +52,6 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplyChainQuotationFilters:viewMode', 'list');
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainQuotationColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplyChainQuotationFilters:advanced');
-
-    // Toast de Notificação — Seção 13 do guia
-    const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
-    const notify = (message: string, type: 'success' | 'error' = 'success') => {
-        setNotification({ message, type });
-        setTimeout(() => setNotification(null), 4500);
-    };
-
-    // Modal de Confirmação — Seção 14 do guia
-    const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
-    const askConfirm = (message: string, onConfirm: () => void) => setPendingConfirm({ message, onConfirm });
 
     React.useEffect(() => {
         let cancelled = false;
@@ -128,104 +117,59 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
     }, [requests, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, advancedFilters.rules]);
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Cotações de Suprimentos</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie solicitações de preço e mapas comparativos com visão estratégica.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Button
+                    <button
                         onClick={onCreateNew}
-                        size="lg"
-                        className="gap-3 rounded-[1.25rem] shadow-xl shadow-blue-900/20"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                     >
-                        <Plus className="w-4 h-4" />
-                        <span>Nova Cotação</span>
-                    </Button>
+                        <Plus className="w-[15px] h-[15px]" />
+                        Nova cotação
+                    </button>
                 </div>
             </div>
 
             {/* Dashboard Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-blue-100 transition-all">
-                    <div className="p-3.5 bg-blue-50 text-blue-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <FileText className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Total</p>
-                        <p className="text-2xl font-bold text-gray-900">{requests.length}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></span>
-                            <p className="text-xs text-gray-400 font-medium truncate">Cotações registradas</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-amber-100 transition-all">
-                    <div className="p-3.5 bg-amber-50 text-amber-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <Clock className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Abertas</p>
-                        <p className="text-2xl font-bold text-gray-900">{requests.filter(r => r.status === 'Aberta').length}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 bg-amber-500 rounded-full shrink-0 animate-pulse"></span>
-                            <p className="text-xs text-gray-400 font-medium truncate">Aguardando respostas</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-indigo-100 transition-all">
-                    <div className="p-3.5 bg-indigo-50 text-indigo-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <Search className="w-5 h-5 text-indigo-600" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Em Análise</p>
-                        <p className="text-2xl font-bold text-gray-900">{requests.filter(r => r.status === 'Em Análise').length}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full shrink-0"></span>
-                            <p className="text-xs text-gray-400 font-medium truncate">Comparando propostas</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-emerald-100 transition-all">
-                    <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <Plus className="w-5 h-5 text-emerald-600" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Concluídas</p>
-                        <p className="text-2xl font-bold text-gray-900">{requests.filter(r => r.status === 'Concluída').length}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full shrink-0"></span>
-                            <p className="text-xs text-gray-400 font-medium truncate">Pedidos gerados</p>
-                        </div>
-                    </div>
-                </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <KpiCard shadow={false} size="sm" label="Total" value={requests.length} sub="Cotações registradas" icon={<FileText className="w-4 h-4" />} color="blue" />
+                <KpiCard shadow={false} size="sm" label="Abertas" value={requests.filter(r => r.status === 'Aberta').length} sub="Aguardando respostas" icon={<Clock className="w-4 h-4" />} color="amber" pulse />
+                <KpiCard shadow={false} size="sm" label="Em Análise" value={requests.filter(r => r.status === 'Em Análise').length} sub="Comparando propostas" icon={<Search className="w-4 h-4" />} color="indigo" />
+                <KpiCard shadow={false} size="sm" label="Concluídas" value={requests.filter(r => r.status === 'Concluída').length} sub="Pedidos gerados" icon={<Plus className="w-4 h-4" />} color="emerald" />
             </div>
 
-            {/* Filters */}
-            <div className="bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+            {/* Filters — §5.1 (variante desaninhada, escala compacta §16) */}
+            <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
-                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
                         placeholder="Buscar por título, número ou obra..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-transparent rounded-[1.5rem] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                 </div>
+
                 <button
                     onClick={loadRequests}
-                    className="p-4 bg-blue-50 text-blue-600 rounded-[1.25rem] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shadow-sm"
+                    className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                    title="Atualizar"
                 >
-                    <Filter className="w-4 h-4" />
+                    <RefreshCw className="w-4 h-4" />
                 </button>
 
-                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                <div className="flex items-center h-9">
+                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                </div>
+
+                <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                     <ColumnConfigButton
                         columns={COLUMNS.filter(c => c.key !== 'actions')}
                         visibleColumns={tableColumns.visibleColumns}
@@ -234,26 +178,26 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                         onToggleColumn={tableColumns.toggleColumn}
                         onReset={tableColumns.resetColumns}
                     />
-                    <div className="w-px bg-gray-200 mx-1 my-1"></div>
+                    <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                     <button
                         onClick={() => setViewMode('grid')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid'
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid'
+                            ? 'bg-blue-600 text-white'
                             : 'text-gray-400 hover:text-gray-600'
                             }`}
                         title="Visualização em Grade"
                     >
-                        <LayoutDashboard className="w-5 h-5" />
+                        <LayoutDashboard className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'list'
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list'
+                            ? 'bg-blue-600 text-white'
                             : 'text-gray-400 hover:text-gray-600'
                             }`}
                         title="Visualização em Lista"
                     >
-                        <Table2 className="w-5 h-5" />
+                        <Table2 className="w-4 h-4" />
                     </button>
                 </div>
             </div>
@@ -266,24 +210,27 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                 </div>
             ) : filteredRequests.length > 0 ? (
                 viewMode === 'list' ? (
-                    <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                        <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
-                            <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
-                                <tr>
+                            {/* thead em sentence case (§6.2) — escala compacta; uppercase={false} porque
+                                SortableHeader força uppercase internamente por padrão. */}
+                            <thead>
+                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.visibleColumns.includes('number') && (
-                                        <SortableHeader colKey="number" label="Número" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="number" label="Número" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('title') && (
-                                        <SortableHeader colKey="title" label="Título / Obra" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="title" label="Título / Obra" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('deadline') && (
-                                        <SortableHeader colKey="deadline" label="Prazo Final" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="deadline" label="Prazo Final" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader colKey="status" label="Status" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                                        <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                     )}
                                     {tableColumns.visibleColumns.includes('actions') && (
-                                        <th className="px-6 py-2 text-right">Ações</th>
+                                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                     )}
                                 </tr>
                             </thead>
@@ -302,13 +249,13 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                         {tableColumns.visibleColumns.includes('title') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 <div className="flex flex-col">
-                                                    <span className="text-sm font-medium text-gray-900">{req.title}</span>
-                                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{req.projectName}</span>
+                                                    <span className="text-sm font-normal text-gray-900">{req.title}</span>
+                                                    <span className="text-xs font-normal text-gray-400">{req.projectName}</span>
                                                 </div>
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('deadline') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-600">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                 <div className="flex items-center gap-2">
                                                     <Calendar className="w-3.5 h-3.5 text-gray-400" />
                                                     {new Date(req.deadline + 'T12:00:00').toLocaleDateString('pt-BR')}
@@ -321,26 +268,29 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('actions') && (
-                                            <td className="px-6 py-2.5 text-right flex items-center justify-end gap-2">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onViewComparison(req.id); }}
-                                                    className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                                                    title="Ver Mapa Comparativo"
-                                                >
-                                                    <Table2 className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onViewDetails(req.id); }}
-                                                    className="text-blue-600 hover:text-blue-800 text-sm font-semibold hover:underline"
-                                                >
-                                                    Ver Detalhes
-                                                </button>
+                                            <td className="px-6 py-2.5 text-right">
+                                                <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); onViewDetails(req.id); }}
+                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                                                    >
+                                                        Ver Detalhes
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); onViewComparison(req.id); }}
+                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                        title="Ver Mapa Comparativo"
+                                                    >
+                                                        <Table2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             </td>
                                         )}
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -393,50 +343,16 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                     </div>
                 )
             ) : (
-                <div className="text-center py-12 bg-white rounded-[2.5rem] shadow-sm border border-gray-100">
+                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
                     <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma cotação encontrada</h3>
-                    <p className="text-sm text-gray-500 max-w-md mx-auto mb-6">Comece criando uma nova solicitação de cotação para suas obras.</p>
+                    <p className="text-sm text-gray-500 mb-6">Comece criando uma nova solicitação de cotação para suas obras.</p>
                     <button
                         onClick={onCreateNew}
                         className="text-blue-600 font-bold hover:underline"
                     >
                         Criar minha primeira cotação
                     </button>
-                </div>
-            )}
-
-            {/* Toast de Notificação — padrão guia seção 13 */}
-            {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
-                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-                }`}>
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    {notification.message}
-                </div>
-            )}
-
-            {/* Modal de Confirmação — padrão guia seção 14 */}
-            {pendingConfirm && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
-                    <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 border border-gray-100 animate-in zoom-in-95 duration-200">
-                        <p className="text-sm font-normal text-gray-700 mb-6 leading-relaxed">{pendingConfirm.message}</p>
-                        <div className="flex justify-end gap-3">
-                            <button
-                                onClick={() => setPendingConfirm(null)}
-                                className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-sm font-semibold uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-all"
-                            >
-                                Cancelar
-                            </button>
-                            <Button
-                                variant="danger"
-                                onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }}
-                                className="rounded-2xl"
-                            >
-                                Confirmar
-                            </Button>
-                        </div>
-                    </div>
                 </div>
             )}
         </div>

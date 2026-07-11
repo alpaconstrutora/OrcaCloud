@@ -112,6 +112,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
   const isRecentlyShared = (dateStr: string) => (Date.now() - new Date(dateStr).getTime()) < 48 * 60 * 60 * 1000;
 
+  // URL do PDF do contrato: prioriza o assinado; se não houver, cai na última minuta
+  // marcada como "emitida" (mesma flag que já gate-ia exposição ao Portal do Cliente).
+  const getContractFileUrl = (contract: Contract): string | null => {
+    if (contract.signed_contract_url) return contract.signed_contract_url;
+    const emitted = (contract.minuta_versions || []).filter((m) => m.emitted && m.url);
+    return emitted.length > 0 ? emitted[emitted.length - 1].url : null;
+  };
+
   const [docSearchQuery, setDocSearchQuery] = useState('');
 
   // Documentos compartilhados, filtrados pela busca e agrupados por categoria (Onda 4)
@@ -793,10 +801,10 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         <span className="text-xs text-gray-500 uppercase block font-semibold">Valor Atual</span>
                         <h4 className="text-sm font-black text-white mt-0.5">R$ {Number(contract.current_value).toLocaleString('pt-BR', {minimumFractionDigits:2})}</h4>
                       </div>
-                      {contract.signed_contract_url && (
-                        <a 
-                          href={contract.signed_contract_url} 
-                          target="_blank" 
+                      {getContractFileUrl(contract) && (
+                        <a
+                          href={getContractFileUrl(contract)!}
+                          target="_blank"
                           rel="noreferrer"
                           className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-3.5 py-2 rounded-xl text-xs text-white hover:bg-white/10 active:scale-95 transition-all font-semibold"
                         >

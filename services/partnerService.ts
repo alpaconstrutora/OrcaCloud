@@ -311,7 +311,7 @@ export const partnerService = {
   async listSharedDocuments(workspaceId: string): Promise<PartnerSharedDocument[]> {
     const { data, error } = await supabase
       .from('partner_shared_documents')
-      .select('*, document:opura_documents(*, active_version:opura_document_versions(*))')
+      .select('*, document:opura_documents(*, active_version:opura_document_versions!fk_active_version(*))')
       .eq('partner_workspace_id', workspaceId)
       .order('shared_at', { ascending: false });
 

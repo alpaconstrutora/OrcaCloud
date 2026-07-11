@@ -14,11 +14,13 @@ import {
   UserPlus,
   CheckCircle,
   AlertCircle,
-  Eye
+  Eye,
+  Link2
 } from 'lucide-react';
 import Button from '../ui/Button';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
+import { partnerPortalTokenService, PartnerPortalToken } from '../../services/partnerPortalTokenService';
 import { supplierService } from '../../services/supplierService';
 
 const PartnerPortalPreview = React.lazy(() => import('./PartnerPortal').then(m => ({ default: m.PartnerPortal })));
@@ -52,6 +54,10 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   const [sharedDocs, setSharedDocs] = useState<PartnerSharedDocument[]>([]);
   const [requests, setRequests] = useState<PartnerRequest[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [portalToken, setPortalToken] = useState<PartnerPortalToken | null>(null);
+  const [tokenModalOpen, setTokenModalOpen] = useState(false);
+  const [tokenLoading, setTokenLoading] = useState(false);
+  const [tokenCopied, setTokenCopied] = useState(false);
 
   // Listas auxiliares da Construtora
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -134,6 +140,9 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
           .select('project_id')
           .eq('supplier_id', selectedWorkspace.supplier_id);
         setRelevantProjectIds((cts || []).map((c: any) => c.project_id).filter(Boolean));
+
+        const tok = await partnerPortalTokenService.getTokenForWorkspace(selectedWorkspace.id);
+        setPortalToken(tok);
       } catch (err) {
         console.error('Erro ao carregar detalhes do workspace:', err);
       }
@@ -141,6 +150,45 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
 
     loadWorkspaceDetails();
   }, [selectedWorkspace]);
+
+  // Gerar/regenerar o link de acesso público do workspace selecionado
+  const handleGenerateToken = async () => {
+    if (!selectedWorkspace) return;
+    setTokenLoading(true);
+    try {
+      await partnerPortalTokenService.generateToken(selectedWorkspace.id, organizationId);
+      const tok = await partnerPortalTokenService.getTokenForWorkspace(selectedWorkspace.id);
+      setPortalToken(tok);
+    } catch (err) {
+      console.error('Erro ao gerar link do portal:', err);
+      alert('Erro ao gerar o link de acesso.');
+    } finally {
+      setTokenLoading(false);
+    }
+  };
+
+  const handleCopyPortalLink = async () => {
+    if (!portalToken) return;
+    const url = partnerPortalTokenService.buildPortalUrl(portalToken.token);
+    await navigator.clipboard.writeText(url);
+    setTokenCopied(true);
+    setTimeout(() => setTokenCopied(false), 2000);
+  };
+
+  const handleRevokeToken = async () => {
+    if (!selectedWorkspace) return;
+    if (!confirm('Revogar o acesso via link deste parceiro? Ele perderá o acesso imediatamente.')) return;
+    setTokenLoading(true);
+    try {
+      await partnerPortalTokenService.revokeToken(selectedWorkspace.id, organizationId);
+      setPortalToken(null);
+    } catch (err) {
+      console.error('Erro ao revogar link:', err);
+      alert('Erro ao revogar o link.');
+    } finally {
+      setTokenLoading(false);
+    }
+  };
 
   // Ativar Workspace
   const handleCreateWorkspace = async (e: React.FormEvent) => {
@@ -374,6 +422,13 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 <h1 className="text-xl font-bold text-gray-900 mt-1">{selectedWorkspace.supplier_name}</h1>
               </div>
               <div className="flex gap-2">
+                <button
+                  onClick={() => setTokenModalOpen(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 border rounded-xl text-button font-semibold active:scale-95 transition-all bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100"
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  Link de Acesso
+                </button>
                 <button
                   onClick={() => setPreviewOpen(true)}
                   className="flex items-center gap-1.5 px-4 py-2 border rounded-xl text-button font-semibold active:scale-95 transition-all bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100"
@@ -829,6 +884,61 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: LINK DE ACESSO PÚBLICO (SEM LOGIN) */}
+      {tokenModalOpen && selectedWorkspace && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-gray-200 max-w-lg w-full p-6 rounded-2xl flex flex-col gap-4 shadow-2xl relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-md font-bold text-gray-900">Link de Acesso ao Portal</h3>
+                <p className="text-sm text-gray-400 font-medium mt-0.5">{selectedWorkspace.supplier_name}</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setTokenModalOpen(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Compartilhe este link com o fornecedor para que ele acesse o portal direto, sem
+              precisar de senha ou cadastro prévio. Ele consegue ver documentos e contratos,
+              enviar mensagens e abrir solicitações — só o envio de arquivos fica restrito ao
+              acesso convidado (com login).
+            </p>
+
+            {tokenLoading ? (
+              <div className="text-center py-6 text-xs text-gray-400">Carregando...</div>
+            ) : portalToken && portalToken.is_active ? (
+              <>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col gap-1">
+                  <p className="text-xs font-mono text-gray-700 break-all">
+                    {partnerPortalTokenService.buildPortalUrl(portalToken.token)}
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    Expira em: {new Date(portalToken.expires_at).toLocaleDateString('pt-BR')}
+                    {portalToken.last_used_at && ` · Último acesso: ${new Date(portalToken.last_used_at).toLocaleDateString('pt-BR')}`}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleCopyPortalLink} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white">
+                    {tokenCopied ? 'Copiado!' : 'Copiar Link'}
+                  </Button>
+                  <Button variant="secondary" onClick={handleGenerateToken} title="Gerar um novo link (invalida o atual)">
+                    Regenerar
+                  </Button>
+                  <Button variant="ghost" onClick={handleRevokeToken} className="text-red-500 hover:bg-red-50" title="Revogar acesso">
+                    Revogar
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <Button onClick={handleGenerateToken} className="bg-orange-500 hover:bg-orange-600 text-white">
+                Gerar Link de Acesso
+              </Button>
+            )}
           </div>
         </div>
       )}

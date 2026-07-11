@@ -22,14 +22,15 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
+import { partnerPortalTokenService } from '../../services/partnerPortalTokenService';
 import { contractService } from '../../services/contractService';
 import Button from '../ui/Button';
-import { 
-  PartnerWorkspace, 
-  PartnerUser, 
-  PartnerConversation, 
-  PartnerMessage, 
-  PartnerRequest, 
+import {
+  PartnerWorkspace,
+  PartnerUser,
+  PartnerConversation,
+  PartnerMessage,
+  PartnerRequest,
   PartnerSharedDocument,
   Contract
 } from '../../types';
@@ -39,6 +40,8 @@ interface PartnerPortalProps {
   /** Modo de pré-visualização para admin/dev: carrega o workspace diretamente, sem exigir um partner_user cadastrado. */
   previewWorkspaceId?: string;
   onExitPreview?: () => void;
+  /** Acesso via link público (sem login), mesmo padrão do Portal do Cliente/Investidor. */
+  portalToken?: string;
 }
 
 const CATEGORIA_LABELS: Record<string, string> = {
@@ -50,8 +53,9 @@ const CATEGORIA_LABELS: Record<string, string> = {
 };
 const CATEGORIA_ORDER = ['engenharia', 'juridico', 'compliance', 'financeiro', 'comercial'];
 
-export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, previewWorkspaceId, onExitPreview }) => {
+export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, previewWorkspaceId, onExitPreview, portalToken }) => {
   const isPreview = !!previewWorkspaceId;
+  const isTokenMode = !!portalToken;
   const [activeTab, setActiveTab] = useState<'dashboard' | 'conversas' | 'documentos' | 'contratos' | 'solicitacoes'>('dashboard');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -197,12 +201,42 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       }
     };
 
-    if (isPreview) {
+    const loadTokenWorkspace = async () => {
+      try {
+        setLoading(true);
+        const res = await partnerPortalTokenService.getPortalData(portalToken!);
+        if (!res.valid || !res.workspace) {
+          setError('Link inválido ou expirado. Solicite um novo link à construtora.');
+          setLoading(false);
+          return;
+        }
+        setWorkspace(res.workspace as PartnerWorkspace);
+        setPartnerUser({
+          id: 'token',
+          partner_workspace_id: res.workspace.id,
+          email: 'link-publico@portal-parceiro',
+          name: res.workspace.supplier_name || 'Parceiro',
+          role: 'ADMINISTRADOR',
+          is_active: true,
+          created_at: '',
+          updated_at: '',
+        });
+        setLoading(false);
+      } catch (err: any) {
+        console.error('Erro ao carregar portal via link:', err);
+        setError('Link inválido ou expirado. Solicite um novo link à construtora.');
+        setLoading(false);
+      }
+    };
+
+    if (isTokenMode) {
+      loadTokenWorkspace();
+    } else if (isPreview) {
       loadPreviewWorkspace();
     } else if (userEmail) {
       loadPartnerProfile();
     }
-  }, [userEmail, previewWorkspaceId, isPreview]);
+  }, [userEmail, previewWorkspaceId, isPreview, portalToken, isTokenMode]);
 
   // 2. Carregar dados específicos de cada aba
   useEffect(() => {
@@ -210,6 +244,32 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
     const loadTabData = async () => {
       try {
+        if (isTokenMode) {
+          if (activeTab === 'dashboard') {
+            const [docs, reqs, cts] = await Promise.all([
+              partnerPortalTokenService.getSharedDocuments(portalToken!),
+              partnerPortalTokenService.getRequests(portalToken!),
+              partnerPortalTokenService.getContracts(portalToken!),
+            ]);
+            setSharedDocs(docs);
+            setRequests(reqs);
+            setContracts(cts);
+          } else if (activeTab === 'conversas') {
+            const convs = await partnerPortalTokenService.getConversations(portalToken!);
+            setConversations(convs);
+            if (convs.length > 0 && !selectedConversation) {
+              setSelectedConversation(convs[0]);
+            }
+          } else if (activeTab === 'documentos') {
+            setSharedDocs(await partnerPortalTokenService.getSharedDocuments(portalToken!));
+          } else if (activeTab === 'contratos') {
+            setContracts(await partnerPortalTokenService.getContracts(portalToken!));
+          } else if (activeTab === 'solicitacoes') {
+            setRequests(await partnerPortalTokenService.getRequests(portalToken!));
+          }
+          return;
+        }
+
         if (activeTab === 'dashboard') {
           // Carrega resumos rápidos
           const docs = await partnerService.listSharedDocuments(workspace.id);
@@ -240,19 +300,28 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
     };
 
     loadTabData();
-  }, [workspace, activeTab]);
+  }, [workspace, activeTab, isTokenMode, portalToken]);
 
   // 3. Monitoramento de mensagens do chat selecionado + Realtime
+  // (Realtime respeita RLS: sessão anon do link público não tem acesso à tabela partner_messages
+  // diretamente, então nesse modo a atualização é por polling em vez de subscription.)
   useEffect(() => {
     if (!selectedConversation) return;
 
     const loadMessages = async () => {
-      const msgs = await partnerService.listMessages(selectedConversation.id);
+      const msgs = isTokenMode
+        ? await partnerPortalTokenService.getMessages(portalToken!, selectedConversation.id)
+        : await partnerService.listMessages(selectedConversation.id);
       setMessages(msgs);
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     };
 
     loadMessages();
+
+    if (isTokenMode) {
+      const interval = setInterval(loadMessages, 8000);
+      return () => clearInterval(interval);
+    }
 
     // Inscrição Realtime para novas mensagens
     const channel = supabase
@@ -275,7 +344,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedConversation]);
+  }, [selectedConversation, isTokenMode, portalToken]);
 
   // Ações do Chat
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -283,14 +352,20 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
     if (isPreview || !newMessage.trim() || !selectedConversation || !partnerUser) return;
 
     try {
-      await partnerService.sendMessage({
-        conversation_id: selectedConversation.id,
-        sender_email: partnerUser.email,
-        sender_name: partnerUser.name,
-        sender_type: 'EXTERNAL',
-        message: newMessage,
-        attachments: []
-      });
+      if (isTokenMode) {
+        const sent = await partnerPortalTokenService.sendMessage(portalToken!, selectedConversation.id, newMessage);
+        if (sent) setMessages((prev) => [...prev, sent as PartnerMessage]);
+        setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+      } else {
+        await partnerService.sendMessage({
+          conversation_id: selectedConversation.id,
+          sender_email: partnerUser.email,
+          sender_name: partnerUser.name,
+          sender_type: 'EXTERNAL',
+          message: newMessage,
+          attachments: []
+        });
+      }
       setNewMessage('');
     } catch (err) {
       console.error('Erro ao enviar mensagem:', err);
@@ -304,20 +379,32 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
     setCreatingRequest(true);
     try {
-      const attachmentPaths = await Promise.all(
-        newRequestFiles.map((file) => partnerService.uploadRequestAttachment(workspace.id, file))
-      );
+      let created: PartnerRequest;
+      if (isTokenMode) {
+        // Upload de anexo não é suportado no acesso via link (exigiria escrita anônima em storage);
+        // o campo de arquivo já fica oculto na UI nesse modo.
+        created = await partnerPortalTokenService.createRequest(portalToken!, {
+          title: newRequest.title,
+          description: newRequest.description,
+          type: newRequest.type,
+          priority: newRequest.priority,
+        });
+      } else {
+        const attachmentPaths = await Promise.all(
+          newRequestFiles.map((file) => partnerService.uploadRequestAttachment(workspace.id, file))
+        );
 
-      const created = await partnerService.saveRequest({
-        partner_workspace_id: workspace.id,
-        title: newRequest.title,
-        description: newRequest.description,
-        type: newRequest.type,
-        priority: newRequest.priority,
-        status: 'ABERTO',
-        created_by_email: partnerUser.email,
-        attachment_paths: attachmentPaths
-      });
+        created = await partnerService.saveRequest({
+          partner_workspace_id: workspace.id,
+          title: newRequest.title,
+          description: newRequest.description,
+          type: newRequest.type,
+          priority: newRequest.priority,
+          status: 'ABERTO',
+          created_by_email: partnerUser.email,
+          attachment_paths: attachmentPaths
+        });
+      }
       setRequests((prev) => [created, ...prev]);
       setIsNewRequestModalOpen(false);
       setNewRequest({ title: '', description: '', type: 'TECNICA', priority: 'MEDIA' });
@@ -330,10 +417,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
     }
   };
 
-  // Baixar um anexo enviado numa solicitação (gera link assinado, o bucket é privado)
+  // Baixar um anexo enviado numa solicitação (gera link assinado, o bucket é privado).
+  // No modo token, a assinatura passa pela Edge Function (sessão anon não tem RLS de storage).
   const handleDownloadAttachment = async (path: string) => {
     try {
-      const url = await partnerService.getAttachmentDownloadUrl(path);
+      const url = isTokenMode
+        ? await partnerPortalTokenService.getDocumentDownloadUrl(portalToken!, path)
+        : await partnerService.getAttachmentDownloadUrl(path);
       window.open(url, '_blank', 'noreferrer');
     } catch (err) {
       console.error('Erro ao baixar anexo:', err);
@@ -344,7 +434,9 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   // Baixar um documento GED compartilhado (bucket privado, precisa de link assinado)
   const handleDownloadSharedDocument = async (storagePath: string) => {
     try {
-      const url = await partnerService.getDocumentDownloadUrl(storagePath);
+      const url = isTokenMode
+        ? await partnerPortalTokenService.getDocumentDownloadUrl(portalToken!, storagePath)
+        : await partnerService.getDocumentDownloadUrl(storagePath);
       window.open(url, '_blank', 'noreferrer');
     } catch (err) {
       console.error('Erro ao baixar documento:', err);
@@ -353,10 +445,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   };
 
   // Enviar um documento direto pela aba Documentos (fica pendente de revisão/promoção do time interno,
-  // reaproveitando o mesmo mecanismo de anexo de solicitação — sem escrita direta no GED)
+  // reaproveitando o mesmo mecanismo de anexo de solicitação — sem escrita direta no GED).
+  // Indisponível no modo token: exigiria upload anônimo em storage.
   const handleSendDocument = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isPreview || !workspace || !partnerUser || !sendDocFile) return;
+    if (isPreview || isTokenMode || !workspace || !partnerUser || !sendDocFile) return;
 
     setSendingDoc(true);
     try {
@@ -432,6 +525,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               Sair da pré-visualização
             </button>
           )}
+        </div>
+      )}
+      {isTokenMode && (
+        <div className="h-9 bg-blue-500/15 border-b border-blue-500/30 flex items-center justify-center gap-3 shrink-0 text-xs font-bold text-blue-400 uppercase tracking-wider">
+          <span>Acesso via link — envio de arquivos indisponível nesse modo</span>
         </div>
       )}
       {/* Header Premium */}
@@ -671,8 +769,8 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   </div>
                   <Button
                     onClick={() => setIsSendDocModalOpen(true)}
-                    disabled={isPreview}
-                    title={isPreview ? 'Indisponível no modo de pré-visualização' : undefined}
+                    disabled={isPreview || isTokenMode}
+                    title={isPreview ? 'Indisponível no modo de pré-visualização' : isTokenMode ? 'Envio de arquivo indisponível no acesso via link' : undefined}
                     className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10 normal-case tracking-normal shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Upload className="w-4 h-4" />
@@ -953,25 +1051,27 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Anexos (opcional)</label>
-                <input
-                  type="file"
-                  multiple
-                  onChange={(e) => setNewRequestFiles(Array.from(e.target.files || []))}
-                  className="text-xs text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-white/5 file:text-gray-300 file:text-xs file:font-semibold hover:file:bg-white/10"
-                />
-                {newRequestFiles.length > 0 && (
-                  <ul className="flex flex-col gap-1 pt-1">
-                    {newRequestFiles.map((f, idx) => (
-                      <li key={idx} className="flex items-center gap-1.5 text-xs text-gray-400">
-                        <Paperclip className="w-3 h-3" />
-                        <span className="truncate">{f.name}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              {!isTokenMode && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-gray-400 uppercase font-bold">Anexos (opcional)</label>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={(e) => setNewRequestFiles(Array.from(e.target.files || []))}
+                    className="text-xs text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-white/5 file:text-gray-300 file:text-xs file:font-semibold hover:file:bg-white/10"
+                  />
+                  {newRequestFiles.length > 0 && (
+                    <ul className="flex flex-col gap-1 pt-1">
+                      {newRequestFiles.map((f, idx) => (
+                        <li key={idx} className="flex items-center gap-1.5 text-xs text-gray-400">
+                          <Paperclip className="w-3 h-3" />
+                          <span className="truncate">{f.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 border-t border-white/5 pt-4 mt-2">
                 <Button

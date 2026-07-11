@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import {
   Building2,
   Users,
@@ -13,12 +13,15 @@ import {
   Share2,
   UserPlus,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Eye
 } from 'lucide-react';
 import Button from '../ui/Button';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
 import { supplierService } from '../../services/supplierService';
+
+const PartnerPortalPreview = React.lazy(() => import('./PartnerPortal').then(m => ({ default: m.PartnerPortal })));
 import { 
   PartnerWorkspace, 
   PartnerUser, 
@@ -48,7 +51,8 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   const [partnerUsers, setPartnerUsers] = useState<PartnerUser[]>([]);
   const [sharedDocs, setSharedDocs] = useState<PartnerSharedDocument[]>([]);
   const [requests, setRequests] = useState<PartnerRequest[]>([]);
-  
+  const [previewOpen, setPreviewOpen] = useState(false);
+
   // Listas auxiliares da Construtora
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
@@ -371,6 +375,13 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
               </div>
               <div className="flex gap-2">
                 <button
+                  onClick={() => setPreviewOpen(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 border rounded-xl text-button font-semibold active:scale-95 transition-all bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  Visualizar como Parceiro
+                </button>
+                <button
                   onClick={async () => {
                     const toggled = await partnerService.saveWorkspace({
                       ...selectedWorkspace,
@@ -380,8 +391,8 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                     setSelectedWorkspace(prev => prev ? { ...prev, is_active: toggled.is_active } : null);
                   }}
                   className={`px-4 py-2 border rounded-xl text-button font-semibold active:scale-95 transition-all
-                    ${selectedWorkspace.is_active 
-                      ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100' 
+                    ${selectedWorkspace.is_active
+                      ? 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
                       : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'}`}
                 >
                   {selectedWorkspace.is_active ? 'Workspace Ativo' : 'Workspace Inativo'}
@@ -819,6 +830,22 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* PRÉ-VISUALIZAÇÃO: como o parceiro veria o próprio portal */}
+      {previewOpen && selectedWorkspace && (
+        <div className="fixed inset-0 z-[10000] bg-black">
+          <button
+            onClick={() => setPreviewOpen(false)}
+            className="absolute top-3 right-3 z-[10001] flex items-center gap-1.5 px-3 py-1.5 bg-white text-gray-800 rounded-lg text-xs font-bold shadow-lg hover:bg-gray-100"
+          >
+            <X className="w-3.5 h-3.5" />
+            Fechar Pré-visualização
+          </button>
+          <Suspense fallback={<div className="flex items-center justify-center h-screen bg-[#141414] text-white text-sm">Carregando pré-visualização...</div>}>
+            <PartnerPortalPreview userEmail="" previewWorkspaceId={selectedWorkspace.id} onExitPreview={() => setPreviewOpen(false)} />
+          </Suspense>
         </div>
       )}
     </div>

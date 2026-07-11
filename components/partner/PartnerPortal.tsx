@@ -36,6 +36,9 @@ import {
 
 interface PartnerPortalProps {
   userEmail: string;
+  /** Modo de pré-visualização para admin/dev: carrega o workspace diretamente, sem exigir um partner_user cadastrado. */
+  previewWorkspaceId?: string;
+  onExitPreview?: () => void;
 }
 
 const CATEGORIA_LABELS: Record<string, string> = {
@@ -47,7 +50,8 @@ const CATEGORIA_LABELS: Record<string, string> = {
 };
 const CATEGORIA_ORDER = ['engenharia', 'juridico', 'compliance', 'financeiro', 'comercial'];
 
-export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
+export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, previewWorkspaceId, onExitPreview }) => {
+  const isPreview = !!previewWorkspaceId;
   const [activeTab, setActiveTab] = useState<'dashboard' | 'conversas' | 'documentos' | 'contratos' | 'solicitacoes'>('dashboard');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -129,8 +133,36 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
     return grouped;
   }, [sharedDocs, docSearchQuery]);
 
-  // 1. Carregar perfil e workspace inicial
+  // 1. Carregar perfil e workspace inicial (ou o workspace de pré-visualização, se for o caso)
   useEffect(() => {
+    const loadPreviewWorkspace = async () => {
+      try {
+        setLoading(true);
+        const ws = await partnerService.getWorkspaceById(previewWorkspaceId!);
+        if (!ws) {
+          setError('Workspace de parceiro não encontrado.');
+          setLoading(false);
+          return;
+        }
+        setWorkspace(ws);
+        setPartnerUser({
+          id: 'preview',
+          partner_workspace_id: ws.id,
+          email: userEmail || 'preview@admin',
+          name: 'Visualização (Admin)',
+          role: 'ADMINISTRADOR',
+          is_active: true,
+          created_at: '',
+          updated_at: '',
+        });
+        setLoading(false);
+      } catch (err: any) {
+        console.error('Erro ao carregar pré-visualização do parceiro:', err);
+        setError(err.message || 'Erro ao carregar pré-visualização.');
+        setLoading(false);
+      }
+    };
+
     const loadPartnerProfile = async () => {
       try {
         setLoading(true);
@@ -156,8 +188,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
         setLoading(false);
       }
     };
-    if (userEmail) loadPartnerProfile();
-  }, [userEmail]);
+
+    if (isPreview) {
+      loadPreviewWorkspace();
+    } else if (userEmail) {
+      loadPartnerProfile();
+    }
+  }, [userEmail, previewWorkspaceId, isPreview]);
 
   // 2. Carregar dados específicos de cada aba
   useEffect(() => {
@@ -235,7 +272,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
   // Ações do Chat
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedConversation || !partnerUser) return;
+    if (isPreview || !newMessage.trim() || !selectedConversation || !partnerUser) return;
 
     try {
       await partnerService.sendMessage({
@@ -255,7 +292,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
   // Criar solicitação (com upload opcional de anexos — Onda 5)
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!workspace || !partnerUser) return;
+    if (isPreview || !workspace || !partnerUser) return;
 
     setCreatingRequest(true);
     try {
@@ -311,7 +348,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
   // reaproveitando o mesmo mecanismo de anexo de solicitação — sem escrita direta no GED)
   const handleSendDocument = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!workspace || !partnerUser || !sendDocFile) return;
+    if (isPreview || !workspace || !partnerUser || !sendDocFile) return;
 
     setSendingDoc(true);
     try {
@@ -376,6 +413,19 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
 
   return (
     <div className="flex flex-col h-screen bg-[#121212] text-gray-100 overflow-hidden font-sans">
+      {isPreview && (
+        <div className="h-9 bg-yellow-500/15 border-b border-yellow-500/30 flex items-center justify-center gap-3 shrink-0 text-xs font-bold text-yellow-400 uppercase tracking-wider">
+          <span>Modo de Pré-visualização (Admin) — envio de mensagens e solicitações desabilitado</span>
+          {onExitPreview && (
+            <button
+              onClick={onExitPreview}
+              className="underline decoration-dotted hover:text-yellow-300 normal-case tracking-normal"
+            >
+              Sair da pré-visualização
+            </button>
+          )}
+        </div>
+      )}
       {/* Header Premium */}
       <header className="h-16 border-b border-white/5 bg-[#181818] flex items-center justify-between px-6 shrink-0 shadow-lg">
         <div className="flex items-center gap-3">
@@ -580,10 +630,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                       <input
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
-                        placeholder={`Enviar mensagem em #${selectedConversation.name}...`}
-                        className="flex-1 bg-[#121212] border border-white/5 rounded-xl px-4 py-2 text-form-input text-white focus:outline-none focus:border-orange-500/50"
+                        disabled={isPreview}
+                        placeholder={isPreview ? 'Envio de mensagens indisponível no modo de pré-visualização' : `Enviar mensagem em #${selectedConversation.name}...`}
+                        className="flex-1 bg-[#121212] border border-white/5 rounded-xl px-4 py-2 text-form-input text-white focus:outline-none focus:border-orange-500/50 disabled:opacity-40"
                       />
-                      <Button type="submit" size="icon" className="bg-orange-500 hover:bg-orange-600 text-white">
+                      <Button type="submit" size="icon" disabled={isPreview} className="bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-40 disabled:cursor-not-allowed">
                         <Send className="w-4 h-4" />
                       </Button>
                     </form>
@@ -612,7 +663,9 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                   </div>
                   <Button
                     onClick={() => setIsSendDocModalOpen(true)}
-                    className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10 normal-case tracking-normal shrink-0"
+                    disabled={isPreview}
+                    title={isPreview ? 'Indisponível no modo de pré-visualização' : undefined}
+                    className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10 normal-case tracking-normal shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Upload className="w-4 h-4" />
                     Enviar Documento
@@ -770,7 +823,9 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                 <h3 className="text-md font-bold text-white">Solicitações de Atendimento</h3>
                 <Button
                   onClick={() => setIsNewRequestModalOpen(true)}
-                  className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10 normal-case tracking-normal"
+                  disabled={isPreview}
+                  title={isPreview ? 'Indisponível no modo de pré-visualização' : undefined}
+                  className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10 normal-case tracking-normal disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-4 h-4" />
                   Nova Solicitação

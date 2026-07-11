@@ -5,8 +5,11 @@ import {
   PartnerConversation,
   PartnerMessage,
   PartnerRequest,
-  PartnerSharedDocument
+  PartnerSharedDocument,
+  OpuraDocumentCategoria
 } from '../types';
+import { documentService } from './documentService';
+import { notificationService } from './notificationService';
 
 export const partnerService = {
   // --- Workspaces ---
@@ -328,7 +331,7 @@ export const partnerService = {
         document_id: documentId,
         shared_by: sharedBy
       })
-      .select()
+      .select('*, document:opura_documents(nome, organization_id)')
       .single();
 
     if (error) {
@@ -336,7 +339,47 @@ export const partnerService = {
       throw error;
     }
 
+    const sharedDoc = (data as any)?.document;
+
+    // Notificar os usuários ativos do parceiro e registrar auditoria (best-effort, não bloqueia o compartilhamento)
+    this.notifyPartnersOfSharedDocument(workspaceId, sharedDoc?.nome, sharedBy).catch((err) => {
+      console.error('[PARTNER SERVICE] Erro ao notificar parceiros sobre documento compartilhado:', err);
+    });
+
+    if (sharedDoc?.organization_id) {
+      documentService
+        .logDocumentAction(
+          sharedDoc.organization_id,
+          documentId,
+          sharedBy,
+          'compartilhado_parceiro',
+          `Documento compartilhado com o Portal do Parceiro (workspace ${workspaceId})`
+        )
+        .catch((err) => console.error('[PARTNER SERVICE] Erro ao registrar auditoria de compartilhamento:', err));
+    }
+
     return data as PartnerSharedDocument;
+  },
+
+  async notifyPartnersOfSharedDocument(workspaceId: string, documentName: string | undefined, sharedBy: string): Promise<void> {
+    const { data: users, error } = await supabase
+      .from('partner_users')
+      .select('email')
+      .eq('partner_workspace_id', workspaceId)
+      .eq('is_active', true);
+
+    if (error || !users || users.length === 0) return;
+
+    await Promise.all(
+      users.map((u: { email: string }) =>
+        notificationService.sendNotification({
+          recipientEmail: u.email,
+          title: 'Novo Documento Compartilhado',
+          message: `${sharedBy} compartilhou o documento "${documentName || 'documento'}" com você no Portal do Parceiro.`,
+          type: 'documento_compartilhado'
+        })
+      )
+    );
   },
 
   async unshareDocument(workspaceId: string, documentId: string): Promise<void> {
@@ -350,5 +393,100 @@ export const partnerService = {
       console.error('[PARTNER SERVICE] Error unsharing document:', error);
       throw error;
     }
+  },
+
+  // --- Anexos de Solicitações (Onda 5: fluxo reverso — parceiro envia arquivo) ---
+  async uploadRequestAttachment(workspaceId: string, file: File): Promise<string> {
+    const path = `partner-uploads/${workspaceId}/${Date.now()}_${file.name}`;
+    const { error } = await supabase.storage
+      .from('opura-docs')
+      .upload(path, file, { cacheControl: '3600', upsert: false });
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error uploading request attachment:', error);
+      throw error;
+    }
+    return path;
+  },
+
+  async getAttachmentDownloadUrl(path: string): Promise<string> {
+    const { data, error } = await supabase.storage
+      .from('opura-docs')
+      .createSignedUrl(path, 60 * 15);
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error creating signed URL for attachment:', error);
+      throw error;
+    }
+    return data.signedUrl;
+  },
+
+  // Promove um anexo enviado pelo parceiro a um documento formal do GED (ação manual do time interno)
+  async promoteAttachmentToDocument(
+    workspaceId: string,
+    storagePath: string,
+    docName: string,
+    categoria: OpuraDocumentCategoria,
+    promotedByEmail: string
+  ): Promise<void> {
+    const ws = await this.getWorkspaceById(workspaceId);
+    if (!ws) throw new Error('Workspace de parceiro não encontrado.');
+
+    const { data: newDoc, error: docError } = await supabase
+      .from('opura_documents')
+      .insert({
+        organization_id: ws.organization_id,
+        nome: docName,
+        descricao: `Documento enviado pelo parceiro ${ws.supplier_name || ''} via Portal do Parceiro`.trim(),
+        categoria,
+        tipo_documento: 'Documento de Parceiro',
+        status: 'ativo',
+        supplier_id: ws.supplier_id,
+        criado_por: promotedByEmail,
+      })
+      .select()
+      .single();
+
+    if (docError) {
+      console.error('[PARTNER SERVICE] Error creating document from attachment:', docError);
+      throw docError;
+    }
+
+    const { data: newVersion, error: versionError } = await supabase
+      .from('opura_document_versions')
+      .insert({
+        document_id: newDoc.id,
+        version_number: 1,
+        storage_path: storagePath,
+        tamanho: 0,
+        mime_type: 'application/octet-stream',
+        criado_por: promotedByEmail,
+      })
+      .select()
+      .single();
+
+    if (versionError) {
+      console.error('[PARTNER SERVICE] Error registering version from attachment:', versionError);
+      await supabase.from('opura_documents').delete().eq('id', newDoc.id);
+      throw versionError;
+    }
+
+    const { error: updateError } = await supabase
+      .from('opura_documents')
+      .update({ active_version_id: newVersion.id })
+      .eq('id', newDoc.id);
+
+    if (updateError) {
+      console.error('[PARTNER SERVICE] Error linking active version from attachment:', updateError);
+      throw updateError;
+    }
+
+    await documentService.logDocumentAction(
+      ws.organization_id,
+      newDoc.id,
+      promotedByEmail,
+      'criado',
+      'Documento promovido a partir de um anexo de solicitação do Portal do Parceiro'
+    );
   }
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Building2,
   Users,
@@ -30,6 +30,15 @@ import {
 interface PartnerWorkspaceManagerProps {
   organizationId: string;
 }
+
+const CATEGORIA_LABELS: Record<string, string> = {
+  engenharia: 'Projetos',
+  juridico: 'Contratos',
+  compliance: 'Licenças & Alvarás',
+  financeiro: 'Financeiro',
+  comercial: 'Comercial',
+};
+const CATEGORIA_ORDER = ['engenharia', 'juridico', 'compliance', 'financeiro', 'comercial'];
 
 export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = ({ organizationId }) => {
   const [workspaces, setWorkspaces] = useState<PartnerWorkspace[]>([]);
@@ -63,6 +72,15 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   const [isShareDocModalOpen, setIsShareDocModalOpen] = useState(false);
   const [docToShareId, setDocToShareId] = useState('');
 
+  // Promover anexo de solicitação a documento formal do GED (Onda 5)
+  const [promotingAttachmentPath, setPromotingAttachmentPath] = useState<string | null>(null);
+  const [promoteDocName, setPromoteDocName] = useState('');
+  const [promoteDocCategoria, setPromoteDocCategoria] = useState('engenharia');
+  const [promoting, setPromoting] = useState(false);
+
+  // Relevância do seletor de documentos (Onda 2): projetos onde o fornecedor do workspace tem contrato ativo
+  const [relevantProjectIds, setRelevantProjectIds] = useState<string[]>([]);
+
   // 1. Carregar workspaces e fornecedores iniciais
   useEffect(() => {
     const loadInitialData = async () => {
@@ -81,7 +99,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
         // Carrega documentos ativos da org
         const { data: docs } = await supabase
           .from('opura_documents')
-          .select('id, nome, categoria')
+          .select('id, nome, categoria, supplier_id, project_id')
           .eq('organization_id', organizationId);
         setDocuments(docs || []);
       } catch (err) {
@@ -105,6 +123,13 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
         setSharedDocs(docs);
         const reqs = await partnerService.listRequests(selectedWorkspace.id);
         setRequests(reqs);
+
+        // Obras onde este fornecedor tem contrato ativo, para priorizar documentos relevantes no seletor
+        const { data: cts } = await supabase
+          .from('contracts')
+          .select('project_id')
+          .eq('supplier_id', selectedWorkspace.supplier_id);
+        setRelevantProjectIds((cts || []).map((c: any) => c.project_id).filter(Boolean));
       } catch (err) {
         console.error('Erro ao carregar detalhes do workspace:', err);
       }
@@ -183,6 +208,27 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     }
   };
 
+  // Documentos recomendados (fornecedor do workspace direto no doc, ou obra com contrato ativo com ele)
+  // vs. os demais agrupados por categoria — evita um <select> plano com todos os documentos da org (Onda 2)
+  const { recommendedDocs, docsByCategoria } = useMemo(() => {
+    if (!selectedWorkspace) {
+      return { recommendedDocs: [] as any[], docsByCategoria: {} as Record<string, any[]> };
+    }
+    const isRelevant = (d: any) =>
+      d.supplier_id === selectedWorkspace.supplier_id ||
+      (d.project_id && relevantProjectIds.includes(d.project_id));
+
+    const recommended = documents.filter(isRelevant);
+    const rest = documents.filter((d) => !isRelevant(d));
+    const byCategoria: Record<string, any[]> = {};
+    rest.forEach((d) => {
+      const key = d.categoria || 'outros';
+      if (!byCategoria[key]) byCategoria[key] = [];
+      byCategoria[key].push(d);
+    });
+    return { recommendedDocs: recommended, docsByCategoria: byCategoria };
+  }, [documents, selectedWorkspace, relevantProjectIds]);
+
   // Compartilhar Documento
   const handleShareDoc = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,6 +267,48 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
       setRequests((prev) => prev.map(r => r.id === req.id ? updated : r));
     } catch (err) {
       console.error('Erro ao atualizar status da solicitação:', err);
+    }
+  };
+
+  // Baixar um anexo enviado pelo parceiro numa solicitação
+  const handleDownloadAttachment = async (path: string) => {
+    try {
+      const url = await partnerService.getAttachmentDownloadUrl(path);
+      window.open(url, '_blank', 'noreferrer');
+    } catch (err) {
+      console.error('Erro ao baixar anexo:', err);
+    }
+  };
+
+  // Abrir modal de promoção do anexo a documento formal do GED
+  const openPromoteModal = (path: string) => {
+    const rawName = path.split('/').pop()?.replace(/^\d+_/, '') || 'Documento do Parceiro';
+    setPromotingAttachmentPath(path);
+    setPromoteDocName(rawName);
+    setPromoteDocCategoria('engenharia');
+  };
+
+  // Confirmar promoção do anexo a documento formal do GED (decisão manual do time interno)
+  const handleConfirmPromote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedWorkspace || !promotingAttachmentPath || !promoteDocName.trim()) return;
+
+    setPromoting(true);
+    try {
+      await partnerService.promoteAttachmentToDocument(
+        selectedWorkspace.id,
+        promotingAttachmentPath,
+        promoteDocName.trim(),
+        promoteDocCategoria as any,
+        'Membro Construtora'
+      );
+      setPromotingAttachmentPath(null);
+      alert('Documento promovido ao GED com sucesso.');
+    } catch (err: any) {
+      console.error('Erro ao promover anexo:', err);
+      alert(err.message || 'Erro ao promover anexo a documento do GED.');
+    } finally {
+      setPromoting(false);
     }
   };
 
@@ -450,8 +538,32 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                         </div>
                         <h4 className="text-xs font-bold text-gray-900 truncate">{req.title}</h4>
                         <p className="text-xs text-gray-500 mt-1 leading-relaxed">{req.description}</p>
+                        {req.attachment_paths && req.attachment_paths.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-2">
+                            {req.attachment_paths.map((path, idx) => (
+                              <div key={idx} className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-lg pl-2 pr-1 py-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadAttachment(path)}
+                                  className="text-xs text-orange-600 hover:text-orange-700 font-semibold truncate max-w-[9rem]"
+                                  title="Baixar anexo"
+                                >
+                                  {path.split('/').pop()?.replace(/^\d+_/, '')}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openPromoteModal(path)}
+                                  className="text-[10px] uppercase font-bold text-blue-600 hover:text-blue-700 border-l border-gray-200 pl-1.5"
+                                  title="Promover a documento formal do GED"
+                                >
+                                  GED
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      
+
                       <div className="flex items-center gap-4 shrink-0 border-t md:border-t-0 border-gray-100 pt-3 md:pt-0">
                         <div className="flex flex-col text-left md:text-right">
                           <span className="text-xs text-gray-400 uppercase font-semibold">Status Atual</span>
@@ -617,10 +729,26 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
                 >
                   <option value="">Selecione um documento...</option>
-                  {documents.map(d => (
-                    <option key={d.id} value={d.id}>[{d.categoria}] {d.nome}</option>
+                  {recommendedDocs.length > 0 && (
+                    <optgroup label="★ Recomendados para este fornecedor">
+                      {recommendedDocs.map(d => (
+                        <option key={d.id} value={d.id}>[{CATEGORIA_LABELS[d.categoria] || d.categoria}] {d.nome}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {CATEGORIA_ORDER.filter((cat) => docsByCategoria[cat]?.length).map((cat) => (
+                    <optgroup key={cat} label={CATEGORIA_LABELS[cat] || cat}>
+                      {docsByCategoria[cat].map((d) => (
+                        <option key={d.id} value={d.id}>{d.nome}</option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
+                {recommendedDocs.length > 0 && (
+                  <p className="text-xs text-gray-400 pt-1">
+                    ★ = documento já vinculado a este fornecedor ou a uma obra onde ele tem contrato ativo.
+                  </p>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 border-t border-gray-100 pt-4 mt-2">
@@ -629,6 +757,54 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 </Button>
                 <Button type="submit" className="bg-orange-500 hover:bg-orange-600 text-white">
                   Compartilhar Arquivo
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PROMOVER ANEXO A DOCUMENTO DO GED */}
+      {promotingAttachmentPath && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-gray-200 max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 shadow-2xl relative">
+            <h3 className="text-md font-bold text-gray-900">Promover Anexo a Documento do GED</h3>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Cria um documento formal em Gestão de Documentos apontando para este mesmo arquivo,
+              já vinculado ao fornecedor <strong>{selectedWorkspace?.supplier_name}</strong>. O anexo
+              original da solicitação continua disponível normalmente.
+            </p>
+
+            <form onSubmit={handleConfirmPromote} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-400 uppercase font-bold">Nome do Documento</label>
+                <input
+                  required
+                  value={promoteDocName}
+                  onChange={(e) => setPromoteDocName(e.target.value)}
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-800 focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-400 uppercase font-bold">Categoria</label>
+                <select
+                  value={promoteDocCategoria}
+                  onChange={(e) => setPromoteDocCategoria(e.target.value)}
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
+                >
+                  {CATEGORIA_ORDER.map((cat) => (
+                    <option key={cat} value={cat}>{CATEGORIA_LABELS[cat]}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-gray-100 pt-4 mt-2">
+                <Button variant="ghost" type="button" onClick={() => setPromotingAttachmentPath(null)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={promoting} className="bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50">
+                  {promoting ? 'Promovendo...' : 'Promover ao GED'}
                 </Button>
               </div>
             </form>

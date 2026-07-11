@@ -37,6 +37,15 @@ interface PartnerPortalProps {
   userEmail: string;
 }
 
+const CATEGORIA_LABELS: Record<string, string> = {
+  engenharia: 'Projetos',
+  juridico: 'Contratos',
+  compliance: 'Licenças & Alvarás',
+  financeiro: 'Financeiro',
+  comercial: 'Comercial',
+};
+const CATEGORIA_ORDER = ['engenharia', 'juridico', 'compliance', 'financeiro', 'comercial'];
+
 export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'conversas' | 'documentos' | 'contratos' | 'solicitacoes'>('dashboard');
   const [loading, setLoading] = useState(true);
@@ -63,8 +72,55 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
     type: 'TECNICA' as any,
     priority: 'MEDIA' as any
   });
+  const [newRequestFiles, setNewRequestFiles] = useState<File[]>([]);
+  const [creatingRequest, setCreatingRequest] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Feed unificado de atividades (documentos compartilhados + solicitações), mais recente primeiro
+  const recentActivity = React.useMemo(() => {
+    const docActivities = sharedDocs.map((sd) => ({
+      id: `doc-${sd.id}`,
+      kind: 'documento' as const,
+      label: sd.document?.categoria || 'Documento',
+      title: sd.document?.nome || 'Documento compartilhado',
+      date: sd.shared_at,
+    }));
+    const reqActivities = requests.map((req) => ({
+      id: `req-${req.id}`,
+      kind: 'solicitacao' as const,
+      label: req.type,
+      title: req.title,
+      date: req.created_at,
+      status: req.status,
+    }));
+    return [...docActivities, ...reqActivities]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 6);
+  }, [sharedDocs, requests]);
+
+  const isRecentlyShared = (dateStr: string) => (Date.now() - new Date(dateStr).getTime()) < 48 * 60 * 60 * 1000;
+
+  const [docSearchQuery, setDocSearchQuery] = useState('');
+
+  // Documentos compartilhados, filtrados pela busca e agrupados por categoria (Onda 4)
+  const docsByCategoria = React.useMemo(() => {
+    const q = docSearchQuery.trim().toLowerCase();
+    const filtered = q
+      ? sharedDocs.filter((sd) =>
+          (sd.document?.nome || '').toLowerCase().includes(q) ||
+          (sd.document?.descricao || '').toLowerCase().includes(q)
+        )
+      : sharedDocs;
+
+    const grouped: Record<string, PartnerSharedDocument[]> = {};
+    filtered.forEach((sd) => {
+      const key = sd.document?.categoria || 'outros';
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(sd);
+    });
+    return grouped;
+  }, [sharedDocs, docSearchQuery]);
 
   // 1. Carregar perfil e workspace inicial
   useEffect(() => {
@@ -189,12 +245,17 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
     }
   };
 
-  // Criar solicitação
+  // Criar solicitação (com upload opcional de anexos — Onda 5)
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!workspace || !partnerUser) return;
 
+    setCreatingRequest(true);
     try {
+      const attachmentPaths = await Promise.all(
+        newRequestFiles.map((file) => partnerService.uploadRequestAttachment(workspace.id, file))
+      );
+
       const created = await partnerService.saveRequest({
         partner_workspace_id: workspace.id,
         title: newRequest.title,
@@ -202,13 +263,29 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
         type: newRequest.type,
         priority: newRequest.priority,
         status: 'ABERTO',
-        created_by_email: partnerUser.email
+        created_by_email: partnerUser.email,
+        attachment_paths: attachmentPaths
       });
       setRequests((prev) => [created, ...prev]);
       setIsNewRequestModalOpen(false);
       setNewRequest({ title: '', description: '', type: 'TECNICA', priority: 'MEDIA' });
+      setNewRequestFiles([]);
     } catch (err) {
       console.error('Erro ao criar solicitação:', err);
+      alert('Erro ao criar solicitação. Tente novamente.');
+    } finally {
+      setCreatingRequest(false);
+    }
+  };
+
+  // Baixar um anexo enviado numa solicitação (gera link assinado, o bucket é privado)
+  const handleDownloadAttachment = async (path: string) => {
+    try {
+      const url = await partnerService.getAttachmentDownloadUrl(path);
+      window.open(url, '_blank', 'noreferrer');
+    } catch (err) {
+      console.error('Erro ao baixar anexo:', err);
+      alert('Erro ao baixar o anexo.');
     }
   };
 
@@ -356,18 +433,25 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                     Atividades Recentes
                   </h4>
                   <div className="flex flex-col gap-4">
-                    {requests.slice(0, 4).map((req) => (
-                      <div key={req.id} className="flex gap-4 items-start p-3 bg-white/5 rounded-xl border border-white/5">
-                        <div className={`p-2 rounded-lg text-xs font-bold ${req.status === 'CONCLUIDO' ? 'bg-green-500/10 text-green-400' : 'bg-orange-500/10 text-orange-400'}`}>
-                          {req.type}
+                    {recentActivity.map((act) => (
+                      <div key={act.id} className="flex gap-4 items-start p-3 bg-white/5 rounded-xl border border-white/5">
+                        <div className={`p-2 rounded-lg text-xs font-bold shrink-0
+                          ${act.kind === 'documento'
+                            ? 'bg-purple-500/10 text-purple-400'
+                            : act.status === 'CONCLUIDO' ? 'bg-green-500/10 text-green-400' : 'bg-orange-500/10 text-orange-400'}`}>
+                          {act.kind === 'documento' ? <FolderOpen className="w-3.5 h-3.5" /> : act.label}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-white truncate">{req.title}</p>
-                          <span className="text-xs text-gray-500">Status: {req.status} • {new Date(req.created_at).toLocaleDateString()}</span>
+                          <p className="text-xs font-semibold text-white truncate">
+                            {act.kind === 'documento' ? `Documento compartilhado: ${act.title}` : act.title}
+                          </p>
+                          <span className="text-xs text-gray-500">
+                            {act.kind === 'documento' ? `Categoria: ${act.label}` : `Status: ${act.status}`} • {new Date(act.date).toLocaleDateString()}
+                          </span>
                         </div>
                       </div>
                     ))}
-                    {requests.length === 0 && (
+                    {recentActivity.length === 0 && (
                       <div className="text-center py-6 text-xs text-gray-500">Nenhuma atividade recente cadastrada.</div>
                     )}
                   </div>
@@ -462,43 +546,69 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                 <h3 className="text-md font-bold text-white">Documentos e Projetos Compartilhados</h3>
                 <div className="relative max-w-xs w-full">
                   <Search className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
-                  <input placeholder="Buscar documentos..." className="bg-[#1c1c1c] border border-white/5 pl-9 pr-4 py-2 rounded-xl text-form-input w-full text-white focus:outline-none" />
+                  <input
+                    value={docSearchQuery}
+                    onChange={(e) => setDocSearchQuery(e.target.value)}
+                    placeholder="Buscar documentos..."
+                    className="bg-[#1c1c1c] border border-white/5 pl-9 pr-4 py-2 rounded-xl text-form-input w-full text-white focus:outline-none"
+                  />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {sharedDocs.map((sd) => (
-                  <div key={sd.id} className="bg-[#1c1c1c] border border-white/5 p-4 rounded-2xl flex flex-col gap-3 shadow-md hover:border-white/10 transition-all group">
-                    <div className="flex items-start justify-between">
-                      <div className="p-2 bg-orange-500/10 text-orange-400 rounded-xl"><FolderOpen className="w-5 h-5" /></div>
-                      <span className="text-xs uppercase font-bold text-gray-500">{sd.document?.categoria}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-xs font-bold text-white truncate">{sd.document?.nome}</h4>
-                      <p className="text-xs text-gray-500 mt-1 truncate">{sd.document?.descricao || 'Sem descrição'}</p>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-gray-500 border-t border-white/5 pt-3 mt-1">
-                      <span>Compartilhado em: {new Date(sd.shared_at).toLocaleDateString()}</span>
-                      {sd.document?.active_version?.storage_path && (
-                        <a
-                          href={`${supabase.storage.from('opura-docs').getPublicUrl(sd.document.active_version.storage_path).data.publicUrl}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-1 text-orange-400 hover:text-orange-300 font-semibold"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Baixar</span>
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {sharedDocs.length === 0 && (
-                  <div className="col-span-full text-center py-12 bg-[#1c1c1c] border border-dashed border-white/5 rounded-2xl text-xs text-gray-500">
-                    Nenhum documento compartilhado com o seu portal no momento.
-                  </div>
-                )}
-              </div>
+              {sharedDocs.length === 0 ? (
+                <div className="text-center py-12 bg-[#1c1c1c] border border-dashed border-white/5 rounded-2xl text-xs text-gray-500">
+                  Nenhum documento compartilhado com o seu portal no momento.
+                </div>
+              ) : Object.keys(docsByCategoria).length === 0 ? (
+                <div className="text-center py-12 bg-[#1c1c1c] border border-dashed border-white/5 rounded-2xl text-xs text-gray-500">
+                  Nenhum documento encontrado para "{docSearchQuery}".
+                </div>
+              ) : (
+                <div className="flex flex-col gap-8">
+                  {[...CATEGORIA_ORDER, ...Object.keys(docsByCategoria).filter((c) => !CATEGORIA_ORDER.includes(c))]
+                    .filter((cat) => docsByCategoria[cat]?.length)
+                    .map((cat) => (
+                      <div key={cat} className="flex flex-col gap-3">
+                        <h4 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
+                          {CATEGORIA_LABELS[cat] || cat}
+                          <span className="text-gray-600 font-bold">({docsByCategoria[cat].length})</span>
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {docsByCategoria[cat].map((sd) => (
+                            <div key={sd.id} className="bg-[#1c1c1c] border border-white/5 p-4 rounded-2xl flex flex-col gap-3 shadow-md hover:border-white/10 transition-all group">
+                              <div className="flex items-start justify-between">
+                                <div className="p-2 bg-orange-500/10 text-orange-400 rounded-xl"><FolderOpen className="w-5 h-5" /></div>
+                                {isRecentlyShared(sd.shared_at) && (
+                                  <span className="text-[9px] font-black uppercase tracking-wider bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded-md border border-green-500/20">
+                                    Novo
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="text-xs font-bold text-white truncate">{sd.document?.nome}</h4>
+                                <p className="text-xs text-gray-500 mt-1 truncate">{sd.document?.descricao || 'Sem descrição'}</p>
+                              </div>
+                              <div className="flex items-center justify-between text-xs text-gray-500 border-t border-white/5 pt-3 mt-1">
+                                <span>Compartilhado em: {new Date(sd.shared_at).toLocaleDateString()}</span>
+                                {sd.document?.active_version?.storage_path && (
+                                  <a
+                                    href={`${supabase.storage.from('opura-docs').getPublicUrl(sd.document.active_version.storage_path).data.publicUrl}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center gap-1 text-orange-400 hover:text-orange-300 font-semibold"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                    <span>Baixar</span>
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -577,6 +687,21 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                       </div>
                       <h4 className="text-xs font-bold text-white truncate">{req.title}</h4>
                       <p className="text-xs text-gray-500 mt-1 leading-relaxed">{req.description}</p>
+                      {req.attachment_paths && req.attachment_paths.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-2">
+                          {req.attachment_paths.map((path, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => handleDownloadAttachment(path)}
+                              className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 font-semibold bg-white/5 border border-white/5 px-2 py-1 rounded-lg"
+                            >
+                              <Paperclip className="w-3 h-3" />
+                              <span className="truncate max-w-[10rem]">{path.split('/').pop()?.replace(/^\d+_/, '')}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 border-white/5 pt-3 md:pt-0">
                       <div className="text-left md:text-right">
@@ -662,6 +787,26 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                 </div>
               </div>
 
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-400 uppercase font-bold">Anexos (opcional)</label>
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setNewRequestFiles(Array.from(e.target.files || []))}
+                  className="text-xs text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-white/5 file:text-gray-300 file:text-xs file:font-semibold hover:file:bg-white/10"
+                />
+                {newRequestFiles.length > 0 && (
+                  <ul className="flex flex-col gap-1 pt-1">
+                    {newRequestFiles.map((f, idx) => (
+                      <li key={idx} className="flex items-center gap-1.5 text-xs text-gray-400">
+                        <Paperclip className="w-3 h-3" />
+                        <span className="truncate">{f.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
               <div className="flex justify-end gap-2 border-t border-white/5 pt-4 mt-2">
                 <Button
                   type="button"
@@ -673,9 +818,10 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                 </Button>
                 <Button
                   type="submit"
-                  className="bg-orange-500 hover:bg-orange-600 text-white normal-case tracking-normal"
+                  disabled={creatingRequest}
+                  className="bg-orange-500 hover:bg-orange-600 text-white normal-case tracking-normal disabled:opacity-50"
                 >
-                  Enviar Solicitação
+                  {creatingRequest ? 'Enviando...' : 'Enviar Solicitação'}
                 </Button>
               </div>
             </form>

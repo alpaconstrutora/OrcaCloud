@@ -10,6 +10,7 @@
 -- "Cannot coerce the result to a single JSON object".
 -- ============================================================
 
+DROP POLICY IF EXISTS nfe_invoices_update ON public.nfe_invoices;
 CREATE POLICY nfe_invoices_update ON public.nfe_invoices FOR UPDATE
   USING (fiscal_member_of(organization_id))
   WITH CHECK (fiscal_member_of(organization_id));

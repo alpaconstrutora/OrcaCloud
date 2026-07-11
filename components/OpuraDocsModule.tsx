@@ -33,12 +33,14 @@ import {
   UserCheck,
   Eye,
   Filter,
+  Share2,
 } from 'lucide-react';
-import { 
+import {
   documentService,
   OpuraDmsDiscipline,
   OpuraDmsNamingPattern
 } from '../services/documentService';
+import { partnerService } from '../services/partnerService';
 import { DocumentMarkupViewer } from './ui/DocumentMarkupViewer';
 import { validateFileNameAgainstMask, extractTokenFromFileName } from '../utils/dmsUtils';
 import {
@@ -51,6 +53,7 @@ import {
   OpuraDocumentApproval,
   OpuraDocumentApprovalStatus,
   OpuraDocumentAuditLog,
+  PartnerWorkspace,
 } from '../types';
 import { useStore } from '../store/useStore';
 
@@ -139,6 +142,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [processingAction, setProcessingAction] = React.useState(false);
   const [documentApprovals, setDocumentApprovals] = React.useState<OpuraDocumentApproval[]>([]);
   const [documentAuditLogs, setDocumentAuditLogs] = React.useState<OpuraDocumentAuditLog[]>([]);
+
+  // Estados locais — compartilhamento com Portal do Parceiro (PLANO_MODULO_PARCEIRO_DOCUMENTOS.md, Onda 1)
+  const [partnerWorkspaces, setPartnerWorkspaces] = React.useState<PartnerWorkspace[]>([]);
+  const [shareModalOpen, setShareModalOpen] = React.useState(false);
+  const [shareDocId, setShareDocId] = React.useState<string | null>(null);
+  const [selectedShareWorkspaceId, setSelectedShareWorkspaceId] = React.useState('');
+  const [sharingSubmitting, setSharingSubmitting] = React.useState(false);
 
   // Buscar histórico de auditoria do documento (Onda 4)
   const loadAuditLogsForDoc = async (docId: string) => {
@@ -629,6 +639,58 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       fetchDocs();
     } catch (err: any) {
       alert(err.message || 'Erro ao mover documento.');
+    }
+  };
+
+  // Fornecedor do documento sendo compartilhado, para priorizar o parceiro correspondente no seletor (Onda 2)
+  const shareTargetSupplierId = React.useMemo(
+    () => documents.find((d) => d.id === shareDocId)?.supplier_id || null,
+    [documents, shareDocId]
+  );
+  const sortedShareWorkspaces = React.useMemo(() => {
+    const recommended = partnerWorkspaces.filter((ws) => shareTargetSupplierId && ws.supplier_id === shareTargetSupplierId);
+    const others = partnerWorkspaces
+      .filter((ws) => !(shareTargetSupplierId && ws.supplier_id === shareTargetSupplierId))
+      .sort((a, b) => (a.supplier_name || '').localeCompare(b.supplier_name || ''));
+    return [...recommended, ...others];
+  }, [partnerWorkspaces, shareTargetSupplierId]);
+
+  // Abrir modal de compartilhamento com parceiro, carregando workspaces ativos sob demanda
+  const openShareModal = async (docId: string) => {
+    setShareDocId(docId);
+    setSelectedShareWorkspaceId('');
+    setShareModalOpen(true);
+    if (partnerWorkspaces.length === 0 && activeOrganizationId) {
+      try {
+        const wss = await partnerService.listWorkspaces(activeOrganizationId);
+        setPartnerWorkspaces(wss.filter((w) => w.is_active));
+      } catch (err) {
+        console.error('[OpuraDocsModule] Erro ao carregar parceiros habilitados:', err);
+      }
+    }
+  };
+
+  // Compartilhar o documento selecionado com o workspace de parceiro escolhido
+  const handleShareWithPartner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shareDocId || !selectedShareWorkspaceId) return;
+    setSharingSubmitting(true);
+    try {
+      await partnerService.shareDocument(
+        selectedShareWorkspaceId,
+        shareDocId,
+        currentProfile?.email || 'sistema'
+      );
+      setShareModalOpen(false);
+      setShareDocId(null);
+    } catch (err: any) {
+      if (err?.code === '23505' || /duplicate key/i.test(err?.message || '')) {
+        alert('Este documento já está compartilhado com este parceiro.');
+      } else {
+        alert(err.message || 'Erro ao compartilhar documento com o parceiro.');
+      }
+    } finally {
+      setSharingSubmitting(false);
     }
   };
 
@@ -1699,6 +1761,15 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           >
                             <Settings className="w-4 h-4" />
                           </button>
+                          {isOrgAdmin && (
+                            <button
+                              onClick={() => openShareModal(doc.id)}
+                              title="Compartilhar com Parceiro"
+                              className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-orange-600 hover:border-orange-100 rounded-xl transition-all shadow-sm active:scale-95"
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </button>
+                          )}
                           <button
                             onClick={async (e) => {
                               const btn = e.currentTarget;
@@ -2374,6 +2445,76 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   className="px-5 py-2.5 bg-blue-600 text-white font-black text-button uppercase tracking-widest rounded-xl hover:bg-blue-700 transition-all shadow-md"
                 >
                   Confirmar Mudança
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Compartilhamento com Portal do Parceiro */}
+      {shareModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md border border-slate-100 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <Share2 className="w-5 h-5 text-orange-500" />
+                <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">Compartilhar com Parceiro</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShareModalOpen(false);
+                  setShareDocId(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleShareWithPartner} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Parceiro / Fornecedor Habilitado</label>
+                <select
+                  required
+                  value={selectedShareWorkspaceId}
+                  onChange={(e) => setSelectedShareWorkspaceId(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                >
+                  <option value="">Selecione um parceiro...</option>
+                  {sortedShareWorkspaces.map((ws) => (
+                    <option key={ws.id} value={ws.id}>
+                      {ws.supplier_id === shareTargetSupplierId ? '★ ' : ''}{ws.supplier_name}
+                    </option>
+                  ))}
+                </select>
+                {shareTargetSupplierId && sortedShareWorkspaces.some((ws) => ws.supplier_id === shareTargetSupplierId) && (
+                  <p className="text-xs text-slate-400 pt-1">★ = fornecedor já vinculado a este documento.</p>
+                )}
+                {partnerWorkspaces.length === 0 && (
+                  <p className="text-xs text-slate-400 pt-1">
+                    Nenhum parceiro habilitado. Ative um workspace em Suprimentos → Parceiros.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShareModalOpen(false);
+                    setShareDocId(null);
+                  }}
+                  className="px-4 py-2.5 border border-slate-200 text-slate-500 font-bold text-button uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={sharingSubmitting || !selectedShareWorkspaceId}
+                  className="px-5 py-2.5 bg-orange-500 text-white font-black text-button uppercase tracking-widest rounded-xl hover:bg-orange-600 transition-all shadow-md disabled:opacity-50"
+                >
+                  {sharingSubmitting ? 'Compartilhando...' : 'Compartilhar'}
                 </button>
               </div>
             </form>

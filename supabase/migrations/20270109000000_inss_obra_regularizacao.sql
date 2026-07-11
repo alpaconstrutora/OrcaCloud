@@ -1,14 +1,24 @@
--- Create enum types for social security module
-CREATE TYPE cno_status AS ENUM ('nao_cadastrado', 'cadastrado', 'pendente_revisao', 'encerrado');
-CREATE TYPE regularization_method AS ENUM ('afericao_indireta', 'contabilidade_regular');
-CREATE TYPE sero_status AS ENUM ('nao_iniciado', 'em_preparacao', 'aferido', 'dctfweb_enviada', 'darf_emitido', 'pago', 'certidao_emitida');
+-- Create enum types for social security module (idempotente: reexecução segura se já existirem)
+DO $$ BEGIN
+  CREATE TYPE cno_status AS ENUM ('nao_cadastrado', 'cadastrado', 'pendente_revisao', 'encerrado');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE regularization_method AS ENUM ('afericao_indireta', 'contabilidade_regular');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE sero_status AS ENUM ('nao_iniciado', 'em_preparacao', 'aferido', 'dctfweb_enviada', 'darf_emitido', 'pago', 'certidao_emitida');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Main social security record per project/obra
 CREATE TABLE IF NOT EXISTS construction_social_security_records (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
-    obra_id UUID REFERENCES obras(id) ON DELETE CASCADE,
     cno_number VARCHAR(14),
     cno_status cno_status DEFAULT 'nao_cadastrado',
     cno_registration_date DATE,
@@ -100,42 +110,60 @@ ALTER TABLE construction_social_security_simulations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE construction_social_security_dctfweb ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies (assuming multi-tenant based on company_id in main record)
+DROP POLICY IF EXISTS "Users can view records in their company" ON construction_social_security_records;
 CREATE POLICY "Users can view records in their company" ON construction_social_security_records
-    FOR SELECT USING (company_id = auth.company_id());
+    FOR SELECT USING (EXISTS (SELECT 1 FROM companies c WHERE c.id = company_id AND public.is_org_member(c.org_id)));
+DROP POLICY IF EXISTS "Users can insert records in their company" ON construction_social_security_records;
 CREATE POLICY "Users can insert records in their company" ON construction_social_security_records
-    FOR INSERT WITH CHECK (company_id = auth.company_id());
+    FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM companies c WHERE c.id = company_id AND public.is_org_member(c.org_id)));
+DROP POLICY IF EXISTS "Users can update records in their company" ON construction_social_security_records;
 CREATE POLICY "Users can update records in their company" ON construction_social_security_records
-    FOR UPDATE USING (company_id = auth.company_id());
+    FOR UPDATE USING (EXISTS (SELECT 1 FROM companies c WHERE c.id = company_id AND public.is_org_member(c.org_id)));
 
 -- Cascading RLS via record_id
+DROP POLICY IF EXISTS "Users can view docs in their company" ON construction_social_security_documents;
 CREATE POLICY "Users can view docs in their company" ON construction_social_security_documents
-    FOR SELECT USING (EXISTS (SELECT 1 FROM construction_social_security_records r WHERE r.id = record_id AND r.company_id = auth.company_id()));
+    FOR SELECT USING (EXISTS (SELECT 1 FROM construction_social_security_records r JOIN companies c ON r.company_id = c.id WHERE r.id = record_id AND public.is_org_member(c.org_id)));
+DROP POLICY IF EXISTS "Users can insert docs in their company" ON construction_social_security_documents;
 CREATE POLICY "Users can insert docs in their company" ON construction_social_security_documents
-    FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM construction_social_security_records r WHERE r.id = record_id AND r.company_id = auth.company_id()));
+    FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM construction_social_security_records r JOIN companies c ON r.company_id = c.id WHERE r.id = record_id AND public.is_org_member(c.org_id)));
+DROP POLICY IF EXISTS "Users can update docs in their company" ON construction_social_security_documents;
 CREATE POLICY "Users can update docs in their company" ON construction_social_security_documents
-    FOR UPDATE USING (EXISTS (SELECT 1 FROM construction_social_security_records r WHERE r.id = record_id AND r.company_id = auth.company_id()));
+    FOR UPDATE USING (EXISTS (SELECT 1 FROM construction_social_security_records r JOIN companies c ON r.company_id = c.id WHERE r.id = record_id AND public.is_org_member(c.org_id)));
 
+DROP POLICY IF EXISTS "Users can view credits in their company" ON construction_social_security_credits;
 CREATE POLICY "Users can view credits in their company" ON construction_social_security_credits
-    FOR SELECT USING (EXISTS (SELECT 1 FROM construction_social_security_records r WHERE r.id = record_id AND r.company_id = auth.company_id()));
+    FOR SELECT USING (EXISTS (SELECT 1 FROM construction_social_security_records r JOIN companies c ON r.company_id = c.id WHERE r.id = record_id AND public.is_org_member(c.org_id)));
+DROP POLICY IF EXISTS "Users can insert credits in their company" ON construction_social_security_credits;
 CREATE POLICY "Users can insert credits in their company" ON construction_social_security_credits
-    FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM construction_social_security_records r WHERE r.id = record_id AND r.company_id = auth.company_id()));
+    FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM construction_social_security_records r JOIN companies c ON r.company_id = c.id WHERE r.id = record_id AND public.is_org_member(c.org_id)));
+DROP POLICY IF EXISTS "Users can update credits in their company" ON construction_social_security_credits;
 CREATE POLICY "Users can update credits in their company" ON construction_social_security_credits
-    FOR UPDATE USING (EXISTS (SELECT 1 FROM construction_social_security_records r WHERE r.id = record_id AND r.company_id = auth.company_id()));
+    FOR UPDATE USING (EXISTS (SELECT 1 FROM construction_social_security_records r JOIN companies c ON r.company_id = c.id WHERE r.id = record_id AND public.is_org_member(c.org_id)));
 
+DROP POLICY IF EXISTS "Users can view simulations in their company" ON construction_social_security_simulations;
 CREATE POLICY "Users can view simulations in their company" ON construction_social_security_simulations
-    FOR SELECT USING (EXISTS (SELECT 1 FROM construction_social_security_records r WHERE r.id = record_id AND r.company_id = auth.company_id()));
+    FOR SELECT USING (EXISTS (SELECT 1 FROM construction_social_security_records r JOIN companies c ON r.company_id = c.id WHERE r.id = record_id AND public.is_org_member(c.org_id)));
+DROP POLICY IF EXISTS "Users can insert simulations in their company" ON construction_social_security_simulations;
 CREATE POLICY "Users can insert simulations in their company" ON construction_social_security_simulations
-    FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM construction_social_security_records r WHERE r.id = record_id AND r.company_id = auth.company_id()));
+    FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM construction_social_security_records r JOIN companies c ON r.company_id = c.id WHERE r.id = record_id AND public.is_org_member(c.org_id)));
 
+DROP POLICY IF EXISTS "Users can view dctfweb in their company" ON construction_social_security_dctfweb;
 CREATE POLICY "Users can view dctfweb in their company" ON construction_social_security_dctfweb
-    FOR SELECT USING (EXISTS (SELECT 1 FROM construction_social_security_records r WHERE r.id = record_id AND r.company_id = auth.company_id()));
+    FOR SELECT USING (EXISTS (SELECT 1 FROM construction_social_security_records r JOIN companies c ON r.company_id = c.id WHERE r.id = record_id AND public.is_org_member(c.org_id)));
+DROP POLICY IF EXISTS "Users can insert dctfweb in their company" ON construction_social_security_dctfweb;
 CREATE POLICY "Users can insert dctfweb in their company" ON construction_social_security_dctfweb
-    FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM construction_social_security_records r WHERE r.id = record_id AND r.company_id = auth.company_id()));
+    FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM construction_social_security_records r JOIN companies c ON r.company_id = c.id WHERE r.id = record_id AND public.is_org_member(c.org_id)));
+DROP POLICY IF EXISTS "Users can update dctfweb in their company" ON construction_social_security_dctfweb;
 CREATE POLICY "Users can update dctfweb in their company" ON construction_social_security_dctfweb
-    FOR UPDATE USING (EXISTS (SELECT 1 FROM construction_social_security_records r WHERE r.id = record_id AND r.company_id = auth.company_id()));
+    FOR UPDATE USING (EXISTS (SELECT 1 FROM construction_social_security_records r JOIN companies c ON r.company_id = c.id WHERE r.id = record_id AND public.is_org_member(c.org_id)));
 
 -- Triggers for updated_at
+DROP TRIGGER IF EXISTS update_construction_social_security_records_updated_at ON construction_social_security_records;
 CREATE TRIGGER update_construction_social_security_records_updated_at BEFORE UPDATE ON construction_social_security_records FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_construction_social_security_documents_updated_at ON construction_social_security_documents;
 CREATE TRIGGER update_construction_social_security_documents_updated_at BEFORE UPDATE ON construction_social_security_documents FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_construction_social_security_credits_updated_at ON construction_social_security_credits;
 CREATE TRIGGER update_construction_social_security_credits_updated_at BEFORE UPDATE ON construction_social_security_credits FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_construction_social_security_dctfweb_updated_at ON construction_social_security_dctfweb;
 CREATE TRIGGER update_construction_social_security_dctfweb_updated_at BEFORE UPDATE ON construction_social_security_dctfweb FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

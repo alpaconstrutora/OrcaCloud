@@ -62,6 +62,7 @@ export interface PartnerRequest {
   due_date?: string;
   assigned_to_email?: string;
   created_by_email: string;
+  attachment_paths?: string[];
   created_at: string;
   updated_at: string;
 }

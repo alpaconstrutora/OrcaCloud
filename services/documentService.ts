@@ -1201,7 +1201,7 @@ export const documentService = {
     organizationId: string,
     documentId: string,
     email: string,
-    action: 'criado' | 'versao_enviada' | 'download' | 'visualizado' | 'movido_pasta' | 'status_alterado',
+    action: 'criado' | 'versao_enviada' | 'download' | 'visualizado' | 'movido_pasta' | 'status_alterado' | 'compartilhado_parceiro',
     details?: string
   ): Promise<void> {
     const { error } = await supabase

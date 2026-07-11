@@ -419,21 +419,21 @@ const PlanningList: React.FC<PlanningListProps> = ({
                                                         </button>
                                                         <button
                                                             onClick={() => onDuplicateProject(project.id)}
-                                                            className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                                            className="p-2.5 bg-white border border-amber-50 text-amber-600 hover:bg-amber-50 rounded-xl transition-all shadow-sm active:scale-95"
                                                             title="Duplicar Planejamento"
                                                         >
                                                             <Copy className="w-4 h-4" />
                                                         </button>
                                                         <button
                                                             onClick={() => onEditProject(project.id)}
-                                                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                                            className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
                                                             title="Configurações"
                                                         >
                                                             <Settings className="w-4 h-4" />
                                                         </button>
                                                         <button
                                                             onClick={() => onDeleteProject(project)}
-                                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                            className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95"
                                                             title="Excluir Planejamento"
                                                         >
                                                             <Trash2 className="w-4 h-4" />
@@ -527,21 +527,21 @@ const PlanningList: React.FC<PlanningListProps> = ({
                                     <div className="flex items-center gap-1">
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onDuplicateProject(project.id); }}
-                                            className="p-2 text-amber-600 hover:bg-amber-100 rounded-lg transition-colors"
+                                            className="p-2.5 bg-white border border-amber-50 text-amber-600 hover:bg-amber-50 rounded-xl transition-all shadow-sm active:scale-95"
                                             title="Duplicar"
                                         >
                                             <Copy className="w-4 h-4" />
                                         </button>
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }}
-                                            className="p-2 text-gray-500 hover:text-blue-600 hover:bg-white rounded-lg transition-all"
+                                            className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
                                             title="Configurações"
                                         >
                                             <Settings className="w-4 h-4" />
                                         </button>
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onDeleteProject(project); }}
-                                            className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all ml-auto"
+                                            className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95 ml-auto"
                                             title="Excluir"
                                         >
                                             <Trash2 className="w-4 h-4" />

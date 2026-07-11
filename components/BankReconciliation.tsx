@@ -4496,7 +4496,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 <td className="px-6 py-2.5 text-right">
                                                                     <button
                                                                         onClick={() => handleDeleteBankTransactions([tx.id])}
-                                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                                        className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95"
                                                                         title="Excluir extrato"
                                                                     >
                                                                         <Trash2 className="w-4 h-4" />

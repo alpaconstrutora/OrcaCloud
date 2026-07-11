@@ -79,7 +79,7 @@ suficiente).
 - [ ] §7.1 Campos editáveis inline dentro de TD
 - [ ] §7.2 Altura da linha — `py-2.5` em toda `<td>`, sem exceção não documentada
 - [ ] §8 Status Badge
-- [ ] §9 Coluna de Ações (+ §9.1 ação dominante via clique na linha, se aplicável)
+- [ ] §9 Coluna de Ações (+ §9.1 ação dominante via clique na linha, se aplicável; + §9.2 estilo do botão-ícone — `bg-white border shadow-sm rounded-xl`, não o flat antigo)
 - [ ] §10 Barra de ações em lote (+ §10.1 seleção de intervalo Shift+clique) — decisão explícita se a tela tem seleção múltipla
 - [ ] §11 Loading State
 - [ ] §12 Empty State
@@ -806,7 +806,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 ```tsx
 {tableColumns.visibleColumns.includes('actions') && (
   <td className="px-6 py-2.5 text-right">
-    <div className="flex items-center justify-end gap-3" onClick={(e) => e.stopPropagation()}>
+    <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
 
       {/* Ação primária — botão de texto azul */}
       <button
@@ -816,11 +816,11 @@ const StatusBadge = ({ status }: { status: string }) => {
         Ver Detalhes
       </button>
 
-      {/* Ação secundária — apenas ícone */}
+      {/* Ação secundária — apenas ícone (§9.2: estilo de botão-ícone padrão) */}
       <button
         onClick={(e) => { e.stopPropagation(); onEdit(item.id); }}
-        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors ml-1"
         title="Editar"
+        className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
       >
         <Pencil className="w-4 h-4" />
       </button>
@@ -867,6 +867,65 @@ propósito para não ser acionada sem querer:
 > ❌ Não deixe um botão de texto "Editar" fazendo a mesma coisa que o clique
 > na linha já faz — são dois controles para uma ação, não dois controles para
 > duas ações. Extraído de `components/SupplierList.tsx`.
+
+### 9.2 Estilo do botão-ícone — flat sem borda está deprecado
+
+**Padrão único de botão-ícone de ação** (secundária, fora do texto azul de "Ver
+Detalhes" e fora do `InlineDisclosureMenu`, que é componente compartilhado e
+mantém seu próprio estilo): `bg-white` + borda `border-slate-200` + `shadow-sm`
++ `rounded-xl` + `active:scale-95`, cor neutra `text-slate-600` em repouso,
+mudando para a cor de destaque só no hover (`hover:text-blue-600
+hover:border-blue-100` para ação neutra/informativa; `hover:text-orange-600
+hover:border-orange-100` para uma ação de "atenção" como Compartilhar; para
+ação destrutiva ver variante abaixo). Extraído de `components/OpuraDocsModule.tsx`
+(aba Projetos de Gestão de Documentos), adotado como padrão em 2026-07-10.
+
+```tsx
+{/* Botão-ícone neutro — padrão */}
+<button
+  onClick={(e) => { e.stopPropagation(); onAction(item.id); }}
+  title="Descrição da ação"
+  className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
+>
+  <IconName className="w-4 h-4" />
+</button>
+
+{/* Variante com texto (quando o ícone sozinho não é auto-explicativo) */}
+<button
+  onClick={(e) => { e.stopPropagation(); onAction(item.id); }}
+  title="Descrição da ação"
+  className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm text-sm font-bold active:scale-95"
+>
+  <IconName className="w-4 h-4" />
+  Rótulo
+</button>
+
+{/* Variante destrutiva */}
+<button
+  onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+  title="Excluir"
+  className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95"
+>
+  <Trash2 className="w-4 h-4" />
+</button>
+```
+
+> ❌ **Deprecado:** o estilo flat sem borda/sombra (`text-blue-600 hover:bg-blue-50
+> rounded-lg`, sem `bg-white`/`border`/`shadow-sm`) que ainda aparece no snippet
+> da seção 9 acima para a ação secundária — era o padrão antigo, mantido ali só
+> como histórico da estrutura (texto+ícone+kebab), não como referência visual.
+> Ao aplicar/corrigir uma tela, use sempre o estilo desta seção para qualquer
+> botão-ícone solto na coluna de ações.
+> ℹ️ Esta seção define só o **estilo visual** do botão-ícone. A **estrutura**
+> continua sendo a da seção 9 (texto azul para a ação dominante, ícones soltos
+> só para 1-2 ações secundárias de fato relevantes, `InlineDisclosureMenu` para
+> o resto) — não é para transformar toda ação terciária em botão solto na linha
+> só porque o estilo ficou mais bonito. `OpuraDocsModule.tsx` hoje expõe até 6
+> botões soltos por linha sem kebab (por não ter refeito a estrutura ainda) —
+> isso não é o padrão a copiar, é o próximo item de correção da própria tela.
+> ℹ️ `gap-2` (não `gap-3`) entre os botões da coluna de ações — o padding
+> próprio do botão (`p-2.5`/borda) já dá respiro suficiente; `gap-3` fica
+> espaçado demais com o novo estilo.
 
 ---
 

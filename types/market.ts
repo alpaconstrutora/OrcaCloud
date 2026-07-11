@@ -95,6 +95,7 @@ export interface OpuraMarketTerrainStudy {
   estimatedAbsorptionVelocity: number | null;
   riskScore: number | null;
   createdBy: string;
+  polygonGeom?: [number, number][] | null;
   createdAt: string;
   updatedAt: string;
 }

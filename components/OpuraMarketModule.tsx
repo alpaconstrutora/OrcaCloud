@@ -98,6 +98,11 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   const [activeLayer, setActiveLayer] = React.useState<'preco' | 'saturacao' | 'concorrencia' | 'oportunidade'>('preco');
   const [terrainPin, setTerrainPin] = React.useState<{ lat: number; lng: number } | null>(null);
   
+  // Estados para desenho de polígono de terreno
+  const [isDrawingPolygon, setIsDrawingPolygon] = React.useState(false);
+  const [drawingPoints, setDrawingPoints] = React.useState<[number, number][]>([]);
+  const [polygonPoints, setPolygonPoints] = React.useState<[number, number][] | null>(null);
+  
   // Estados para simulação de Análise de Terreno
   const [studyName, setStudyName] = React.useState('');
   const [terrainArea, setTerrainArea] = React.useState('1500');
@@ -165,6 +170,74 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
     }
   }, [organizationId]);
 
+  const startDrawing = () => {
+    setIsDrawingPolygon(true);
+    setDrawingPoints([]);
+    setPolygonPoints(null);
+    setTerrainPin(null);
+    setAnalysisResult(null);
+  };
+
+  const cancelDrawing = () => {
+    setIsDrawingPolygon(false);
+    setDrawingPoints([]);
+  };
+
+  const completeDrawing = async () => {
+    if (drawingPoints.length < 3) {
+      alert('Desenhe pelo menos 3 pontos no mapa para formar o polígono do terreno.');
+      return;
+    }
+
+    try {
+      setAnalyzing(true);
+      
+      // Converte a lista de pontos [lat, lng] (Leaflet) para GeoJSON Polygon [[[lng, lat], [lng, lat], ...]]
+      // PostGIS e a RPC exigem o formato [lng, lat]
+      const geojsonCoords = drawingPoints.map(p => [p[1], p[0]]);
+      // Fecha o polígono no GeoJSON (o primeiro e o último elemento devem ser idênticos)
+      geojsonCoords.push([drawingPoints[0][1], drawingPoints[0][0]]);
+
+      const geojson = {
+        type: "Polygon",
+        coordinates: [geojsonCoords]
+      };
+
+      console.log('Enviando GeoJSON para a RPC de cálculo de área:', geojson);
+      const calculatedArea = await opuraMarketService.calculatePolygonArea(geojson);
+      
+      setTerrainArea(calculatedArea.toString());
+      setPolygonPoints(drawingPoints);
+
+      // Calcula o centroide médio do polígono para servir como o pino de análise (terrainPin)
+      let totalLat = 0;
+      let totalLng = 0;
+      drawingPoints.forEach(p => {
+        totalLat += p[0];
+        totalLng += p[1];
+      });
+      const centerLat = totalLat / drawingPoints.length;
+      const centerLng = totalLng / drawingPoints.length;
+      setTerrainPin({ lat: centerLat, lng: centerLng });
+      
+      // Limpa estado de desenho
+      setIsDrawingPolygon(false);
+      setDrawingPoints([]);
+
+      setStudyName(`Estudo Terreno - Polígono ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
+
+      // Centraliza o mapa no centroide
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.setView([centerLat, centerLng], 16);
+      }
+    } catch (err: any) {
+      console.error('Erro ao calcular a área do polígono:', err);
+      alert('Não foi possível calcular a área do polígono: ' + err.message);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   React.useEffect(() => {
     loadInitialData();
     loadSavedStudies();
@@ -193,6 +266,17 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
     loadHistory();
   }, [selectedNeighborhood]);
 
+  const isDrawingPolygonRef = React.useRef(isDrawingPolygon);
+  const drawingPointsRef = React.useRef(drawingPoints);
+
+  React.useEffect(() => {
+    isDrawingPolygonRef.current = isDrawingPolygon;
+  }, [isDrawingPolygon]);
+
+  React.useEffect(() => {
+    drawingPointsRef.current = drawingPoints;
+  }, [drawingPoints]);
+
   // Inicializar o mapa Leaflet quando o loading for concluído e o contêiner estiver no DOM
   React.useEffect(() => {
     if (loading || !mapContainerRef.current || mapInstanceRef.current) return;
@@ -217,9 +301,15 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
     const markersLayer = L.featureGroup().addTo(map);
     markersLayerRef.current = markersLayer;
 
-    // Evento de clique no mapa para selecionar o terreno
+    // Evento de clique no mapa para selecionar o terreno ou desenhar polígono
     map.on('click', (e: L.LeafletMouseEvent) => {
       const { lat, lng } = e.latlng;
+
+      if (isDrawingPolygonRef.current) {
+        setDrawingPoints(prev => [...prev, [lat, lng]]);
+        return;
+      }
+
       setTerrainPin({ lat, lng });
       setAnalysisResult(null); // Limpa resultados anteriores
       setStudyName(`Estudo Terreno - ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`);
@@ -327,7 +417,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       });
     }
 
-    // 3. Desenhar o Pino do Terreno selecionado
+    // 3. Desenhar o Pino do Terreno selecionado (ou centroide)
     if (terrainPin) {
       const pinIcon = L.divIcon({
         html: `<div class="relative flex items-center justify-center">
@@ -351,7 +441,50 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         dashArray: '5, 5'
       }).addTo(markersLayer);
     }
-  }, [mapInstance, neighborhoods, listings, activeLayer, terrainPin, radiusMeters]);
+
+    // 4. Desenhar polígono em modo de desenho
+    if (isDrawingPolygon && drawingPoints.length > 0) {
+      drawingPoints.forEach((p, idx) => {
+        L.circleMarker(p, {
+          radius: 5,
+          color: '#4F46E5',
+          fillColor: '#FFFFFF',
+          fillOpacity: 1,
+          weight: 2
+        })
+        .bindTooltip(`Vértice ${idx + 1}`, { permanent: false })
+        .addTo(markersLayer);
+      });
+
+      if (drawingPoints.length >= 3) {
+        L.polygon(drawingPoints, {
+          color: '#4F46E5',
+          fillColor: '#6366F1',
+          fillOpacity: 0.3,
+          weight: 2,
+          dashArray: '3, 3'
+        }).addTo(markersLayer);
+      } else if (drawingPoints.length === 2) {
+        L.polyline(drawingPoints, {
+          color: '#4F46E5',
+          weight: 2,
+          dashArray: '3, 3'
+        }).addTo(markersLayer);
+      }
+    }
+
+    // 5. Desenhar o polígono definitivo do lote selecionado
+    if (!isDrawingPolygon && polygonPoints && polygonPoints.length >= 3) {
+      L.polygon(polygonPoints, {
+        color: '#1E3A8A',
+        fillColor: '#3B82F6',
+        fillOpacity: 0.25,
+        weight: 2.5
+      })
+      .bindTooltip('Área do Terreno Desenhorada', { direction: 'top' })
+      .addTo(markersLayer);
+    }
+  }, [mapInstance, neighborhoods, listings, activeLayer, terrainPin, radiusMeters, isDrawingPolygon, drawingPoints, polygonPoints]);
 
   // Executar a análise de raio PostGIS
   const handleAnalyzeTerrain = async () => {
@@ -515,7 +648,8 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         estimatedVgv: analysisResult.estimatedVgv,
         estimatedAbsorptionVelocity: analysisResult.estimatedAbsorptionVelocity,
         riskScore: analysisResult.riskScore,
-        createdBy: userEmail
+        createdBy: userEmail,
+        polygonGeom: polygonPoints ? polygonPoints.map(p => [p[1], p[0]] as [number, number]) : null
       });
 
       alert('Estudo territorial salvo com sucesso na sua organização!');
@@ -835,6 +969,12 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
     setTerrainArea(study.terrainArea.toString());
     setAnalysisRadius(study.analysisRadiusMeters.toString());
 
+    if (study.polygonGeom && study.polygonGeom.length >= 3) {
+      setPolygonPoints(study.polygonGeom.map(p => [p[1], p[0]] as [number, number]));
+    } else {
+      setPolygonPoints(null);
+    }
+
     // Centraliza o mapa nas coordenadas do estudo salvo
     if (mapInstanceRef.current) {
       mapInstanceRef.current.setView([study.latitude, study.longitude], 15);
@@ -1124,17 +1264,54 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
               {activeTab === 'analise' ? (
                 <div className="space-y-4">
                   {/* Botão de importação de concorrência */}
-                  <button
-                    onClick={() => setIsImportModalOpen(true)}
-                    className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-100 rounded-xl text-button font-black text-emerald-700 uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
-                  >
-                    📥 Importar Planilha de Concorrência
-                  </button>
+                  {!isDrawingPolygon && (
+                    <button
+                      onClick={() => setIsImportModalOpen(true)}
+                      className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-100 rounded-xl text-button font-black text-emerald-700 uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      📥 Importar Planilha de Concorrência
+                    </button>
+                  )}
 
-                  {terrainPin ? (
+                  {isDrawingPolygon ? (
+                    <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl text-xs space-y-3 animate-fadeIn">
+                      <span className="block font-black text-indigo-800 uppercase text-[9px] tracking-wider">📏 Modo de Desenho Ativo</span>
+                      <p className="text-slate-600 font-semibold leading-normal text-[11px]">
+                        Clique em múltiplos pontos no mapa territorial para marcar os limites (vértices) do seu terreno. 
+                      </p>
+                      <div className="text-[10px] text-slate-500 font-bold bg-white p-3 rounded-xl border border-slate-100 space-y-1">
+                        <div>Vértices marcados: <span className="font-extrabold text-indigo-600">{drawingPoints.length}</span></div>
+                        {drawingPoints.length < 3 && <div className="text-rose-500 font-extrabold">⚠️ Mínimo de 3 pontos para formar a área.</div>}
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <button
+                          onClick={completeDrawing}
+                          disabled={drawingPoints.length < 3}
+                          className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 text-center font-bold text-[10px]"
+                        >
+                          Concluir
+                        </button>
+                        <button
+                          onClick={cancelDrawing}
+                          className="flex-1 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 text-center font-bold text-[10px]"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : terrainPin ? (
                     <>
                       <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl text-xs space-y-2">
-                        <span className="block font-black text-blue-800 uppercase text-[9px] tracking-wider">Terreno Selecionado (Georreferenciado)</span>
+                        <div className="flex justify-between items-center">
+                          <span className="block font-black text-blue-800 uppercase text-[9px] tracking-wider">Terreno Selecionado (Georreferenciado)</span>
+                          <button
+                            onClick={startDrawing}
+                            className="text-[9px] font-black uppercase tracking-wider text-indigo-600 hover:text-indigo-800 underline bg-transparent border-0 cursor-pointer"
+                          >
+                            📐 Redesenhar Lote
+                          </button>
+                        </div>
                         <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 font-semibold">
                           <span>Lat: {terrainPin.lat.toFixed(6)}</span>
                           <span>Lng: {terrainPin.lng.toFixed(6)}</span>
@@ -1270,9 +1447,17 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                       )}
                     </>
                   ) : (
-                    <div className="flex flex-col items-center justify-center py-16 text-slate-400 text-xs font-semibold text-center space-y-2">
-                      <span>🗺️</span>
-                      <span>Selecione um ponto no mapa territorial para iniciar a análise espacial.</span>
+                    <div className="space-y-3">
+                      <button
+                        onClick={startDrawing}
+                        className="w-full py-3 border border-indigo-200 bg-indigo-50/30 hover:bg-indigo-50 text-indigo-700 rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2 font-bold"
+                      >
+                        📐 Desenhar Lote no Mapa
+                      </button>
+                      <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-xs font-semibold text-center space-y-2">
+                        <span>🗺️</span>
+                        <span>Ou clique diretamente em qualquer ponto do mapa para iniciar a análise por ponto.</span>
+                      </div>
                     </div>
                   )}
                 </div>

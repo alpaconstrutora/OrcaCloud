@@ -10,6 +10,18 @@ import {
   OpuraMarketCityConfig
 } from '../types';
 
+function getPolygonWkt(coords: [number, number][]): string {
+  if (!coords || coords.length < 3) return '';
+  const closedCoords = [...coords];
+  const first = closedCoords[0];
+  const last = closedCoords[closedCoords.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) {
+    closedCoords.push(first);
+  }
+  const pointsStr = closedCoords.map(c => `${c[0]} ${c[1]}`).join(', ');
+  return `SRID=4326;POLYGON((${pointsStr}))`;
+}
+
 export const opuraMarketService = {
   // Cidades
   async listCities(): Promise<OpuraMarketCity[]> {
@@ -242,6 +254,7 @@ export const opuraMarketService = {
       estimatedAbsorptionVelocity: s.estimated_absorption_velocity ? Number(s.estimated_absorption_velocity) : null,
       riskScore: s.risk_score ? Number(s.risk_score) : null,
       createdBy: s.created_by,
+      polygonGeom: s.coefficients_zone?.polygonCoords || null,
       createdAt: s.created_at,
       updatedAt: s.updated_at
     }));
@@ -258,11 +271,15 @@ export const opuraMarketService = {
       name: study.name,
       address: study.address,
       terrain_area: study.terrainArea,
-      coefficients_zone: study.coefficientsZone,
+      coefficients_zone: {
+        ...(study.coefficientsZone || {}),
+        polygonCoords: study.polygonGeom || null
+      },
       analysis_radius_meters: study.analysisRadiusMeters,
       latitude: study.latitude,
       longitude: study.longitude,
       geom: `SRID=4326;POINT(${study.longitude} ${study.latitude})`,
+      polygon_geom: study.polygonGeom ? getPolygonWkt(study.polygonGeom) : null,
       recommended_product_mix: study.recommendedProductMix,
       recommended_standard: study.recommendedStandard,
       estimated_vgv: study.estimatedVgv,
@@ -298,6 +315,7 @@ export const opuraMarketService = {
       estimatedAbsorptionVelocity: data.estimated_absorption_velocity ? Number(data.estimated_absorption_velocity) : null,
       riskScore: data.risk_score ? Number(data.risk_score) : null,
       createdBy: data.created_by,
+      polygonGeom: data.coefficients_zone?.polygonCoords || null,
       createdAt: data.created_at,
       updatedAt: data.updated_at
     };
@@ -343,6 +361,20 @@ export const opuraMarketService = {
       console.error('Erro ao geocodificar endereço:', err);
       return null;
     }
+  },
+
+  // Calcula a área geodésica exata do polígono usando a RPC do Supabase
+  async calculatePolygonArea(geojson: any): Promise<number> {
+    const { data, error } = await supabase.rpc('calculate_polygon_area', {
+      p_polygon_geojson: geojson
+    });
+
+    if (error) {
+      console.error('Error calling calculate_polygon_area RPC:', error);
+      throw new Error(`Falha ao calcular a área do polígono: ${error.message}`);
+    }
+
+    return Number(data || 0);
   },
 
   // Importação em lote de anúncios

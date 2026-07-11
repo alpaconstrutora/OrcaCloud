@@ -280,6 +280,17 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     }
   };
 
+  // Abrir um documento GED compartilhado (bucket privado, precisa de link assinado)
+  const handleViewSharedDocument = async (storagePath: string) => {
+    try {
+      const url = await partnerService.getDocumentDownloadUrl(storagePath);
+      window.open(url, '_blank', 'noreferrer');
+    } catch (err) {
+      console.error('Erro ao abrir documento:', err);
+      alert('Erro ao gerar link de acesso ao documento.');
+    }
+  };
+
   // Abrir modal de promoção do anexo a documento formal do GED
   const openPromoteModal = (path: string) => {
     const rawName = path.split('/').pop()?.replace(/^\d+_/, '') || 'Documento do Parceiro';
@@ -498,15 +509,14 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                       <div className="flex items-center justify-between text-xs text-gray-400 border-t border-gray-100 pt-3 mt-1">
                         <span>Compartilhado: {new Date(sd.shared_at).toLocaleDateString()}</span>
                         {sd.document?.active_version?.storage_path && (
-                          <a
-                            href={`${supabase.storage.from('opura-docs').getPublicUrl(sd.document.active_version.storage_path).data.publicUrl}`}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => handleViewSharedDocument(sd.document!.active_version!.storage_path)}
                             className="flex items-center gap-0.5 text-orange-500 hover:text-orange-600 font-semibold"
                           >
                             <ExternalLink className="w-3 h-3" />
                             <span>Ver</span>
-                          </a>
+                          </button>
                         )}
                       </div>
                     </div>

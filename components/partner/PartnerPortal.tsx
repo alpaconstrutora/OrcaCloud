@@ -289,6 +289,17 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
     }
   };
 
+  // Baixar um documento GED compartilhado (bucket privado, precisa de link assinado)
+  const handleDownloadSharedDocument = async (storagePath: string) => {
+    try {
+      const url = await partnerService.getDocumentDownloadUrl(storagePath);
+      window.open(url, '_blank', 'noreferrer');
+    } catch (err) {
+      console.error('Erro ao baixar documento:', err);
+      alert('Erro ao gerar link de acesso ao documento.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#141414] text-white">
@@ -591,15 +602,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                               <div className="flex items-center justify-between text-xs text-gray-500 border-t border-white/5 pt-3 mt-1">
                                 <span>Compartilhado em: {new Date(sd.shared_at).toLocaleDateString()}</span>
                                 {sd.document?.active_version?.storage_path && (
-                                  <a
-                                    href={`${supabase.storage.from('opura-docs').getPublicUrl(sd.document.active_version.storage_path).data.publicUrl}`}
-                                    target="_blank"
-                                    rel="noreferrer"
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadSharedDocument(sd.document!.active_version!.storage_path)}
                                     className="flex items-center gap-1 text-orange-400 hover:text-orange-300 font-semibold"
                                   >
                                     <Download className="w-3.5 h-3.5" />
                                     <span>Baixar</span>
-                                  </a>
+                                  </button>
                                 )}
                               </div>
                             </div>

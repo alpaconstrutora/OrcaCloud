@@ -413,6 +413,12 @@ export const partnerService = {
     }
   },
 
+  // Link assinado para abrir/baixar um documento compartilhado — o bucket 'opura-docs' é privado,
+  // então getPublicUrl() nunca funciona aqui (retorna 404 "Bucket not found" ao navegar até a URL)
+  async getDocumentDownloadUrl(storagePath: string): Promise<string> {
+    return documentService.generateDownloadUrl(storagePath);
+  },
+
   // --- Anexos de Solicitações (Onda 5: fluxo reverso — parceiro envia arquivo) ---
   async uploadRequestAttachment(workspaceId: string, file: File): Promise<string> {
     const path = `partner-uploads/${workspaceId}/${Date.now()}_${file.name}`;

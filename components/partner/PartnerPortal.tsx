@@ -17,7 +17,8 @@ import {
   Search,
   User,
   Activity,
-  DollarSign
+  DollarSign,
+  Upload
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
@@ -74,6 +75,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
   });
   const [newRequestFiles, setNewRequestFiles] = useState<File[]>([]);
   const [creatingRequest, setCreatingRequest] = useState(false);
+
+  // Envio de documento direto pela aba Documentos (fica pendente de revisão do time interno)
+  const [isSendDocModalOpen, setIsSendDocModalOpen] = useState(false);
+  const [sendDocFile, setSendDocFile] = useState<File | null>(null);
+  const [sendDocNote, setSendDocNote] = useState('');
+  const [sendingDoc, setSendingDoc] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -299,6 +306,44 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
       alert('Erro ao gerar link de acesso ao documento.');
     }
   };
+
+  // Enviar um documento direto pela aba Documentos (fica pendente de revisão/promoção do time interno,
+  // reaproveitando o mesmo mecanismo de anexo de solicitação — sem escrita direta no GED)
+  const handleSendDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!workspace || !partnerUser || !sendDocFile) return;
+
+    setSendingDoc(true);
+    try {
+      const path = await partnerService.uploadRequestAttachment(workspace.id, sendDocFile);
+      const created = await partnerService.saveRequest({
+        partner_workspace_id: workspace.id,
+        title: sendDocFile.name,
+        description: sendDocNote.trim() || 'Documento enviado pelo parceiro pela aba Documentos.',
+        type: 'DOCUMENTACAO',
+        priority: 'MEDIA',
+        status: 'ABERTO',
+        created_by_email: partnerUser.email,
+        attachment_paths: [path]
+      });
+      setRequests((prev) => [created, ...prev]);
+      setIsSendDocModalOpen(false);
+      setSendDocFile(null);
+      setSendDocNote('');
+      alert('Documento enviado. A equipe da construtora vai revisar e incluir no GED.');
+    } catch (err) {
+      console.error('Erro ao enviar documento:', err);
+      alert('Erro ao enviar documento. Tente novamente.');
+    } finally {
+      setSendingDoc(false);
+    }
+  };
+
+  // Documentos que o próprio parceiro enviou, para dar visibilidade na mesma aba
+  const sentDocuments = React.useMemo(
+    () => requests.filter((r) => r.type === 'DOCUMENTACAO' && r.attachment_paths && r.attachment_paths.length > 0),
+    [requests]
+  );
 
   if (loading) {
     return (
@@ -553,18 +598,66 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
           {/* TAB: DOCUMENTOS */}
           {activeTab === 'documentos' && (
             <div className="flex flex-col gap-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
                 <h3 className="text-md font-bold text-white">Documentos e Projetos Compartilhados</h3>
-                <div className="relative max-w-xs w-full">
-                  <Search className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
-                  <input
-                    value={docSearchQuery}
-                    onChange={(e) => setDocSearchQuery(e.target.value)}
-                    placeholder="Buscar documentos..."
-                    className="bg-[#1c1c1c] border border-white/5 pl-9 pr-4 py-2 rounded-xl text-form-input w-full text-white focus:outline-none"
-                  />
+                <div className="flex items-center gap-3">
+                  <div className="relative max-w-xs w-full">
+                    <Search className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
+                    <input
+                      value={docSearchQuery}
+                      onChange={(e) => setDocSearchQuery(e.target.value)}
+                      placeholder="Buscar documentos..."
+                      className="bg-[#1c1c1c] border border-white/5 pl-9 pr-4 py-2 rounded-xl text-form-input w-full text-white focus:outline-none"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => setIsSendDocModalOpen(true)}
+                    className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10 normal-case tracking-normal shrink-0"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Enviar Documento
+                  </Button>
                 </div>
               </div>
+
+              {sentDocuments.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
+                    Enviados por Você
+                    <span className="text-gray-600 font-bold">({sentDocuments.length})</span>
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {sentDocuments.map((req) => (
+                      <div key={req.id} className="bg-[#1c1c1c] border border-white/5 p-4 rounded-2xl flex flex-col gap-3 shadow-md">
+                        <div className="flex items-start justify-between">
+                          <div className="p-2 bg-purple-500/10 text-purple-400 rounded-xl"><Upload className="w-5 h-5" /></div>
+                          <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border
+                            ${req.status === 'CONCLUIDO' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'}`}>
+                            {req.status === 'CONCLUIDO' ? 'Incluído no GED' : 'Aguardando revisão'}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-xs font-bold text-white truncate">{req.title}</h4>
+                          <p className="text-xs text-gray-500 mt-1 truncate">{req.description}</p>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-gray-500 border-t border-white/5 pt-3 mt-1">
+                          <span>Enviado em: {new Date(req.created_at).toLocaleDateString()}</span>
+                          {req.attachment_paths?.[0] && (
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadAttachment(req.attachment_paths![0])}
+                              className="flex items-center gap-1 text-orange-400 hover:text-orange-300 font-semibold"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Ver</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {sharedDocs.length === 0 ? (
                 <div className="text-center py-12 bg-[#1c1c1c] border border-dashed border-white/5 rounded-2xl text-xs text-gray-500">
@@ -832,6 +925,64 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail }) => {
                   className="bg-orange-500 hover:bg-orange-600 text-white normal-case tracking-normal disabled:opacity-50"
                 >
                   {creatingRequest ? 'Enviando...' : 'Enviar Solicitação'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ENVIAR DOCUMENTO */}
+      {isSendDocModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#1c1c1c] border border-white/5 max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 shadow-2xl relative">
+            <h3 className="text-md font-bold text-white">Enviar Documento</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              O arquivo enviado aqui fica pendente de revisão da construtora antes de entrar
+              oficialmente no GED. Você pode acompanhar o status na própria aba Documentos.
+            </p>
+
+            <form onSubmit={handleSendDocument} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-400 uppercase font-bold">Arquivo</label>
+                <input
+                  required
+                  type="file"
+                  onChange={(e) => setSendDocFile(e.target.files?.[0] || null)}
+                  className="text-xs text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-white/5 file:text-gray-300 file:text-xs file:font-semibold hover:file:bg-white/10"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-400 uppercase font-bold">Observação (opcional)</label>
+                <textarea
+                  rows={3}
+                  value={sendDocNote}
+                  onChange={(e) => setSendDocNote(e.target.value)}
+                  placeholder="Ex: ART atualizada referente ao contrato nº..."
+                  className="bg-[#121212] border border-white/5 rounded-xl px-3.5 py-2.5 text-form-input text-white focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-white/5 pt-4 mt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setIsSendDocModalOpen(false);
+                    setSendDocFile(null);
+                    setSendDocNote('');
+                  }}
+                  className="bg-transparent border-white/10 text-gray-400 hover:text-white hover:bg-transparent normal-case tracking-normal"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={sendingDoc || !sendDocFile}
+                  className="bg-orange-500 hover:bg-orange-600 text-white normal-case tracking-normal disabled:opacity-50"
+                >
+                  {sendingDoc ? 'Enviando...' : 'Enviar Documento'}
                 </Button>
               </div>
             </form>

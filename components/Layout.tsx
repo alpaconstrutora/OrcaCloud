@@ -1109,7 +1109,7 @@ const Layout: React.FC<LayoutProps> = ({
                 </>
               )}
 
-              {isDev ? (
+              {(isDev || canManageOrganization) ? (
                 <>
                   <NavDropdown
                     label="Portais"
@@ -1263,7 +1263,7 @@ const Layout: React.FC<LayoutProps> = ({
 
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               <NavItem id="notifications-center" icon={Bell} label="Notificações" badge={unreadCount > 0 ? unreadCount : undefined} forceFull />
-              {profile.group === 'DESENVOLVEDOR' || isDevEmail ? (
+              {(profile.group === 'DESENVOLVEDOR' || isDevEmail || canManageOrganization) ? (
                 <div className="space-y-1 mb-4">
                   <div className="px-4 py-2 text-xs font-black text-gray-500 uppercase tracking-widest">Portais</div>
                   <NavItem id="client-properties" icon={Building2} label="Meus Imóveis" forceFull />

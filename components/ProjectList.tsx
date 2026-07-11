@@ -1,6 +1,6 @@
 import React from 'react';
 import { projectService, ProjectData } from '../services/projectService';
-import { FolderOpen, Calendar, Trash2, Search, Loader2, Settings, Plus, Copy, FileSpreadsheet, Edit2, LayoutDashboard, Table2, Lock, Unlock, BookOpen, Link2, Pencil, SquareDashedKanban, Filter, Clock, CheckCircle2, ArrowRight } from 'lucide-react';
+import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, Pencil, RefreshCw, Clock, CheckCircle2 } from 'lucide-react';
 import { TipoObra } from '../types/project';
 
 const TIPO_OBRA_LABELS: Record<TipoObra, string> = {
@@ -29,6 +29,8 @@ import ExcelImportModal from './ExcelImportModal';
 import { BudgetEntry } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
+import { useConfirm } from './ui/confirm';
+import { KpiCard } from './ui/KpiCard';
 
 interface ProjectSettings {
     classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO' | string;
@@ -82,7 +84,9 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'code',          label: 'Código',      sortable: true },
     { key: 'name',          label: 'Nome',        sortable: true },
     { key: 'organization',  label: 'Organização', sortable: true },
-    { key: 'linked',        label: 'Vinculado',   sortable: true },
+    // Vinculado = obra/orçamento/planejamento ligado (ou sugestão) — sem valor único
+    // comparável entre os contextos (Obra/Orçamento/Planejamento/Diário), ver §6.3.
+    { key: 'linked',        label: 'Vinculado',   sortable: false },
     { key: 'client',        label: 'Cliente',     sortable: true },
     { key: 'updated',       label: 'Atualização', sortable: true },
     { key: 'status-budget', label: 'Status',      sortable: true },
@@ -170,6 +174,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     );
     const tableColumns = useTableColumns(COLUMNS, 'projectListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'projectListFilters:advanced');
+    const confirm = useConfirm();
     const {
         visibleColumns,
         sortColumn,
@@ -226,24 +231,29 @@ const ProjectList: React.FC<ProjectListProps> = ({
         updateProjects();
     }, [projectsProp, clientId, organizationId]);
 
-    const handleDelete = async (e: React.MouseEvent, id: string, name: string) => {
-        e.stopPropagation();
-
+    const handleDelete = async (id: string, name: string) => {
         const effectiveOrders = getEffectiveOrderCount(id);
         if (effectiveOrders > 0) {
             alert(`Não é possível excluir "${name}" pois existem ${effectiveOrders} pedido(s) vinculados a esta obra ou orçamentos relacionados.`);
             return;
         }
 
-        if (confirm(`Tem certeza que deseja excluir o ${isObraContext ? 'obra' : (isPlanejamentoContext ? 'planejamento' : 'orçamento')} "${name}"? Essa ação não pode ser desfeita.`)) {
-            try {
-                await projectService.deleteProject(id);
-                setProjects(projects.filter(p => p.id !== id));
-            } catch (error: unknown) {
-                console.error("Erro ao excluir orçamento:", error);
-                const err = error as Error;
-                alert(err.message || "Erro ao excluir o orçamento.");
-            }
+        const itemLabel = isObraContext ? 'obra' : (isPlanejamentoContext ? 'planejamento' : 'orçamento');
+        const ok = await confirm({
+            title: `Excluir ${itemLabel}?`,
+            message: `Tem certeza que deseja excluir o ${itemLabel} "${name}"? Essa ação não pode ser desfeita.`,
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+
+        try {
+            await projectService.deleteProject(id);
+            setProjects(projects.filter(p => p.id !== id));
+        } catch (error: unknown) {
+            console.error("Erro ao excluir orçamento:", error);
+            const err = error as Error;
+            alert(err.message || "Erro ao excluir o orçamento.");
         }
     };
 
@@ -262,9 +272,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
         onExportProject(id);
     };
 
-    const [sortBy, setSortBy] = React.useState<string>('recent');
     const [tipoFilter, setTipoFilter] = React.useState<TipoObra | ''>('');
-
 
     const filteredProjects = React.useMemo(() => {
         let result = projects
@@ -335,10 +343,24 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             return sortDirection === 'asc'
                                 ? (valA as string).localeCompare(valB as string)
                                 : (valB as string).localeCompare(valA as string);
+                        case 'organization': {
+                            const orgA = organizations.find(o => o.id === a.settings?.organizationId)?.name || '';
+                            const orgB = organizations.find(o => o.id === b.settings?.organizationId)?.name || '';
+                            return sortDirection === 'asc' ? orgA.localeCompare(orgB) : orgB.localeCompare(orgA);
+                        }
+                        case 'lock': {
+                            // Aproximação direta (orderCounts), não a contagem em cascata de
+                            // getEffectiveOrderCount — suficiente para ordenar bloqueado/livre.
+                            const lockA = (orderCounts[a.id] || 0) > 0 ? 1 : 0;
+                            const lockB = (orderCounts[b.id] || 0) > 0 ? 1 : 0;
+                            return sortDirection === 'asc' ? lockA - lockB : lockB - lockA;
+                        }
                     }
                 }
 
-                if (isObraContext && !sortColumn) {
+                // Sem coluna selecionada: Obras ordenam por código (padrão do módulo);
+                // as demais telas ordenam pela mais recentemente atualizada (§6.4).
+                if (isObraContext) {
                     const codeA = parseInt((a.code || a.settings?.code || ''), 10);
                     const codeB = parseInt((b.code || b.settings?.code || ''), 10);
                     const hasA = !isNaN(codeA);
@@ -348,26 +370,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     if (hasB) return 1;
                     return a.name.localeCompare(b.name);
                 }
-                if (sortBy === 'recent') {
-                    return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
-                }
-                if (sortBy === 'oldest') {
-                    return new Date(a.updated_at || a.created_at || 0).getTime() - new Date(b.updated_at || b.created_at || 0).getTime();
-                }
-                if (sortBy === 'name-asc') {
-                    return a.name.localeCompare(b.name);
-                }
-                if (sortBy === 'name-desc') {
-                    return b.name.localeCompare(a.name);
-                }
-                if (sortColumn === 'status-obra') {
-                    const aVal = String(a.settings?.obraStatus || '').toLowerCase();
-                    const bVal = String(b.settings?.obraStatus || '').toLowerCase();
-                    return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-                }
-                return 0;
+                return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
             });
-    }, [projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules]);
+    }, [projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules, organizations, orderCounts]);
 
     const stats = React.useMemo(() => {
         const total = filteredProjects.length;
@@ -517,31 +522,32 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         </h1>
                         <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie suas {isObraContext ? 'obras' : (isPlanejamentoContext ? 'planejamentos' : (isDiarioContext ? 'diários' : 'orçamentos'))} com infraestrutura de alta performance.</p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    {/* Variante compacta do CTA primário (ui_ux_standard_guide.md §17) */}
+                    <div className="flex items-center gap-2">
                         <button
                             onClick={() => setIsImportModalOpen(true)}
-                            className="flex items-center gap-3 px-6 py-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[1.25rem] hover:bg-emerald-600 hover:text-white font-black text-button uppercase tracking-widest transition-all shadow-sm active:scale-95"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[6px] hover:bg-emerald-600 hover:text-white font-medium text-[13px] transition-all active:scale-95"
                         >
                             <FileSpreadsheet className="w-4 h-4" />
                             Importar Excel
                         </button>
                         <button
                             onClick={() => onNewProject(classificationFilter || (activeTab === 'templates' ? 'OBRA' : 'ORCAMENTO'))}
-                            className="flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-[1.25rem] hover:bg-blue-700 font-black text-button uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                         >
-                            <Plus className="w-4 h-4" />
-                            {isObraContext ? 'Nova Obra' : (isPlanejamentoContext ? 'Novo Planejamento' : (isDiarioContext ? 'Novo Diário' : 'Novo Orçamento'))}
+                            <Plus className="w-[15px] h-[15px]" />
+                            {isObraContext ? 'Nova obra' : (isPlanejamentoContext ? 'Novo planejamento' : (isDiarioContext ? 'Novo diário' : 'Novo orçamento'))}
                         </button>
                     </div>
                 </div>
             )}
 
             {!classificationFilter && (
-                <div className="flex space-x-1.5 bg-gray-100/50 p-1.5 rounded-[1.25rem] w-fit">
+                <div className="flex gap-1 bg-gray-100/50 p-1 rounded-[10px] w-fit">
                     <button
                         onClick={() => setActiveTab('budgets')}
-                        className={`flex items-center px-6 py-2.5 text-table-header font-black uppercase tracking-widest rounded-xl transition-all ${activeTab === 'budgets'
-                            ? 'bg-white text-blue-600 shadow-lg shadow-gray-200/50'
+                        className={`flex items-center h-9 px-4 text-sm font-medium rounded-[6px] transition-all ${activeTab === 'budgets'
+                            ? 'bg-white text-blue-600 shadow-sm'
                             : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
                             }`}
                     >
@@ -550,8 +556,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     </button>
                     <button
                         onClick={() => setActiveTab('templates')}
-                        className={`flex items-center px-6 py-2.5 text-button font-black uppercase tracking-widest rounded-xl transition-all ${activeTab === 'templates'
-                            ? 'bg-white text-blue-600 shadow-lg shadow-gray-200/50'
+                        className={`flex items-center h-9 px-4 text-sm font-medium rounded-[6px] transition-all ${activeTab === 'templates'
+                            ? 'bg-white text-blue-600 shadow-sm'
                             : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
                             }`}
                     >
@@ -561,115 +567,63 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-blue-100 transition-all">
-                    <div className="p-3.5 bg-blue-50 text-blue-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <FolderOpen className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">TOTAL</p>
-                        <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full shrink-0"></span>
-                            <p className="text-xs text-gray-400 font-medium truncate">Registros visíveis</p>
-                        </div>
-                    </div>
+            {/* KPIs genéricos desta tabela — só quando o pai não já mostra seus próprios KPIs
+                (Planejamento usa PlanningDashboard, Diário usa DiaryDashboard, ambos com
+                hideHeader=true; mostrar os dois juntos duplicava a informação). */}
+            {!hideHeader && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <KpiCard label="Total" value={stats.total} sub="Registros visíveis" icon={<FolderOpen className="w-5 h-5" />} color="blue" />
+                    <KpiCard label="Em Andamento" value={stats.inProgress} sub="Ativos no momento" icon={<Clock className="w-5 h-5" />} color="amber" />
+                    <KpiCard label="Concluídos" value={stats.concluded} sub="Finalizados / fechados" icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
+                    <KpiCard label="Recentes" value={stats.recent} sub="Criados nos últimos 30 dias" icon={<Calendar className="w-5 h-5" />} color="violet" />
                 </div>
+            )}
 
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-yellow-100 transition-all">
-                    <div className="p-3.5 bg-yellow-50 text-yellow-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <Clock className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">EM ANDAMENTO</p>
-                        <p className="text-2xl font-bold text-gray-900">{stats.inProgress}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full shrink-0"></span>
-                            <p className="text-xs text-gray-400 font-medium truncate">Ativos no momento</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-green-100 transition-all">
-                    <div className="p-3.5 bg-green-50 text-green-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <CheckCircle2 className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">CONCLUÍDOS</p>
-                        <p className="text-2xl font-bold text-gray-900">{stats.concluded}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full shrink-0"></span>
-                            <p className="text-xs text-gray-400 font-medium truncate">Finalizados / Fechados</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg hover:border-purple-100 transition-all">
-                    <div className="p-3.5 bg-purple-50 text-purple-600 rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform">
-                        <Calendar className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">RECENTES</p>
-                        <p className="text-2xl font-bold text-gray-900">{stats.recent}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="w-1.5 h-1.5 bg-purple-500 rounded-full shrink-0"></span>
-                            <p className="text-xs text-gray-400 font-medium truncate">Criados nos últimos 30 dias</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+            {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — já há KPIs/dashboard
+                acima dando contexto em todos os usos desta tabela. */}
+            <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
-                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
                         placeholder="Buscar por obra ou cliente..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-transparent rounded-[1.5rem] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                 </div>
-                
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2 bg-gray-50/50 p-1.5 rounded-[1.25rem] border border-gray-100/50">
-                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest whitespace-nowrap pl-2">Ordenar:</span>
-                        <select
-                            value={sortBy}
-                            onChange={(e) => setSortBy(e.target.value)}
-                            className="text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-[1rem] px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-sans"
-                        >
-                            <option value="recent">Mais Recentes</option>
-                            <option value="oldest">Mais Antigos</option>
-                            <option value="name-asc">Nome (A-Z)</option>
-                            <option value="name-desc">Nome (Z-A)</option>
-                        </select>
-                    </div>
 
-                    {isObraContext && (
-                        <select
-                            value={tipoFilter}
-                            onChange={(e) => setTipoFilter(e.target.value as TipoObra | '')}
-                            className="text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-[1.25rem] px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-sans"
-                        >
-                            <option value="">Todos os tipos</option>
-                            {(Object.keys(TIPO_OBRA_LABELS) as TipoObra[]).map(k => (
-                                <option key={k} value={k}>{TIPO_OBRA_LABELS[k]}</option>
-                            ))}
-                        </select>
-                    )}
-                    
-                    <button
-                        onClick={loadProjects}
-                        className="p-4 bg-blue-50 text-blue-600 rounded-[1.25rem] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shadow-sm"
-                        title="Atualizar dados"
+                {isObraContext && (
+                    <select
+                        value={tipoFilter}
+                        onChange={(e) => setTipoFilter(e.target.value as TipoObra | '')}
+                        className="h-9 text-sm font-normal text-gray-700 bg-white border border-gray-200 rounded-[6px] px-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                     >
-                        <Filter className="w-4 h-4" />
-                    </button>
+                        <option value="">Todos os tipos</option>
+                        {(Object.keys(TIPO_OBRA_LABELS) as TipoObra[]).map(k => (
+                            <option key={k} value={k}>{TIPO_OBRA_LABELS[k]}</option>
+                        ))}
+                    </select>
+                )}
+
+                {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio
+                    cabeçalho (ui_ux_standard_guide.md §6.4); default sem coluna selecionada
+                    ficou dentro do .sort() (mais recente primeiro / código para Obras). */}
+                <div className="flex items-center h-9">
+                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 </div>
 
-                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                <button
+                    onClick={loadProjects}
+                    className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                    title="Atualizar dados"
+                >
+                    <RefreshCw className="w-4 h-4" />
+                </button>
+
+                <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                     <ColumnConfigButton
                         columns={COLUMNS.filter(c => c.key !== 'actions')}
                         visibleColumns={tableColumns.visibleColumns}
@@ -678,41 +632,42 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         onToggleColumn={tableColumns.toggleColumn}
                         onReset={tableColumns.resetColumns}
                     />
-                    <div className="w-px bg-gray-200 mx-1 my-1"></div>
+                    <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                     <button
                         onClick={() => setViewMode('grid')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid'
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid'
+                            ? 'bg-blue-600 text-white'
                             : 'text-gray-400 hover:text-gray-600'
                             }`}
                         title="Visualização em Grade"
                     >
-                        <LayoutDashboard className="w-5 h-5" />
+                        <LayoutDashboard className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'list'
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list'
+                            ? 'bg-blue-600 text-white'
                             : 'text-gray-400 hover:text-gray-600'
                             }`}
                         title="Visualização em Lista"
                     >
-                        <Table2 className="w-5 h-5" />
+                        <Table2 className="w-4 h-4" />
                     </button>
                 </div>
             </div>
 
             {(isLoading || isExternalLoading) ? (
-                <div className="flex justify-center items-center py-20">
-                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-500">Carregando...</p>
                 </div>
             ) : filteredProjects.length === 0 ? (
-                <div className="text-center py-20 bg-white rounded-[2.5rem] border border-gray-200 border-dashed">
-                    <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <h3 className="text-lg font-bold text-gray-900">
+                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                    <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">
                         {isDiaryContext ? 'Nenhum diário encontrado' : (activeTab === 'budgets' ? 'Nenhum orçamento encontrado' : 'Nenhuma obra encontrada')}
                     </h3>
-                    <p className="text-gray-500 font-medium">
+                    <p className="text-sm text-gray-500">
                         {searchTerm
                             ? 'Tente buscar por outro termo.'
                             : isDiaryContext
@@ -724,46 +679,57 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 </div>
             ) : (
                 viewMode === 'list' ? (
-                    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-visible">
-                        <table className="w-full text-left">
-                            <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
-                                <tr>
+                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                        <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader
+                                força uppercase internamente por padrão. */}
+                            <thead>
+                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     {visibleColumns.includes('code') && (
                                         <SortableHeader
                                             label="Código"
                                             colKey="code"
+                                            uppercase={false}
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
-                                            className="w-20 text-center"
+                                            className="px-6 py-2 border-r border-gray-100 w-20 text-center"
                                         />
                                     )}
                                     {visibleColumns.includes('name') && (
                                         <SortableHeader
                                             label={isDiaryContext ? 'Diário' : (isObraContext ? 'Obra' : (isPlanejamentoContext ? 'Planejamento' : 'Orçamento'))}
                                             colKey="name"
+                                            uppercase={false}
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
+                                            className="px-6 py-2 border-r border-gray-100"
                                         />
                                     )}
                                     {visibleColumns.includes('organization') && (
                                         <SortableHeader
                                             label="Organização"
                                             colKey="organization"
+                                            uppercase={false}
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
+                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
                                         />
                                     )}
                                     {visibleColumns.includes('linked') && (
+                                        // Vinculado = obra/orçamento/planejamento ligado — sem valor único pra ordenar (§6.3).
                                         <SortableHeader
                                             label={isDiaryContext ? 'Último Diário' : (isObraContext ? 'Orçamentos Vinculados' : 'Obra Vinculada')}
                                             colKey="linked"
+                                            uppercase={false}
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
                                             sortable={false}
+                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
                                         />
                                     )}
                                     {isDiaryContext && (
@@ -771,18 +737,22 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             <SortableHeader
                                                 label="Obra Vinculada"
                                                 colKey="obra-vinculada"
+                                                uppercase={false}
                                                 sortColumn={sortColumn}
                                                 sortDirection={sortDirection}
                                                 onSort={handleColumnSort}
                                                 sortable={false}
+                                                className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
                                             />
                                             <SortableHeader
                                                 label="Planejamento Vinculado"
                                                 colKey="planejamento-vinculada"
+                                                uppercase={false}
                                                 sortColumn={sortColumn}
                                                 sortDirection={sortDirection}
                                                 onSort={handleColumnSort}
                                                 sortable={false}
+                                                className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
                                             />
                                         </>
                                     )}
@@ -790,42 +760,58 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         <SortableHeader
                                             label="Cliente"
                                             colKey="client"
+                                            uppercase={false}
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
+                                            className="px-6 py-2 border-r border-gray-100"
                                         />
                                     )}
                                     {visibleColumns.includes('updated') && (
                                         <SortableHeader
                                             label={isDiaryContext ? 'Clima' : 'Atualização'}
                                             colKey="updated"
+                                            uppercase={false}
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
+                                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
                                         />
                                     )}
                                     {visibleColumns.includes('status-budget') && (
                                         <SortableHeader
                                             label={isDiaryContext ? 'Status Diário' : 'Status'}
                                             colKey="status-budget"
+                                            uppercase={false}
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
+                                            className="px-6 py-2 border-r border-gray-100"
                                         />
                                     )}
                                     {visibleColumns.includes('status-obra') && (
                                         <SortableHeader
                                             label={isDiaryContext ? 'Total Registros' : 'Status Obra'}
                                             colKey="status-obra"
+                                            uppercase={false}
                                             sortColumn={sortColumn}
                                             sortDirection={sortDirection}
                                             onSort={handleColumnSort}
+                                            className="px-6 py-2 border-r border-gray-100"
                                         />
                                     )}
                                     {visibleColumns.includes('lock') && (
-                                        <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider text-center">Bloqueio</th>
+                                        <SortableHeader
+                                            label="Bloqueio"
+                                            colKey="lock"
+                                            uppercase={false}
+                                            sortColumn={sortColumn}
+                                            sortDirection={sortDirection}
+                                            onSort={handleColumnSort}
+                                            className="px-6 py-2 border-r border-gray-100 text-center"
+                                        />
                                     )}
-                                    <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase tracking-wider text-right">Ações</th>
+                                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -836,26 +822,24 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
                                     >
                                         {visibleColumns.includes('code') && (
-                                        <td className="px-4 py-4 text-center">
-                                            <span className="text-sm font-black font-mono text-blue-700">
-                                                {project.code || project.settings?.code || '—'}
-                                            </span>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center text-sm font-normal text-gray-700">
+                                            {project.code || project.settings?.code || '—'}
                                         </td>
                                     )}
                                     {visibleColumns.includes('name') && (
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 <div className="flex items-center">
-                                                    <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 mr-3 shrink-0">
-                                                        <FolderOpen className="w-5 h-5" />
+                                                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mr-3 shrink-0">
+                                                        <FolderOpen className="w-4 h-4" />
                                                     </div>
                                                     <div>
-                                                        <div className="text-sm font-bold text-gray-900">
+                                                        <div className="text-sm font-normal text-gray-900">
                                                             {project.name}
                                                         </div>
                                                         <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
                                                             <span>CR: {new Date(project.created_at || 0).toLocaleDateString()}</span>
                                                             {project.settings?.tipoObra && (
-                                                                <span className={`px-1.5 py-0.5 rounded border text-[9px] font-black uppercase tracking-wider ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                                                <span className={`px-1.5 py-0.5 rounded border text-[9px] font-semibold tracking-wide ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                                                                     {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
                                                                 </span>
                                                             )}
@@ -868,36 +852,30 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             const orgId = project.settings?.organizationId;
                                             const org = organizations.find(o => o.id === orgId);
                                             return (
-                                                <td className="px-6 py-4">
-                                                    {org ? (
-                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-100 text-xs font-bold">
-                                                            {org.name}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-xs text-gray-300 italic">—</span>
-                                                    )}
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                    {org ? org.name : <span className="text-gray-400 italic">—</span>}
                                                 </td>
                                             );
                                         })()}
                                         {visibleColumns.includes('linked') && (
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 {isDiaryContext ? (
                                                     <div className="flex flex-col">
-                                                        <div className="text-sm font-bold text-gray-900 truncate max-w-[150px]">
+                                                        <div className="text-sm font-normal text-gray-900 truncate max-w-[150px]">
                                                             {(project.settings?.diaryEntries && project.settings.diaryEntries.length > 0)
                                                                 ? new Date(project.settings.diaryEntries[project.settings.diaryEntries.length - 1].date).toLocaleDateString()
                                                                 : '-'}
                                                         </div>
-                                                        <span className="text-xs text-gray-400 font-medium lowercase italic">Visto por último</span>
+                                                        <span className="text-xs text-gray-400 font-normal lowercase italic">Visto por último</span>
                                                     </div>
                                                 ) : (
                                                     isObraContext ? (() => {
                                                     const linked = getLinkedBudgets(project.id);
                                                     const suggested = linked.length === 0 ? getSuggestedBudgetsForObra(project) : [];
                                                     if (linked.length > 0) return (
-                                                        <div className="flex flex-wrap gap-1">
+                                                        <div className="flex flex-col gap-1">
                                                             {linked.map(budget => (
-                                                                <span key={budget.id} className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100/50">
+                                                                <span key={budget.id} className="text-sm font-normal text-blue-600 truncate max-w-[200px]">
                                                                     {budget.name}
                                                                 </span>
                                                             ))}
@@ -906,72 +884,61 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     if (suggested.length > 0) return (
                                                         <div className="flex flex-col gap-1">
                                                             {suggested.map(s => (
-                                                                <div key={s.id} className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-700 rounded-md border border-amber-200" title={`Orçamento "${s.name}" tem o mesmo cliente e pode ser vinculado a esta Obra`}>
-                                                                    <Link2 className="w-3 h-3 shrink-0" />
-                                                                    <span className="text-xs font-black uppercase tracking-tight">{s.name}</span>
-                                                                    <span className="text-[9px] font-bold text-amber-500 ml-0.5">Sugerido</span>
+                                                                <div key={s.id} className="flex items-center gap-1.5 text-sm font-normal text-amber-600" title={`Orçamento "${s.name}" tem o mesmo cliente e pode ser vinculado a esta Obra`}>
+                                                                    <Link2 className="w-3.5 h-3.5 shrink-0" />
+                                                                    <span className="truncate max-w-[160px]">{s.name}</span>
+                                                                    <span className="text-xs text-amber-500">(sugerido)</span>
                                                                 </div>
                                                             ))}
                                                         </div>
                                                     );
-                                                    return <span className="text-xs text-gray-400 italic pl-2">-</span>;
+                                                    return <span className="text-sm font-normal text-gray-400">-</span>;
                                                 })() : (() => {
                                                     const linked = getLinkedProjectData(project);
                                                     if (linked) return (
-                                                        <div className="flex items-center gap-1.5">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-[pulse_3s_ease-in-out_infinite]"></div>
-                                                            <span className="text-xs font-bold text-gray-700 bg-green-50 px-2 py-1 rounded-md border border-green-100/50">
-                                                                {linked.name}
-                                                            </span>
+                                                        <div className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></div>
+                                                            <span className="truncate max-w-[180px]">{linked.name}</span>
                                                         </div>
                                                     );
                                                     if (project.settings?.linkedProjectName) return (
-                                                        <div className="flex items-center gap-1.5">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 opacity-50"></div>
-                                                            <span className="text-xs font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded-md border border-gray-100/50">
-                                                                {project.settings.linkedProjectName}
-                                                            </span>
+                                                        <div className="flex items-center gap-1.5 text-sm font-normal text-gray-400">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 opacity-50 shrink-0"></div>
+                                                            <span className="truncate max-w-[180px]">{project.settings.linkedProjectName}</span>
                                                         </div>
                                                     );
                                                     const suggested = getSuggestedObraForOrcamento(project);
                                                     if (suggested) return (
-                                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-700 rounded-md border border-amber-200" title={`Obra "${suggested.name}" tem o mesmo cliente e pode ser vinculada a este Orçamento`}>
-                                                            <Link2 className="w-3 h-3 shrink-0" />
-                                                            <span className="text-xs font-black uppercase tracking-tight">{suggested.name}</span>
-                                                            <span className="text-[9px] font-bold text-amber-500 ml-0.5">Sugerido</span>
+                                                        <div className="flex items-center gap-1.5 text-sm font-normal text-amber-600" title={`Obra "${suggested.name}" tem o mesmo cliente e pode ser vinculada a este Orçamento`}>
+                                                            <Link2 className="w-3.5 h-3.5 shrink-0" />
+                                                            <span className="truncate max-w-[160px]">{suggested.name}</span>
+                                                            <span className="text-xs text-amber-500">(sugerido)</span>
                                                         </div>
                                                     );
-                                                    return <span className="text-xs text-gray-400 italic pl-2">-</span>;
+                                                    return <span className="text-sm font-normal text-gray-400">-</span>;
                                                 })()
                                             )}
                                             </td>
                                         )}
                                         {isDiaryContext && (
                                             <>
-                                                <td className="px-6 py-4">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                     {getLinkedProjectData(project) ? (
-                                                        <div className="flex items-center gap-1.5">
-                                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
-                                                            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-md border border-blue-100 uppercase tracking-tighter">
-                                                                OBRA: {getLinkedProjectData(project)?.name}
-                                                            </span>
+                                                        <div className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></div>
+                                                            <span className="truncate max-w-[180px]">{getLinkedProjectData(project)?.name}</span>
                                                         </div>
-                                                    ) : <span className="text-xs text-gray-400 italic pl-2">-</span>}
+                                                    ) : <span className="text-sm font-normal text-gray-400">-</span>}
                                                 </td>
-                                                <td className="px-6 py-4">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                     {(() => {
                                                         const linked = getLinkedPlanning(project);
-                                                        if (!linked) return <span className="text-xs text-gray-400 italic pl-2">-</span>;
+                                                        if (!linked) return <span className="text-sm font-normal text-gray-400">-</span>;
 
                                                         return (
-                                                            <div className="flex items-center gap-1.5">
-                                                                <div className={`w-1.5 h-1.5 rounded-full ${linked.type === 'manual' ? 'bg-emerald-500' : 'bg-blue-500'} animate-pulse`}></div>
-                                                                <span className={`text-xs font-bold px-2 py-1 rounded border uppercase tracking-tighter ${linked.type === 'manual'
-                                                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                                                    : 'bg-blue-50 text-blue-700 border-blue-100'
-                                                                    }`}>
-                                                                    {linked.project.name}
-                                                                </span>
+                                                            <div className={`flex items-center gap-1.5 text-sm font-normal ${linked.type === 'manual' ? 'text-emerald-600' : 'text-blue-600'}`}>
+                                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${linked.type === 'manual' ? 'bg-emerald-500' : 'bg-blue-500'}`}></div>
+                                                                <span className="truncate max-w-[180px]">{linked.project.name}</span>
                                                             </div>
                                                         );
                                                     })()}
@@ -979,39 +946,37 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             </>
                                         )}
                                         {visibleColumns.includes('client') && (
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
                                                 {project.settings?.obraPropria ? (
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-tight bg-indigo-100 text-indigo-700 border border-indigo-200">
-                                                        Obra Própria
-                                                    </span>
+                                                    <span className="text-indigo-700">Obra Própria</span>
                                                 ) : (activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)) ? (
-                                                    <span className="text-sm text-gray-600 font-medium">
+                                                    <span className="text-gray-600">
                                                         {activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-xs text-gray-400 italic">-</span>
+                                                    <span className="text-gray-400 italic">-</span>
                                                 )}
                                             </td>
                                         )}
                                         {visibleColumns.includes('updated') && (
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                             {isDiaryContext ? (
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 text-sm font-normal text-gray-600">
                                                     {(project.settings?.diaryEntries && project.settings.diaryEntries.length > 0) ? (
-                                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-600 rounded-md border border-blue-100/50 text-xs font-bold">
+                                                        <>
                                                             {project.settings.diaryEntries[project.settings.diaryEntries.length - 1].weatherMorning === 'sunny' ? (
-                                                                <>☀ <span className="text-xs font-black uppercase">Sol</span></>
+                                                                <>☀ Sol</>
                                                             ) : project.settings.diaryEntries[project.settings.diaryEntries.length - 1].weatherMorning === 'cloudy' ? (
-                                                                <>☁ <span className="text-xs font-black uppercase">Nublado</span></>
+                                                                <>☁ Nublado</>
                                                             ) : (
-                                                                <>🌧 <span className="text-xs font-black uppercase">Chuva</span></>
+                                                                <>🌧 Chuva</>
                                                             )}
-                                                        </div>
+                                                        </>
                                                     ) : '-'}
                                                 </div>
                                             ) : (
                                                 <div className="flex flex-col">
-                                                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                                                    <div className="flex items-center gap-1 text-sm font-normal text-gray-600">
                                                         <Calendar className="w-3.5 h-3.5 text-gray-400" />
                                                         {new Date(project.updated_at || project.created_at || 0).toLocaleDateString()}
                                                     </div>
@@ -1042,9 +1007,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         {visibleColumns.includes('status-obra') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 {isDiaryContext ? (
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-sm font-bold text-gray-900">{project.settings?.diaryEntries?.length || 0}</span>
-                                                    <span className="text-xs text-gray-400 font-medium uppercase">Dias</span>
+                                                <div className="flex items-center gap-1.5 text-sm font-normal text-gray-900">
+                                                    <span>{project.settings?.diaryEntries?.length || 0}</span>
+                                                    <span className="text-xs text-gray-400">dias</span>
                                                 </div>
                                             ) : (
                                                 project.settings?.obraStatus ? (
@@ -1074,26 +1039,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         )}
                                         <td className="px-6 py-2.5 text-right">
                                             <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-end gap-3">
-                                                {isPlanejamentoContext && (
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'planning-view'); }}
-                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1.5"
-                                                        title="Cronograma"
-                                                    >
-                                                        <Calendar className="w-4 h-4" />
-                                                        Cronograma
-                                                    </button>
-                                                )}
-                                                {isDiaryContext && (
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'project-diary'); }}
-                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1.5 group/act"
-                                                        title="Abrir Diário"
-                                                    >
-                                                        <BookOpen className="w-4 h-4 group-hover/act:scale-110 transition-transform" />
-                                                        Abrir Diário
-                                                    </button>
-                                                )}
+                                                {/* Para Planejamento/Diário, o clique na linha já abre Cronograma/Diário
+                                                    (onRowClick) — um botão de texto repetindo a mesma ação duplicaria o
+                                                    controle (ui_ux_standard_guide.md §9.1). */}
                                                 {(!isPlanejamentoContext && !isDiaryContext) && (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }}
@@ -1123,7 +1071,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                         },
                                                     ]}
                                                     showDelete
-                                                    onDelete={() => handleDelete({ stopPropagation: () => {} } as React.MouseEvent, project.id, project.name)}
+                                                    onDelete={() => handleDelete(project.id, project.name)}
                                                     deleteDisabled={getEffectiveOrderCount(project.id) > 0}
                                                     deleteDisabledTitle={getEffectiveOrderCount(project.id) > 0 ? 'Exclusão Bloqueada (Possui pedidos vinculados)' : undefined}
                                                 />
@@ -1133,6 +1081,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 ))}
                             </tbody>
                         </table>
+                        </div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1140,36 +1089,35 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             <div
                                 key={project.id}
                                 onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}
-                                className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group flex flex-col"
+                                className="bg-white rounded-[10px] border border-gray-200 shadow-sm hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group flex flex-col"
                             >
                                 <div className="p-5 flex-1">
                                     <div className="flex items-start justify-between mb-4">
                                         <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
                                             <FolderOpen className="w-6 h-6" />
                                         </div>
-                                        <div className="flex flex-col items-end gap-2">
+                                        {/* Badges de status — texto simples colorido, sem pílula/fundo/uppercase (§8) */}
+                                        <div className="flex flex-col items-end gap-1">
                                             {!isObraContext && project.settings?.budgetStatus && (
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black tracking-wider
-                                                ${project.settings.budgetStatus === 'Fechado' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                <span className={`text-sm font-normal ${project.settings.budgetStatus === 'Fechado' ? 'text-emerald-700' : 'text-blue-700'}`}>
                                                     {capitalizeStatus(project.settings.budgetStatus)}
                                                 </span>
                                             )}
                                             {project.settings?.obraStatus && (
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider
-                                                ${project.settings.obraStatus === 'Concluída' ? 'bg-indigo-100 text-indigo-700' :
-                                                        project.settings.obraStatus === 'Não Iniciado' ? 'bg-gray-100 text-gray-600' :
-                                                            'bg-sky-100 text-sky-700'}`}>
+                                                <span className={`text-sm font-normal ${project.settings.obraStatus === 'Concluída' ? 'text-indigo-700' :
+                                                        project.settings.obraStatus === 'Não Iniciado' ? 'text-gray-600' :
+                                                            'text-sky-700'}`}>
                                                     {project.settings.obraStatus}
                                                 </span>
                                             )}
                                             {getEffectiveOrderCount(project.id) > 0 ? (
-                                                <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-black uppercase tracking-wider">
-                                                    <Lock className="w-2.5 h-2.5" />
+                                                <span className="flex items-center gap-1 text-sm font-normal text-amber-600">
+                                                    <Lock className="w-3.5 h-3.5" />
                                                     Bloqueado
                                                 </span>
                                             ) : (
-                                                <span className="flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-black uppercase tracking-wider">
-                                                    <Unlock className="w-2.5 h-2.5" />
+                                                <span className="flex items-center gap-1 text-sm font-normal text-emerald-600">
+                                                    <Unlock className="w-3.5 h-3.5" />
                                                     Livre
                                                 </span>
                                             )}
@@ -1177,14 +1125,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     </div>
                                     {project.settings?.tipoObra && (
                                         <div className="mb-3">
-                                            <span className={`px-2 py-0.5 rounded border text-[9px] font-black uppercase tracking-wider ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                            <span className={`px-2 py-0.5 rounded border text-[9px] font-semibold tracking-wide ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                                                 {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
                                             </span>
                                         </div>
                                     )}
                                     <div className="flex items-start gap-2">
                                         {(project.code || project.settings?.code) && (
-                                            <span className="text-xs font-black font-mono text-blue-700 shrink-0 mt-1">
+                                            <span className="text-xs font-normal text-blue-700 shrink-0 mt-1">
                                                 {project.code || project.settings?.code}
                                             </span>
                                         )}
@@ -1193,9 +1141,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         </h3>
                                     </div>
                                     {!isObraContext && (
-                                        <p className="text-sm text-gray-500 mt-1 mb-4 flex items-center gap-1.5 font-medium">
+                                        <p className="text-sm font-normal text-gray-500 mt-1 mb-4 flex items-center gap-1.5">
                                             {project.settings?.obraPropria ? (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-tight bg-indigo-100 text-indigo-700 border border-indigo-200">Obra Própria</span>
+                                                <span className="text-indigo-700">Obra Própria</span>
                                             ) : (project.settings?.client || 'Cliente não definido')}
                                         </p>
                                     )}
@@ -1215,7 +1163,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     </div>
                                 </div>
 
-                                <div className="p-4 bg-gray-50 rounded-b-[2.5rem] border-t border-gray-100 flex items-center justify-between">
+                                <div className="p-4 bg-gray-50 rounded-b-[10px] border-t border-gray-100 flex items-center justify-between">
                                     <div className="flex items-center gap-1">
                                         {!isObraContext && !isPlanejamentoContext && !isDiaryContext && (
                                             <button
@@ -1226,15 +1174,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 <Table2 className="w-4 h-4" />
                                             </button>
                                         )}
-                                        {isPlanejamentoContext && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'planning-view'); }}
-                                                className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                                                title="Cronograma"
-                                            >
-                                                <Calendar className="w-4 h-4" />
-                                            </button>
-                                        )}
+                                        {/* Para Planejamento, o clique no card já abre o Cronograma (onRowClick) —
+                                            evita duplicar a ação em botão (§9.1). */}
                                     </div>
                                     <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
                                         <button
@@ -1258,7 +1199,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 },
                                             ]}
                                             showDelete
-                                            onDelete={() => handleDelete({ stopPropagation: () => {} } as React.MouseEvent, project.id, project.name)}
+                                            onDelete={() => handleDelete(project.id, project.name)}
                                             deleteDisabled={getEffectiveOrderCount(project.id) > 0}
                                             deleteDisabledTitle={getEffectiveOrderCount(project.id) > 0 ? 'Exclusão Bloqueada (Possui pedidos vinculados)' : undefined}
                                         />

@@ -651,23 +651,24 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
               <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Planejamento</h1>
               <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie seus planejamentos com infraestrutura de alta performance.</p>
             </div>
-            <div className="flex items-center gap-3">
+            {/* Variante compacta do CTA primário (ui_ux_standard_guide.md §17) — ação de
+                criação é o fluxo principal desta tela, então fica isolada junto ao título,
+                mas no tamanho compacto (h-9), não mais nos 50px da escala antiga. */}
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsImportModalOpenPlanning(true)}
-                className="flex items-center gap-3 px-6 py-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[1.25rem] hover:bg-emerald-600 hover:text-white font-black text-button uppercase tracking-widest transition-all shadow-sm active:scale-95"
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[6px] hover:bg-emerald-600 hover:text-white font-medium text-[13px] transition-all active:scale-95"
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 Importar Excel
               </button>
-              <Button
-                variant="primary"
-                size="lg"
+              <button
                 onClick={() => handleNewProject('PLANEJAMENTO')}
-                className="rounded-[1.25rem] shadow-xl shadow-blue-900/20 active:scale-95"
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
               >
-                <Plus className="w-4 h-4" />
-                Novo Planejamento
-              </Button>
+                <Plus className="w-[15px] h-[15px]" />
+                Novo planejamento
+              </button>
             </div>
           </div>
           <PlanningDashboard projects={typedProjects} />

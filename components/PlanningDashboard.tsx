@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { AlertTriangle, Clock, ListTodo, Target } from 'lucide-react';
+import { KpiCard } from './ui/KpiCard';
 
 interface ScheduleItem {
     slack?: number;
@@ -29,40 +30,6 @@ interface PlanningDashboardProps {
     projects: ProjectSummary[];
 }
 
-interface StatCardProps {
-    title: string;
-    value: string | number;
-    subtext?: string;
-    icon: React.ElementType;
-    color: string;
-}
-
-const COLOR_MAP: Record<string, { border: string, bg: string, text: string, dot: string }> = {
-    blue: { border: 'hover:border-blue-100', bg: 'bg-blue-50', text: 'text-blue-600', dot: 'bg-blue-500' },
-    emerald: { border: 'hover:border-emerald-100', bg: 'bg-emerald-50', text: 'text-emerald-600', dot: 'bg-emerald-500' },
-    amber: { border: 'hover:border-amber-100', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-500' },
-    red: { border: 'hover:border-red-100', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
-    gray: { border: 'hover:border-gray-100', bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-500' },
-};
-
-const StatCard = ({ title, value, subtext, icon: Icon, color }: StatCardProps) => {
-    const theme = COLOR_MAP[color] || COLOR_MAP.gray;
-    return (
-        <div className={`bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 flex items-center gap-5 group hover:shadow-lg transition-all ${theme.border}`}>
-            <div className={`p-3.5 ${theme.bg} ${theme.text} rounded-[1.25rem] shrink-0 group-hover:scale-110 transition-transform`}>
-                <Icon className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">{title}</p>
-                <p className="text-2xl font-bold text-gray-900">{value}</p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className={`w-1.5 h-1.5 ${theme.dot} rounded-full shrink-0`}></span>
-                    <p className="text-xs text-gray-400 font-medium truncate">{subtext}</p>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 const PlanningDashboard: React.FC<PlanningDashboardProps> = ({ projects }) => {
     const planningProjects = useMemo(() =>
@@ -129,34 +96,34 @@ const PlanningDashboard: React.FC<PlanningDashboardProps> = ({ projects }) => {
         : 'gray';
 
     return (
-        <div className="space-y-6 mb-8 animate-in fade-in slide-in-from-top-4 duration-700">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard
-                    title="Total Planejamentos"
+        <div className="animate-in fade-in slide-in-from-top-4 duration-700">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <KpiCard
+                    label="Total Planejamentos"
                     value={totalCount}
-                    subtext="Cronogramas ativos"
-                    icon={ListTodo}
+                    sub="Cronogramas ativos"
+                    icon={<ListTodo className="w-5 h-5" />}
                     color="blue"
                 />
-                <StatCard
-                    title="Progresso Médio"
+                <KpiCard
+                    label="Progresso Médio"
                     value={`${avgProgress}%`}
-                    subtext="Avanço físico médio"
-                    icon={Target}
+                    sub="Avanço físico médio"
+                    icon={<Target className="w-5 h-5" />}
                     color="emerald"
                 />
-                <StatCard
-                    title="Atividades Críticas"
+                <KpiCard
+                    label="Atividades Críticas"
                     value={criticalCount}
-                    subtext="Tarefas com folga zero"
-                    icon={AlertTriangle}
+                    sub="Tarefas com folga zero"
+                    icon={<AlertTriangle className="w-5 h-5" />}
                     color={criticalCount > 0 ? 'red' : 'amber'}
                 />
-                <StatCard
-                    title="Próximo Vencimento"
+                <KpiCard
+                    label="Próximo Vencimento"
                     value={deadlineValue}
-                    subtext={nextDeadline.name ? `${nextDeadline.name}` : 'Sem cronograma definido'}
-                    icon={Clock}
+                    sub={nextDeadline.name ? `${nextDeadline.name}` : 'Sem cronograma definido'}
+                    icon={<Clock className="w-5 h-5" />}
                     color={deadlineColor}
                 />
             </div>

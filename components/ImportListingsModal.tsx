@@ -277,11 +277,16 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
       return;
     }
 
-    // Grava dados em lote
+    // Grava dados em lote com deduplicação ativa
     try {
-      setStatusMessage(`Enviando ${importedListings.length} anúncios para o Supabase...`);
-      await opuraMarketService.importListingsInBatch(importedListings);
-      alert(`${importedListings.length} anúncios importados e geocodificados com sucesso!`);
+      setStatusMessage(`Enviando ${importedListings.length} anúncios para o Supabase com deduplicação...`);
+      const result = await opuraMarketService.importListingsInBatch(importedListings);
+      
+      let successMsg = `Importação concluída com sucesso!\n\n🔹 Anúncios salvos: ${result.importedCount}`;
+      if (result.deduplicatedCount > 0) {
+        successMsg += `\n🛡️ Anúncios duplicados ignorados: ${result.deduplicatedCount} (limpeza de dados ativada)`;
+      }
+      alert(successMsg);
       onSuccess();
       onClose();
     } catch (err: any) {

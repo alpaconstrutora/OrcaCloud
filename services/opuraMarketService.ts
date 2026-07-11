@@ -377,46 +377,143 @@ export const opuraMarketService = {
     return Number(data || 0);
   },
 
-  // Importação em lote de anúncios
+  // Importação em lote de anúncios com deduplicação automática
   async importListingsInBatch(
     listings: Omit<OpuraMarketListing, 'id' | 'createdAt' | 'pricePerM2'>[]
-  ): Promise<void> {
-    const dbPayload = listings.map(l => ({
-      city_id: l.cityId,
-      neighborhood_id: l.neighborhoodId,
-      organization_id: l.organizationId,
-      source: l.source,
-      source_url: l.sourceUrl,
-      property_type: l.propertyType,
-      address: l.address,
-      zip_code: l.zipCode,
-      area_private: l.areaPrivate,
-      area_total: l.areaTotal,
-      bedrooms: l.bedrooms,
-      suites: l.suites,
-      bathrooms: l.bathrooms,
-      parking_spaces: l.parkingSpaces,
-      price: l.price,
-      condo_fee: l.condoFee,
-      iptu: l.iptu,
-      latitude: l.latitude,
-      longitude: l.longitude,
-      geom: (l.latitude && l.longitude) ? `SRID=4326;POINT(${l.longitude} ${l.latitude})` : null,
-      description: l.description,
-      construction_standard: l.constructionStandard,
-      listing_status: l.listingStatus,
-      captured_at: l.capturedAt,
-      last_seen_at: l.lastSeenAt
-    }));
-
-    const { error } = await supabase
-      .from('opura_market_listings')
-      .insert(dbPayload);
-
-    if (error) {
-      console.error('Error importing listings in batch:', error);
-      throw new Error(`Failed to import listings: ${error.message}`);
+  ): Promise<{ importedCount: number; deduplicatedCount: number }> {
+    if (!listings || listings.length === 0) {
+      return { importedCount: 0, deduplicatedCount: 0 };
     }
+
+    // Coleta pares únicos de (city_id, neighborhood_id) para buscar dados do banco
+    const filterPairs = Array.from(new Set(listings.map(l => `${l.cityId}|${l.neighborhoodId}`)));
+    let existingListings: any[] = [];
+
+    // Busca anúncios existentes nos bairros correspondentes
+    for (const pair of filterPairs) {
+      const [cityId, neighborhoodId] = pair.split('|');
+      const { data, error } = await supabase
+        .from('opura_market_listings')
+        .select('id, city_id, neighborhood_id, latitude, longitude, bedrooms, area_private, price')
+        .eq('city_id', cityId)
+        .eq('neighborhood_id', neighborhoodId);
+
+      if (!error && data) {
+        existingListings = existingListings.concat(data);
+      }
+    }
+
+    // Função de verificação de duplicata por proximidade física, quartos e área útil (+/- 2% de tolerância)
+    const isDuplicate = (
+      lat1: number | null, lng1: number | null,
+      lat2: number | null, lng2: number | null,
+      bed1: number, bed2: number,
+      area1: number | null | undefined,
+      area2: number | null | undefined
+    ) => {
+      const a1 = Number(area1 || 0);
+      const a2 = Number(area2 || 0);
+
+      // Se não possui coordenadas geocodificadas, compara estritamente pela tipologia de área e quartos
+      if (!lat1 || !lng1 || !lat2 || !lng2) {
+        return bed1 === bed2 && Math.abs(a1 - a2) / Math.max(a1, a2, 1) <= 0.01;
+      }
+
+      // 1. Mesmo número de dormitórios
+      if (bed1 !== bed2) return false;
+
+      // 2. Área privativa próxima (+/- 2% de tolerância)
+      const areaDiffPct = Math.abs(a1 - a2) / Math.max(a1, a2, 1);
+      if (areaDiffPct > 0.02) return false;
+
+      // 3. Mesma localização aproximada (distância geográfica menor que 50 metros)
+      const dLat = lat1 - lat2;
+      const dLng = lng1 - lng2;
+      const distanceMeters = Math.sqrt(dLat * dLat + dLng * dLng) * 111000;
+
+      return distanceMeters < 50;
+    };
+
+    const uniqueListingsPayload: any[] = [];
+    let deduplicatedCount = 0;
+
+    for (const l of listings) {
+      // 1. Verificar duplicatas internas no próprio lote importado
+      const existsInPayload = uniqueListingsPayload.some(ul =>
+        isDuplicate(
+          l.latitude, l.longitude,
+          ul.latitude, ul.longitude,
+          l.bedrooms, ul.bedrooms,
+          l.areaPrivate, ul.areaPrivate
+        )
+      );
+
+      if (existsInPayload) {
+        deduplicatedCount++;
+        continue;
+      }
+
+      const existsInDb = existingListings.some(el =>
+        isDuplicate(
+          l.latitude, l.longitude,
+          el.latitude ? Number(el.latitude) : null,
+          el.longitude ? Number(el.longitude) : null,
+          l.bedrooms, el.bedrooms,
+          el.area_private ? Number(el.area_private) : 0,
+          l.areaPrivate
+        )
+      );
+
+      if (existsInDb) {
+        deduplicatedCount++;
+        continue;
+      }
+
+      // Anúncio validado e sem duplicatas
+      uniqueListingsPayload.push({
+        city_id: l.cityId,
+        neighborhood_id: l.neighborhoodId,
+        organization_id: l.organizationId,
+        source: l.source,
+        source_url: l.sourceUrl,
+        property_type: l.propertyType,
+        address: l.address,
+        zip_code: l.zipCode,
+        area_private: l.areaPrivate,
+        area_total: l.areaTotal,
+        bedrooms: l.bedrooms,
+        suites: l.suites,
+        bathrooms: l.bathrooms,
+        parking_spaces: l.parkingSpaces,
+        price: l.price,
+        condo_fee: l.condoFee,
+        iptu: l.iptu,
+        latitude: l.latitude,
+        longitude: l.longitude,
+        geom: (l.latitude && l.longitude) ? `SRID=4326;POINT(${l.longitude} ${l.latitude})` : null,
+        description: l.description,
+        construction_standard: l.constructionStandard,
+        listing_status: l.listingStatus,
+        captured_at: l.capturedAt,
+        last_seen_at: l.lastSeenAt
+      });
+    }
+
+    if (uniqueListingsPayload.length > 0) {
+      const { error } = await supabase
+        .from('opura_market_listings')
+        .insert(uniqueListingsPayload);
+
+      if (error) {
+        console.error('Error inserting unique listings in batch:', error);
+        throw new Error(`Falha ao importar anúncios únicos: ${error.message}`);
+      }
+    }
+
+    return {
+      importedCount: uniqueListingsPayload.length,
+      deduplicatedCount
+    };
   },
 
   // Deletar anúncio/ocorrência individual

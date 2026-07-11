@@ -149,6 +149,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [shareDocId, setShareDocId] = React.useState<string | null>(null);
   const [selectedShareWorkspaceId, setSelectedShareWorkspaceId] = React.useState('');
   const [sharingSubmitting, setSharingSubmitting] = React.useState(false);
+  const [docAlreadySharedWith, setDocAlreadySharedWith] = React.useState<{ partner_workspace_id: string; supplier_name: string }[]>([]);
 
   // Buscar histórico de auditoria do documento (Onda 4)
   const loadAuditLogsForDoc = async (docId: string) => {
@@ -659,6 +660,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const openShareModal = async (docId: string) => {
     setShareDocId(docId);
     setSelectedShareWorkspaceId('');
+    setDocAlreadySharedWith([]);
     setShareModalOpen(true);
     if (partnerWorkspaces.length === 0 && activeOrganizationId) {
       try {
@@ -668,12 +670,19 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         console.error('[OpuraDocsModule] Erro ao carregar parceiros habilitados:', err);
       }
     }
+    try {
+      const sharings = await partnerService.listSharingsForDocument(docId);
+      setDocAlreadySharedWith(sharings);
+    } catch (err) {
+      console.error('[OpuraDocsModule] Erro ao carregar compartilhamentos existentes do documento:', err);
+    }
   };
 
   // Compartilhar o documento selecionado com o workspace de parceiro escolhido
   const handleShareWithPartner = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shareDocId || !selectedShareWorkspaceId) return;
+    const chosenWorkspace = partnerWorkspaces.find((w) => w.id === selectedShareWorkspaceId);
     setSharingSubmitting(true);
     try {
       await partnerService.shareDocument(
@@ -683,6 +692,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       );
       setShareModalOpen(false);
       setShareDocId(null);
+      alert(`Documento compartilhado com ${chosenWorkspace?.supplier_name || 'o parceiro'} com sucesso.`);
     } catch (err: any) {
       if (err?.code === '23505' || /duplicate key/i.test(err?.message || '')) {
         alert('Este documento já está compartilhado com este parceiro.');
@@ -2473,6 +2483,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             </div>
 
             <form onSubmit={handleShareWithPartner} className="p-6 space-y-4">
+              {docAlreadySharedWith.length > 0 && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl px-3.5 py-2.5">
+                  <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">Já compartilhado com:</p>
+                  <p className="text-xs text-blue-600">
+                    {docAlreadySharedWith.map((s) => s.supplier_name).join(', ')}
+                  </p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Parceiro / Fornecedor Habilitado</label>
                 <select
@@ -2482,11 +2500,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                 >
                   <option value="">Selecione um parceiro...</option>
-                  {sortedShareWorkspaces.map((ws) => (
-                    <option key={ws.id} value={ws.id}>
-                      {ws.supplier_id === shareTargetSupplierId ? '★ ' : ''}{ws.supplier_name}
-                    </option>
-                  ))}
+                  {sortedShareWorkspaces.map((ws) => {
+                    const alreadyShared = docAlreadySharedWith.some((s) => s.partner_workspace_id === ws.id);
+                    return (
+                      <option key={ws.id} value={ws.id} disabled={alreadyShared}>
+                        {ws.supplier_id === shareTargetSupplierId ? '★ ' : ''}{ws.supplier_name}{alreadyShared ? ' (já compartilhado)' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
                 {shareTargetSupplierId && sortedShareWorkspaces.some((ws) => ws.supplier_id === shareTargetSupplierId) && (
                   <p className="text-xs text-slate-400 pt-1">★ = fornecedor já vinculado a este documento.</p>

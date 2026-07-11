@@ -323,6 +323,24 @@ export const partnerService = {
     return (data || []) as PartnerSharedDocument[];
   },
 
+  // Com quais workspaces de parceiro um documento já está compartilhado (evita reshare duplicado sem perceber)
+  async listSharingsForDocument(documentId: string): Promise<{ partner_workspace_id: string; supplier_name: string }[]> {
+    const { data, error } = await supabase
+      .from('partner_shared_documents')
+      .select('partner_workspace_id, workspace:partner_workspaces(supplier:suppliers(name))')
+      .eq('document_id', documentId);
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error listing sharings for document:', error);
+      throw error;
+    }
+
+    return (data || []).map((row: any) => ({
+      partner_workspace_id: row.partner_workspace_id,
+      supplier_name: row.workspace?.supplier?.name || 'Fornecedor sem nome',
+    }));
+  },
+
   async shareDocument(workspaceId: string, documentId: string, sharedBy: string): Promise<PartnerSharedDocument> {
     const { data, error } = await supabase
       .from('partner_shared_documents')

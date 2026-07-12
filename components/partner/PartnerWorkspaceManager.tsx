@@ -118,11 +118,14 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
         const sups = await supplierService.listSuppliers(organizationId);
         setSuppliers(sups || []);
 
-        // Carrega documentos ativos da org
-        const { data: docs } = await supabase
+        // Carrega documentos ativos da org (sem filtro quando "Todas as organizações" está selecionado)
+        let docsQuery = supabase
           .from('opura_documents')
-          .select('id, nome, categoria, supplier_id, project_id')
-          .eq('organization_id', organizationId);
+          .select('id, nome, categoria, supplier_id, project_id');
+        if (organizationId) {
+          docsQuery = docsQuery.eq('organization_id', organizationId);
+        }
+        const { data: docs } = await docsQuery;
         setDocuments(docs || []);
       } catch (err) {
         console.error('Erro ao carregar workspaces:', err);
@@ -130,7 +133,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
         setLoading(false);
       }
     };
-    if (organizationId) loadInitialData();
+    loadInitialData();
   }, [organizationId]);
 
   // 2. Recarregar dados ao selecionar outro workspace

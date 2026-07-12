@@ -202,15 +202,40 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         const pageUrl = `${TARGET_URL}?pagina=${page}`;
         setScrapingStatus(`Lendo pág. ${page} de ${maxPages}...`);
         
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(pageUrl)}`;
-        const res = await fetch(proxyUrl);
-        if (!res.ok) {
-          console.error(`Erro ao baixar página ${page} via proxy CORS`);
+        let html = '';
+        let success = false;
+        
+        // Tentativa 1: CORSProxy.io (Retorna HTML bruto)
+        try {
+          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(pageUrl)}`;
+          const res = await fetch(proxyUrl);
+          if (res.ok) {
+            html = await res.text();
+            success = true;
+          }
+        } catch (e1) {
+          console.warn('Falha no CORSProxy.io, tentando fallback AllOrigins...', e1);
+        }
+
+        // Tentativa 2: Fallback AllOrigins (Retorna JSON contendo .contents)
+        if (!success) {
+          try {
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(pageUrl)}`;
+            const res = await fetch(proxyUrl);
+            if (res.ok) {
+              const responseJson = await res.json();
+              html = responseJson.contents || '';
+              success = true;
+            }
+          } catch (e2) {
+            console.error('Falha de conexão em todos os proxies de CORS', e2);
+          }
+        }
+
+        if (!success || !html) {
+          console.error(`Erro ao baixar página ${page} via proxies CORS`);
           break;
         }
-        
-        const responseJson = await res.json();
-        const html = responseJson.contents || '';
 
         // Higienizar e extrair JSON-LD
         const sanitizeJsonString = (rawJson: string) => {

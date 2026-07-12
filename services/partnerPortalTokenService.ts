@@ -64,6 +64,18 @@ export const partnerPortalTokenService = {
     return (data as any)?.data || [];
   },
 
+  async getContractDetail(
+    token: string,
+    contractId: string
+  ): Promise<{ valid: boolean; items: any[]; addendums: any[]; measurements: any[] }> {
+    const { data, error } = await supabase.rpc('partner_portal_get_contract_detail', {
+      p_token: token,
+      p_contract_id: contractId,
+    });
+    if (error) throw error;
+    return data as any;
+  },
+
   async getRequests(token: string): Promise<any[]> {
     const { data, error } = await supabase.rpc('partner_portal_get_requests', { p_token: token });
     if (error) throw error;

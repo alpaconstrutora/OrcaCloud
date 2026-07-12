@@ -18,7 +18,11 @@ import {
   User,
   Activity,
   DollarSign,
-  Upload
+  Upload,
+  X,
+  Package,
+  TrendingUp,
+  Ruler
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
@@ -32,7 +36,10 @@ import {
   PartnerMessage,
   PartnerRequest,
   PartnerSharedDocument,
-  Contract
+  Contract,
+  ContractItem,
+  ContractAddendum,
+  ContractMeasurement
 } from '../../types';
 
 interface PartnerPortalProps {
@@ -90,6 +97,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const [sendDocNote, setSendDocNote] = useState('');
   const [sendingDoc, setSendingDoc] = useState(false);
 
+  // Detalhe do contrato (Visão Geral / Itens / Aditivos / Medições)
+  const [detailContract, setDetailContract] = useState<Contract | null>(null);
+  const [detailTab, setDetailTab] = useState<'overview' | 'items' | 'addendums' | 'measurements'>('overview');
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [contractItems, setContractItems] = useState<ContractItem[]>([]);
+  const [contractAddendums, setContractAddendums] = useState<ContractAddendum[]>([]);
+  const [contractMeasurements, setContractMeasurements] = useState<ContractMeasurement[]>([]);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Feed unificado de atividades (documentos compartilhados + solicitações), mais recente primeiro
@@ -123,6 +138,57 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
     const emitted = (contract.minuta_versions || []).filter((m) => m.emitted && m.url);
     return emitted.length > 0 ? emitted[emitted.length - 1].url : null;
   };
+
+  // Abrir o detalhe de um contrato (itens/aditivos/medições) — mesmos dados que a
+  // tela interna de Suprimentos > Contratos mostra, só que somente leitura.
+  const openContractDetail = async (contract: Contract) => {
+    setDetailContract(contract);
+    setDetailTab('overview');
+    setDetailLoading(true);
+    try {
+      if (isTokenMode) {
+        const res = await partnerPortalTokenService.getContractDetail(portalToken!, contract.id);
+        setContractItems(res.items || []);
+        setContractAddendums(res.addendums || []);
+        setContractMeasurements(res.measurements || []);
+      } else {
+        const [items, addendums, measurements] = await Promise.all([
+          contractService.listContractItems(contract.id),
+          contractService.listAddendums(contract.id),
+          contractService.listMeasurements(contract.id),
+        ]);
+        setContractItems(items);
+        setContractAddendums(addendums);
+        setContractMeasurements(measurements);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar detalhe do contrato:', err);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  // Métricas derivadas (mesmas fórmulas de ContractDetailView.tsx)
+  const totalMeasured = contractMeasurements.reduce((sum, m) => sum + (Number(m.total_value) || 0), 0);
+  const physicalProgress = detailContract && Number(detailContract.current_value) > 0
+    ? (totalMeasured / Number(detailContract.current_value)) * 100
+    : 0;
+  const timeProgress = (() => {
+    if (!detailContract?.start_date || !detailContract?.end_date) return 0;
+    const start = new Date(detailContract.start_date).getTime();
+    const end = new Date(detailContract.end_date).getTime();
+    const now = Date.now();
+    if (end <= start) return 0;
+    return Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100));
+  })();
+  const approvedAddendumsImpact = contractAddendums
+    .filter((a) => a.status === 'Aprovado')
+    .reduce((sum, a) => sum + (Number(a.value_impact) || 0), 0);
+  const addendumsPercentage = detailContract && Number(detailContract.original_value) > 0
+    ? (approvedAddendumsImpact / Number(detailContract.original_value)) * 100
+    : 0;
+  const retentionValue = totalMeasured * ((Number(detailContract?.retention_rate) || 0) / 100);
+  const saldoAFaturar = detailContract ? Number(detailContract.current_value) - totalMeasured : 0;
 
   const [docSearchQuery, setDocSearchQuery] = useState('');
 
@@ -893,7 +959,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               <h3 className="text-md font-bold text-gray-900">Seus Contratos Ativos</h3>
               <div className="flex flex-col gap-4">
                 {contracts.map((contract) => (
-                  <div key={contract.id} className="bg-white border border-gray-200 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                  <div
+                    key={contract.id}
+                    onClick={() => openContractDetail(contract)}
+                    className="bg-white border border-gray-200 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm hover:border-orange-200 hover:shadow-md transition-all cursor-pointer"
+                  >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-200 text-xs font-bold rounded-md uppercase">
@@ -907,11 +977,18 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         <span>Reajuste: {contract.reajuste_index || 'Sem reajuste'}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 border-gray-100 pt-3 md:pt-0">
+                    <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 border-gray-100 pt-3 md:pt-0" onClick={(e) => e.stopPropagation()}>
                       <div className="text-left md:text-right">
                         <span className="text-xs text-gray-400 uppercase block font-semibold">Valor Atual</span>
                         <h4 className="text-sm font-black text-gray-900 mt-0.5">R$ {Number(contract.current_value).toLocaleString('pt-BR', {minimumFractionDigits:2})}</h4>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => openContractDetail(contract)}
+                        className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3.5 py-2 rounded-xl text-xs text-gray-700 hover:bg-gray-100 active:scale-95 transition-all font-semibold"
+                      >
+                        Ver Detalhes
+                      </button>
                       {getContractFileUrl(contract) && (
                         <a
                           href={getContractFileUrl(contract)!}
@@ -1160,6 +1237,195 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DETALHE DO CONTRATO (Visão Geral / Itens / Aditivos / Medições) */}
+      {detailContract && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-gray-200 max-w-3xl w-full max-h-[90vh] rounded-2xl shadow-2xl relative flex flex-col">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
+              <div className="min-w-0">
+                <span className="text-xs text-gray-400 font-bold uppercase">Nº {detailContract.number}</span>
+                <h3 className="text-md font-bold text-gray-900 truncate">{detailContract.title || 'Contrato'}</h3>
+              </div>
+              <button
+                onClick={() => setDetailContract(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex gap-1 px-6 pt-3 border-b border-gray-100 shrink-0 overflow-x-auto">
+              {([
+                { id: 'overview', label: 'Visão Geral', icon: TrendingUp },
+                { id: 'items', label: `Itens (${contractItems.length})`, icon: Package },
+                { id: 'addendums', label: `Aditivos (${contractAddendums.length})`, icon: FileText },
+                { id: 'measurements', label: `Medições (${contractMeasurements.length})`, icon: Ruler },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setDetailTab(tab.id)}
+                  className={`px-3 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-all
+                    ${detailTab === tab.id ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+                >
+                  <tab.icon className="w-3.5 h-3.5" />
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="p-6 flex-1 overflow-y-auto">
+              {detailLoading ? (
+                <div className="text-center py-12 text-xs text-gray-400">Carregando...</div>
+              ) : (
+                <>
+                  {detailTab === 'overview' && (
+                    <div className="flex flex-col gap-4">
+                      <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Resumo de Execução</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-4">
+                          <div>
+                            <span className="text-gray-400 block">Data Início</span>
+                            <span className="font-bold text-gray-900">{detailContract.start_date ? new Date(detailContract.start_date).toLocaleDateString() : '-'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 block">Data Término</span>
+                            <span className="font-bold text-gray-900">{detailContract.end_date ? new Date(detailContract.end_date).toLocaleDateString() : '-'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 block">Tempo Decorrido</span>
+                            <span className="font-bold text-gray-900">{timeProgress.toFixed(1)}%</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 block">Progresso Físico-Financeiro</span>
+                            <span className="font-bold text-gray-900">{physicalProgress.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2.5">
+                          <div>
+                            <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                              <span>Execução do Prazo</span><span>{timeProgress.toFixed(1)}%</span>
+                            </div>
+                            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-500" style={{ width: `${Math.min(100, timeProgress)}%` }}></div>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                              <span>Progresso Físico-Financeiro</span><span>{physicalProgress.toFixed(1)}%</span>
+                            </div>
+                            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div className="h-full bg-orange-500" style={{ width: `${Math.min(100, physicalProgress)}%` }}></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Valor Atual</span>
+                          <span className="text-sm font-black text-gray-900">R$ {Number(detailContract.current_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Valor Original</span>
+                          <span className="text-sm font-black text-gray-900">R$ {Number(detailContract.original_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">% em Aditivos</span>
+                          <span className="text-sm font-black text-gray-900">{addendumsPercentage.toFixed(1)}%</span>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Total Medido</span>
+                          <span className="text-sm font-black text-gray-900">R$ {totalMeasured.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Retenções</span>
+                          <span className="text-sm font-black text-gray-900">R$ {retentionValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+                          <span className="text-[10px] text-orange-600 uppercase font-semibold block">Saldo a Faturar</span>
+                          <span className="text-sm font-black text-orange-700">R$ {saldoAFaturar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {detailTab === 'items' && (
+                    <div className="flex flex-col gap-2">
+                      {contractItems.map((item) => (
+                        <div key={item.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-gray-900 truncate">{item.description}</p>
+                            <p className="text-[10px] text-gray-400">{item.quantity} {item.unit} × R$ {Number(item.unit_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          </div>
+                          <span className="text-xs font-black text-gray-900 shrink-0">R$ {Number(item.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      ))}
+                      {contractItems.length === 0 && (
+                        <div className="text-center py-8 text-xs text-gray-400">Nenhum item cadastrado.</div>
+                      )}
+                    </div>
+                  )}
+
+                  {detailTab === 'addendums' && (
+                    <div className="flex flex-col gap-2">
+                      {contractAddendums.map((a) => (
+                        <div key={a.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-xs font-bold text-gray-900">Aditivo Nº {a.number} — {a.type}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
+                              ${a.status === 'Aprovado' ? 'bg-green-100 text-green-700' : a.status === 'Rejeitado' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                              {a.status}
+                            </span>
+                          </div>
+                          {a.description && <p className="text-[11px] text-gray-500 mb-1">{a.description}</p>}
+                          <div className="flex flex-wrap gap-4 text-[10px] text-gray-400">
+                            {a.value_impact ? <span>Impacto: R$ {Number(a.value_impact).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span> : null}
+                            {a.new_end_date ? <span>Novo término: {new Date(a.new_end_date).toLocaleDateString()}</span> : null}
+                          </div>
+                        </div>
+                      ))}
+                      {contractAddendums.length === 0 && (
+                        <div className="text-center py-8 text-xs text-gray-400">Nenhum aditivo registrado.</div>
+                      )}
+                    </div>
+                  )}
+
+                  {detailTab === 'measurements' && (
+                    <div className="flex flex-col gap-2">
+                      {contractMeasurements.map((m) => (
+                        <div key={m.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-xs font-bold text-gray-900">Medição Nº {m.number}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
+                              ${m.status === 'Paga' || m.status === 'Processada' ? 'bg-green-100 text-green-700' : m.status === 'Cancelada' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                              {m.status}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-500 mb-1">
+                            Período: {m.period_start ? new Date(m.period_start).toLocaleDateString() : '-'} até {m.period_end ? new Date(m.period_end).toLocaleDateString() : '-'}
+                          </p>
+                          <div className="flex flex-wrap gap-4 text-[10px] text-gray-400">
+                            <span>Bruto: R$ {Number(m.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span>Retenção: R$ {Number(m.retention_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span>Líquido: R$ {Number(m.net_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            {m.invoice_url && (
+                              <a href={m.invoice_url} target="_blank" rel="noreferrer" className="text-orange-500 hover:text-orange-600 font-semibold">Ver Nota</a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {contractMeasurements.length === 0 && (
+                        <div className="text-center py-8 text-xs text-gray-400">Nenhuma medição registrada.</div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

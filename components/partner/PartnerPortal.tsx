@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  LayoutDashboard, 
-  MessageSquare, 
-  FolderOpen, 
-  FileText, 
-  ClipboardList, 
-  Send, 
-  Paperclip, 
-  Download, 
-  Plus, 
-  Calendar, 
-  Clock, 
+import {
+  LayoutDashboard,
+  MessageSquare,
+  FolderOpen,
+  FileText,
+  ClipboardList,
+  Send,
+  Paperclip,
+  Download,
+  Plus,
+  Calendar,
+  Clock,
   AlertTriangle,
   CheckCircle2,
   ExternalLink,
@@ -59,11 +59,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const [activeTab, setActiveTab] = useState<'dashboard' | 'conversas' | 'documentos' | 'contratos' | 'solicitacoes'>('dashboard');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Dados do Parceiro
   const [partnerUser, setPartnerUser] = useState<PartnerUser | null>(null);
   const [workspace, setWorkspace] = useState<PartnerWorkspace | null>(null);
-  
+
   // Dados das abas
   const [conversations, setConversations] = useState<PartnerConversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<PartnerConversation | null>(null);
@@ -72,7 +72,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const [sharedDocs, setSharedDocs] = useState<PartnerSharedDocument[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [requests, setRequests] = useState<PartnerRequest[]>([]);
-  
+
   // Modais
   const [isNewRequestModalOpen, setIsNewRequestModalOpen] = useState(false);
   const [newRequest, setNewRequest] = useState({
@@ -498,10 +498,10 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#141414] text-white">
+      <div className="flex items-center justify-center h-screen bg-gray-50 text-gray-900">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-sm font-medium text-gray-400">Carregando portal do parceiro...</span>
+          <span className="text-sm font-medium text-gray-500">Carregando portal do parceiro...</span>
         </div>
       </div>
     );
@@ -509,11 +509,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#141414] text-white p-6">
-        <div className="max-w-md w-full bg-[#1c1c1c] border border-red-500/20 p-6 rounded-2xl text-center shadow-xl">
+      <div className="flex items-center justify-center h-screen bg-gray-50 text-gray-900 p-6">
+        <div className="max-w-md w-full bg-white border border-red-200 p-6 rounded-2xl text-center shadow-xl">
           <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-white mb-2">Acesso Negado</h3>
-          <p className="text-sm text-gray-400 mb-6">{error}</p>
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Acesso Negado</h3>
+          <p className="text-sm text-gray-500 mb-6">{error}</p>
           <Button
             onClick={() => window.location.reload()}
             className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold normal-case tracking-normal"
@@ -526,14 +526,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   }
 
   return (
-    <div className="flex flex-col h-screen bg-[#121212] text-gray-100 overflow-hidden font-sans">
+    <div className="flex flex-col h-screen bg-white text-gray-800 overflow-hidden font-sans">
       {isPreview && (
-        <div className="h-9 bg-yellow-500/15 border-b border-yellow-500/30 flex items-center justify-center gap-3 shrink-0 text-xs font-bold text-yellow-400 uppercase tracking-wider">
+        <div className="h-9 bg-yellow-50 border-b border-yellow-200 flex items-center justify-center gap-3 shrink-0 text-xs font-bold text-yellow-700 uppercase tracking-wider">
           <span>Modo de Pré-visualização (Admin) — envio de mensagens e solicitações desabilitado</span>
           {onExitPreview && (
             <button
               onClick={onExitPreview}
-              className="underline decoration-dotted hover:text-yellow-300 normal-case tracking-normal"
+              className="underline decoration-dotted hover:text-yellow-800 normal-case tracking-normal"
             >
               Sair da pré-visualização
             </button>
@@ -541,66 +541,66 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
         </div>
       )}
       {isTokenMode && (
-        <div className="h-9 bg-blue-500/15 border-b border-blue-500/30 flex items-center justify-center gap-3 shrink-0 text-xs font-bold text-blue-400 uppercase tracking-wider">
+        <div className="h-9 bg-blue-50 border-b border-blue-200 flex items-center justify-center gap-3 shrink-0 text-xs font-bold text-blue-700 uppercase tracking-wider">
           <span>Acesso via link público</span>
         </div>
       )}
-      {/* Header Premium */}
-      <header className="h-16 border-b border-white/5 bg-[#181818] flex items-center justify-between px-6 shrink-0 shadow-lg">
+      {/* Header */}
+      <header className="h-16 border-b border-gray-100 bg-white flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-3">
           <div className="px-2.5 py-1 bg-orange-500 text-white rounded-lg text-xs font-black uppercase tracking-wider">
             Partner Portal
           </div>
-          <h1 className="text-md font-bold text-white tracking-tight">
+          <h1 className="text-md font-bold text-gray-900 tracking-tight">
             {workspace?.supplier_name}
           </h1>
         </div>
-        <div className="flex items-center gap-3 text-xs bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
-          <User className="w-3.5 h-3.5 text-orange-400" />
-          <span className="font-semibold text-gray-300">{partnerUser?.name} ({partnerUser?.role})</span>
+        <div className="flex items-center gap-3 text-xs bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
+          <User className="w-3.5 h-3.5 text-orange-500" />
+          <span className="font-semibold text-gray-600">{partnerUser?.name} ({partnerUser?.role})</span>
         </div>
       </header>
 
       {/* Main Body */}
       <div className="flex flex-1 overflow-hidden">
         {/* Navigation Sidebar */}
-        <aside className="w-64 border-r border-white/5 bg-[#161616] p-4 flex flex-col gap-1.5 shrink-0">
-          <button 
+        <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex flex-col gap-1.5 shrink-0">
+          <button
             onClick={() => setActiveTab('dashboard')}
             className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
-              ${activeTab === 'dashboard' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+              ${activeTab === 'dashboard' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
           >
             <LayoutDashboard className="w-4 h-4" />
             <span>Dashboard</span>
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('conversas')}
             className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
-              ${activeTab === 'conversas' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+              ${activeTab === 'conversas' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
           >
             <MessageSquare className="w-4 h-4" />
             <span>Conversas</span>
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('documentos')}
             className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
-              ${activeTab === 'documentos' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+              ${activeTab === 'documentos' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
           >
             <FolderOpen className="w-4 h-4" />
             <span>Documentos</span>
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('contratos')}
             className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
-              ${activeTab === 'contratos' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+              ${activeTab === 'contratos' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
           >
             <FileText className="w-4 h-4" />
             <span>Contratos</span>
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('solicitacoes')}
             className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
-              ${activeTab === 'solicitacoes' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+              ${activeTab === 'solicitacoes' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
           >
             <ClipboardList className="w-4 h-4" />
             <span>Solicitações</span>
@@ -608,90 +608,90 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
         </aside>
 
         {/* Dynamic Content Pane */}
-        <main className="flex-1 bg-[#121212] overflow-y-auto p-6 relative">
-          
+        <main className="flex-1 bg-white overflow-y-auto p-6 relative">
+
           {/* TAB: DASHBOARD */}
           {activeTab === 'dashboard' && (
             <div className="flex flex-col gap-6">
               {/* Header Cards */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-[#1c1c1c] border border-white/5 p-5 rounded-2xl flex items-center justify-between shadow-md">
+                <div className="bg-white border border-gray-200 p-5 rounded-2xl flex items-center justify-between shadow-sm">
                   <div>
                     <span className="text-xs text-gray-400 font-medium">Contratos Ativos</span>
-                    <h3 className="text-2xl font-black text-white mt-1">{contracts.filter(c => c.status === 'Assinado').length}</h3>
+                    <h3 className="text-2xl font-black text-gray-900 mt-1">{contracts.filter(c => c.status === 'Assinado').length}</h3>
                   </div>
-                  <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl"><FileText className="w-5 h-5" /></div>
+                  <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><FileText className="w-5 h-5" /></div>
                 </div>
-                <div className="bg-[#1c1c1c] border border-white/5 p-5 rounded-2xl flex items-center justify-between shadow-md">
+                <div className="bg-white border border-gray-200 p-5 rounded-2xl flex items-center justify-between shadow-sm">
                   <div>
                     <span className="text-xs text-gray-400 font-medium">Solicitações Abertas</span>
-                    <h3 className="text-2xl font-black text-white mt-1">{requests.filter(r => r.status === 'ABERTO' || r.status === 'EM_ANALISE').length}</h3>
+                    <h3 className="text-2xl font-black text-gray-900 mt-1">{requests.filter(r => r.status === 'ABERTO' || r.status === 'EM_ANALISE').length}</h3>
                   </div>
-                  <div className="p-3 bg-yellow-500/10 text-yellow-400 rounded-xl"><ClipboardList className="w-5 h-5" /></div>
+                  <div className="p-3 bg-yellow-50 text-yellow-600 rounded-xl"><ClipboardList className="w-5 h-5" /></div>
                 </div>
-                <div className="bg-[#1c1c1c] border border-white/5 p-5 rounded-2xl flex items-center justify-between shadow-md">
+                <div className="bg-white border border-gray-200 p-5 rounded-2xl flex items-center justify-between shadow-sm">
                   <div>
                     <span className="text-xs text-gray-400 font-medium">Documentos Disponíveis</span>
-                    <h3 className="text-2xl font-black text-white mt-1">{sharedDocs.length}</h3>
+                    <h3 className="text-2xl font-black text-gray-900 mt-1">{sharedDocs.length}</h3>
                   </div>
-                  <div className="p-3 bg-purple-500/10 text-purple-400 rounded-xl"><FolderOpen className="w-5 h-5" /></div>
+                  <div className="p-3 bg-purple-50 text-purple-600 rounded-xl"><FolderOpen className="w-5 h-5" /></div>
                 </div>
-                <div className="bg-[#1c1c1c] border border-white/5 p-5 rounded-2xl flex items-center justify-between shadow-md">
+                <div className="bg-white border border-gray-200 p-5 rounded-2xl flex items-center justify-between shadow-sm">
                   <div>
                     <span className="text-xs text-gray-400 font-medium">Valor Contratado</span>
-                    <h3 className="text-lg font-black text-white mt-1">
-                      {contracts.length > 0 
+                    <h3 className="text-lg font-black text-gray-900 mt-1">
+                      {contracts.length > 0
                         ? `R$ ${contracts.reduce((acc, c) => acc + (Number(c.current_value) || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
                         : 'R$ 0,00'}
                     </h3>
                   </div>
-                  <div className="p-3 bg-green-500/10 text-green-400 rounded-xl"><DollarSign className="w-5 h-5" /></div>
+                  <div className="p-3 bg-green-50 text-green-600 rounded-xl"><DollarSign className="w-5 h-5" /></div>
                 </div>
               </div>
 
               {/* Grid 2 Columns */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Timeline */}
-                <div className="bg-[#1a1a1a] border border-white/5 p-5 rounded-2xl lg:col-span-2 shadow-xl">
-                  <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-orange-400" />
+                <div className="bg-white border border-gray-200 p-5 rounded-2xl lg:col-span-2 shadow-sm">
+                  <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-orange-500" />
                     Atividades Recentes
                   </h4>
                   <div className="flex flex-col gap-4">
                     {recentActivity.map((act) => (
-                      <div key={act.id} className="flex gap-4 items-start p-3 bg-white/5 rounded-xl border border-white/5">
+                      <div key={act.id} className="flex gap-4 items-start p-3 bg-gray-50 rounded-xl border border-gray-100">
                         <div className={`p-2 rounded-lg text-xs font-bold shrink-0
                           ${act.kind === 'documento'
-                            ? 'bg-purple-500/10 text-purple-400'
-                            : act.status === 'CONCLUIDO' ? 'bg-green-500/10 text-green-400' : 'bg-orange-500/10 text-orange-400'}`}>
+                            ? 'bg-purple-50 text-purple-600'
+                            : act.status === 'CONCLUIDO' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>
                           {act.kind === 'documento' ? <FolderOpen className="w-3.5 h-3.5" /> : act.label}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-white truncate">
+                          <p className="text-xs font-semibold text-gray-800 truncate">
                             {act.kind === 'documento' ? `Documento compartilhado: ${act.title}` : act.title}
                           </p>
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-gray-400">
                             {act.kind === 'documento' ? `Categoria: ${act.label}` : `Status: ${act.status}`} • {new Date(act.date).toLocaleDateString()}
                           </span>
                         </div>
                       </div>
                     ))}
                     {recentActivity.length === 0 && (
-                      <div className="text-center py-6 text-xs text-gray-500">Nenhuma atividade recente cadastrada.</div>
+                      <div className="text-center py-6 text-xs text-gray-400">Nenhuma atividade recente cadastrada.</div>
                     )}
                   </div>
                 </div>
 
                 {/* Info Card Construtora */}
-                <div className="bg-[#1a1a1a] border border-white/5 p-5 rounded-2xl shadow-xl flex flex-col gap-4">
-                  <h4 className="text-sm font-bold text-white">Canal de Atendimento</h4>
-                  <p className="text-xs text-gray-400 leading-relaxed">
+                <div className="bg-white border border-gray-200 p-5 rounded-2xl shadow-sm flex flex-col gap-4">
+                  <h4 className="text-sm font-bold text-gray-900">Canal de Atendimento</h4>
+                  <p className="text-xs text-gray-500 leading-relaxed">
                     Este é o canal direto de comunicação da sua empresa com a Construtora. Qualquer dúvida ou solicitação técnica/financeira deve ser formalizada pela aba <strong>Solicitações</strong>.
                   </p>
-                  <div className="h-px bg-white/5 my-1"></div>
+                  <div className="h-px bg-gray-100 my-1"></div>
                   <div>
-                    <span className="text-xs text-gray-500 uppercase block font-bold">Documentação GED</span>
-                    <span className="text-xs text-gray-300">Todos os projetos e contratos oficiais estão na aba <strong>Documentos</strong>.</span>
+                    <span className="text-xs text-gray-400 uppercase block font-bold">Documentação GED</span>
+                    <span className="text-xs text-gray-600">Todos os projetos e contratos oficiais estão na aba <strong>Documentos</strong>.</span>
                   </div>
                 </div>
               </div>
@@ -700,33 +700,33 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
           {/* TAB: CONVERSAS */}
           {activeTab === 'conversas' && (
-            <div className="flex h-[calc(100vh-12rem)] bg-[#1a1a1a] border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
+            <div className="flex h-[calc(100vh-12rem)] bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
               {/* Canais List */}
-              <div className="w-64 border-r border-white/5 bg-[#181818] flex flex-col">
-                <div className="p-4 border-b border-white/5 text-xs font-bold text-gray-400 uppercase tracking-wider">Canais</div>
+              <div className="w-64 border-r border-gray-100 bg-gray-50 flex flex-col">
+                <div className="p-4 border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">Canais</div>
                 <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
                   {conversations.map((conv) => (
                     <button
                       key={conv.id}
                       onClick={() => setSelectedConversation(conv)}
                       className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-button text-left font-medium transition-all
-                        ${selectedConversation?.id === conv.id ? 'bg-orange-500 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                        ${selectedConversation?.id === conv.id ? 'bg-orange-500 text-white font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
                     >
                       <span className="text-lg">#</span>
                       <span className="truncate">{conv.name}</span>
                     </button>
                   ))}
                   {conversations.length === 0 && (
-                    <div className="text-center py-6 text-xs text-gray-500">Nenhum canal ativo.</div>
+                    <div className="text-center py-6 text-xs text-gray-400">Nenhum canal ativo.</div>
                   )}
                 </div>
               </div>
 
               {/* Chat Panel */}
-              <div className="flex-1 flex flex-col bg-[#1c1c1c]">
+              <div className="flex-1 flex flex-col bg-white">
                 {selectedConversation ? (
                   <>
-                    <div className="h-12 border-b border-white/5 bg-[#181818] px-4 flex items-center justify-between text-xs font-bold text-white shrink-0">
+                    <div className="h-12 border-b border-gray-100 bg-gray-50 px-4 flex items-center justify-between text-xs font-bold text-gray-800 shrink-0">
                       <span># {selectedConversation.name}</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
@@ -734,24 +734,24 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         const isMe = msg.sender_type === 'EXTERNAL';
                         return (
                           <div key={msg.id} className={`flex flex-col max-w-[70%] ${isMe ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
-                            <span className="text-xs text-gray-500 mb-0.5 font-medium">{msg.sender_name}</span>
+                            <span className="text-xs text-gray-400 mb-0.5 font-medium">{msg.sender_name}</span>
                             <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed
-                              ${isMe ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-white/5 text-gray-100 rounded-tl-none border border-white/5'}`}>
+                              ${isMe ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none border border-gray-100'}`}>
                               {msg.message}
                             </div>
-                            <span className="text-[9px] text-gray-600 mt-1">{new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            <span className="text-[9px] text-gray-400 mt-1">{new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                           </div>
                         );
                       })}
                       <div ref={chatEndRef}></div>
                     </div>
-                    <form onSubmit={handleSendMessage} className="p-4 border-t border-white/5 bg-[#181818] flex gap-2 shrink-0">
+                    <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-100 bg-gray-50 flex gap-2 shrink-0">
                       <input
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
                         disabled={isPreview}
                         placeholder={isPreview ? 'Envio de mensagens indisponível no modo de pré-visualização' : `Enviar mensagem em #${selectedConversation.name}...`}
-                        className="flex-1 bg-[#121212] border border-white/5 rounded-xl px-4 py-2 text-form-input text-white focus:outline-none focus:border-orange-500/50 disabled:opacity-40"
+                        className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2 text-form-input text-gray-900 focus:outline-none focus:border-orange-500 disabled:opacity-40"
                       />
                       <Button type="submit" size="icon" disabled={isPreview} className="bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-40 disabled:cursor-not-allowed">
                         <Send className="w-4 h-4" />
@@ -759,7 +759,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                     </form>
                   </>
                 ) : (
-                  <div className="flex-1 flex items-center justify-center text-xs text-gray-500">Selecione ou aguarde o início de uma conversa.</div>
+                  <div className="flex-1 flex items-center justify-center text-xs text-gray-400">Selecione ou aguarde o início de uma conversa.</div>
                 )}
               </div>
             </div>
@@ -769,22 +769,22 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           {activeTab === 'documentos' && (
             <div className="flex flex-col gap-6">
               <div className="flex items-center justify-between gap-4 flex-wrap">
-                <h3 className="text-md font-bold text-white">Documentos e Projetos Compartilhados</h3>
+                <h3 className="text-md font-bold text-gray-900">Documentos e Projetos Compartilhados</h3>
                 <div className="flex items-center gap-3">
                   <div className="relative max-w-xs w-full">
-                    <Search className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
+                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                     <input
                       value={docSearchQuery}
                       onChange={(e) => setDocSearchQuery(e.target.value)}
                       placeholder="Buscar documentos..."
-                      className="bg-[#1c1c1c] border border-white/5 pl-9 pr-4 py-2 rounded-xl text-form-input w-full text-white focus:outline-none"
+                      className="bg-gray-50 border border-gray-200 pl-9 pr-4 py-2 rounded-xl text-form-input w-full text-gray-900 focus:outline-none focus:border-orange-500"
                     />
                   </div>
                   <Button
                     onClick={() => setIsSendDocModalOpen(true)}
                     disabled={isPreview}
                     title={isPreview ? 'Indisponível no modo de pré-visualização' : undefined}
-                    className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10 normal-case tracking-normal shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="bg-orange-500 hover:bg-orange-600 text-white shadow-sm normal-case tracking-normal shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Upload className="w-4 h-4" />
                     Enviar Documento
@@ -796,29 +796,29 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 <div className="flex flex-col gap-3">
                   <h4 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
                     Enviados por Você
-                    <span className="text-gray-600 font-bold">({sentDocuments.length})</span>
+                    <span className="text-gray-400 font-bold">({sentDocuments.length})</span>
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {sentDocuments.map((req) => (
-                      <div key={req.id} className="bg-[#1c1c1c] border border-white/5 p-4 rounded-2xl flex flex-col gap-3 shadow-md">
+                      <div key={req.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col gap-3 shadow-sm">
                         <div className="flex items-start justify-between">
-                          <div className="p-2 bg-purple-500/10 text-purple-400 rounded-xl"><Upload className="w-5 h-5" /></div>
+                          <div className="p-2 bg-purple-50 text-purple-600 rounded-xl"><Upload className="w-5 h-5" /></div>
                           <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border
-                            ${req.status === 'CONCLUIDO' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'}`}>
+                            ${req.status === 'CONCLUIDO' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-yellow-50 text-yellow-600 border-yellow-200'}`}>
                             {req.status === 'CONCLUIDO' ? 'Incluído no GED' : 'Aguardando revisão'}
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="text-xs font-bold text-white truncate">{req.title}</h4>
-                          <p className="text-xs text-gray-500 mt-1 truncate">{req.description}</p>
+                          <h4 className="text-xs font-bold text-gray-900 truncate">{req.title}</h4>
+                          <p className="text-xs text-gray-400 mt-1 truncate">{req.description}</p>
                         </div>
-                        <div className="flex items-center justify-between text-xs text-gray-500 border-t border-white/5 pt-3 mt-1">
+                        <div className="flex items-center justify-between text-xs text-gray-400 border-t border-gray-100 pt-3 mt-1">
                           <span>Enviado em: {new Date(req.created_at).toLocaleDateString()}</span>
                           {req.attachment_paths?.[0] && (
                             <button
                               type="button"
                               onClick={() => handleDownloadAttachment(req.attachment_paths![0])}
-                              className="flex items-center gap-1 text-orange-400 hover:text-orange-300 font-semibold"
+                              className="flex items-center gap-1 text-orange-500 hover:text-orange-600 font-semibold"
                             >
                               <Download className="w-3.5 h-3.5" />
                               <span>Ver</span>
@@ -832,11 +832,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               )}
 
               {sharedDocs.length === 0 ? (
-                <div className="text-center py-12 bg-[#1c1c1c] border border-dashed border-white/5 rounded-2xl text-xs text-gray-500">
+                <div className="text-center py-12 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-xs text-gray-400">
                   Nenhum documento compartilhado com o seu portal no momento.
                 </div>
               ) : Object.keys(docsByCategoria).length === 0 ? (
-                <div className="text-center py-12 bg-[#1c1c1c] border border-dashed border-white/5 rounded-2xl text-xs text-gray-500">
+                <div className="text-center py-12 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-xs text-gray-400">
                   Nenhum documento encontrado para "{docSearchQuery}".
                 </div>
               ) : (
@@ -847,30 +847,30 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                       <div key={cat} className="flex flex-col gap-3">
                         <h4 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
                           {CATEGORIA_LABELS[cat] || cat}
-                          <span className="text-gray-600 font-bold">({docsByCategoria[cat].length})</span>
+                          <span className="text-gray-400 font-bold">({docsByCategoria[cat].length})</span>
                         </h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                           {docsByCategoria[cat].map((sd) => (
-                            <div key={sd.id} className="bg-[#1c1c1c] border border-white/5 p-4 rounded-2xl flex flex-col gap-3 shadow-md hover:border-white/10 transition-all group">
+                            <div key={sd.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col gap-3 shadow-sm hover:border-gray-300 transition-all group">
                               <div className="flex items-start justify-between">
-                                <div className="p-2 bg-orange-500/10 text-orange-400 rounded-xl"><FolderOpen className="w-5 h-5" /></div>
+                                <div className="p-2 bg-orange-50 text-orange-500 rounded-xl"><FolderOpen className="w-5 h-5" /></div>
                                 {isRecentlyShared(sd.shared_at) && (
-                                  <span className="text-[9px] font-black uppercase tracking-wider bg-green-500/10 text-green-400 px-1.5 py-0.5 rounded-md border border-green-500/20">
+                                  <span className="text-[9px] font-black uppercase tracking-wider bg-green-50 text-green-600 px-1.5 py-0.5 rounded-md border border-green-200">
                                     Novo
                                   </span>
                                 )}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <h4 className="text-xs font-bold text-white truncate">{sd.document?.nome}</h4>
-                                <p className="text-xs text-gray-500 mt-1 truncate">{sd.document?.descricao || 'Sem descrição'}</p>
+                                <h4 className="text-xs font-bold text-gray-900 truncate">{sd.document?.nome}</h4>
+                                <p className="text-xs text-gray-400 mt-1 truncate">{sd.document?.descricao || 'Sem descrição'}</p>
                               </div>
-                              <div className="flex items-center justify-between text-xs text-gray-500 border-t border-white/5 pt-3 mt-1">
+                              <div className="flex items-center justify-between text-xs text-gray-400 border-t border-gray-100 pt-3 mt-1">
                                 <span>Compartilhado em: {new Date(sd.shared_at).toLocaleDateString()}</span>
                                 {sd.document?.active_version?.storage_path && (
                                   <button
                                     type="button"
                                     onClick={() => handleDownloadSharedDocument(sd.document!.active_version!.storage_path)}
-                                    className="flex items-center gap-1 text-orange-400 hover:text-orange-300 font-semibold"
+                                    className="flex items-center gap-1 text-orange-500 hover:text-orange-600 font-semibold"
                                   >
                                     <Download className="w-3.5 h-3.5" />
                                     <span>Baixar</span>
@@ -890,36 +890,36 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           {/* TAB: CONTRATOS */}
           {activeTab === 'contratos' && (
             <div className="flex flex-col gap-6">
-              <h3 className="text-md font-bold text-white">Seus Contratos Ativos</h3>
+              <h3 className="text-md font-bold text-gray-900">Seus Contratos Ativos</h3>
               <div className="flex flex-col gap-4">
                 {contracts.map((contract) => (
-                  <div key={contract.id} className="bg-[#1c1c1c] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-lg">
+                  <div key={contract.id} className="bg-white border border-gray-200 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5">
-                        <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-bold rounded-md uppercase">
+                        <span className="px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-200 text-xs font-bold rounded-md uppercase">
                           {contract.nature || 'Contrato'}
                         </span>
-                        <span className="text-xs text-gray-500 font-bold">Nº {contract.number}</span>
+                        <span className="text-xs text-gray-400 font-bold">Nº {contract.number}</span>
                       </div>
-                      <h4 className="text-xs font-bold text-white truncate">{contract.title || 'Contrato Prestação de Serviços'}</h4>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
+                      <h4 className="text-xs font-bold text-gray-900 truncate">{contract.title || 'Contrato Prestação de Serviços'}</h4>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-400">
                         <span>Vigência: {contract.start_date ? new Date(contract.start_date).toLocaleDateString() : '-'} até {contract.end_date ? new Date(contract.end_date).toLocaleDateString() : '-'}</span>
                         <span>Reajuste: {contract.reajuste_index || 'Sem reajuste'}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 border-white/5 pt-3 md:pt-0">
+                    <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 border-gray-100 pt-3 md:pt-0">
                       <div className="text-left md:text-right">
-                        <span className="text-xs text-gray-500 uppercase block font-semibold">Valor Atual</span>
-                        <h4 className="text-sm font-black text-white mt-0.5">R$ {Number(contract.current_value).toLocaleString('pt-BR', {minimumFractionDigits:2})}</h4>
+                        <span className="text-xs text-gray-400 uppercase block font-semibold">Valor Atual</span>
+                        <h4 className="text-sm font-black text-gray-900 mt-0.5">R$ {Number(contract.current_value).toLocaleString('pt-BR', {minimumFractionDigits:2})}</h4>
                       </div>
                       {getContractFileUrl(contract) && (
                         <a
                           href={getContractFileUrl(contract)!}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-3.5 py-2 rounded-xl text-xs text-white hover:bg-white/10 active:scale-95 transition-all font-semibold"
+                          className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3.5 py-2 rounded-xl text-xs text-gray-700 hover:bg-gray-100 active:scale-95 transition-all font-semibold"
                         >
-                          <ExternalLink className="w-3.5 h-3.5 text-orange-400" />
+                          <ExternalLink className="w-3.5 h-3.5 text-orange-500" />
                           Ver PDF
                         </a>
                       )}
@@ -927,7 +927,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   </div>
                 ))}
                 {contracts.length === 0 && (
-                  <div className="text-center py-12 bg-[#1c1c1c] border border-dashed border-white/5 rounded-2xl text-xs text-gray-500">
+                  <div className="text-center py-12 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-xs text-gray-400">
                     Nenhum contrato vinculado encontrado.
                   </div>
                 )}
@@ -939,12 +939,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           {activeTab === 'solicitacoes' && (
             <div className="flex flex-col gap-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-md font-bold text-white">Solicitações de Atendimento</h3>
+                <h3 className="text-md font-bold text-gray-900">Solicitações de Atendimento</h3>
                 <Button
                   onClick={() => setIsNewRequestModalOpen(true)}
                   disabled={isPreview}
                   title={isPreview ? 'Indisponível no modo de pré-visualização' : undefined}
-                  className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10 normal-case tracking-normal disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="bg-orange-500 hover:bg-orange-600 text-white shadow-sm normal-case tracking-normal disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-4 h-4" />
                   Nova Solicitação
@@ -953,17 +953,17 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
               <div className="flex flex-col gap-3">
                 {requests.map((req) => (
-                  <div key={req.id} className="bg-[#1c1c1c] border border-white/5 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-md">
+                  <div key={req.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className={`px-2 py-0.5 text-[9px] font-black rounded-md border
-                          ${req.priority === 'ALTA' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-gray-500/10 text-gray-400 border-white/5'}`}>
+                          ${req.priority === 'ALTA' ? 'bg-red-50 text-red-500 border-red-100' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
                           {req.priority}
                         </span>
-                        <span className="text-xs text-gray-500 font-bold uppercase">{req.type}</span>
+                        <span className="text-xs text-gray-400 font-bold uppercase">{req.type}</span>
                       </div>
-                      <h4 className="text-xs font-bold text-white truncate">{req.title}</h4>
-                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">{req.description}</p>
+                      <h4 className="text-xs font-bold text-gray-900 truncate">{req.title}</h4>
+                      <p className="text-xs text-gray-400 mt-1 leading-relaxed">{req.description}</p>
                       {req.attachment_paths && req.attachment_paths.length > 0 && (
                         <div className="flex flex-wrap gap-2 pt-2">
                           {req.attachment_paths.map((path, idx) => (
@@ -971,7 +971,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                               key={idx}
                               type="button"
                               onClick={() => handleDownloadAttachment(path)}
-                              className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 font-semibold bg-white/5 border border-white/5 px-2 py-1 rounded-lg"
+                              className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-600 font-semibold bg-gray-50 border border-gray-200 px-2 py-1 rounded-lg"
                             >
                               <Paperclip className="w-3 h-3" />
                               <span className="truncate max-w-[10rem]">{path.split('/').pop()?.replace(/^\d+_/, '')}</span>
@@ -980,20 +980,20 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 border-white/5 pt-3 md:pt-0">
+                    <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 border-gray-100 pt-3 md:pt-0">
                       <div className="text-left md:text-right">
-                        <span className="text-xs text-gray-500 uppercase block font-semibold">Status</span>
+                        <span className="text-xs text-gray-400 uppercase block font-semibold">Status</span>
                         <span className={`text-xs font-bold mt-1 px-2.5 py-0.5 rounded-full inline-block
-                          ${req.status === 'CONCLUIDO' ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
+                          ${req.status === 'CONCLUIDO' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
                           {req.status}
                         </span>
                       </div>
-                      <span className="text-xs text-gray-500 font-medium">Aberto em: {new Date(req.created_at).toLocaleDateString()}</span>
+                      <span className="text-xs text-gray-400 font-medium">Aberto em: {new Date(req.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
                 ))}
                 {requests.length === 0 && (
-                  <div className="text-center py-12 bg-[#1c1c1c] border border-dashed border-white/5 rounded-2xl text-xs text-gray-500">
+                  <div className="text-center py-12 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-xs text-gray-400">
                     Nenhuma solicitação cadastrada. Clique no botão acima para criar a primeira.
                   </div>
                 )}
@@ -1006,10 +1006,10 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
       {/* MODAL: NOVA SOLICITAÇÃO */}
       {isNewRequestModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-[#1c1c1c] border border-white/5 max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 shadow-2xl relative">
-            <h3 className="text-md font-bold text-white">Nova Solicitação</h3>
-            
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-gray-200 max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 shadow-2xl relative">
+            <h3 className="text-md font-bold text-gray-900">Nova Solicitação</h3>
+
             <form onSubmit={handleCreateRequest} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs text-gray-400 uppercase font-bold">Título</label>
@@ -1018,7 +1018,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   value={newRequest.title}
                   onChange={(e) => setNewRequest({ ...newRequest, title: e.target.value })}
                   placeholder="Ex: Reenvio de projeto executivo de fundação"
-                  className="bg-[#121212] border border-white/5 rounded-xl px-3.5 py-2.5 text-form-input text-white focus:outline-none focus:border-orange-500"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-900 focus:outline-none focus:border-orange-500"
                 />
               </div>
 
@@ -1030,7 +1030,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   value={newRequest.description}
                   onChange={(e) => setNewRequest({ ...newRequest, description: e.target.value })}
                   placeholder="Explique o motivo do seu pedido..."
-                  className="bg-[#121212] border border-white/5 rounded-xl px-3.5 py-2.5 text-form-input text-white focus:outline-none focus:border-orange-500"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-900 focus:outline-none focus:border-orange-500"
                 />
               </div>
 
@@ -1040,7 +1040,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   <select
                     value={newRequest.type}
                     onChange={(e) => setNewRequest({ ...newRequest, type: e.target.value as any })}
-                    className="bg-[#121212] border border-white/5 rounded-xl px-3 py-2.5 text-form-input text-white focus:outline-none"
+                    className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-900 focus:outline-none"
                   >
                     <option value="TECNICA">Técnica</option>
                     <option value="CONTRATO">Dúvida Contratual</option>
@@ -1055,7 +1055,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   <select
                     value={newRequest.priority}
                     onChange={(e) => setNewRequest({ ...newRequest, priority: e.target.value as any })}
-                    className="bg-[#121212] border border-white/5 rounded-xl px-3 py-2.5 text-form-input text-white focus:outline-none"
+                    className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-900 focus:outline-none"
                   >
                     <option value="BAIXA">Baixa</option>
                     <option value="MEDIA">Média</option>
@@ -1070,12 +1070,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   type="file"
                   multiple
                   onChange={(e) => setNewRequestFiles(Array.from(e.target.files || []))}
-                  className="text-xs text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-white/5 file:text-gray-300 file:text-xs file:font-semibold hover:file:bg-white/10"
+                  className="text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-gray-100 file:text-gray-700 file:text-xs file:font-semibold hover:file:bg-gray-200"
                 />
                 {newRequestFiles.length > 0 && (
                   <ul className="flex flex-col gap-1 pt-1">
                     {newRequestFiles.map((f, idx) => (
-                      <li key={idx} className="flex items-center gap-1.5 text-xs text-gray-400">
+                      <li key={idx} className="flex items-center gap-1.5 text-xs text-gray-500">
                         <Paperclip className="w-3 h-3" />
                         <span className="truncate">{f.name}</span>
                       </li>
@@ -1084,12 +1084,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 border-t border-white/5 pt-4 mt-2">
+              <div className="flex justify-end gap-2 border-t border-gray-100 pt-4 mt-2">
                 <Button
                   type="button"
                   variant="secondary"
                   onClick={() => setIsNewRequestModalOpen(false)}
-                  className="bg-transparent border-white/10 text-gray-400 hover:text-white hover:bg-transparent normal-case tracking-normal"
+                  className="normal-case tracking-normal"
                 >
                   Cancelar
                 </Button>
@@ -1108,10 +1108,10 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
       {/* MODAL: ENVIAR DOCUMENTO */}
       {isSendDocModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-[#1c1c1c] border border-white/5 max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 shadow-2xl relative">
-            <h3 className="text-md font-bold text-white">Enviar Documento</h3>
-            <p className="text-xs text-gray-400 leading-relaxed">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-gray-200 max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 shadow-2xl relative">
+            <h3 className="text-md font-bold text-gray-900">Enviar Documento</h3>
+            <p className="text-xs text-gray-500 leading-relaxed">
               O arquivo enviado aqui fica pendente de revisão da construtora antes de entrar
               oficialmente no GED. Você pode acompanhar o status na própria aba Documentos.
             </p>
@@ -1123,7 +1123,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   required
                   type="file"
                   onChange={(e) => setSendDocFile(e.target.files?.[0] || null)}
-                  className="text-xs text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-white/5 file:text-gray-300 file:text-xs file:font-semibold hover:file:bg-white/10"
+                  className="text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-gray-100 file:text-gray-700 file:text-xs file:font-semibold hover:file:bg-gray-200"
                 />
               </div>
 
@@ -1134,11 +1134,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   value={sendDocNote}
                   onChange={(e) => setSendDocNote(e.target.value)}
                   placeholder="Ex: ART atualizada referente ao contrato nº..."
-                  className="bg-[#121212] border border-white/5 rounded-xl px-3.5 py-2.5 text-form-input text-white focus:outline-none focus:border-orange-500"
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-900 focus:outline-none focus:border-orange-500"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 border-t border-white/5 pt-4 mt-2">
+              <div className="flex justify-end gap-2 border-t border-gray-100 pt-4 mt-2">
                 <Button
                   type="button"
                   variant="secondary"
@@ -1147,7 +1147,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                     setSendDocFile(null);
                     setSendDocNote('');
                   }}
-                  className="bg-transparent border-white/10 text-gray-400 hover:text-white hover:bg-transparent normal-case tracking-normal"
+                  className="normal-case tracking-normal"
                 >
                   Cancelar
                 </Button>

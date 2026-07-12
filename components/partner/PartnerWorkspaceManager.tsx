@@ -18,13 +18,20 @@ import {
   Link2,
   MessageSquare,
   Send,
-  FileText
+  FileText,
+  Search,
+  RefreshCw,
+  ArrowLeft
 } from 'lucide-react';
 import Button from '../ui/Button';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
 import { partnerPortalTokenService, PartnerPortalToken } from '../../services/partnerPortalTokenService';
 import { supplierService } from '../../services/supplierService';
+import { organizationService } from '../../services/organizationService';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
+import { useConfirm } from '../ui/confirm';
+import { KpiCard } from '../ui/KpiCard';
 
 const PartnerPortalPreview = React.lazy(() => import('./PartnerPortal').then(m => ({ default: m.PartnerPortal })));
 import {
@@ -43,6 +50,16 @@ interface PartnerWorkspaceManagerProps {
   currentUserEmail?: string;
 }
 
+// ui_ux_standard_guide.md — COLUMNS fora do componente (§2)
+const PARTNER_COLUMNS: ColumnConfig[] = [
+  { key: 'supplier', label: 'Parceiro', sortable: true },
+  { key: 'organization', label: 'Organização', sortable: true },
+  { key: 'users', label: 'Usuários', sortable: true },
+  { key: 'documents', label: 'Documentos', sortable: true },
+  { key: 'requests', label: 'Solicitações', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+];
+
 const CATEGORIA_LABELS: Record<string, string> = {
   engenharia: 'Projetos',
   juridico: 'Contratos',
@@ -53,6 +70,7 @@ const CATEGORIA_LABELS: Record<string, string> = {
 const CATEGORIA_ORDER = ['engenharia', 'juridico', 'compliance', 'financeiro', 'comercial'];
 
 export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = ({ organizationId, currentUserEmail }) => {
+  const confirm = useConfirm();
   const [workspaces, setWorkspaces] = useState<PartnerWorkspace[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState<PartnerWorkspace | null>(null);
 
@@ -84,6 +102,12 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   const [loading, setLoading] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<'usuarios' | 'conversas' | 'documentos' | 'contratos' | 'solicitacoes'>('usuarios');
 
+  // Tela de listagem (KPI + tabela, ui_ux_standard_guide.md) — filtros sobrevivem a navegação (§3)
+  const [searchTerm, setSearchTerm] = usePersistedState('partnerWorkspaceList:search', '');
+  const tableColumns = useTableColumns(PARTNER_COLUMNS, 'partnerWorkspaceListColumns');
+  const [workspaceStats, setWorkspaceStats] = useState<Record<string, { users: number; documents: number; requestsOpen: number }>>({});
+  const [orgNames, setOrgNames] = useState<Record<string, string>>({});
+
   // Modais
   const [isNewWorkspaceModalOpen, setIsNewWorkspaceModalOpen] = useState(false);
   const [newWorkspaceSupplierId, setNewWorkspaceSupplierId] = useState('');
@@ -108,6 +132,19 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   // Relevância do seletor de documentos (Onda 2): projetos onde o fornecedor do workspace tem contrato ativo
   const [relevantProjectIds, setRelevantProjectIds] = useState<string[]>([]);
 
+  // Recarregar só a lista de parceiros (botão de atualizar da toolbar)
+  const refreshWorkspaces = async () => {
+    setLoading(true);
+    try {
+      const wss = await partnerService.listWorkspaces(organizationId);
+      setWorkspaces(wss);
+    } catch (err) {
+      console.error('Erro ao atualizar parceiros:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // 1. Carregar workspaces e fornecedores iniciais
   useEffect(() => {
     const loadInitialData = async () => {
@@ -115,13 +152,19 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
         setLoading(true);
         const wss = await partnerService.listWorkspaces(organizationId);
         setWorkspaces(wss);
-        if (wss.length > 0) {
-          setSelectedWorkspace(wss[0]);
-        }
 
         // Carrega fornecedores ativos da org usando o serviço correto (que inclui globais/locais)
         const sups = await supplierService.listSuppliers(organizationId);
         setSuppliers(sups || []);
+
+        // Nomes de organização, para a coluna "Organização" da tabela (workspace pode ser
+        // de qualquer organização quando "Todas as organizações" está selecionado)
+        try {
+          const orgs = await organizationService.listOrganizations();
+          setOrgNames(Object.fromEntries(orgs.map((o: any) => [o.id, o.name])));
+        } catch (err) {
+          console.error('Erro ao carregar nomes de organizações:', err);
+        }
 
         // Carrega documentos ativos da org (sem filtro quando "Todas as organizações" está selecionado)
         let docsQuery = supabase
@@ -140,6 +183,36 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     };
     loadInitialData();
   }, [organizationId]);
+
+  // 1.1 Contagens por workspace (usuários / documentos / solicitações abertas) para a tabela e os KPIs
+  useEffect(() => {
+    if (workspaces.length === 0) {
+      setWorkspaceStats({});
+      return;
+    }
+    const ids = workspaces.map((w) => w.id);
+    (async () => {
+      try {
+        const [{ data: users }, { data: docs }, { data: reqs }] = await Promise.all([
+          supabase.from('partner_users').select('partner_workspace_id').in('partner_workspace_id', ids),
+          supabase.from('partner_shared_documents').select('partner_workspace_id').in('partner_workspace_id', ids),
+          supabase.from('partner_requests').select('partner_workspace_id, status').in('partner_workspace_id', ids),
+        ]);
+        const stats: Record<string, { users: number; documents: number; requestsOpen: number }> = {};
+        ids.forEach((id) => { stats[id] = { users: 0, documents: 0, requestsOpen: 0 }; });
+        (users || []).forEach((u: any) => { if (stats[u.partner_workspace_id]) stats[u.partner_workspace_id].users++; });
+        (docs || []).forEach((d: any) => { if (stats[d.partner_workspace_id]) stats[d.partner_workspace_id].documents++; });
+        (reqs || []).forEach((r: any) => {
+          if (stats[r.partner_workspace_id] && (r.status === 'ABERTO' || r.status === 'EM_ANALISE')) {
+            stats[r.partner_workspace_id].requestsOpen++;
+          }
+        });
+        setWorkspaceStats(stats);
+      } catch (err) {
+        console.error('Erro ao carregar contagens dos parceiros:', err);
+      }
+    })();
+  }, [workspaces]);
 
   // 2. Recarregar dados ao selecionar outro workspace
   useEffect(() => {
@@ -278,7 +351,13 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
 
   const handleRevokeToken = async () => {
     if (!selectedWorkspace || !portalToken) return;
-    if (!confirm('Revogar o acesso via link deste parceiro? Ele perderá o acesso imediatamente.')) return;
+    const ok = await confirm({
+      title: 'Revogar acesso ao portal?',
+      message: 'O parceiro perderá o acesso via link imediatamente.',
+      variant: 'warning',
+      confirmLabel: 'Revogar',
+    });
+    if (!ok) return;
     setTokenLoading(true);
     try {
       // Usa o org_id já gravado no próprio token (quem gerou), em vez do filtro de
@@ -495,56 +574,74 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     }
   };
 
+  // KPIs da tela de listagem (§4.2 — "Total" em destaque + decomposição)
+  const kpis = useMemo(() => ({
+    total: workspaces.length,
+    ativos: workspaces.filter((w) => w.is_active).length,
+    comUsuarios: workspaces.filter((w) => (workspaceStats[w.id]?.users || 0) > 0).length,
+    globais: workspaces.filter((w) => !w.organization_id).length,
+  }), [workspaces, workspaceStats]);
+
+  const filteredWorkspaces = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    let result = workspaces.filter((w) =>
+      !q || (w.supplier_name || '').toLowerCase().includes(q)
+    );
+
+    return result.sort((a, b) => {
+      if (tableColumns.sortColumn) {
+        let cmp = 0;
+        switch (tableColumns.sortColumn) {
+          case 'supplier':
+            cmp = (a.supplier_name || '').localeCompare(b.supplier_name || '');
+            break;
+          case 'organization': {
+            const orgA = a.organization_id ? (orgNames[a.organization_id] || '') : 'Todas as Organizações';
+            const orgB = b.organization_id ? (orgNames[b.organization_id] || '') : 'Todas as Organizações';
+            cmp = orgA.localeCompare(orgB);
+            break;
+          }
+          case 'users':
+            cmp = (workspaceStats[a.id]?.users || 0) - (workspaceStats[b.id]?.users || 0);
+            break;
+          case 'documents':
+            cmp = (workspaceStats[a.id]?.documents || 0) - (workspaceStats[b.id]?.documents || 0);
+            break;
+          case 'requests':
+            cmp = (workspaceStats[a.id]?.requestsOpen || 0) - (workspaceStats[b.id]?.requestsOpen || 0);
+            break;
+          case 'status':
+            cmp = Number(a.is_active) - Number(b.is_active);
+            break;
+        }
+        return tableColumns.sortDirection === 'asc' ? cmp : -cmp;
+      }
+      return (a.supplier_name || '').localeCompare(b.supplier_name || '');
+    });
+  }, [workspaces, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, workspaceStats, orgNames]);
+
+  // Ativar/desativar direto da tabela, sem precisar abrir o detalhe
+  const handleToggleActiveInline = async (ws: PartnerWorkspace, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const toggled = await partnerService.saveWorkspace({ ...ws, is_active: !ws.is_active });
+    setWorkspaces((prev) => prev.map((w) => (w.id === ws.id ? { ...w, is_active: toggled.is_active } : w)));
+    if (selectedWorkspace?.id === ws.id) {
+      setSelectedWorkspace((prev) => (prev ? { ...prev, is_active: toggled.is_active } : null));
+    }
+  };
+
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-4rem)] bg-white text-gray-800 overflow-hidden font-sans">
-      {/* Workspace List Sidebar */}
-      <aside className="w-80 border-r border-gray-200 bg-gray-50 p-4 flex flex-col gap-4 shrink-0 overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase text-gray-500 tracking-wider">Parceiros Habilitados</h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsNewWorkspaceModalOpen(true)}
-            className="bg-orange-500 hover:bg-orange-600 text-white"
-          >
-            <Plus className="w-4 h-4" />
-          </Button>
-        </div>
-        {!organizationId && (
-          <p className="text-xs text-gray-400 -mt-2">
-            Visualizando parceiros de todas as organizações. Ao ativar um novo, a organização é definida pelo cadastro do próprio fornecedor.
-          </p>
-        )}
-
-        <div className="flex flex-col gap-1.5">
-          {workspaces.map((ws) => (
-            <button
-              key={ws.id}
-              onClick={() => setSelectedWorkspace(ws)}
-              className={`flex items-center justify-between w-full px-4 py-3.5 rounded-xl text-button text-left font-medium transition-all border
-                ${selectedWorkspace?.id === ws.id 
-                  ? 'bg-orange-500/10 border-orange-500/20 text-orange-600 font-bold' 
-                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-            >
-              <div className="flex items-center gap-2.5 truncate">
-                <Building2 className="w-4 h-4 shrink-0" />
-                <span className="truncate">{ws.supplier_name}</span>
-              </div>
-              <span className={`w-2 h-2 rounded-full ${ws.is_active ? 'bg-green-500' : 'bg-gray-400'}`} />
-            </button>
-          ))}
-          {workspaces.length === 0 && (
-            <div className="text-center py-12 text-xs text-gray-400 bg-white border border-dashed rounded-xl">
-              Nenhum parceiro habilitado. Clique no botão acima para ativar o primeiro.
-            </div>
-          )}
-        </div>
-      </aside>
-
-      {/* Main Operations Area */}
-      <main className="flex-1 overflow-y-auto p-6 bg-white flex flex-col gap-6">
+    <div className="h-[calc(100vh-4rem)] overflow-y-auto bg-white text-gray-800 font-sans">
+      <main className="p-6 flex flex-col gap-6">
         {selectedWorkspace ? (
           <>
+            <button
+              onClick={() => setSelectedWorkspace(null)}
+              className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-900 transition-all w-fit"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Voltar para Parceiros
+            </button>
             {/* Header info */}
             <div className="flex items-center justify-between border-b border-gray-100 pb-5">
               <div>
@@ -724,21 +821,18 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                     <tbody className="divide-y divide-gray-100 text-xs">
                       {partnerUsers.map((user) => (
                         <tr key={user.id} className="hover:bg-gray-50">
-                          <td className="px-5 py-4 font-bold text-gray-900">{user.name}</td>
-                          <td className="px-5 py-4 text-gray-500">{user.email}</td>
-                          <td className="px-5 py-4 text-gray-500">{user.phone || '-'}</td>
-                          <td className="px-5 py-4">
-                            <span className="px-2 py-0.5 bg-gray-100 border border-gray-200 text-gray-500 text-xs font-bold rounded-md uppercase">
-                              {user.role}
-                            </span>
+                          <td className="px-5 py-4 text-sm font-normal text-gray-900">{user.name}</td>
+                          <td className="px-5 py-4 text-sm font-normal text-gray-500">{user.email}</td>
+                          <td className="px-5 py-4 text-sm font-normal text-gray-500">{user.phone || '-'}</td>
+                          <td className="px-5 py-4 text-sm font-normal text-gray-600">
+                            {user.role}
                           </td>
                           <td className="px-5 py-4 text-center">
                             <button
                               onClick={() => handleToggleUserActive(user)}
-                              className={`text-xs font-bold px-2 py-0.5 rounded-full inline-block
-                                ${user.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
+                              className={`text-sm font-normal ${user.is_active ? 'text-emerald-700' : 'text-gray-500'}`}
                             >
-                              {user.is_active ? 'ATIVO' : 'INATIVO'}
+                              {user.is_active ? 'Ativo' : 'Inativo'}
                             </button>
                           </td>
                           <td className="px-5 py-4 text-right">
@@ -939,12 +1033,210 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
             )}
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-            <Building2 className="w-16 h-16 text-gray-300 mb-4" />
-            <h3 className="text-md font-bold text-gray-800 mb-1">Nenhum Parceiro Selecionado</h3>
-            <p className="text-xs text-gray-400 max-w-sm leading-relaxed">
-              Habilite ou escolha um parceiro na lista lateral para gerenciar sua equipe, compartilhar projetos e responder às suas solicitações.
-            </p>
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal de Parceiros</h1>
+              <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie os fornecedores habilitados a acessar o Portal do Parceiro.</p>
+            </div>
+
+            {/* "Total" em destaque (2 colunas); os demais são a decomposição (§4.2) */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+              <KpiCard shadow={false} size="lg" className="col-span-2" label="Total de Parceiros" value={kpis.total} icon={<Building2 className="w-4 h-4" />} color="orange" />
+              <KpiCard shadow={false} size="sm" label="Ativos" value={kpis.ativos} icon={<CheckCircle className="w-4 h-4" />} color="emerald" />
+              <KpiCard shadow={false} size="sm" label="Com usuários" value={kpis.comUsuarios} icon={<Users className="w-4 h-4" />} color="indigo" />
+              <KpiCard shadow={false} size="sm" label="Globais" value={kpis.globais} icon={<Link2 className="w-4 h-4" />} color="violet" />
+            </div>
+
+            {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — já há KPI cards acima dando contexto */}
+            <div className="flex flex-col md:flex-row gap-2.5 items-center">
+              <div className="flex-1 relative w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por fornecedor..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                />
+              </div>
+
+              <button
+                onClick={refreshWorkspaces}
+                className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                title="Atualizar"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+
+              <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+              <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                <ColumnConfigButton
+                  columns={PARTNER_COLUMNS}
+                  visibleColumns={tableColumns.visibleColumns}
+                  showColumnConfig={tableColumns.showColumnConfig}
+                  onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                  onToggleColumn={tableColumns.toggleColumn}
+                  onReset={tableColumns.resetColumns}
+                />
+              </div>
+
+              {/* Variante compacta do CTA primário (§17) — ativar parceiro não é o fluxo mais frequente da tela */}
+              <button
+                onClick={() => setIsNewWorkspaceModalOpen(true)}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-500 text-white rounded-[6px] hover:bg-orange-600 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+              >
+                <Plus className="w-[15px] h-[15px]" />
+                Novo parceiro
+              </button>
+            </div>
+
+            {!organizationId && (
+              <p className="text-xs text-gray-400 -mt-3">
+                Visualizando parceiros de todas as organizações. Ao ativar um novo, a organização é definida pelo cadastro do próprio fornecedor.
+              </p>
+            )}
+
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                <p className="mt-2 text-gray-500 text-sm">Carregando...</p>
+              </div>
+            ) : filteredWorkspaces.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum parceiro encontrado</h3>
+                <p className="text-sm text-gray-500">
+                  {searchTerm ? 'Tente ajustar sua busca.' : 'Clique em "Novo parceiro" para habilitar o primeiro.'}
+                </p>
+              </div>
+            ) : (
+              <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                        {tableColumns.visibleColumns.includes('supplier') && (
+                          <SortableHeader colKey="supplier" label="Parceiro" uppercase={false}
+                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                            onSort={tableColumns.handleColumnSort}
+                            className="px-6 py-2 border-r border-gray-100" />
+                        )}
+                        {tableColumns.visibleColumns.includes('organization') && (
+                          <SortableHeader colKey="organization" label="Organização" uppercase={false}
+                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                            onSort={tableColumns.handleColumnSort}
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        {tableColumns.visibleColumns.includes('users') && (
+                          <SortableHeader colKey="users" label="Usuários" uppercase={false}
+                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                            onSort={tableColumns.handleColumnSort}
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        {tableColumns.visibleColumns.includes('documents') && (
+                          <SortableHeader colKey="documents" label="Documentos" uppercase={false}
+                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                            onSort={tableColumns.handleColumnSort}
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        {tableColumns.visibleColumns.includes('requests') && (
+                          <SortableHeader colKey="requests" label="Solicitações" uppercase={false}
+                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                            onSort={tableColumns.handleColumnSort}
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        {tableColumns.visibleColumns.includes('status') && (
+                          <SortableHeader colKey="status" label="Status" uppercase={false}
+                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                            onSort={tableColumns.handleColumnSort}
+                            className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredWorkspaces.map((ws) => {
+                        const stats = workspaceStats[ws.id] || { users: 0, documents: 0, requestsOpen: 0 };
+                        return (
+                          <tr
+                            key={ws.id}
+                            onClick={() => setSelectedWorkspace(ws)}
+                            className="hover:bg-orange-50/50 transition-colors cursor-pointer group"
+                          >
+                            {tableColumns.visibleColumns.includes('supplier') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shrink-0">
+                                    <Building2 className="w-4 h-4" />
+                                  </div>
+                                  <span className="text-sm font-normal text-gray-900">{ws.supplier_name}</span>
+                                </div>
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('organization') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                {ws.organization_id ? (orgNames[ws.organization_id] || '-') : 'Todas as Organizações'}
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('users') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                {stats.users}
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('documents') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                {stats.documents}
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('requests') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                {stats.requestsOpen}
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('status') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                {/* StatusBadge — texto simples colorido, sem pílula/fundo/uppercase (§8) */}
+                                <span className={`text-sm font-normal ${ws.is_active ? 'text-emerald-700' : 'text-gray-500'}`}>
+                                  {ws.is_active ? 'Ativo' : 'Inativo'}
+                                </span>
+                              </td>
+                            )}
+                            <td className="px-6 py-2.5 text-right">
+                              {/* Editar/gerenciar = clique na linha (ação dominante, §9.1). Ações aqui são só o que sobra. */}
+                              <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  onClick={() => { setSelectedWorkspace(ws); setTokenModalOpen(true); }}
+                                  title="Link de Acesso"
+                                  className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-purple-600 hover:border-purple-100 rounded-xl transition-all shadow-sm active:scale-95"
+                                >
+                                  <Link2 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => { setSelectedWorkspace(ws); setPreviewOpen(true); }}
+                                  title="Visualizar como Parceiro"
+                                  className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => handleToggleActiveInline(ws, e)}
+                                  title={ws.is_active ? 'Desativar' : 'Ativar'}
+                                  className={`p-2.5 bg-white border rounded-xl transition-all shadow-sm active:scale-95
+                                    ${ws.is_active ? 'border-slate-200 text-slate-600 hover:text-red-600 hover:border-red-100' : 'border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-100'}`}
+                                >
+                                  {ws.is_active ? <X className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>

@@ -119,6 +119,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [newPatName, setNewPatName] = React.useState('');
   const [newPatMask, setNewPatMask] = React.useState('');
   const [selectedFolderDisciplines, setSelectedFolderDisciplines] = React.useState<string[]>([]);
+  const [leftSidebarTab, setLeftSidebarTab] = React.useState<'disciplines' | 'folders'>('disciplines');
+  const [leftSearchQuery, setLeftSearchQuery] = React.useState('');
+  const [selectedDisciplineCode, setSelectedDisciplineCode] = React.useState<string | null>(null);
+  const [expandedNodes, setExpandedNodes] = React.useState<string[]>([]);
 
   // Estados locais da Onda 1 (Pastas Virtuais e Movimentação)
   const [folders, setFolders] = React.useState<OpuraFolder[]>([]);
@@ -212,11 +216,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   // Carregar lista de diretórios (pastas virtuais)
   const fetchFolders = async () => {
-    if (!activeOrganizationId) return;
     try {
       const projFilter = selectedProjectId === 'all' ? undefined : selectedProjectId;
       const data = await documentService.listFolders(
-        activeOrganizationId,
+        activeOrganizationId ?? null,
         activeTab,
         projFilter
       );
@@ -228,17 +231,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   // Carregar lista de documentos
   const fetchDocs = async () => {
-    if (!activeOrganizationId) {
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     try {
       const projFilter = selectedProjectId === 'all' ? undefined : selectedProjectId;
-      const data = await documentService.listDocuments(activeOrganizationId, {
+      const data = await documentService.listDocuments(activeOrganizationId ?? undefined, {
         projectId: projFilter,
         categoria: activeTab,
-        folderId: currentFolderId,
+        folderId: selectedDisciplineCode && !currentFolderId ? undefined : currentFolderId,
       });
       setDocuments(data);
     } catch (err) {
@@ -394,7 +393,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     fetchPendingApprovals();
     fetchOrgMembers();
     fetchDmsSettings();
-  }, [activeOrganizationId, selectedProjectId, activeTab, currentFolderId, currentProfile]);
+  }, [activeOrganizationId, selectedProjectId, activeTab, currentFolderId, selectedDisciplineCode, currentProfile]);
 
   // Sincronizar parâmetros de rota de notificação (Onda 3)
   React.useEffect(() => {
@@ -624,6 +623,121 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
+  // ─── NAVEGAÇÃO EM ÁRVORE (ESTILO CONSTRUCODE) ────────────────
+  const toggleNode = (nodeId: string) => {
+    setExpandedNodes(prev =>
+      prev.includes(nodeId)
+        ? prev.filter(id => id !== nodeId)
+        : [...prev, nodeId]
+    );
+  };
+
+  // Cores dinâmicas e harmoniosas para as disciplinas (estilo tags do ConstruCode)
+  const getDisciplineColor = (code: string): string => {
+    const map: Record<string, string> = {
+      ARQ: '#10B981', // Verde esmeralda
+      ESTR: '#3B82F6', // Azul
+      CIV: '#64748B', // Cinza ardósia
+      ELEC: '#F59E0B', // Âmbar
+      HYDR: '#06B6D4', // Ciano
+      SANI: '#8B5CF6', // Roxo
+      PREV: '#EF4444', // Vermelho
+      AUT: '#6366F1', // Indigo
+    };
+    const key = code.toUpperCase().trim();
+    if (map[key]) return map[key];
+
+    // Fallback determinístico baseado em hash
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+      hash = key.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h = Math.abs(hash % 360);
+    return `hsl(${h}, 65%, 45%)`;
+  };
+
+  // Retorna as pastas que aceitam uma disciplina e devem ser nós raiz daquela disciplina na árvore
+  const getFoldersForDiscipline = (discCode: string) => {
+    return folders.filter((folder) => {
+      const accepts = (folder.disciplines || []).some(
+        d => d.toUpperCase() === discCode.toUpperCase()
+      );
+      if (!accepts) return false;
+
+      if (!folder.parent_id) return true;
+
+      const parent = folders.find(f => f.id === folder.parent_id);
+      const parentAccepts = parent && (parent.disciplines || []).some(
+        d => d.toUpperCase() === discCode.toUpperCase()
+      );
+      return !parentAccepts;
+    });
+  };
+
+  // Renderizador recursivo para nós de pastas na árvore
+  const renderFolderTreeItem = (folder: OpuraFolder, discCode: string | null, depth: number) => {
+    const isExpanded = expandedNodes.includes(folder.id);
+    const isSelected = currentFolderId === folder.id && (discCode === null || selectedDisciplineCode === discCode);
+    const subfolders = folders.filter(f => f.parent_id === folder.id);
+
+    // Validação contra o filtro de pesquisa do painel esquerdo
+    if (leftSearchQuery.trim()) {
+      const q = leftSearchQuery.toLowerCase();
+      const matchThis = folder.name.toLowerCase().includes(q);
+      const matchChildren = subfolders.some(sf => sf.name.toLowerCase().includes(q));
+      if (!matchThis && !matchChildren) return null;
+    }
+
+    return (
+      <div key={folder.id} className="space-y-1">
+        <div
+          className={`flex items-center justify-between p-1 rounded-lg transition-all group ${
+            isSelected
+              ? 'bg-blue-50 text-blue-700 font-extrabold border border-blue-100/50'
+              : 'hover:bg-slate-50 border border-transparent'
+          }`}
+          style={{ paddingLeft: `${depth * 4 + 4}px` }}
+        >
+          <div
+            onClick={() => {
+              setCurrentFolderId(folder.id);
+              if (discCode) {
+                setSelectedDisciplineCode(discCode);
+              } else {
+                setSelectedDisciplineCode(null);
+              }
+            }}
+            className="flex items-center gap-1.5 min-w-0 flex-grow cursor-pointer"
+          >
+            <FolderOpen className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+            <span className="text-xs truncate">{folder.name}</span>
+          </div>
+
+          {subfolders.length > 0 && (
+            <button
+              onClick={() => toggleNode(folder.id)}
+              className="p-0.5 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100 transition-colors"
+            >
+              {isExpanded ? (
+                <ChevronDown className="w-3 h-3" />
+              ) : (
+                <ChevronRight className="w-3 h-3" />
+              )}
+            </button>
+          )}
+        </div>
+
+        {isExpanded && subfolders.length > 0 && (
+          <div className="space-y-1">
+            {subfolders.map(sub =>
+              renderFolderTreeItem(sub, discCode, depth + 1)
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Função para mover um arquivo de pasta
   const handleMoveDocumentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -748,7 +862,31 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       );
     }
 
-    // 3. Filtrar por busca textual simples
+    // 3. Filtrar por disciplina selecionada no painel esquerdo
+    if (selectedDisciplineCode) {
+      result = result.filter(doc => {
+        const docFolder = folders.find(f => f.id === doc.folder_id);
+        const fileName = doc.active_version?.storage_path.split('/').pop() || doc.nome;
+        
+        let isMatch = false;
+        if (docFolder?.naming_mask) {
+          const extracted = extractTokenFromFileName(fileName, docFolder.naming_mask, '[DISCIPLINA]');
+          if (extracted) {
+            isMatch = extracted.toUpperCase() === selectedDisciplineCode.toUpperCase();
+          }
+        }
+        
+        if (!isMatch) {
+          const uppercaseName = fileName.toUpperCase();
+          const uppercaseCode = selectedDisciplineCode.toUpperCase();
+          isMatch = uppercaseName.includes(uppercaseCode);
+        }
+        
+        return isMatch;
+      });
+    }
+
+    // 4. Filtrar por busca textual simples
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter(doc => 
@@ -762,7 +900,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
 
     return result;
-  }, [documents, searchQuery, filterStatus, selectedTags]);
+  }, [documents, searchQuery, filterStatus, selectedTags, selectedDisciplineCode, folders]);
 
   // Coletar tags únicas dos documentos carregados para filtragem rápida
   const allUniqueTags = React.useMemo(() => {
@@ -1328,7 +1466,162 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+          {/* PAINEL LATERAL ESQUERDO: Árvore de Disciplinas/Pastas */}
+          <div className="lg:col-span-1 bg-white rounded-3xl border border-slate-100 shadow-sm p-5 space-y-4 min-h-[600px] flex flex-col">
+            {/* Abas do Painel Esquerdo */}
+            <div className="flex border-b border-slate-100 pb-px gap-2">
+              <button
+                type="button"
+                onClick={() => { setLeftSidebarTab('disciplines'); setLeftSearchQuery(''); }}
+                className={`flex-grow pb-2.5 font-black text-[10px] uppercase tracking-wider border-b-2 transition-all text-center ${
+                  leftSidebarTab === 'disciplines'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                Disciplinas
+              </button>
+              <button
+                type="button"
+                onClick={() => { setLeftSidebarTab('folders'); setLeftSearchQuery(''); }}
+                className={`flex-grow pb-2.5 font-black text-[10px] uppercase tracking-wider border-b-2 transition-all text-center ${
+                  leftSidebarTab === 'folders'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                Locais
+              </button>
+
+              {/* Atalho de Gestão de Disciplinas */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsTab('disciplines');
+                  setShowSettingsModal(true);
+                }}
+                className="pb-2.5 px-1.5 text-slate-400 hover:text-blue-600 transition-colors"
+                title="Gerenciar Disciplinas"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Input de Pesquisa Lateral */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder={leftSidebarTab === 'disciplines' ? "Pesquisar disciplina..." : "Pesquisar pasta..."}
+                value={leftSearchQuery}
+                onChange={(e) => setLeftSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+              />
+              <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            </div>
+
+            {/* Lista/Árvore */}
+            <div className="flex-grow overflow-y-auto max-h-[500px] pr-1 space-y-1 text-slate-700">
+              {/* Botão Todos os documentos */}
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentFolderId(null);
+                  setSelectedDisciplineCode(null);
+                }}
+                className={`w-full flex items-center gap-2 p-2 rounded-xl text-left text-xs font-bold transition-all ${
+                  !currentFolderId && !selectedDisciplineCode
+                    ? 'bg-blue-50 text-blue-700 font-extrabold shadow-sm border border-blue-100'
+                    : 'hover:bg-slate-50 border border-transparent'
+                }`}
+              >
+                <FolderOpen className="w-4 h-4" />
+                <span>Todos os documentos</span>
+              </button>
+
+              {leftSidebarTab === 'disciplines' ? (
+                // ABA 1: DISCIPLINAS
+                <div className="space-y-1.5 pt-2">
+                  {disciplines
+                    .filter(disc => 
+                      !leftSearchQuery.trim() || 
+                      disc.code.toLowerCase().includes(leftSearchQuery.toLowerCase()) || 
+                      disc.name.toLowerCase().includes(leftSearchQuery.toLowerCase())
+                    )
+                    .map((disc) => {
+                      const isExpanded = expandedNodes.includes(disc.code);
+                      const isSelected = selectedDisciplineCode === disc.code && !currentFolderId;
+                      const folderList = getFoldersForDiscipline(disc.code);
+
+                      return (
+                        <div key={disc.id} className="space-y-1">
+                          {/* Linha da Disciplina */}
+                          <div
+                            className={`w-full flex items-center justify-between p-1.5 rounded-xl transition-all group ${
+                              isSelected
+                                ? 'bg-blue-50 text-blue-700 font-extrabold border border-blue-100/50'
+                                : 'hover:bg-slate-50/80 border border-transparent'
+                            }`}
+                          >
+                            <div
+                              onClick={() => {
+                                setSelectedDisciplineCode(disc.code);
+                                setCurrentFolderId(null); // Limpa pasta selecionada
+                              }}
+                              className="flex items-center gap-2 min-w-0 flex-grow cursor-pointer"
+                            >
+                              {/* Bloco Colorido da Disciplina */}
+                              <span
+                                className="w-7 h-5 flex items-center justify-center text-[9px] font-black uppercase rounded text-white shadow-sm shrink-0"
+                                style={{ backgroundColor: getDisciplineColor(disc.code) }}
+                              >
+                                {disc.code.slice(0, 3)}
+                              </span>
+                              <span className="text-xs font-bold truncate">{disc.name}</span>
+                            </div>
+
+                            {folderList.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => toggleNode(disc.code)}
+                                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                ) : (
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Pastas Sob a Disciplina */}
+                          {isExpanded && folderList.length > 0 && (
+                            <div className="pl-4 ml-3.5 border-l border-slate-100/80 space-y-1 animate-in fade-in duration-200">
+                              {folderList.map(folder =>
+                                renderFolderTreeItem(folder, disc.code, 1)
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              ) : (
+                // ABA 2: PASTAS PURAS (LOCAIS)
+                <div className="space-y-1.5 pt-2">
+                  {folders
+                    .filter(f => !f.parent_id)
+                    .map(folder =>
+                      renderFolderTreeItem(folder, null, 0)
+                    )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* PAINEL CENTRAL DIREITO: Documentos */}
+          <div className="lg:col-span-3 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
         {/* Barra de Busca e Breadcrumb */}
         <div className="p-4 border-b border-slate-100 bg-slate-50/20 space-y-3">
           <div className="flex items-center gap-3">
@@ -1835,6 +2128,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             )}
           </div>
         )}
+      </div>
       </div>
       )}
 
@@ -2960,8 +3254,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             {/* Cabeçalho */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
-                <span className="text-xl">⚙️</span>
-                <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider">Ajustes do GED</h3>
+                <span className="text-xl">{settingsTab === 'disciplines' ? '📋' : '⚙️'}</span>
+                <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider">
+                  {settingsTab === 'disciplines' ? 'Gestão de Disciplinas' : 'Ajustes do GED'}
+                </h3>
               </div>
               <button
                 onClick={() => setShowSettingsModal(false)}

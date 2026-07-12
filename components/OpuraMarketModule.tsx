@@ -1623,6 +1623,14 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           >
             🤖 Web Scraping
           </button>
+          <button
+            onClick={() => setActiveViewMode('studies')}
+            className={`px-3 py-1.5 rounded-[6px] text-[13px] font-bold transition-all ${
+              activeViewMode === 'studies' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            📊 Estudos & Análise
+          </button>
         </div>
       )}
 

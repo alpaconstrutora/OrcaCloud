@@ -185,6 +185,9 @@ export const partnerService = {
   },
 
   // --- Conversations & Chat ---
+  // Se o workspace ainda não tem nenhum canal, cria um "Geral" automaticamente —
+  // sem isso a aba Conversas ficava permanentemente vazia (nunca existiu ação
+  // na UI, admin ou parceiro, para criar o primeiro canal).
   async listConversations(workspaceId: string): Promise<PartnerConversation[]> {
     const { data, error } = await supabase
       .from('partner_conversations')
@@ -197,7 +200,17 @@ export const partnerService = {
       throw error;
     }
 
-    return (data || []) as PartnerConversation[];
+    if (data && data.length > 0) {
+      return data as PartnerConversation[];
+    }
+
+    try {
+      const general = await this.saveConversation({ partner_workspace_id: workspaceId, name: 'Geral' });
+      return [general];
+    } catch (err) {
+      console.error('[PARTNER SERVICE] Error auto-creating default conversation:', err);
+      return [];
+    }
   },
 
   async saveConversation(conversation: Partial<PartnerConversation>): Promise<PartnerConversation> {

@@ -286,14 +286,22 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWorkspaceSupplierId) return;
-    if (!organizationId) {
-      alert('Selecione uma organização específica (não "Todas as organizações") para ativar um novo parceiro.');
+
+    // Com "Todas as organizações" selecionado (organizationId vazio), cruza com o
+    // cadastro do próprio fornecedor: se ele já pertence a uma organização específica,
+    // usa essa organização automaticamente — só pede pra escolher manualmente quando o
+    // fornecedor também é global (cadastrado em "Todas as organizações"), caso em que
+    // não há como inferir sozinho a qual organização o workspace deve pertencer.
+    const selectedSupplier = suppliers.find((s) => s.id === newWorkspaceSupplierId);
+    const targetOrgId = organizationId || selectedSupplier?.organization_id;
+    if (!targetOrgId) {
+      alert('Este fornecedor está cadastrado em "Todas as organizações". Selecione uma organização específica no topo do sistema antes de ativar o parceiro.');
       return;
     }
 
     try {
       const created = await partnerService.saveWorkspace({
-        organization_id: organizationId,
+        organization_id: targetOrgId,
         supplier_id: newWorkspaceSupplierId,
         is_active: true,
         settings: {}
@@ -481,16 +489,14 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
             variant="ghost"
             size="icon"
             onClick={() => setIsNewWorkspaceModalOpen(true)}
-            disabled={!organizationId}
-            title={!organizationId ? 'Selecione uma organização específica para ativar um novo parceiro' : undefined}
-            className="bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+            className="bg-orange-500 hover:bg-orange-600 text-white"
           >
             <Plus className="w-4 h-4" />
           </Button>
         </div>
         {!organizationId && (
           <p className="text-xs text-gray-400 -mt-2">
-            Visualizando parceiros de todas as organizações. Selecione uma organização específica para ativar um novo parceiro.
+            Visualizando parceiros de todas as organizações. Ao ativar um novo, a organização é definida pelo cadastro do próprio fornecedor.
           </p>
         )}
 
@@ -944,9 +950,16 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 >
                   <option value="">Selecione um prestador...</option>
                   {suppliers.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
+                    <option key={s.id} value={s.id}>
+                      {s.name}{!organizationId ? ` — ${s.organization_name || 'Todas as Organizações'}` : ''}
+                    </option>
                   ))}
                 </select>
+                {!organizationId && newWorkspaceSupplierId && !suppliers.find(s => s.id === newWorkspaceSupplierId)?.organization_id && (
+                  <p className="text-xs text-amber-600 pt-1">
+                    Este fornecedor é global ("Todas as Organizações") — selecione uma organização específica no topo do sistema antes de continuar.
+                  </p>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 border-t border-gray-100 pt-4 mt-2">

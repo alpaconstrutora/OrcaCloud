@@ -73,7 +73,11 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   const [cityConfig, setCityConfig] = React.useState<OpuraMarketCityConfig | null>(null);
   const [loadingCityConfig, setLoadingCityConfig] = React.useState(false);
   const [isRulesModalOpen, setIsRulesModalOpen] = React.useState(false);
-  const [showTableView, setShowTableView] = React.useState(false);
+  const [activeViewMode, setActiveViewMode] = React.useState<'map' | 'table' | 'scraping'>('map');
+  const [scraperUrl, setScraperUrl] = React.useState('https://conexao381.com.br/imoveis/a-venda/cambui-mg');
+  const [scrapedListings, setScrapedListings] = React.useState<OpuraMarketListing[]>([]);
+  const [isLocalScraping, setIsLocalScraping] = React.useState(false);
+  const [localScrapingStatus, setLocalScrapingStatus] = React.useState('');
   const tableColumns = useTableColumns(CONCORRENCIA_COLUMNS, 'opuraMarketConcorrenciaTable');
 
   // Carrega configurações da praça selecionada
@@ -425,6 +429,232 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       setScrapingStatus('');
     }
   }, [cities, selectedCityId, neighborhoods, organizationId, setNeighborhoods, setListings]);
+
+  // Função parametrizada de Web Scraping sob demanda (🤖 Web Scraping)
+  const handleRunScraper = React.useCallback(async (targetUrl: string) => {
+    const activeCity = cities.find(c => c.id === selectedCityId);
+    if (!activeCity || activeCity.name !== 'Cambuí') {
+      alert('A captura automática está disponível apenas para a cidade piloto (Cambuí - MG) no momento.');
+      return;
+    }
+
+    setIsLocalScraping(true);
+    setLocalScrapingStatus('Iniciando...');
+    setScrapedListings([]);
+
+    try {
+      if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+        throw new Error('Por favor, insira um link válido com http:// ou https://');
+      }
+
+      const BASE_URL = new URL(targetUrl).origin;
+      const IMOBILIARIA_NAME = targetUrl.includes('conexao381') ? 'Conexão 381' : 'Imobiliária Local';
+
+      setLocalScrapingStatus('Conectando ao portal...');
+      const listingsBatch: any[] = [];
+      const maxPages = 2; // Processar as duas primeiras páginas
+
+      for (let page = 1; page <= maxPages; page++) {
+        const cleanUrl = targetUrl.split('?')[0];
+        const pageUrl = `${cleanUrl}?pagina=${page}`;
+        setLocalScrapingStatus(`Lendo pág. ${page} de ${maxPages}...`);
+        
+        let html = '';
+        let success = false;
+        
+        // Tentativa 1: CORSProxy.io
+        try {
+          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(pageUrl)}`;
+          const res = await fetch(proxyUrl);
+          if (res.ok) {
+            html = await res.text();
+            success = true;
+          }
+        } catch (e1) {
+          console.warn('Falha no CORSProxy.io, tentando fallback AllOrigins...', e1);
+        }
+
+        // Tentativa 2: Fallback AllOrigins
+        if (!success) {
+          try {
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(pageUrl)}`;
+            const res = await fetch(proxyUrl);
+            if (res.ok) {
+              const responseJson = await res.json();
+              html = responseJson.contents || '';
+              success = true;
+            }
+          } catch (e2) {
+            console.error('Falha de conexão em todos os proxies de CORS', e2);
+          }
+        }
+
+        if (!success || !html) {
+          console.error(`Erro ao baixar página ${page} via proxies CORS`);
+          break;
+        }
+
+        const sanitizeJsonString = (rawJson: string) => {
+          return rawJson.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (m, p1) => {
+            return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+          });
+        };
+
+        const jsonLdRegex = /<script\s+type=["']application\/ld\+json["']\s*[^>]*>([\s\S]*?)<\/script>/gi;
+        let match;
+        let pageCount = 0;
+
+        while ((match = jsonLdRegex.exec(html)) !== null) {
+          try {
+            const rawText = match[1].trim();
+            let json;
+            try {
+              json = JSON.parse(rawText);
+            } catch (pe) {
+              json = JSON.parse(sanitizeJsonString(rawText));
+            }
+
+            const isProperty = json && (
+              json['@type'] === 'Product' || 
+              (Array.isArray(json['@type']) && json['@type'].includes('Product')) ||
+              (typeof json['@type'] === 'string' && json['@type'].includes('Product')) ||
+              json.offers
+            );
+
+            if (isProperty) {
+              const title = json.name || '';
+              const price = json.offers?.price ? Number(json.offers.price) : null;
+              const url = json.offers?.url || '';
+              const bedrooms = json.numberOfBedrooms ? Number(json.numberOfBedrooms) : 0;
+              const bathrooms = json.numberOfBathroomsTotal ? Number(json.numberOfBathroomsTotal) : 0;
+              const description = json.description || '';
+
+              let rawAddress = json.address?.streetAddress || '';
+              let neighborhoodName = 'Centro';
+              if (rawAddress.includes(',')) {
+                neighborhoodName = rawAddress.split(',')[0].trim();
+              } else {
+                neighborhoodName = rawAddress.replace('-MG', '').replace('Cambuí', '').trim();
+              }
+
+              const areaMatch = url.match(/-(\d+)m2-/);
+              const areaPrivate = areaMatch ? Number(areaMatch[1]) : null;
+
+              let propertyType = 'Casa';
+              if (url.includes('apartamento')) propertyType = 'Apartamento';
+              else if (url.includes('terreno') || url.includes('lote')) propertyType = 'Terreno';
+              else if (url.includes('sobrado')) propertyType = 'Casa';
+              else if (url.includes('comercial') || url.includes('sala')) propertyType = 'Comercial';
+
+              let constructionStandard = 'Médio';
+              const descLower = description.toLowerCase();
+              if (descLower.includes('alto padrão') || descLower.includes('luxo') || descLower.includes('fino acabamento')) {
+                constructionStandard = 'Alto Padrão';
+              } else if (descLower.includes('popular') || descLower.includes('minha casa minha vida') || descLower.includes('mcmv')) {
+                constructionStandard = 'Econômico';
+              }
+
+              listingsBatch.push({
+                title,
+                price,
+                url,
+                bedrooms,
+                bathrooms,
+                description,
+                neighborhoodName,
+                areaPrivate,
+                propertyType,
+                constructionStandard,
+                rawAddress
+              });
+              pageCount++;
+            }
+          } catch (e) {
+            // Ignora JSON-LDs de outra tipologia
+          }
+        }
+
+        if (pageCount === 0) break;
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      if (listingsBatch.length === 0) {
+        throw new Error('Nenhum anúncio localizado na URL fornecida com o parser atual.');
+      }
+
+      // 2. Geocodificação e Associação de Bairros no Supabase
+      const processedListings: any[] = [];
+      const localNeighborhoods = [...neighborhoods];
+
+      for (let i = 0; i < listingsBatch.length; i++) {
+        const item = listingsBatch[i];
+        setLocalScrapingStatus(`Geocodificando ${i + 1}/${listingsBatch.length}...`);
+
+        let neighborhood = localNeighborhoods.find(n => n.name.toLowerCase().trim() === item.neighborhoodName.toLowerCase().trim());
+        if (!neighborhood) {
+          neighborhood = localNeighborhoods.find(n => 
+            item.neighborhoodName.toLowerCase().trim().includes(n.name.toLowerCase().trim()) ||
+            n.name.toLowerCase().trim().includes(item.neighborhoodName.toLowerCase().trim())
+          );
+        }
+
+        let neighborhoodId = neighborhood ? neighborhood.id : '';
+        if (!neighborhoodId) {
+          const centroNeigh = localNeighborhoods.find(n => n.name.toLowerCase().trim() === 'centro');
+          neighborhoodId = centroNeigh ? centroNeigh.id : (neighborhoods[0]?.id || '');
+        }
+
+        const geo = await opuraMarketService.geocodeAddress(item.neighborhoodName, 'Cambuí');
+        await new Promise(resolve => setTimeout(resolve, 1100));
+
+        processedListings.push({
+          cityId: selectedCityId,
+          neighborhoodId,
+          organizationId,
+          source: IMOBILIARIA_NAME,
+          sourceUrl: item.url,
+          propertyType: item.propertyType,
+          address: item.rawAddress,
+          zipCode: null,
+          areaPrivate: item.areaPrivate,
+          areaTotal: item.areaPrivate,
+          bedrooms: item.bedrooms,
+          suites: null,
+          bathrooms: item.bathrooms,
+          parkingSpaces: null,
+          price: item.price,
+          condoFee: null,
+          iptu: null,
+          latitude: geo ? geo.lat : null,
+          longitude: geo ? geo.lng : null,
+          description: item.description,
+          constructionStandard: item.constructionStandard,
+          listingStatus: 'active',
+          capturedAt: new Date().toISOString(),
+          lastSeenAt: new Date().toISOString()
+        });
+      }
+
+      const validProcessedListings = processedListings.filter(l => l.price && l.price > 0);
+
+      // 3. Salvar e Deduplicar
+      setLocalScrapingStatus('Salvando lote...');
+      const result = await opuraMarketService.importListingsInBatch(validProcessedListings);
+
+      alert(`Captura concluída com sucesso!\n\n- Importados: ${result.importedCount} anúncios únicos\n- Duplicados ignorados: ${result.deduplicatedCount} anúncios`);
+      
+      setScrapedListings(validProcessedListings);
+
+      const updatedListings = await opuraMarketService.listListings(selectedCityId);
+      setListings(updatedListings);
+    } catch (err: any) {
+      console.error('Falha ao rodar web scraping:', err);
+      alert(`Erro na captura: ${err.message || 'Falha inesperada.'}`);
+    } finally {
+      setIsLocalScraping(false);
+      setLocalScrapingStatus('');
+    }
+  }, [selectedCityId, cities, neighborhoods, organizationId]);
 
   const startDrawing = () => {
     setIsDrawingPolygon(true);
@@ -1346,12 +1576,42 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         </div>
       </div>
 
+      {/* Navegação de Abas Unificada (§19 e §16) */}
+      {!loading && (
+        <div className="flex bg-white p-1 rounded-[10px] border border-slate-200 shadow-xs gap-1 shrink-0 w-fit">
+          <button
+            onClick={() => setActiveViewMode('map')}
+            className={`px-3 py-1.5 rounded-[6px] text-[13px] font-bold transition-all ${
+              activeViewMode === 'map' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            🗺️ Mapa de Inteligência
+          </button>
+          <button
+            onClick={() => setActiveViewMode('table')}
+            className={`px-3 py-1.5 rounded-[6px] text-[13px] font-bold transition-all ${
+              activeViewMode === 'table' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            📋 Tabela de Ocorrências
+          </button>
+          <button
+            onClick={() => setActiveViewMode('scraping')}
+            className={`px-3 py-1.5 rounded-[6px] text-[13px] font-bold transition-all ${
+              activeViewMode === 'scraping' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+            }`}
+          >
+            🤖 Web Scraping
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-200/50 rounded-3xl">
           <div className="w-8 h-8 border-4 border-slate-950 border-t-transparent rounded-full animate-spin mb-3" />
           <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Construindo Atlas Dinâmico...</span>
         </div>
-      ) : showTableView ? (
+      ) : activeViewMode === 'table' ? (
         <div className="bg-white rounded-[10px] border border-slate-200/60 p-6 space-y-6">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
@@ -1362,12 +1622,6 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                 Visualizando todos os {sortedListings.length} anúncios de concorrência da praça ativa.
               </p>
             </div>
-            <button
-              onClick={() => setShowTableView(false)}
-              className="flex items-center gap-1.5 h-9 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shadow-sm"
-            >
-              <span>🗺️ Voltar para o Mapa</span>
-            </button>
           </div>
 
           {/* Painel de busca e config de colunas superior (§5.1) */}
@@ -1435,7 +1689,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                         key={l.id}
                         onClick={() => {
                           handleFocusListing(l);
-                          setShowTableView(false);
+                          setActiveViewMode('map');
                         }}
                         className="hover:bg-slate-50/80 cursor-pointer transition-colors"
                       >
@@ -1502,7 +1756,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                           <button
                             onClick={() => {
                               handleFocusListing(l);
-                              setShowTableView(false);
+                              setActiveViewMode('map');
                             }}
                             className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
                           >
@@ -1525,6 +1779,186 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      ) : activeViewMode === 'scraping' ? (
+        <div className="bg-white rounded-[10px] border border-slate-200/60 p-6 space-y-6">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <span>🤖</span> Captura de Dados (Web Scraping)
+            </h2>
+            <p className="text-xs text-slate-500 font-semibold mt-1">
+              Insira o link da página de anúncios de uma imobiliária parceira e inicie o robô de varredura e geolocalização automática.
+            </p>
+          </div>
+
+          {/* Formulário de Scraping (§5.1 e §16 e §17) */}
+          <div className="flex flex-col md:flex-row gap-3 items-center">
+            <div className="flex-1 relative w-full">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔗</span>
+              <input
+                type="text"
+                value={scraperUrl}
+                onChange={(e) => setScraperUrl(e.target.value)}
+                placeholder="Insira a URL dos anúncios imobiliários (ex: https://conexao381.com.br/...)"
+                className="w-full h-9 pl-9 pr-4 bg-slate-50 border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              />
+            </div>
+            <button
+              onClick={() => handleRunScraper(scraperUrl)}
+              disabled={isLocalScraping}
+              className={`h-9 px-4 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 flex items-center justify-center gap-1.5 shrink-0
+                ${isLocalScraping
+                  ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
+                }`}
+            >
+              {isLocalScraping ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Processando...</span>
+                </>
+              ) : (
+                <>
+                  <span>Iniciar Captura</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Progresso de Scraping (§11) */}
+          {isLocalScraping && (
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-[10px] flex items-center gap-3">
+              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <span className="text-xs text-blue-800 font-bold uppercase tracking-wider">Robô de Captura: {localScrapingStatus}</span>
+            </div>
+          )}
+
+          {/* Tabela de Resultados Recentes */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Resultados da Última Execução</h3>
+              {scrapedListings.length > 0 && (
+                <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold rounded-full">
+                  {scrapedListings.length} anúncios processados
+                </span>
+              )}
+            </div>
+
+            {scrapedListings.length > 0 ? (
+              <div className="overflow-x-auto max-h-[50vh] border border-gray-100 rounded-[10px]">
+                <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+                  <thead className="sticky top-0 bg-slate-50 border-b border-gray-200 z-10">
+                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                      {CONCORRENCIA_COLUMNS.map(col =>
+                        tableColumns.visibleColumns.includes(col.key) && (
+                          <SortableHeader
+                            key={col.key}
+                            label={col.label}
+                            colKey={col.key}
+                            sortable={col.sortable}
+                            sortColumn={tableColumns.sortColumn || undefined}
+                            sortDirection={tableColumns.sortDirection}
+                            onSort={tableColumns.handleColumnSort}
+                            className="px-5 py-3 text-xs font-bold text-slate-500 text-left border-r border-gray-100 last:border-r-0"
+                            uppercase={false}
+                          />
+                        )
+                      )}
+                      <th className="px-5 py-3 text-right text-xs font-bold text-slate-500">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-xs">
+                    {scrapedListings.map(l => (
+                      <tr
+                        key={l.id || l.sourceUrl}
+                        onClick={() => {
+                          handleFocusListing(l);
+                          setActiveViewMode('map');
+                        }}
+                        className="hover:bg-slate-50/80 cursor-pointer transition-colors"
+                      >
+                        {tableColumns.visibleColumns.includes('propertyType') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 truncate">{l.propertyType}</td>
+                        )}
+                        {tableColumns.visibleColumns.includes('neighborhood') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 truncate">
+                            {neighborhoods.find(n => n.id === l.neighborhoodId)?.name || 'Desconhecido'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('price') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                            R$ {l.price.toLocaleString('pt-BR')}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('pricePerM2') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                            {l.pricePerM2 ? `R$ ${Math.round(l.pricePerM2).toLocaleString('pt-BR')}/m²` : '-'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('areaPrivate') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                            {l.areaPrivate ? `${l.areaPrivate}m²` : '-'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('bedrooms') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                            {l.bedrooms || '-'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('suites') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                            {l.suites || '-'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('bathrooms') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                            {l.bathrooms || '-'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('parkingSpaces') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                            {l.parkingSpaces || '-'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('source') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 truncate">
+                            <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-bold rounded uppercase">
+                              {l.source}
+                            </span>
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('constructionStandard') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                            {l.constructionStandard ? (
+                              <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold rounded uppercase">
+                                {l.constructionStandard}
+                              </span>
+                            ) : '-'}
+                          </td>
+                        )}
+                        <td className="px-5 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => {
+                              handleFocusListing(l);
+                              setActiveViewMode('map');
+                            }}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                          >
+                            Ver no Mapa
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-16 bg-slate-50/50 border border-dashed border-slate-200 rounded-[10px] text-slate-400 text-xs font-semibold">
+                <span className="text-3xl block mb-2">🤖</span>
+                <span>Nenhum resultado capturado nesta sessão ainda. Insira um link acima para iniciar.</span>
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -2018,7 +2452,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                       </select>
                       <button
                         type="button"
-                        onClick={() => setShowTableView(true)}
+                        onClick={() => setActiveViewMode('table')}
                         className="flex items-center gap-1 h-9 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0"
                       >
                         <span>📋 Tabela</span>

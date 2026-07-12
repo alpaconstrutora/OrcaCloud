@@ -2,7 +2,16 @@ export type ContractType =
     | 'Empreitada Global' | 'Empreitada Parcial' | 'Preço Fechado' | 'Preço Unitário'
     | 'Contrato por Medição' | 'Contrato Recorrente' | 'Manutenção' | 'Prestação de Serviços'
     | 'Instalação' | 'Reforma' | 'Administração' | 'Subempreitada' | 'Outros'
-    | 'Compra e Venda';
+    | 'Compra e Venda' | (string & {});
+
+export interface ContractTypeRecord {
+    id: string;
+    name: string;
+    category: 'Serviços' | 'Suprimentos' | 'Geral';
+    organization_id?: string;
+    active?: boolean;
+    created_at?: string;
+}
 
 export type BillingMode = 'MEDICAO' | 'ETAPA' | 'SINAL_PARCELAS' | 'COST_PLUS';
 

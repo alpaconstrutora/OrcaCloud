@@ -9,6 +9,7 @@ import Button from './ui/Button';
 import ClientCategoriesSettings from './ClientCategoriesSettings';
 import SupplierCategoriesSettings from './SupplierCategoriesSettings';
 import FinancialCategoriesManager from './FinancialCategoriesManager';
+import ContractTypesSettings from './ContractTypesSettings';
 
 const Settings: React.FC = () => {
     const confirm = useConfirm();
@@ -440,7 +441,8 @@ const Settings: React.FC = () => {
                 <div className="space-y-6">
                     <ClientCategoriesSettings />
                     <SupplierCategoriesSettings />
-                    
+                    <ContractTypesSettings />
+
                     {/* Para separar visualmente sem destoar, envolvemos num container branco parecido */}
                     <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                         <FinancialCategoriesManager />

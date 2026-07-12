@@ -2,7 +2,7 @@ import React from 'react';
 import Button from './ui/Button';
 import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins, MapPin, ClipboardList, Users } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
-import { Contract, ContractInstallment, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature } from '../types';
+import { Contract, ContractInstallment, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature, ContractTypeRecord } from '../types';
 import { PaymentAccount } from '../types/financial';
 import { supplierService } from '../services/supplierService';
 import { clientService as crmClientService } from '../services/clientService';
@@ -10,6 +10,7 @@ import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
 import { storageService } from '../services/storageService';
 import { laborService } from '../services/laborService';
+import { contractTypeService } from '../services/contractTypeService';
 import { sanitizeFileName } from '../utils/storageUtils';
 import ContractScopeManager from './ContractScopeManager';
 import { Upload, Trash2, ExternalLink } from 'lucide-react';
@@ -96,6 +97,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const [costCenters, setCostCenters] = React.useState<CostCenter[]>([]);
     const [employees, setEmployees] = React.useState<{ id: string; name: string; role?: string }[]>([]);
     const [chartOfAccounts, setChartOfAccounts] = React.useState<ChartOfAccount[]>([]);
+    const [contractTypes, setContractTypes] = React.useState<ContractTypeRecord[]>([]);
     const [paymentAccounts, setPaymentAccounts] = React.useState<PaymentAccount[]>([]);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [scopePickerOpen, setScopePickerOpen] = React.useState(false);
@@ -228,14 +230,15 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const loadDependencies = async () => {
         setIsSubmitting(true);
         try {
-            const [s, cl, cc, ca, p, emps, pa] = await Promise.all([
+            const [s, cl, cc, ca, p, emps, pa, ct] = await Promise.all([
                 supplierService.listSuppliers(organizationId),
                 crmClientService.listClients(organizationId),
                 financialRegistryService.listCostCenters(organizationId),
                 financialRegistryService.listChartOfAccounts(organizationId),
                 projectService.listProjects(undefined, organizationId, true),
                 laborService.listEmployees(organizationId).catch(() => [] as { id: string; name: string; role?: string }[]),
-                financialRegistryService.listPaymentAccounts(organizationId).catch(() => [] as PaymentAccount[])
+                financialRegistryService.listPaymentAccounts(organizationId).catch(() => [] as PaymentAccount[]),
+                contractTypeService.listTypes(organizationId).catch(() => [] as ContractTypeRecord[])
             ]);
             setSuppliers(s);
             setCrmClients((cl as any[]).map(c => ({ id: c.id, name: c.name, document: c.document })));
@@ -244,6 +247,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             setProjects(p);
             setEmployees((emps as any[]).filter(e => e.status !== 'DEMITIDO').map(e => ({ id: e.id, name: e.name, role: e.role })));
             setPaymentAccounts(pa);
+            setContractTypes(ct);
         } catch (error) {
             console.error("Erro ao carregar dependências do contrato:", error);
         } finally {
@@ -873,22 +877,20 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
                                     >
                                         <optgroup label="Serviços ao Cliente">
-                                            <option value="Prestação de Serviços">Prestação de Serviços</option>
-                                            <option value="Empreitada Global">Empreitada Global</option>
-                                            <option value="Empreitada Parcial">Empreitada Parcial</option>
-                                            <option value="Preço Fechado">Preço Fechado</option>
-                                            <option value="Preço Unitário">Preço Unitário</option>
-                                            <option value="Contrato por Medição">Contrato por Medição</option>
-                                            <option value="Contrato Recorrente">Contrato Recorrente</option>
-                                            <option value="Manutenção">Manutenção</option>
-                                            <option value="Instalação">Instalação</option>
-                                            <option value="Reforma">Reforma</option>
+                                            {contractTypes.filter(t => t.category === 'Serviços').map(t => (
+                                                <option key={t.id} value={t.name}>{t.name}</option>
+                                            ))}
                                         </optgroup>
                                         <optgroup label="Suprimentos">
-                                            <option value="Administração">Administração</option>
-                                            <option value="Subempreitada">Subempreitada</option>
+                                            {contractTypes.filter(t => t.category === 'Suprimentos').map(t => (
+                                                <option key={t.id} value={t.name}>{t.name}</option>
+                                            ))}
                                         </optgroup>
-                                        <option value="Outros">Outros</option>
+                                        <optgroup label="Geral">
+                                            {contractTypes.filter(t => t.category === 'Geral').map(t => (
+                                                <option key={t.id} value={t.name}>{t.name}</option>
+                                            ))}
+                                        </optgroup>
                                     </select>
                                 </div>
                                 <div className="space-y-2">

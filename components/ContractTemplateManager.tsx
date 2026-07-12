@@ -1,13 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-    FileText, Plus, Edit2, Trash2, Copy, Eye, EyeOff,
-    ChevronLeft, Tag, Variable, Save, X, AlertCircle,
+    FileText, Plus, Edit2, Trash2, Eye, EyeOff,
+    ChevronLeft, Variable, Save,
 } from 'lucide-react';
 import {
     contractTemplateService, ContractTemplate, TEMPLATE_VARIABLES, renderTemplate,
 } from '../services/contractTemplateService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 import Button from './ui/Button';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
+import { useConfirm } from './ui/confirm';
 
 const CONTRACT_TEMPLATE_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Nome', sortable: true },
@@ -18,6 +20,8 @@ const CONTRACT_TEMPLATE_COLUMNS: ColumnConfig[] = [
 
 interface Props {
     organizationId: string;
+    open: boolean;
+    onClose: () => void;
 }
 
 const EMPTY_BODY = `<h2>CONTRATO DE {{TIPO}}</h2>
@@ -48,7 +52,8 @@ const EMPTY_BODY = `<h2>CONTRATO DE {{TIPO}}</h2>
 <p>Contrato nº {{NUMERO}}</p>
 `;
 
-const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
+const ContractTemplateManager: React.FC<Props> = ({ organizationId, open, onClose }) => {
+    const confirm = useConfirm();
     const [templates, setTemplates] = useState<ContractTemplate[]>([]);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState<ContractTemplate | null>(null);
@@ -84,7 +89,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
         finally { setLoading(false); }
     }, [organizationId]);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => { if (open) load(); }, [open, load]);
 
     const openNew = () => {
         setEditing(null); setIsNew(true);
@@ -116,7 +121,13 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
     };
 
     const handleDeactivate = async (id: string) => {
-        if (!confirm('Desativar este template?')) return;
+        const ok = await confirm({
+            title: 'Desativar template?',
+            message: 'O template deixa de aparecer para novos contratos, mas contratos já emitidos com ele não são afetados.',
+            variant: 'warning',
+            confirmLabel: 'Desativar',
+        });
+        if (!ok) return;
         await contractTemplateService.deactivate(id);
         notify('Template desativado.');
         load();
@@ -127,29 +138,23 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
     };
 
     const detectedVars = TEMPLATE_VARIABLES.filter(v => bodyHtml.includes(`{{${v.key}}}`));
+    const isEditing = editing || isNew;
 
     // ── Editor ────────────────────────────────────────────────────────────────
-    if (editing || isNew) {
+    const editorContent = isEditing && (() => {
         const previewContent = renderTemplate(bodyHtml, Object.fromEntries(
             TEMPLATE_VARIABLES.map(v => [v.key, `[${v.label}]`])
         ));
 
         return (
-            <div className="p-6 space-y-4 max-w-4xl mx-auto">
-                {notification && (
-                    <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white px-4 py-3 rounded-xl text-sm shadow-lg">
-                        {notification}
-                    </div>
-                )}
+            <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                    <button onClick={closeEditor} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-                        <ChevronLeft size={20} />
+                    <button onClick={closeEditor} className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-700 font-medium">
+                        <ChevronLeft size={16} /> Voltar
                     </button>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex-1">
-                        {isNew ? 'Novo Template' : `Editar: ${editing?.name}`}
-                    </h2>
+                    <div className="flex-1" />
                     <button onClick={() => setPreviewMode(p => !p)}
-                        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600">
+                        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 px-3 py-1.5 rounded-lg border border-gray-200">
                         {previewMode ? <EyeOff size={14} /> : <Eye size={14} />}
                         {previewMode ? 'Editar' : 'Preview'}
                     </button>
@@ -167,12 +172,12 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                                 <label className="block text-form-label font-medium text-gray-500 mb-1">Nome *</label>
                                 <input value={name} onChange={e => setName(e.target.value)}
                                     placeholder="ex: Contrato de Empreitada Padrão"
-                                    className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                             </div>
                             <div>
                                 <label className="block text-form-label font-medium text-gray-500 mb-1">Tipo de contrato</label>
                                 <select value={contractType} onChange={e => setContractType(e.target.value)}
-                                    className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
                                     <option value="">Todos</option>
                                     {['Empreitada Global', 'Preço Unitário', 'Administração', 'Subempreitada', 'Outros'].map(t =>
                                         <option key={t} value={t}>{t}</option>
@@ -184,7 +189,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                             <label className="block text-form-label font-medium text-gray-500 mb-1">Descrição</label>
                             <input value={description} onChange={e => setDescription(e.target.value)}
                                 placeholder="Uso interno para identificar o template"
-                                className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                         </div>
 
                         {/* Editor / Preview */}
@@ -196,7 +201,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                             </div>
                             {previewMode ? (
                                 <div
-                                    className="min-h-[480px] p-5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl text-sm text-gray-800 dark:text-gray-200 overflow-auto prose prose-sm max-w-none"
+                                    className="min-h-[480px] p-5 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 overflow-auto prose prose-sm max-w-none"
                                     dangerouslySetInnerHTML={{ __html: previewContent }}
                                 />
                             ) : (
@@ -205,7 +210,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                                     onChange={e => setBodyHtml(e.target.value)}
                                     rows={24}
                                     spellCheck={false}
-                                    className="w-full font-mono text-form-input rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                                    className="w-full font-mono text-form-input rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                                 />
                             )}
                         </div>
@@ -213,7 +218,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
 
                     {/* Sidebar: variáveis */}
                     <div className="space-y-4">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 space-y-3">
+                        <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
                                 <Variable size={13} /> Variáveis disponíveis
                             </p>
@@ -223,8 +228,8 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                                     <button key={v.key} onClick={() => insertVar(v.key)}
                                         className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] transition-colors flex items-center justify-between group ${
                                             bodyHtml.includes(`{{${v.key}}}`)
-                                                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
-                                                : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300'
+                                                ? 'bg-blue-50 text-blue-700'
+                                                : 'hover:bg-gray-50 text-gray-600'
                                         }`}>
                                         <span className="font-mono">{`{{${v.key}}}`}</span>
                                         <span className="text-gray-400 group-hover:text-gray-600 text-xs truncate max-w-[80px]">{v.label}</span>
@@ -234,12 +239,12 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                         </div>
 
                         {detectedVars.length > 0 && (
-                            <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-800 p-4">
-                                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-2">
+                            <div className="bg-emerald-50 rounded-2xl border border-emerald-100 p-4">
+                                <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-2">
                                     {detectedVars.length} variável(is) no template
                                 </p>
                                 {detectedVars.map(v => (
-                                    <p key={v.key} className="text-xs text-emerald-600 dark:text-emerald-300">✓ {v.label}</p>
+                                    <p key={v.key} className="text-xs text-emerald-600">✓ {v.label}</p>
                                 ))}
                             </div>
                         )}
@@ -247,37 +252,29 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                 </div>
             </div>
         );
-    }
+    })();
 
     // ── Lista ─────────────────────────────────────────────────────────────────
-    return (
-        <div className="p-6 space-y-5 max-w-4xl mx-auto">
-            {notification && (
-                <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white px-4 py-3 rounded-xl text-sm shadow-lg">
-                    {notification}
-                </div>
-            )}
-            <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Templates de Contrato</h2>
-                <div className="flex items-center gap-2">
-                    <ColumnConfigButton
-                        columns={CONTRACT_TEMPLATE_COLUMNS}
-                        visibleColumns={tableColumns.visibleColumns}
-                        showColumnConfig={tableColumns.showColumnConfig}
-                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                        onToggleColumn={tableColumns.toggleColumn}
-                        onReset={tableColumns.resetColumns}
-                    />
-                    <Button onClick={openNew} className="gap-2">
-                        <Plus size={15} /> Novo Template
-                    </Button>
-                </div>
+    const listContent = (
+        <div className="space-y-5">
+            <div className="flex items-center justify-end gap-2">
+                <ColumnConfigButton
+                    columns={CONTRACT_TEMPLATE_COLUMNS}
+                    visibleColumns={tableColumns.visibleColumns}
+                    showColumnConfig={tableColumns.showColumnConfig}
+                    onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                    onToggleColumn={tableColumns.toggleColumn}
+                    onReset={tableColumns.resetColumns}
+                />
+                <Button onClick={openNew} className="gap-2">
+                    <Plus size={15} /> Novo Template
+                </Button>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                 {loading ? (
                     <div className="space-y-px">
-                        {[...Array(3)].map((_, i) => <div key={i} className="h-16 bg-gray-50 dark:bg-gray-700/50 animate-pulse" />)}
+                        {[...Array(3)].map((_, i) => <div key={i} className="h-16 bg-gray-50 animate-pulse" />)}
                     </div>
                 ) : templates.length === 0 ? (
                     <div className="flex flex-col items-center gap-3 py-16 text-gray-400">
@@ -288,7 +285,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                 ) : (
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
+                            <tr className="bg-gray-50 border-b border-gray-100">
                                 {tableColumns.visibleColumns.includes('name') && (
                                     <SortableHeader label="Nome" colKey="name" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3" />
                                 )}
@@ -304,12 +301,12 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                                 <th className="w-24" />
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
+                        <tbody className="divide-y divide-gray-50">
                             {sortedTemplates.map(t => (
-                                <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                                <tr key={t.id} className="hover:bg-gray-50 transition-colors">
                                     {tableColumns.visibleColumns.includes('name') && (
                                         <td className="px-4 py-3">
-                                            <p className="font-medium text-gray-900 dark:text-white">{t.name}</p>
+                                            <p className="font-medium text-gray-900">{t.name}</p>
                                             {t.description && <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>}
                                         </td>
                                     )}
@@ -320,7 +317,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                                         <td className="px-4 py-3">
                                             <div className="flex flex-wrap gap-1">
                                                 {(t.variables ?? []).slice(0, 4).map(v => (
-                                                    <span key={v} className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded font-mono">
+                                                    <span key={v} className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-medium">
                                                         {`{{${v}}}`}
                                                     </span>
                                                 ))}
@@ -336,11 +333,11 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                                     <td className="px-4 py-3">
                                         <div className="flex gap-1 justify-end">
                                             <button onClick={() => openEdit(t)}
-                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                                                 <Edit2 size={14} />
                                             </button>
                                             <button onClick={() => handleDeactivate(t.id)}
-                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                                                 <Trash2 size={14} />
                                             </button>
                                         </div>
@@ -352,6 +349,25 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId }) => {
                 )}
             </div>
         </div>
+    );
+
+    return (
+        <Sheet open={open} onClose={onClose} size={isEditing ? 'full' : 'lg'}>
+            <SheetHeader onClose={onClose}>
+                <SheetTitle>
+                    {isNew ? 'Novo Template' : editing ? `Editar: ${editing.name}` : 'Templates de Contrato'}
+                </SheetTitle>
+                <SheetDescription>Modelos reutilizáveis para emissão de contratos.</SheetDescription>
+            </SheetHeader>
+            <SheetPanel className="p-6">
+                {isEditing ? editorContent : listContent}
+            </SheetPanel>
+            {notification && (
+                <div className="fixed bottom-6 right-6 z-[60] bg-gray-900 text-white px-4 py-3 rounded-xl text-sm shadow-lg">
+                    {notification}
+                </div>
+            )}
+        </Sheet>
     );
 };
 

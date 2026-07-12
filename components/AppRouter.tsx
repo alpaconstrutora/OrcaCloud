@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, FileSpreadsheet, TrendingUp } from 'lucide-react';
+import { Plus, FileSpreadsheet, TrendingUp, FileText } from 'lucide-react';
 import Button from './ui/Button';
 import { ProfileGroup, UserProfile, ProjectSettings, BudgetEntry, Organization, Contract, Client } from '../types';
 import { Session } from '@supabase/supabase-js';
@@ -1427,50 +1427,37 @@ const ContractsDashboardShell: React.FC<ShellProps> = ({
     organizationId, projectId, contractsVersion, setContractsVersion,
     setSelectedContractId, setIsCreatingContract, setEditingContract,
 }) => {
-    const [tab, setTab] = React.useState<'obra' | 'templates'>('obra');
-
-    const TABS = [
-        { id: 'obra',      label: 'Por Obra' },
-        { id: 'templates', label: 'Templates' },
-    ] as const;
+    const [templatesOpen, setTemplatesOpen] = React.useState(false);
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Contratos</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Empreitadas, aditivos e templates.</p>
-            </div>
-
-            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                {TABS.map(t => (
-                    <button key={t.id} onClick={() => setTab(t.id)}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                            tab === t.id
-                                ? 'bg-white text-blue-600 shadow-sm'
-                                : 'text-gray-400 hover:text-gray-600'
-                        }`}>
-                        {t.label}
+        <>
+            <SupplyChainContractList
+                projectId={projectId}
+                domain="SUPRIMENTOS"
+                onCreateNew={() => setIsCreatingContract(true)}
+                onViewDetails={(id) => setSelectedContractId(id)}
+                onEdit={(contract) => { setEditingContract(contract); setIsCreatingContract(true); }}
+                onDelete={() => setContractsVersion(v => v + 1)}
+                organizationId={organizationId || undefined}
+                version={contractsVersion}
+                extraActions={
+                    <button
+                        onClick={() => setTemplatesOpen(true)}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                    >
+                        <FileText className="w-[15px] h-[15px]" />
+                        Templates
                     </button>
-                ))}
-            </div>
-
-            {tab === 'obra' && (
-                <SupplyChainContractList
-                    projectId={projectId}
-                    domain="SUPRIMENTOS"
-                    hideHeader
-                    onCreateNew={() => setIsCreatingContract(true)}
-                    onViewDetails={(id) => setSelectedContractId(id)}
-                    onEdit={(contract) => { setEditingContract(contract); setIsCreatingContract(true); }}
-                    onDelete={() => setContractsVersion(v => v + 1)}
-                    organizationId={organizationId || undefined}
-                    version={contractsVersion}
+                }
+            />
+            <React.Suspense fallback={null}>
+                <ContractTemplateManager
+                    organizationId={organizationId}
+                    open={templatesOpen}
+                    onClose={() => setTemplatesOpen(false)}
                 />
-            )}
-            {tab === 'templates' && (
-                <ContractTemplateManager organizationId={organizationId} />
-            )}
-        </div>
+            </React.Suspense>
+        </>
     );
 };
 

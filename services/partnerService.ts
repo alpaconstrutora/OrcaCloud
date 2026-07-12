@@ -19,7 +19,8 @@ export const partnerService = {
       .select('*, supplier:suppliers(name)');
 
     if (organizationId && organizationId !== '') {
-      query = query.eq('organization_id', organizationId);
+      // Inclui também parceiros globais (organization_id NULL), mesmo padrão de suppliers.listSuppliers
+      query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
     }
 
     const { data, error } = await query.order('created_at', { ascending: false });
@@ -458,13 +459,16 @@ export const partnerService = {
     return data.signedUrl;
   },
 
-  // Promove um anexo enviado pelo parceiro a um documento formal do GED (ação manual do time interno)
+  // Promove um anexo enviado pelo parceiro a um documento formal do GED (ação manual do time interno).
+  // organizationId é explícito porque opura_documents é sempre de uma organização específica
+  // (nunca global), mesmo quando o workspace do parceiro em si é global (organization_id NULL).
   async promoteAttachmentToDocument(
     workspaceId: string,
     storagePath: string,
     docName: string,
     categoria: OpuraDocumentCategoria,
-    promotedByEmail: string
+    promotedByEmail: string,
+    organizationId: string
   ): Promise<void> {
     const ws = await this.getWorkspaceById(workspaceId);
     if (!ws) throw new Error('Workspace de parceiro não encontrado.');
@@ -472,7 +476,7 @@ export const partnerService = {
     const { data: newDoc, error: docError } = await supabase
       .from('opura_documents')
       .insert({
-        organization_id: ws.organization_id,
+        organization_id: organizationId,
         nome: docName,
         descricao: `Documento enviado pelo parceiro ${ws.supplier_name || ''} via Portal do Parceiro`.trim(),
         categoria,
@@ -519,7 +523,7 @@ export const partnerService = {
     }
 
     await documentService.logDocumentAction(
-      ws.organization_id,
+      organizationId,
       newDoc.id,
       promotedByEmail,
       'criado',

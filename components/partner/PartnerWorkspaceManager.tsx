@@ -246,9 +246,18 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   // Gerar/regenerar o link de acesso público do workspace selecionado
   const handleGenerateToken = async () => {
     if (!selectedWorkspace) return;
+    // Gerar/revogar o link é uma permissão de organização (quem administra o token),
+    // diferente da visibilidade dos dados do workspace em si — por isso, ao contrário
+    // da criação do parceiro, aqui é preciso mesmo saber qual organização está
+    // administrando o link, mesmo para um workspace global.
+    const tokenOrgId = organizationId || selectedWorkspace.organization_id;
+    if (!tokenOrgId) {
+      alert('Selecione uma organização específica no topo do sistema para gerar o link deste parceiro global.');
+      return;
+    }
     setTokenLoading(true);
     try {
-      await partnerPortalTokenService.generateToken(selectedWorkspace.id, organizationId);
+      await partnerPortalTokenService.generateToken(selectedWorkspace.id, tokenOrgId);
       const tok = await partnerPortalTokenService.getTokenForWorkspace(selectedWorkspace.id);
       setPortalToken(tok);
     } catch (err) {
@@ -268,11 +277,13 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   };
 
   const handleRevokeToken = async () => {
-    if (!selectedWorkspace) return;
+    if (!selectedWorkspace || !portalToken) return;
     if (!confirm('Revogar o acesso via link deste parceiro? Ele perderá o acesso imediatamente.')) return;
     setTokenLoading(true);
     try {
-      await partnerPortalTokenService.revokeToken(selectedWorkspace.id, organizationId);
+      // Usa o org_id já gravado no próprio token (quem gerou), em vez do filtro de
+      // organização atual da tela — evita falhar quando se está em "Todas as organizações".
+      await partnerPortalTokenService.revokeToken(selectedWorkspace.id, portalToken.org_id);
       setPortalToken(null);
     } catch (err) {
       console.error('Erro ao revogar link:', err);
@@ -289,15 +300,11 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
 
     // Com "Todas as organizações" selecionado (organizationId vazio), cruza com o
     // cadastro do próprio fornecedor: se ele já pertence a uma organização específica,
-    // usa essa organização automaticamente — só pede pra escolher manualmente quando o
-    // fornecedor também é global (cadastrado em "Todas as organizações"), caso em que
-    // não há como inferir sozinho a qual organização o workspace deve pertencer.
+    // usa essa organização automaticamente. Se o fornecedor também for global
+    // ("Todas as Organizações"), o workspace nasce global também (organization_id
+    // NULL) — mesmo conceito já usado em suppliers.organization_id, sem perguntar nada.
     const selectedSupplier = suppliers.find((s) => s.id === newWorkspaceSupplierId);
-    const targetOrgId = organizationId || selectedSupplier?.organization_id;
-    if (!targetOrgId) {
-      alert('Este fornecedor está cadastrado em "Todas as organizações". Selecione uma organização específica no topo do sistema antes de ativar o parceiro.');
-      return;
-    }
+    const targetOrgId: string | null = organizationId || selectedSupplier?.organization_id || null;
 
     try {
       const created = await partnerService.saveWorkspace({
@@ -455,10 +462,18 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     setPromoteDocCategoria('engenharia');
   };
 
-  // Confirmar promoção do anexo a documento formal do GED (decisão manual do time interno)
+  // Confirmar promoção do anexo a documento formal do GED (decisão manual do time interno).
+  // opura_documents é sempre de uma organização específica, então precisa de uma resolvida
+  // mesmo quando o workspace do parceiro é global.
   const handleConfirmPromote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedWorkspace || !promotingAttachmentPath || !promoteDocName.trim()) return;
+
+    const promoteOrgId = organizationId || selectedWorkspace.organization_id;
+    if (!promoteOrgId) {
+      alert('Selecione uma organização específica no topo do sistema para promover este anexo ao GED de um parceiro global.');
+      return;
+    }
 
     setPromoting(true);
     try {
@@ -467,7 +482,8 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
         promotingAttachmentPath,
         promoteDocName.trim(),
         promoteDocCategoria as any,
-        'Membro Construtora'
+        'Membro Construtora',
+        promoteOrgId
       );
       setPromotingAttachmentPath(null);
       alert('Documento promovido ao GED com sucesso.');
@@ -956,8 +972,8 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   ))}
                 </select>
                 {!organizationId && newWorkspaceSupplierId && !suppliers.find(s => s.id === newWorkspaceSupplierId)?.organization_id && (
-                  <p className="text-xs text-amber-600 pt-1">
-                    Este fornecedor é global ("Todas as Organizações") — selecione uma organização específica no topo do sistema antes de continuar.
+                  <p className="text-xs text-blue-600 pt-1">
+                    Este fornecedor é global ("Todas as Organizações") — o parceiro será ativado como global também, visível em qualquer organização.
                   </p>
                 )}
               </div>

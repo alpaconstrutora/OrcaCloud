@@ -10,7 +10,8 @@ export type PartnerRequestPriority = 'BAIXA' | 'MEDIA' | 'ALTA';
 
 export interface PartnerWorkspace {
   id: string;
-  organization_id: string;
+  /** NULL = parceiro global ("Todas as Organizações"), espelhando suppliers.organization_id. */
+  organization_id: string | null;
   supplier_id: string;
   is_active: boolean;
   settings: Record<string, any>;

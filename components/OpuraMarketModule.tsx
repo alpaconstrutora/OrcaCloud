@@ -78,6 +78,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   const [scrapedListings, setScrapedListings] = React.useState<OpuraMarketListing[]>([]);
   const [isLocalScraping, setIsLocalScraping] = React.useState(false);
   const [localScrapingStatus, setLocalScrapingStatus] = React.useState('');
+  const [maxPagesToScrape, setMaxPagesToScrape] = React.useState<number>(5);
   const tableColumns = useTableColumns(CONCORRENCIA_COLUMNS, 'opuraMarketConcorrenciaTable');
 
   // Carrega configurações da praça selecionada
@@ -218,7 +219,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       // 1. Baixar listagens via Proxy CORS AllOrigins
       setScrapingStatus('Conectando ao portal...');
       const listingsBatch: any[] = [];
-      const maxPages = 2; // Processar as duas primeiras páginas para teste
+       const maxPages = maxPagesToScrape;
 
       for (let page = 1; page <= maxPages; page++) {
         const pageUrl = `${TARGET_URL}?pagina=${page}`;
@@ -351,6 +352,9 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       // 2. Geocodificação e Associação de Bairros no Supabase
       const processedListings: any[] = [];
       const localNeighborhoods = [...neighborhoods];
+      
+      // Cache local para geolocalização no escopo da execução
+      const geoCache: { [key: string]: { lat: number; lng: number } | null } = {};
 
       for (let i = 0; i < listingsBatch.length; i++) {
         const item = listingsBatch[i];
@@ -375,10 +379,15 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           neighborhoodId = centroNeigh ? centroNeigh.id : (neighborhoods[0]?.id || '');
         }
 
-        // Chamada de geocodificação Nominatim
-        const geo = await opuraMarketService.geocodeAddress(item.neighborhoodName, 'Cambuí');
-        // Respeitar o rate-limit de 1 req/s do Nominatim
-        await new Promise(resolve => setTimeout(resolve, 1100));
+        // Tenta buscar no cache pelo nome do bairro
+        const cacheKey = item.neighborhoodName.trim();
+        let geo = geoCache[cacheKey];
+        if (geo === undefined) {
+          geo = await opuraMarketService.geocodeAddress(item.neighborhoodName, 'Cambuí');
+          geoCache[cacheKey] = geo;
+          // Respeita o rate-limit do Nominatim de 1 req/1.1s apenas no cache miss
+          await new Promise(resolve => setTimeout(resolve, 1100));
+        }
 
         processedListings.push({
           cityId: selectedCityId,
@@ -428,7 +437,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       setIsScraping(false);
       setScrapingStatus('');
     }
-  }, [cities, selectedCityId, neighborhoods, organizationId, setNeighborhoods, setListings]);
+  }, [cities, selectedCityId, neighborhoods, organizationId, setNeighborhoods, setListings, maxPagesToScrape]);
 
   // Função parametrizada de Web Scraping sob demanda (🤖 Web Scraping)
   const handleRunScraper = React.useCallback(async (targetUrl: string) => {
@@ -452,7 +461,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
 
       setLocalScrapingStatus('Conectando ao portal...');
       const listingsBatch: any[] = [];
-      const maxPages = 2; // Processar as duas primeiras páginas
+      const maxPages = maxPagesToScrape;
 
       for (let page = 1; page <= maxPages; page++) {
         const cleanUrl = targetUrl.split('?')[0];
@@ -585,6 +594,9 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       // 2. Geocodificação e Associação de Bairros no Supabase
       const processedListings: any[] = [];
       const localNeighborhoods = [...neighborhoods];
+      
+      // Cache local para geolocalização no escopo da execução
+      const geoCache: { [key: string]: { lat: number; lng: number } | null } = {};
 
       for (let i = 0; i < listingsBatch.length; i++) {
         const item = listingsBatch[i];
@@ -604,8 +616,15 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           neighborhoodId = centroNeigh ? centroNeigh.id : (neighborhoods[0]?.id || '');
         }
 
-        const geo = await opuraMarketService.geocodeAddress(item.neighborhoodName, 'Cambuí');
-        await new Promise(resolve => setTimeout(resolve, 1100));
+        // Tenta buscar no cache pelo nome do bairro
+        const cacheKey = item.neighborhoodName.trim();
+        let geo = geoCache[cacheKey];
+        if (geo === undefined) {
+          geo = await opuraMarketService.geocodeAddress(item.neighborhoodName, 'Cambuí');
+          geoCache[cacheKey] = geo;
+          // Respeita o rate-limit do Nominatim de 1 req/1.1s apenas no cache miss
+          await new Promise(resolve => setTimeout(resolve, 1100));
+        }
 
         processedListings.push({
           cityId: selectedCityId,
@@ -654,7 +673,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       setIsLocalScraping(false);
       setLocalScrapingStatus('');
     }
-  }, [selectedCityId, cities, neighborhoods, organizationId]);
+  }, [selectedCityId, cities, neighborhoods, organizationId, maxPagesToScrape]);
 
   const startDrawing = () => {
     setIsDrawingPolygon(true);
@@ -1792,7 +1811,6 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
             </p>
           </div>
 
-          {/* Formulário de Scraping (§5.1 e §16 e §17) */}
           <div className="flex flex-col md:flex-row gap-3 items-center">
             <div className="flex-1 relative w-full">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔗</span>
@@ -1802,6 +1820,17 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                 onChange={(e) => setScraperUrl(e.target.value)}
                 placeholder="Insira a URL dos anúncios imobiliários (ex: https://conexao381.com.br/...)"
                 className="w-full h-9 pl-9 pr-4 bg-slate-50 border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              />
+            </div>
+            <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Páginas:</label>
+              <input
+                type="number"
+                min="1"
+                max="30"
+                value={maxPagesToScrape}
+                onChange={(e) => setMaxPagesToScrape(Math.max(1, Math.min(30, Number(e.target.value))))}
+                className="w-16 h-9 px-2 bg-slate-50 border border-slate-200 rounded-[6px] text-xs font-bold text-center text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
               />
             </div>
             <button

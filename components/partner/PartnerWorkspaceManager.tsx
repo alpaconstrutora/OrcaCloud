@@ -17,7 +17,8 @@ import {
   Eye,
   Link2,
   MessageSquare,
-  Send
+  Send,
+  FileText
 } from 'lucide-react';
 import Button from '../ui/Button';
 import { supabase } from '../../lib/supabase';
@@ -33,7 +34,8 @@ import {
   PartnerSharedDocument,
   PartnerConversation,
   PartnerMessage,
-  PartnerRole
+  PartnerRole,
+  Contract
 } from '../../types';
 
 interface PartnerWorkspaceManagerProps {
@@ -71,13 +73,16 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   const [newMessage, setNewMessage] = useState('');
   const chatEndRef = React.useRef<HTMLDivElement>(null);
 
+  // Contratos (contrapartida interna da aba Contratos que o parceiro vê no próprio portal)
+  const [workspaceContracts, setWorkspaceContracts] = useState<Contract[]>([]);
+
   // Listas auxiliares da Construtora
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
 
   // Carregamento e Mensagens
   const [loading, setLoading] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'usuarios' | 'conversas' | 'documentos' | 'solicitacoes'>('usuarios');
+  const [activeSubTab, setActiveSubTab] = useState<'usuarios' | 'conversas' | 'documentos' | 'contratos' | 'solicitacoes'>('usuarios');
 
   // Modais
   const [isNewWorkspaceModalOpen, setIsNewWorkspaceModalOpen] = useState(false);
@@ -162,6 +167,12 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
         const convs = await partnerService.listConversations(selectedWorkspace.id);
         setConversations(convs);
         setSelectedConversation(convs.length > 0 ? convs[0] : null);
+
+        const { data: fullContracts } = await supabase
+          .from('contracts')
+          .select('*')
+          .eq('supplier_id', selectedWorkspace.supplier_id);
+        setWorkspaceContracts((fullContracts || []) as Contract[]);
       } catch (err) {
         console.error('Erro ao carregar detalhes do workspace:', err);
       }
@@ -222,6 +233,14 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     } catch (err) {
       console.error('Erro ao enviar mensagem:', err);
     }
+  };
+
+  // URL do PDF do contrato: prioriza o assinado; se não houver, cai na última minuta
+  // marcada como "emitida" (mesma lógica usada na aba Contratos do PartnerPortal.tsx).
+  const getContractFileUrl = (contract: Contract): string | null => {
+    if (contract.signed_contract_url) return contract.signed_contract_url;
+    const emitted = (contract.minuta_versions || []).filter((m) => m.emitted && m.url);
+    return emitted.length > 0 ? emitted[emitted.length - 1].url : null;
   };
 
   // Gerar/regenerar o link de acesso público do workspace selecionado
@@ -554,7 +573,15 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 <FolderOpen className="w-4 h-4" />
                 Documentos GED ({sharedDocs.length})
               </button>
-              <button 
+              <button
+                onClick={() => setActiveSubTab('contratos')}
+                className={`px-4 py-2.5 text-button font-bold border-b-2 transition-all flex items-center gap-2
+                  ${activeSubTab === 'contratos' ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+              >
+                <FileText className="w-4 h-4" />
+                Contratos ({workspaceContracts.length})
+              </button>
+              <button
                 onClick={() => setActiveSubTab('solicitacoes')}
                 className={`px-4 py-2.5 text-button font-bold border-b-2 transition-all flex items-center gap-2
                   ${activeSubTab === 'solicitacoes' ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
@@ -740,6 +767,55 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   {sharedDocs.length === 0 && (
                     <div className="col-span-full text-center py-12 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-xs text-gray-400">
                       Nenhum documento compartilhado com este parceiro.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* SUBTAB: CONTRATOS */}
+            {activeSubTab === 'contratos' && (
+              <div className="flex flex-col gap-4">
+                <h3 className="text-sm font-bold text-gray-800">Contratos deste Fornecedor</h3>
+
+                <div className="flex flex-col gap-3">
+                  {workspaceContracts.map((contract) => (
+                    <div key={contract.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-200 text-xs font-bold rounded-md uppercase">
+                            {contract.nature || 'Contrato'}
+                          </span>
+                          <span className="text-xs text-gray-400 font-bold">Nº {contract.number}</span>
+                        </div>
+                        <h4 className="text-xs font-bold text-gray-900 truncate">{contract.title || 'Contrato Prestação de Serviços'}</h4>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-400">
+                          <span>Vigência: {contract.start_date ? new Date(contract.start_date).toLocaleDateString() : '-'} até {contract.end_date ? new Date(contract.end_date).toLocaleDateString() : '-'}</span>
+                          <span>Status: {contract.status}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 border-gray-100 pt-3 md:pt-0">
+                        <div className="text-left md:text-right">
+                          <span className="text-xs text-gray-400 uppercase block font-semibold">Valor Atual</span>
+                          <h4 className="text-sm font-black text-gray-900 mt-0.5">R$ {Number(contract.current_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h4>
+                        </div>
+                        {getContractFileUrl(contract) && (
+                          <a
+                            href={getContractFileUrl(contract)!}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3.5 py-2 rounded-xl text-xs text-gray-700 hover:bg-gray-100 active:scale-95 transition-all font-semibold"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-orange-500" />
+                            Ver PDF
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {workspaceContracts.length === 0 && (
+                    <div className="text-center py-12 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-xs text-gray-400">
+                      Nenhum contrato vinculado a este fornecedor.
                     </div>
                   )}
                 </div>

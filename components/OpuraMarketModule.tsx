@@ -16,6 +16,22 @@ import {
 import { ImportListingsModal } from './ImportListingsModal';
 import { CityRulesModal } from './CityRulesModal';
 import Button from './ui/Button';
+import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
+import { useTableColumns, ColumnConfigButton, SortableHeader, ColumnConfig } from './ui/TableUtils';
+
+const CONCORRENCIA_COLUMNS: ColumnConfig[] = [
+  { key: 'propertyType', label: 'Tipo', sortable: true },
+  { key: 'neighborhood', label: 'Bairro', sortable: true },
+  { key: 'price', label: 'Preço (R$)', sortable: true },
+  { key: 'pricePerM2', label: 'R$/m²', sortable: true },
+  { key: 'areaPrivate', label: 'Área Priv. (m²)', sortable: true },
+  { key: 'bedrooms', label: 'Dormitórios', sortable: true },
+  { key: 'suites', label: 'Suítes', sortable: true },
+  { key: 'bathrooms', label: 'Banheiros', sortable: true },
+  { key: 'parkingSpaces', label: 'Vagas', sortable: true },
+  { key: 'source', label: 'Fonte', sortable: true },
+  { key: 'constructionStandard', label: 'Padrão', sortable: true },
+];
 
 interface OpuraMarketModuleProps {
   organizationId: string;
@@ -57,6 +73,8 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   const [cityConfig, setCityConfig] = React.useState<OpuraMarketCityConfig | null>(null);
   const [loadingCityConfig, setLoadingCityConfig] = React.useState(false);
   const [isRulesModalOpen, setIsRulesModalOpen] = React.useState(false);
+  const [isTableModalOpen, setIsTableModalOpen] = React.useState(false);
+  const tableColumns = useTableColumns(CONCORRENCIA_COLUMNS, 'opuraMarketConcorrenciaTable');
 
   // Carrega configurações da praça selecionada
   const loadCityRules = React.useCallback(async (cityId: string) => {
@@ -1200,6 +1218,37 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
     });
   }, [listings, searchTerm, filterSource]);
 
+  // Ordenação dos anúncios baseada no hook tableColumns (§6.3)
+  const sortedListings = React.useMemo(() => {
+    if (!tableColumns.sortColumn) return filteredListings;
+    
+    return [...filteredListings].sort((a, b) => {
+      let val1: any = a[tableColumns.sortColumn as keyof OpuraMarketListing];
+      let val2: any = b[tableColumns.sortColumn as keyof OpuraMarketListing];
+      
+      // Caso especial: Bairro
+      if (tableColumns.sortColumn === 'neighborhood') {
+        val1 = neighborhoods.find(n => n.id === a.neighborhoodId)?.name || '';
+        val2 = neighborhoods.find(n => n.id === b.neighborhoodId)?.name || '';
+      }
+      
+      if (val1 === null || val1 === undefined) return 1;
+      if (val2 === null || val2 === undefined) return -1;
+      
+      if (typeof val1 === 'string') {
+        return tableColumns.sortDirection === 'asc'
+          ? val1.localeCompare(val2)
+          : val2.localeCompare(val1);
+      }
+      if (typeof val1 === 'number') {
+        return tableColumns.sortDirection === 'asc'
+          ? val1 - val2
+          : val2 - val1;
+      }
+      return 0;
+    });
+  }, [filteredListings, tableColumns.sortColumn, tableColumns.sortDirection, neighborhoods]);
+
   // Carregar estudo salvo no mapa
   const handleSelectSavedStudy = (study: OpuraMarketTerrainStudy) => {
     setTerrainPin({ lat: study.latitude, lng: study.longitude });
@@ -1777,20 +1826,27 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       placeholder="🔍 Buscar por endereço, tipo, fonte..."
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                      className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                     />
                     
                     <div className="flex gap-2">
                       <select
                         value={filterSource}
                         onChange={(e) => setFilterSource(e.target.value)}
-                        className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                        className="flex-1 h-9 px-3 bg-slate-50 border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-500"
                       >
                         <option value="Todos">Todas as Fontes</option>
                         {sources.map(src => (
                           <option key={src} value={src}>{src}</option>
                         ))}
                       </select>
+                      <button
+                        type="button"
+                        onClick={() => setIsTableModalOpen(true)}
+                        className="flex items-center gap-1 h-9 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                      >
+                        <span>📋 Tabela</span>
+                      </button>
                     </div>
                   </div>
 
@@ -1904,6 +1960,186 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           cityName={cities.find(c => c.id === selectedCityId)?.name || 'Cambuí'}
           initialConfig={cityConfig}
         />
+      )}
+      {isTableModalOpen && (
+        <Modal
+          open={isTableModalOpen}
+          onClose={() => setIsTableModalOpen(false)}
+          className="max-w-6xl w-full"
+        >
+          <ModalHeader
+            title="Ocorrências de Concorrência"
+            description={`Exibindo ${sortedListings.length} anúncios mapeados no território atual.`}
+            onClose={() => setIsTableModalOpen(false)}
+            icon={<span className="text-xl">📋</span>}
+          />
+          <ModalBody className="p-0 overflow-hidden flex flex-col h-[70vh]">
+            {/* Painel de busca rápido e config de colunas superior (§5.1) */}
+            <div className="px-6 py-4 bg-slate-50/50 border-b border-gray-100 flex items-center justify-between gap-4 shrink-0">
+              <div className="flex items-center gap-2 flex-1 max-w-md">
+                <span className="text-slate-400">🔍</span>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar nesta tabela..."
+                  className="w-full bg-white border border-gray-200 rounded-[6px] px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-slate-400"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={filterSource}
+                  onChange={(e) => setFilterSource(e.target.value)}
+                  className="px-3 py-1.5 bg-white border border-gray-200 rounded-[6px] text-xs font-semibold text-slate-600 focus:outline-none"
+                >
+                  <option value="Todos">Todas as Fontes</option>
+                  {sources.map(src => (
+                    <option key={src} value={src}>{src}</option>
+                  ))}
+                </select>
+                <ColumnConfigButton
+                  columns={CONCORRENCIA_COLUMNS}
+                  visibleColumns={tableColumns.visibleColumns}
+                  showColumnConfig={tableColumns.showColumnConfig}
+                  onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                  onToggleColumn={tableColumns.toggleColumn}
+                  onReset={tableColumns.resetColumns}
+                />
+              </div>
+            </div>
+
+            {/* Tabela Scrollável (§6.5) */}
+            <div className="flex-1 overflow-auto">
+              <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+                <thead className="sticky top-0 bg-slate-50 border-b border-gray-200 z-10">
+                  <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                    {CONCORRENCIA_COLUMNS.map(col =>
+                      tableColumns.visibleColumns.includes(col.key) && (
+                        <SortableHeader
+                          key={col.key}
+                          label={col.label}
+                          colKey={col.key}
+                          sortable={col.sortable}
+                          sortColumn={tableColumns.sortColumn || undefined}
+                          sortDirection={tableColumns.sortDirection}
+                          onSort={tableColumns.handleColumnSort}
+                          className="px-5 py-3 text-xs font-bold text-slate-500 text-left border-r border-gray-100 last:border-r-0"
+                          uppercase={false}
+                        />
+                      )
+                    )}
+                    <th className="px-5 py-3 text-right text-xs font-bold text-slate-500">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-xs">
+                  {sortedListings.length > 0 ? (
+                    sortedListings.map(l => {
+                      return (
+                        <tr
+                          key={l.id}
+                          onClick={() => {
+                            handleFocusListing(l);
+                            setIsTableModalOpen(false);
+                          }}
+                          className="hover:bg-slate-50/80 cursor-pointer transition-colors"
+                        >
+                          {tableColumns.visibleColumns.includes('propertyType') && (
+                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 truncate">{l.propertyType}</td>
+                          )}
+                          {tableColumns.visibleColumns.includes('neighborhood') && (
+                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 truncate">
+                              {neighborhoods.find(n => n.id === l.neighborhoodId)?.name || 'Desconhecido'}
+                            </td>
+                          )}
+                          {tableColumns.visibleColumns.includes('price') && (
+                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                              R$ {l.price.toLocaleString('pt-BR')}
+                            </td>
+                          )}
+                          {tableColumns.visibleColumns.includes('pricePerM2') && (
+                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                              {l.pricePerM2 ? `R$ ${Math.round(l.pricePerM2).toLocaleString('pt-BR')}/m²` : '-'}
+                            </td>
+                          )}
+                          {tableColumns.visibleColumns.includes('areaPrivate') && (
+                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                              {l.areaPrivate ? `${l.areaPrivate}m²` : '-'}
+                            </td>
+                          )}
+                          {tableColumns.visibleColumns.includes('bedrooms') && (
+                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                              {l.bedrooms || '-'}
+                            </td>
+                          )}
+                          {tableColumns.visibleColumns.includes('suites') && (
+                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                              {l.suites || '-'}
+                            </td>
+                          )}
+                          {tableColumns.visibleColumns.includes('bathrooms') && (
+                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                              {l.bathrooms || '-'}
+                            </td>
+                          )}
+                          {tableColumns.visibleColumns.includes('parkingSpaces') && (
+                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                              {l.parkingSpaces || '-'}
+                            </td>
+                          )}
+                          {tableColumns.visibleColumns.includes('source') && (
+                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 truncate">
+                              <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-bold rounded uppercase">
+                                {l.source}
+                              </span>
+                            </td>
+                          )}
+                          {tableColumns.visibleColumns.includes('constructionStandard') && (
+                            <td className="px-5 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                              {l.constructionStandard ? (
+                                <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold rounded uppercase">
+                                  {l.constructionStandard}
+                                </span>
+                              ) : '-'}
+                            </td>
+                          )}
+                          <td className="px-5 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => {
+                                handleFocusListing(l);
+                                setIsTableModalOpen(false);
+                              }}
+                              className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                            >
+                              Ver no Mapa
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={tableColumns.visibleColumns.length + 1} className="text-center py-12 text-slate-400 font-bold bg-white rounded-b-3xl">
+                        <div className="text-center">
+                          <span className="text-3xl block mb-2">📂</span>
+                          <h3 className="text-sm font-bold text-gray-900 mb-1">Nenhum anúncio encontrado</h3>
+                          <p className="text-xs text-gray-500">Tente ajustar seus filtros de busca ou fonte.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <button
+              onClick={() => setIsTableModalOpen(false)}
+              className="px-4 py-2 border rounded-[6px] text-xs font-bold text-slate-600 bg-white border-slate-200 hover:bg-slate-50 active:scale-95 transition-all"
+            >
+              Fechar Janela
+            </button>
+          </ModalFooter>
+        </Modal>
       )}
     </div>
   );

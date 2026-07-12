@@ -46,6 +46,8 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   // Estado para os anúncios (pesquisas de concorrência)
   const [listings, setListings] = React.useState<OpuraMarketListing[]>([]);
   const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
+  const [isScraping, setIsScraping] = React.useState(false);
+  const [scrapingStatus, setScrapingStatus] = React.useState('');
   
   // Estado para o histórico do bairro
   const [neighHistory, setNeighHistory] = React.useState<OpuraMarketNeighborhoodHistory[]>([]);
@@ -169,6 +171,221 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       setLoadingStudies(false);
     }
   }, [organizationId]);
+
+  // Função para disparar a sincronização dos anúncios da Conexão 381 via Web Scraping reativo no navegador (Onda 6)
+  const handleTriggerScraping = React.useCallback(async () => {
+    // 1. Validar se há cidade selecionada (deve ser Cambuí)
+    const activeCity = cities.find(c => c.id === selectedCityId);
+    if (!activeCity || activeCity.name !== 'Cambuí') {
+      alert('A sincronização automática por robô está disponível apenas para a cidade piloto (Cambuí - MG) no momento.');
+      return;
+    }
+
+    if (!window.confirm('Deseja iniciar a sincronização automática dos anúncios da imobiliária Conexão 381 via Web Scraping? Esse processo leva cerca de 30 segundos.')) {
+      return;
+    }
+
+    setIsScraping(true);
+    setScrapingStatus('Iniciando...');
+
+    try {
+      const BASE_URL = 'https://conexao381.com.br';
+      const TARGET_URL = `${BASE_URL}/imoveis/a-venda/cambui-mg`;
+      const IMOBILIARIA_NAME = 'Conexão 381';
+
+      // 1. Baixar listagens via Proxy CORS AllOrigins
+      setScrapingStatus('Conectando ao portal...');
+      const listingsBatch: any[] = [];
+      const maxPages = 2; // Processar as duas primeiras páginas para teste
+
+      for (let page = 1; page <= maxPages; page++) {
+        const pageUrl = `${TARGET_URL}?pagina=${page}`;
+        setScrapingStatus(`Lendo pág. ${page} de ${maxPages}...`);
+        
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(pageUrl)}`;
+        const res = await fetch(proxyUrl);
+        if (!res.ok) {
+          console.error(`Erro ao baixar página ${page} via proxy CORS`);
+          break;
+        }
+        
+        const responseJson = await res.json();
+        const html = responseJson.contents || '';
+
+        // Higienizar e extrair JSON-LD
+        const sanitizeJsonString = (rawJson: string) => {
+          return rawJson.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (m, p1) => {
+            return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+          });
+        };
+
+        const jsonLdRegex = /<script\s+type=["']application\/ld\+json["']\s*[^>]*>([\s\S]*?)<\/script>/gi;
+        let match;
+        let pageCount = 0;
+
+        while ((match = jsonLdRegex.exec(html)) !== null) {
+          try {
+            const rawText = match[1].trim();
+            let json;
+            try {
+              json = JSON.parse(rawText);
+            } catch (pe) {
+              json = JSON.parse(sanitizeJsonString(rawText));
+            }
+
+            const isProperty = json && (
+              json['@type'] === 'Product' || 
+              (Array.isArray(json['@type']) && json['@type'].includes('Product')) ||
+              (typeof json['@type'] === 'string' && json['@type'].includes('Product')) ||
+              json.offers
+            );
+
+            if (isProperty) {
+              const title = json.name || '';
+              const price = json.offers?.price ? Number(json.offers.price) : null;
+              const url = json.offers?.url || '';
+              const bedrooms = json.numberOfBedrooms ? Number(json.numberOfBedrooms) : 0;
+              const bathrooms = json.numberOfBathroomsTotal ? Number(json.numberOfBathroomsTotal) : 0;
+              const description = json.description || '';
+
+              let rawAddress = json.address?.streetAddress || '';
+              let neighborhoodName = 'Centro';
+              if (rawAddress.includes(',')) {
+                neighborhoodName = rawAddress.split(',')[0].trim();
+              } else {
+                neighborhoodName = rawAddress.replace('-MG', '').replace('Cambuí', '').trim();
+              }
+
+              const areaMatch = url.match(/-(\d+)m2-/);
+              const areaPrivate = areaMatch ? Number(areaMatch[1]) : null;
+
+              let propertyType = 'Casa';
+              if (url.includes('apartamento')) propertyType = 'Apartamento';
+              else if (url.includes('terreno') || url.includes('lote')) propertyType = 'Terreno';
+              else if (url.includes('sobrado')) propertyType = 'Casa';
+              else if (url.includes('comercial') || url.includes('sala')) propertyType = 'Comercial';
+
+              let constructionStandard = 'Médio';
+              const descLower = description.toLowerCase();
+              if (descLower.includes('alto padrão') || descLower.includes('luxo') || descLower.includes('fino acabamento')) {
+                constructionStandard = 'Alto Padrão';
+              } else if (descLower.includes('popular') || descLower.includes('minha casa minha vida') || descLower.includes('mcmv')) {
+                constructionStandard = 'Econômico';
+              }
+
+              listingsBatch.push({
+                title,
+                price,
+                url,
+                bedrooms,
+                bathrooms,
+                description,
+                neighborhoodName,
+                areaPrivate,
+                propertyType,
+                constructionStandard,
+                rawAddress
+              });
+              pageCount++;
+            }
+          } catch (e) {
+            // Ignora JSON-LDs de outra tipologia
+          }
+        }
+
+        if (pageCount === 0) break;
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      if (listingsBatch.length === 0) {
+        throw new Error('Nenhum anúncio localizado no portal do parceiro.');
+      }
+
+      // 2. Geocodificação e Associação de Bairros no Supabase
+      const processedListings: any[] = [];
+      const localNeighborhoods = [...neighborhoods];
+
+      for (let i = 0; i < listingsBatch.length; i++) {
+        const item = listingsBatch[i];
+        setScrapingStatus(`Geocodificando ${i + 1}/${listingsBatch.length}...`);
+
+        // Mapear ou criar bairro
+        let neighborhood = localNeighborhoods.find(n => n.name.toLowerCase().trim() === item.neighborhoodName.toLowerCase().trim());
+        let neighborhoodId = neighborhood ? neighborhood.id : '';
+
+        if (!neighborhoodId) {
+          setScrapingStatus(`Cadastrando bairro "${item.neighborhoodName}"...`);
+          const { data: newNeigh, error: neighError } = await supabase
+            .from('opura_market_neighborhoods')
+            .insert({
+              city_id: selectedCityId,
+              name: item.neighborhoodName,
+              created_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+          
+          if (!neighError && newNeigh) {
+            neighborhoodId = newNeigh.id;
+            localNeighborhoods.push(newNeigh as any);
+            // Atualiza o estado global de bairros
+            setNeighborhoods(prev => [...prev, newNeigh as any]);
+          } else {
+            neighborhoodId = neighborhoods[0]?.id || '';
+          }
+        }
+
+        // Chamada de geocodificação Nominatim
+        const geo = await opuraMarketService.geocodeAddress(item.neighborhoodName, 'Cambuí');
+        // Respeitar o rate-limit de 1 req/s do Nominatim
+        await new Promise(resolve => setTimeout(resolve, 1100));
+
+        processedListings.push({
+          cityId: selectedCityId,
+          neighborhoodId,
+          organizationId,
+          source: IMOBILIARIA_NAME,
+          sourceUrl: item.url,
+          propertyType: item.propertyType,
+          address: item.rawAddress,
+          zipCode: null,
+          areaPrivate: item.areaPrivate,
+          areaTotal: item.areaPrivate,
+          bedrooms: item.bedrooms,
+          suites: null,
+          bathrooms: item.bathrooms,
+          parkingSpaces: null,
+          price: item.price,
+          condoFee: null,
+          iptu: null,
+          latitude: geo ? geo.lat : null,
+          longitude: geo ? geo.lng : null,
+          description: item.description,
+          constructionStandard: item.constructionStandard,
+          listingStatus: 'active',
+          capturedAt: new Date().toISOString(),
+          lastSeenAt: new Date().toISOString()
+        });
+      }
+
+      // 3. Salvar e Deduplicar
+      setScrapingStatus('Salvando lote...');
+      const result = await opuraMarketService.importListingsInBatch(processedListings);
+
+      alert(`Sincronização concluída com sucesso!\n\n- Importados: ${result.importedCount} anúncios únicos\n- Duplicados ignorados: ${result.deduplicatedCount} anúncios`);
+      
+      // 4. Recarregar as listagens na tela para renderizar os novos pins
+      const updatedListings = await opuraMarketService.listListings(selectedCityId);
+      setListings(updatedListings);
+      setActiveLayer('concorrencia'); // Foca na aba concorrência para mostrar o mapa
+    } catch (err: any) {
+      console.error('Falha ao acionar web scraping:', err);
+      alert(`Erro na sincronização: ${err.message || 'Falha inesperada no servidor.'}`);
+    } finally {
+      setIsScraping(false);
+      setScrapingStatus('');
+    }
+  }, [cities, selectedCityId, neighborhoods, organizationId, setNeighborhoods, setListings]);
 
   const startDrawing = () => {
     setIsDrawingPolygon(true);
@@ -1263,14 +1480,36 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
 
               {activeTab === 'analise' ? (
                 <div className="space-y-4">
-                  {/* Botão de importação de concorrência */}
+                  {/* Botões de importação e Web Scraping */}
                   {!isDrawingPolygon && (
-                    <button
-                      onClick={() => setIsImportModalOpen(true)}
-                      className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-100 rounded-xl text-button font-black text-emerald-700 uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
-                    >
-                      📥 Importar Planilha de Concorrência
-                    </button>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={() => setIsImportModalOpen(true)}
+                        className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-100 rounded-xl text-button font-black text-emerald-700 uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
+                      >
+                        📥 Importar Planilha de Concorrência
+                      </button>
+                      <button
+                        onClick={handleTriggerScraping}
+                        disabled={isScraping}
+                        className={`w-full py-2.5 rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2 border
+                          ${isScraping 
+                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' 
+                            : 'bg-indigo-50 hover:bg-indigo-100/70 border-indigo-100 text-indigo-700'
+                          }`}
+                      >
+                        {isScraping ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                            <span>{scrapingStatus}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>🤖 Sincronizar Conexão 381</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   )}
 
                   {isDrawingPolygon ? (

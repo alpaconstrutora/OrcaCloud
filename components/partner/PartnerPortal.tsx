@@ -381,13 +381,15 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
     try {
       let created: PartnerRequest;
       if (isTokenMode) {
-        // Upload de anexo não é suportado no acesso via link (exigiria escrita anônima em storage);
-        // o campo de arquivo já fica oculto na UI nesse modo.
+        const attachmentPaths = await Promise.all(
+          newRequestFiles.map((file) => partnerPortalTokenService.uploadAttachment(portalToken!, file))
+        );
         created = await partnerPortalTokenService.createRequest(portalToken!, {
           title: newRequest.title,
           description: newRequest.description,
           type: newRequest.type,
           priority: newRequest.priority,
+          attachmentPaths,
         });
       } else {
         const attachmentPaths = await Promise.all(
@@ -446,24 +448,35 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
   // Enviar um documento direto pela aba Documentos (fica pendente de revisão/promoção do time interno,
   // reaproveitando o mesmo mecanismo de anexo de solicitação — sem escrita direta no GED).
-  // Indisponível no modo token: exigiria upload anônimo em storage.
   const handleSendDocument = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isPreview || isTokenMode || !workspace || !partnerUser || !sendDocFile) return;
+    if (isPreview || !workspace || !partnerUser || !sendDocFile) return;
 
     setSendingDoc(true);
     try {
-      const path = await partnerService.uploadRequestAttachment(workspace.id, sendDocFile);
-      const created = await partnerService.saveRequest({
-        partner_workspace_id: workspace.id,
-        title: sendDocFile.name,
-        description: sendDocNote.trim() || 'Documento enviado pelo parceiro pela aba Documentos.',
-        type: 'DOCUMENTACAO',
-        priority: 'MEDIA',
-        status: 'ABERTO',
-        created_by_email: partnerUser.email,
-        attachment_paths: [path]
-      });
+      let created: PartnerRequest;
+      if (isTokenMode) {
+        const path = await partnerPortalTokenService.uploadAttachment(portalToken!, sendDocFile);
+        created = await partnerPortalTokenService.createRequest(portalToken!, {
+          title: sendDocFile.name,
+          description: sendDocNote.trim() || 'Documento enviado pelo parceiro pela aba Documentos.',
+          type: 'DOCUMENTACAO',
+          priority: 'MEDIA',
+          attachmentPaths: [path],
+        });
+      } else {
+        const path = await partnerService.uploadRequestAttachment(workspace.id, sendDocFile);
+        created = await partnerService.saveRequest({
+          partner_workspace_id: workspace.id,
+          title: sendDocFile.name,
+          description: sendDocNote.trim() || 'Documento enviado pelo parceiro pela aba Documentos.',
+          type: 'DOCUMENTACAO',
+          priority: 'MEDIA',
+          status: 'ABERTO',
+          created_by_email: partnerUser.email,
+          attachment_paths: [path]
+        });
+      }
       setRequests((prev) => [created, ...prev]);
       setIsSendDocModalOpen(false);
       setSendDocFile(null);
@@ -529,7 +542,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       )}
       {isTokenMode && (
         <div className="h-9 bg-blue-500/15 border-b border-blue-500/30 flex items-center justify-center gap-3 shrink-0 text-xs font-bold text-blue-400 uppercase tracking-wider">
-          <span>Acesso via link — envio de arquivos indisponível nesse modo</span>
+          <span>Acesso via link público</span>
         </div>
       )}
       {/* Header Premium */}
@@ -769,8 +782,8 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   </div>
                   <Button
                     onClick={() => setIsSendDocModalOpen(true)}
-                    disabled={isPreview || isTokenMode}
-                    title={isPreview ? 'Indisponível no modo de pré-visualização' : isTokenMode ? 'Envio de arquivo indisponível no acesso via link' : undefined}
+                    disabled={isPreview}
+                    title={isPreview ? 'Indisponível no modo de pré-visualização' : undefined}
                     className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10 normal-case tracking-normal shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <Upload className="w-4 h-4" />
@@ -1051,27 +1064,25 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 </div>
               </div>
 
-              {!isTokenMode && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-gray-400 uppercase font-bold">Anexos (opcional)</label>
-                  <input
-                    type="file"
-                    multiple
-                    onChange={(e) => setNewRequestFiles(Array.from(e.target.files || []))}
-                    className="text-xs text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-white/5 file:text-gray-300 file:text-xs file:font-semibold hover:file:bg-white/10"
-                  />
-                  {newRequestFiles.length > 0 && (
-                    <ul className="flex flex-col gap-1 pt-1">
-                      {newRequestFiles.map((f, idx) => (
-                        <li key={idx} className="flex items-center gap-1.5 text-xs text-gray-400">
-                          <Paperclip className="w-3 h-3" />
-                          <span className="truncate">{f.name}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-gray-400 uppercase font-bold">Anexos (opcional)</label>
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setNewRequestFiles(Array.from(e.target.files || []))}
+                  className="text-xs text-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-white/5 file:text-gray-300 file:text-xs file:font-semibold hover:file:bg-white/10"
+                />
+                {newRequestFiles.length > 0 && (
+                  <ul className="flex flex-col gap-1 pt-1">
+                    {newRequestFiles.map((f, idx) => (
+                      <li key={idx} className="flex items-center gap-1.5 text-xs text-gray-400">
+                        <Paperclip className="w-3 h-3" />
+                        <span className="truncate">{f.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
 
               <div className="flex justify-end gap-2 border-t border-white/5 pt-4 mt-2">
                 <Button

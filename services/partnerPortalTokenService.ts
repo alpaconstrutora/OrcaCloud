@@ -72,7 +72,7 @@ export const partnerPortalTokenService = {
 
   async createRequest(
     token: string,
-    payload: { title: string; description: string; type: string; priority: string }
+    payload: { title: string; description: string; type: string; priority: string; attachmentPaths?: string[] }
   ): Promise<any> {
     const { data, error } = await supabase.rpc('partner_portal_create_request', {
       p_token: token,
@@ -80,9 +80,22 @@ export const partnerPortalTokenService = {
       p_description: payload.description,
       p_type: payload.type,
       p_priority: payload.priority,
+      p_attachment_paths: payload.attachmentPaths || [],
     });
     if (error) throw error;
     return (data as any)?.data;
+  },
+
+  // Upload de arquivo via link público (sessão anon não tem RLS de storage para escrever
+  // em partner-uploads/; a Edge Function valida o token e faz o upload com service role).
+  async uploadAttachment(token: string, file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append('token', token);
+    formData.append('file', file);
+    const { data, error } = await supabase.functions.invoke('partner-portal-upload', { body: formData });
+    if (error) throw error;
+    if (!data?.storagePath) throw new Error(data?.error || 'Erro ao enviar arquivo.');
+    return data.storagePath;
   },
 
   async getConversations(token: string): Promise<any[]> {

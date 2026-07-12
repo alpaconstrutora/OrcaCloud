@@ -15,6 +15,7 @@ import { sanitizeFileName } from '../utils/storageUtils';
 import ContractScopeManager from './ContractScopeManager';
 import { Upload, Trash2, ExternalLink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useStore } from '../store/useStore';
 
 interface ContractModalProps {
     isOpen: boolean;
@@ -35,13 +36,19 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     onClose,
     onSubmit,
     projectId,
-    organizationId,
+    organizationId: organizationIdProp,
     initialData,
     direction,
     onToast,
     titleNew,
     moduleLabel,
 }) => {
+    // Quando "Todas as Organizações" está selecionado no seletor global, organizationIdProp vem undefined.
+    // Contrato não pode existir sem organização — exigimos a escolha aqui dentro.
+    const { organizations: storeOrganizations } = useStore();
+    const [pickedOrgId, setPickedOrgId] = React.useState<string>('');
+    const organizationId = organizationIdProp || pickedOrgId || undefined;
+    const needsOrgPicker = !organizationIdProp && !initialData?.id;
     const [formData, setFormData] = React.useState<Partial<Contract>>({
         number: '',
         title: '',
@@ -118,6 +125,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
             loadDependencies();
             if (!initialData?.id) {
                 setNumberError(null);
+                setPickedOrgId('');
                 numberInputRef.current = '';
                 setFormData({
                     number: '',
@@ -142,7 +150,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                 setInstallmentSchedule([]);
             }
         }
-    }, [isOpen, organizationId]);
+    }, [isOpen, organizationIdProp]);
 
     // Initialize installment schedule when switching to Parcelado
     const prevTermType = React.useRef(formData.payment_term_type);
@@ -208,6 +216,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         })();
         return () => { cancelled = true; };
     }, [isOpen, initialData, organizationId]);
+
+    // Recarrega listas dependentes de organização (fornecedores/clientes/etc.) quando o usuário
+    // escolhe a organização no seletor interno (modo "Todas as Organizações").
+    React.useEffect(() => {
+        if (isOpen && needsOrgPicker && pickedOrgId) {
+            loadDependencies();
+        }
+    }, [pickedOrgId]);
 
     React.useEffect(() => {
         if (initialData) {
@@ -307,6 +323,11 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+
+        if (!organizationId) {
+            setError('Selecione a organização para criar este contrato.');
+            return;
+        }
 
         const currentNumber = (numberInputRef.current || formData.number || '');
         if (!currentNumber || !/^\d{3}$/.test(currentNumber)) {
@@ -471,6 +492,28 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-6">
+                                {needsOrgPicker && (
+                                    <div className="col-span-2 space-y-2">
+                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Organização *</label>
+                                        <div className="relative group">
+                                            <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                            <select
+                                                required
+                                                value={pickedOrgId}
+                                                onChange={(e) => setPickedOrgId(e.target.value)}
+                                                className="w-full pl-14 pr-6 py-4 bg-amber-50 border border-amber-200 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                                            >
+                                                <option value="">Selecione a organização deste contrato</option>
+                                                {storeOrganizations.map(org => (
+                                                    <option key={org.id} value={org.id}>{org.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <p className="text-xs text-amber-600 ml-1">
+                                            "Todas as Organizações" está selecionado — escolha em qual organização este contrato deve ser criado.
+                                        </p>
+                                    </div>
+                                )}
                                 <div className="space-y-2">
                                     <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Número do Contrato</label>
                                     <div className="relative">
@@ -1364,8 +1407,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
                         <button
                             type="submit"
-                            disabled={isSubmitting || isFetchingNumber}
-                            className={`w-full py-5 rounded-[24px] text-white transition-all shadow-xl font-medium text-form-label uppercase tracking-[0.2em] flex items-center justify-center gap-3 group ${(isSubmitting || isFetchingNumber)
+                            disabled={isSubmitting || isFetchingNumber || !organizationId}
+                            className={`w-full py-5 rounded-[24px] text-white transition-all shadow-xl font-medium text-form-label uppercase tracking-[0.2em] flex items-center justify-center gap-3 group ${(isSubmitting || isFetchingNumber || !organizationId)
                                 ? 'bg-gray-400 cursor-not-allowed shadow-none'
                                 : 'bg-gray-900 hover:bg-emerald-600 shadow-gray-200 hover:shadow-emerald-200 active:scale-95'
                                 }`}

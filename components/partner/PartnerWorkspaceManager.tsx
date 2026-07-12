@@ -286,6 +286,10 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWorkspaceSupplierId) return;
+    if (!organizationId) {
+      alert('Selecione uma organização específica (não "Todas as organizações") para ativar um novo parceiro.');
+      return;
+    }
 
     try {
       const created = await partnerService.saveWorkspace({
@@ -473,10 +477,22 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
       <aside className="w-80 border-r border-gray-200 bg-gray-50 p-4 flex flex-col gap-4 shrink-0 overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold uppercase text-gray-500 tracking-wider">Parceiros Habilitados</h2>
-          <Button variant="ghost" size="icon" onClick={() => setIsNewWorkspaceModalOpen(true)} className="bg-orange-500 hover:bg-orange-600 text-white">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsNewWorkspaceModalOpen(true)}
+            disabled={!organizationId}
+            title={!organizationId ? 'Selecione uma organização específica para ativar um novo parceiro' : undefined}
+            className="bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             <Plus className="w-4 h-4" />
           </Button>
         </div>
+        {!organizationId && (
+          <p className="text-xs text-gray-400 -mt-2">
+            Visualizando parceiros de todas as organizações. Selecione uma organização específica para ativar um novo parceiro.
+          </p>
+        )}
 
         <div className="flex flex-col gap-1.5">
           {workspaces.map((ws) => (

@@ -386,7 +386,7 @@ export const useProjectOperations = ({
         await contractService.createContract({
           ...data,
           project_id: data.project_id || projectId || '',
-          organization_id: activeOrganizationId || undefined
+          organization_id: data.organization_id || activeOrganizationId || undefined
         } as Contract);
       }
       setIsCreatingContract(false);

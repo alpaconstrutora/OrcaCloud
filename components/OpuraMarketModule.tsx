@@ -2420,45 +2420,44 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
             )}
           </div>
 
-          {/* Coluna 3: Painel Lateral de Análise de Terreno & Estudos */}
-          <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-sm flex flex-col justify-between">
+          {/* Coluna 3: Painel Lateral de Concorrência Imobiliária */}
+          <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-sm flex flex-col justify-between h-fit min-h-[500px]">
             <div className="space-y-6">
               
-              {/* Abas */}
-              <div className="flex border-b border-slate-100 pb-1 gap-1">
-                <button
-                  onClick={() => setActiveTab('analise')}
-                  className={`flex-1 pb-2 text-xs font-black uppercase tracking-wider border-b-2 text-center transition-all ${
-                    activeTab === 'analise' 
-                      ? 'border-slate-900 text-slate-900' 
-                      : 'border-transparent text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  🧪 Analisar
-                </button>
-                <button
-                  onClick={() => setActiveTab('estudos')}
-                  className={`flex-1 pb-2 text-xs font-black uppercase tracking-wider border-b-2 text-center transition-all ${
-                    activeTab === 'estudos' 
-                      ? 'border-slate-900 text-slate-900' 
-                      : 'border-transparent text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  📂 Estudos ({savedStudies.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab('anuncios')}
-                  className={`flex-1 pb-2 text-xs font-black uppercase tracking-wider border-b-2 text-center transition-all ${
-                    activeTab === 'anuncios' 
-                      ? 'border-slate-900 text-slate-900' 
-                      : 'border-transparent text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  🏢 Concorrência ({listings.length})
-                </button>
+              {/* Cabeçalho do Painel */}
+              <div className="border-b border-slate-100 pb-3 flex justify-between items-center gap-2">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Ofertas da Praça</h3>
+                  <h2 className="text-sm font-black text-slate-800 uppercase tracking-tight flex items-center gap-1.5 mt-0.5 font-sans">
+                    🏢 Concorrência ({listings.length})
+                  </h2>
+                </div>
+                <div className="flex gap-1.5 shrink-0">
+                  <button
+                    onClick={() => setIsImportModalOpen(true)}
+                    className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-100 text-emerald-700 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center gap-1 shadow-sm font-sans"
+                    title="Importar Planilha de Concorrência"
+                  >
+                    📥 Importar
+                  </button>
+                  <button
+                    onClick={handleTriggerScraping}
+                    disabled={isScraping}
+                    className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100/70 border border-indigo-100 text-indigo-700 disabled:bg-slate-50 disabled:text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center gap-1 shadow-sm font-sans"
+                  >
+                    {isScraping ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Sincronizando...</span>
+                      </>
+                    ) : (
+                      '🤖 Sincronizar'
+                    )}
+                  </button>
+                </div>
               </div>
 
-              {activeTab === 'analise' ? (
+              {false ? (
                 <div className="space-y-4">
                   {/* Botões de importação e Web Scraping */}
                   {!isDrawingPolygon && (
@@ -2532,8 +2531,8 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                           </button>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 font-semibold">
-                          <span>Lat: {terrainPin.lat.toFixed(6)}</span>
-                          <span>Lng: {terrainPin.lng.toFixed(6)}</span>
+                          <span>Lat: {terrainPin?.lat?.toFixed(6)}</span>
+                          <span>Lng: {terrainPin?.lng?.toFixed(6)}</span>
                         </div>
                       </div>
 
@@ -2680,7 +2679,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                     </div>
                   )}
                 </div>
-              ) : activeTab === 'estudos' ? (
+              ) : false ? (
                 /* Aba: Estudos Salvos */
                 <div className="space-y-3">
                   {loadingStudies ? (

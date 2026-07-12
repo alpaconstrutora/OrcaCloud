@@ -10,6 +10,7 @@ import type { ActionQueueItem, ApprovalEntity, ApprovalPendingSummary } from '..
 import { financialApprovalService } from '../services/financialApprovalService';
 import type { FinancialApprovalConfig } from '../types/financial';
 import { processService } from '../services/processService';
+import { contractIndexService } from '../services/contractIndexService';
 import { KpiCard } from './ui/KpiCard';
 import MyTasksWidget from './MyTasksWidget';
 import { ApproveRejectModal, ENTITY_TAG } from './FinancialApprovalModule';
@@ -88,11 +89,12 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
 
         // Cada fonte é independente — uma RPC fora do ar não pode apagar as outras
         // (ao contrário do padrão de try/catch único usado no BIDashboard).
-        const [financialR, divergenceR, approvalSummaryR, bottlenecksR, actionQueueR, scorecardR, approvalConfigR] = await Promise.allSettled([
+        const [financialR, divergenceR, approvalSummaryR, bottlenecksR, reajusteR, actionQueueR, scorecardR, approvalConfigR] = await Promise.allSettled([
             financialIntelligenceService.getAlerts(organizationId),
             divergenceService.getDivergences(organizationId),
             approvalService.getPendingSummary(organizationId),
             processService.getBottlenecks(organizationId),
+            contractIndexService.listDueForReajuste(organizationId),
             approvalService.listActionQueue(organizationId),
             financialIntelligenceService.getProjectScorecards(organizationId),
             financialApprovalService.listConfig(organizationId),
@@ -173,6 +175,20 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         } else {
             errs.push('Gargalos de processo');
             console.error('[CentralControle] bottlenecks:', bottlenecksR.reason);
+        }
+
+        if (reajusteR.status === 'fulfilled') {
+            reajusteR.value.forEach(c => built.push({
+                id: `reajuste-${c.id}`,
+                severity: 'MEDIUM',
+                title: `Contrato ${c.number} com reajuste vencido`,
+                description: `${c.reajuste_index} · venceu ${new Date(c.reajuste_proximo).toLocaleDateString('pt-BR')} · valor atual ${fBRL(c.current_value)}`,
+                amount: c.current_value,
+                view: 'contracts-reajuste',
+            }));
+        } else {
+            errs.push('Reajustes de contrato');
+            console.error('[CentralControle] reajustes:', reajusteR.reason);
         }
 
         built.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);

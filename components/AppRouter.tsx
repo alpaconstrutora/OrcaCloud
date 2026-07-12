@@ -887,6 +887,25 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
         />
       );
 
+    // Acessado via alerta da Central de Controle (Faixa 1) — não tem entrada
+    // própria na sidebar, só deep-link a partir do alerta de reajuste vencido.
+    case 'contracts-reajuste':
+      return (
+        <div className="space-y-6">
+          <div>
+            <button onClick={() => setActiveView('supplies-contracts')}
+              className="text-sm text-gray-400 hover:text-gray-600 font-medium mb-2">
+              ← Contratos
+            </button>
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Reajustes de Contrato</h1>
+            <p className="text-gray-400 text-sm mt-1.5 font-medium">Contratos com reajuste vencido — aplique a correção monetária.</p>
+          </div>
+          <React.Suspense fallback={<Spinner />}>
+            <ContractReajusteDue organizationId={activeOrganizationId || ''} />
+          </React.Suspense>
+        </div>
+      );
+
     case 'supplies-receipts':
       return <SupplyChainReceiptManager onViewOrder={(id) => { setSelectedOrderId(id); setActiveView('supplies-orders'); }} />;
 
@@ -1389,7 +1408,10 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
 };
 
 // ─── ContractsDashboardShell ──────────────────────────────────────────────────
-// Wrapper com tabs "Por Obra" (lista por projeto) / "Templates" / "Índices"
+// Wrapper com tabs "Por Obra" (lista por projeto) / "Templates".
+// Reajustes vencidos não é mais aba fixa aqui — vira alerta na Central de
+// Controle (Faixa 1), que já é a home de exceções do sistema; ao clicar no
+// alerta o usuário cai direto na view 'contracts-reajuste' (ver switch acima).
 interface ShellProps {
     organizationId: string;
     projectId: string;
@@ -1405,19 +1427,18 @@ const ContractsDashboardShell: React.FC<ShellProps> = ({
     organizationId, projectId, contractsVersion, setContractsVersion,
     setSelectedContractId, setIsCreatingContract, setEditingContract,
 }) => {
-    const [tab, setTab] = React.useState<'obra' | 'templates' | 'reajustes'>('obra');
+    const [tab, setTab] = React.useState<'obra' | 'templates'>('obra');
 
     const TABS = [
         { id: 'obra',      label: 'Por Obra' },
         { id: 'templates', label: 'Templates' },
-        { id: 'reajustes', label: 'Reajustes' },
     ] as const;
 
     return (
         <div className="space-y-6">
             <div>
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Contratos</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Empreitadas, aditivos, templates e reajustes.</p>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Empreitadas, aditivos e templates.</p>
             </div>
 
             <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
@@ -1448,9 +1469,6 @@ const ContractsDashboardShell: React.FC<ShellProps> = ({
             )}
             {tab === 'templates' && (
                 <ContractTemplateManager organizationId={organizationId} />
-            )}
-            {tab === 'reajustes' && (
-                <ContractReajusteDue organizationId={organizationId} />
             )}
         </div>
     );

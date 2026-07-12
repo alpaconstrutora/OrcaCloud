@@ -267,7 +267,7 @@ export const opuraMarketService = {
     // PostGIS exige a coluna geom formatada em WKT (Well-Known Text) ou GeoJSON
     // Inserimos como POINT(longitude latitude)
     const dbPayload = {
-      organization_id: study.organizationId,
+      organization_id: study.organizationId || null,
       name: study.name,
       address: study.address,
       terrain_area: study.terrainArea,

@@ -14,6 +14,7 @@ import type {
   ClassificationRule,
   PipelineHealth,
   UploadNfeResult,
+  ParsingError,
 } from '../types/fiscal';
 import { supplierService } from './supplierService';
 import { orderService } from './orderService';
@@ -196,6 +197,63 @@ export async function replayDeadLetter(jobId: string): Promise<string> {
 
   if (error) throw new Error(error.message);
   return data as string; // novo job_id
+}
+
+export async function dismissDeadLetter(jobId: string, reason?: string): Promise<void> {
+  const { error } = await supabase.rpc('dismiss_dead_letter', {
+    p_job_id: jobId,
+    p_reason: reason ?? null,
+  });
+
+  if (error) throw new Error(error.message);
+}
+
+// Lote: reprocessa vários jobs de dead letter. Loop client-side (não transação
+// única) — igual ao aprovarEmLote dos boletos: uma falha isolada não derruba o
+// lote inteiro; o chamador mostra quais deram certo/erro.
+export async function replayDeadLetterEmLote(
+  ids: string[],
+): Promise<{ ok: string[]; errors: Array<{ id: string; error: string }> }> {
+  const ok: string[] = [];
+  const errors: Array<{ id: string; error: string }> = [];
+  for (const id of ids) {
+    try {
+      await replayDeadLetter(id);
+      ok.push(id);
+    } catch (err: unknown) {
+      errors.push({ id, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return { ok, errors };
+}
+
+// Lote: arquiva (dismiss) vários jobs de dead letter com o mesmo motivo opcional.
+export async function dismissDeadLetterEmLote(
+  ids: string[],
+  reason?: string,
+): Promise<{ ok: string[]; errors: Array<{ id: string; error: string }> }> {
+  const ok: string[] = [];
+  const errors: Array<{ id: string; error: string }> = [];
+  for (const id of ids) {
+    try {
+      await dismissDeadLetter(id, reason);
+      ok.push(id);
+    } catch (err: unknown) {
+      errors.push({ id, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return { ok, errors };
+}
+
+export async function listParsingErrors(jobId: string): Promise<ParsingError[]> {
+  const { data, error } = await supabase
+    .from('parsing_errors')
+    .select('*')
+    .eq('processing_job_id', jobId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ParsingError[];
 }
 
 // ============================================================

@@ -397,7 +397,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
     case 'partner-workspaces-admin':
       return (
         <React.Suspense fallback={<Spinner />}>
-          <PartnerWorkspaceManager organizationId={activeOrganizationId || ''} />
+          <PartnerWorkspaceManager organizationId={activeOrganizationId || ''} currentUserEmail={currentProfile.email} />
         </React.Suspense>
       );
 

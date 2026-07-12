@@ -15,7 +15,9 @@ import {
   CheckCircle,
   AlertCircle,
   Eye,
-  Link2
+  Link2,
+  MessageSquare,
+  Send
 } from 'lucide-react';
 import Button from '../ui/Button';
 import { supabase } from '../../lib/supabase';
@@ -24,16 +26,19 @@ import { partnerPortalTokenService, PartnerPortalToken } from '../../services/pa
 import { supplierService } from '../../services/supplierService';
 
 const PartnerPortalPreview = React.lazy(() => import('./PartnerPortal').then(m => ({ default: m.PartnerPortal })));
-import { 
-  PartnerWorkspace, 
-  PartnerUser, 
-  PartnerRequest, 
+import {
+  PartnerWorkspace,
+  PartnerUser,
+  PartnerRequest,
   PartnerSharedDocument,
+  PartnerConversation,
+  PartnerMessage,
   PartnerRole
 } from '../../types';
 
 interface PartnerWorkspaceManagerProps {
   organizationId: string;
+  currentUserEmail?: string;
 }
 
 const CATEGORIA_LABELS: Record<string, string> = {
@@ -45,10 +50,10 @@ const CATEGORIA_LABELS: Record<string, string> = {
 };
 const CATEGORIA_ORDER = ['engenharia', 'juridico', 'compliance', 'financeiro', 'comercial'];
 
-export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = ({ organizationId }) => {
+export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = ({ organizationId, currentUserEmail }) => {
   const [workspaces, setWorkspaces] = useState<PartnerWorkspace[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState<PartnerWorkspace | null>(null);
-  
+
   // Detalhes do Workspace Selecionado
   const [partnerUsers, setPartnerUsers] = useState<PartnerUser[]>([]);
   const [sharedDocs, setSharedDocs] = useState<PartnerSharedDocument[]>([]);
@@ -59,13 +64,20 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   const [tokenLoading, setTokenLoading] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
 
+  // Conversas (contrapartida interna do chat que o parceiro vê no próprio portal)
+  const [conversations, setConversations] = useState<PartnerConversation[]>([]);
+  const [selectedConversation, setSelectedConversation] = useState<PartnerConversation | null>(null);
+  const [messages, setMessages] = useState<PartnerMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const chatEndRef = React.useRef<HTMLDivElement>(null);
+
   // Listas auxiliares da Construtora
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
 
   // Carregamento e Mensagens
   const [loading, setLoading] = useState(false);
-  const [activeSubTab, setActiveSubTab] = useState<'usuarios' | 'documentos' | 'solicitacoes'>('usuarios');
+  const [activeSubTab, setActiveSubTab] = useState<'usuarios' | 'conversas' | 'documentos' | 'solicitacoes'>('usuarios');
 
   // Modais
   const [isNewWorkspaceModalOpen, setIsNewWorkspaceModalOpen] = useState(false);
@@ -143,6 +155,10 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
 
         const tok = await partnerPortalTokenService.getTokenForWorkspace(selectedWorkspace.id);
         setPortalToken(tok);
+
+        const convs = await partnerService.listConversations(selectedWorkspace.id);
+        setConversations(convs);
+        setSelectedConversation(convs.length > 0 ? convs[0] : null);
       } catch (err) {
         console.error('Erro ao carregar detalhes do workspace:', err);
       }
@@ -150,6 +166,60 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
 
     loadWorkspaceDetails();
   }, [selectedWorkspace]);
+
+  // 3. Mensagens do canal selecionado + Realtime
+  useEffect(() => {
+    if (!selectedConversation) return;
+
+    const loadMessages = async () => {
+      const msgs = await partnerService.listMessages(selectedConversation.id);
+      setMessages(msgs);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    };
+
+    loadMessages();
+
+    const channel = supabase
+      .channel(`partner-admin-chat-${selectedConversation.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'partner_messages',
+          filter: `conversation_id=eq.${selectedConversation.id}`
+        },
+        (payload) => {
+          setMessages((prev) => [...prev, payload.new as PartnerMessage]);
+          setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [selectedConversation]);
+
+  // Responder no canal do parceiro (lado interno)
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !selectedConversation) return;
+
+    try {
+      await partnerService.sendMessage({
+        conversation_id: selectedConversation.id,
+        sender_email: currentUserEmail || 'equipe@construtora',
+        sender_name: 'Equipe Construtora',
+        sender_type: 'INTERNAL',
+        message: newMessage,
+        attachments: []
+      });
+      setNewMessage('');
+    } catch (err) {
+      console.error('Erro ao enviar mensagem:', err);
+    }
+  };
 
   // Gerar/regenerar o link de acesso público do workspace selecionado
   const handleGenerateToken = async () => {
@@ -465,7 +535,15 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 <Users className="w-4 h-4" />
                 Usuários ({partnerUsers.length})
               </button>
-              <button 
+              <button
+                onClick={() => setActiveSubTab('conversas')}
+                className={`px-4 py-2.5 text-button font-bold border-b-2 transition-all flex items-center gap-2
+                  ${activeSubTab === 'conversas' ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+              >
+                <MessageSquare className="w-4 h-4" />
+                Conversas
+              </button>
+              <button
                 onClick={() => setActiveSubTab('documentos')}
                 className={`px-4 py-2.5 text-button font-bold border-b-2 transition-all flex items-center gap-2
                   ${activeSubTab === 'documentos' ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
@@ -482,6 +560,75 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 Solicitações ({requests.length})
               </button>
             </div>
+
+            {/* SUBTAB: CONVERSAS */}
+            {activeSubTab === 'conversas' && (
+              <div className="flex h-[32rem] bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                {/* Canais */}
+                <div className="w-56 border-r border-gray-100 bg-gray-50 flex flex-col">
+                  <div className="p-4 border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">Canais</div>
+                  <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
+                    {conversations.map((conv) => (
+                      <button
+                        key={conv.id}
+                        onClick={() => setSelectedConversation(conv)}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-left font-medium text-sm transition-all
+                          ${selectedConversation?.id === conv.id ? 'bg-orange-500 text-white font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
+                      >
+                        <span className="text-lg leading-none">#</span>
+                        <span className="truncate">{conv.name}</span>
+                      </button>
+                    ))}
+                    {conversations.length === 0 && (
+                      <div className="text-center py-6 text-xs text-gray-400">Nenhum canal ainda.</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Chat */}
+                <div className="flex-1 flex flex-col bg-white">
+                  {selectedConversation ? (
+                    <>
+                      <div className="h-12 border-b border-gray-100 bg-gray-50 px-4 flex items-center text-xs font-bold text-gray-800 shrink-0">
+                        <span># {selectedConversation.name}</span>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+                        {messages.map((msg) => {
+                          const isMe = msg.sender_type === 'INTERNAL';
+                          return (
+                            <div key={msg.id} className={`flex flex-col max-w-[70%] ${isMe ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
+                              <span className="text-xs text-gray-400 mb-0.5 font-medium">{msg.sender_name}</span>
+                              <div className={`px-4 py-2.5 rounded-2xl text-xs leading-relaxed
+                                ${isMe ? 'bg-orange-500 text-white rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none border border-gray-100'}`}>
+                                {msg.message}
+                              </div>
+                              <span className="text-[9px] text-gray-400 mt-1">{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                          );
+                        })}
+                        {messages.length === 0 && (
+                          <div className="text-center py-6 text-xs text-gray-400">Nenhuma mensagem ainda. Envie a primeira abaixo.</div>
+                        )}
+                        <div ref={chatEndRef}></div>
+                      </div>
+                      <form onSubmit={handleSendMessage} className="p-3 border-t border-gray-100 bg-gray-50 flex gap-2 shrink-0">
+                        <input
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          placeholder={`Responder em #${selectedConversation.name}...`}
+                          className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2 text-form-input text-gray-900 focus:outline-none focus:border-orange-500"
+                        />
+                        <Button type="submit" size="icon" className="bg-orange-500 hover:bg-orange-600 text-white">
+                          <Send className="w-4 h-4" />
+                        </Button>
+                      </form>
+                    </>
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center text-xs text-gray-400">Selecione um canal para conversar.</div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* SUBTAB: USUÁRIOS */}
             {activeSubTab === 'usuarios' && (

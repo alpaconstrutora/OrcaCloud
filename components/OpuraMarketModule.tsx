@@ -62,6 +62,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   // Estado para os anúncios (pesquisas de concorrência)
   const [listings, setListings] = React.useState<OpuraMarketListing[]>([]);
   const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
+  const [selectedDetailedListing, setSelectedDetailedListing] = React.useState<OpuraMarketListing | null>(null);
   const [isScraping, setIsScraping] = React.useState(false);
   const [scrapingStatus, setScrapingStatus] = React.useState('');
   
@@ -2539,6 +2540,23 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                               </p>
                             )}
 
+                            {/* Barra de ações inferior do card */}
+                            <div className="flex justify-between items-center pt-2 border-t border-slate-100/60 mt-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedDetailedListing(l);
+                                }}
+                                className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-700 bg-white border border-slate-200 rounded-[6px] hover:bg-slate-50 transition-all flex items-center gap-1 active:scale-95 shadow-sm"
+                              >
+                                🔍 Ver Detalhes
+                              </button>
+                              
+                              <span className="text-[9px] text-slate-400 font-semibold font-mono">
+                                {l.capturedAt ? new Date(l.capturedAt).toLocaleDateString('pt-BR') : ''}
+                              </span>
+                            </div>
+
                             {/* Botão de Excluir (somente se for privado da org) */}
                             {isPrivate && (
                               <button
@@ -2599,6 +2617,145 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           cityName={cities.find(c => c.id === selectedCityId)?.name || 'Cambuí'}
           initialConfig={cityConfig}
         />
+      )}
+
+      {selectedDetailedListing && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-[32px] shadow-2xl border border-slate-100 max-w-lg w-full overflow-hidden flex flex-col animate-scaleUp">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <span className="block text-[9px] font-black text-indigo-600 uppercase tracking-widest">Detalhes do Anúncio</span>
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider mt-1 truncate max-w-[340px]">
+                  {selectedDetailedListing.propertyType} em Cambuí
+                </h3>
+              </div>
+              <button 
+                onClick={() => setSelectedDetailedListing(null)}
+                className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center font-bold transition-all active:scale-90"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
+              {/* Preço Principal */}
+              <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-between">
+                <div>
+                  <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest">Preço de Venda</span>
+                  <span className="block font-black text-slate-900 text-lg">
+                    R$ {selectedDetailedListing.price.toLocaleString('pt-BR')}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest">Fonte do Anúncio</span>
+                  <span className="block font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg text-xs mt-0.5">
+                    {selectedDetailedListing.source}
+                  </span>
+                </div>
+              </div>
+
+              {/* Endereço */}
+              <div className="space-y-1">
+                <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest">Localização</span>
+                <div className="flex items-start gap-2 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                  <span className="text-base mt-0.5">📍</span>
+                  <span className="text-xs font-semibold text-slate-700 leading-normal">
+                    {selectedDetailedListing.address || 'Endereço não geocodificado'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Ficha Técnica / Características */}
+              <div className="space-y-2">
+                <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest">Ficha Técnica</span>
+                <div className="grid grid-cols-2 gap-3">
+                  {selectedDetailedListing.areaPrivate && (
+                    <div className="p-3 bg-white border border-slate-100 rounded-xl flex flex-col justify-between">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Área Privativa</span>
+                      <span className="text-xs font-extrabold text-slate-800 mt-1">📐 {selectedDetailedListing.areaPrivate} m²</span>
+                    </div>
+                  )}
+                  {selectedDetailedListing.constructionStandard && (
+                    <div className="p-3 bg-white border border-slate-100 rounded-xl flex flex-col justify-between">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Padrão Construtivo</span>
+                      <span className="text-xs font-extrabold text-slate-800 mt-1">✨ {selectedDetailedListing.constructionStandard}</span>
+                    </div>
+                  )}
+                  <div className="p-3 bg-white border border-slate-100 rounded-xl flex flex-col justify-between">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Dormitórios</span>
+                    <span className="text-xs font-extrabold text-slate-800 mt-1">🛏️ {selectedDetailedListing.bedrooms || 0} Dormitório(s)</span>
+                  </div>
+                  <div className="p-3 bg-white border border-slate-100 rounded-xl flex flex-col justify-between">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Banheiros</span>
+                    <span className="text-xs font-extrabold text-slate-800 mt-1">🚿 {selectedDetailedListing.bathrooms || 0} Banheiro(s)</span>
+                  </div>
+                  {selectedDetailedListing.suites !== null && selectedDetailedListing.suites !== undefined && (
+                    <div className="p-3 bg-white border border-slate-100 rounded-xl flex flex-col justify-between">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Suítes</span>
+                      <span className="text-xs font-extrabold text-slate-800 mt-1">🔑 {selectedDetailedListing.suites} Suíte(s)</span>
+                    </div>
+                  )}
+                  {selectedDetailedListing.parkingSpaces !== null && selectedDetailedListing.parkingSpaces !== undefined && (
+                    <div className="p-3 bg-white border border-slate-100 rounded-xl flex flex-col justify-between">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Vagas de Garagem</span>
+                      <span className="text-xs font-extrabold text-slate-800 mt-1">🚗 {selectedDetailedListing.parkingSpaces} Vaga(s)</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Descrição Completa */}
+              {selectedDetailedListing.description && (
+                <div className="space-y-1">
+                  <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest">Descrição do Anúncio</span>
+                  <div className="p-3 bg-slate-50/50 border border-slate-100 rounded-xl max-h-[120px] overflow-y-auto">
+                    <p className="text-[11px] text-slate-600 font-semibold leading-relaxed whitespace-pre-line italic">
+                      "{selectedDetailedListing.description}"
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Histórico/Datas */}
+              <div className="grid grid-cols-2 gap-4 text-[10px] text-slate-400 font-bold bg-slate-50 p-3 rounded-xl border border-slate-100/60">
+                <div>
+                  <span className="block text-[8px] uppercase tracking-wider">Capturado em</span>
+                  <span className="text-slate-600 font-extrabold">
+                    {selectedDetailedListing.capturedAt ? new Date(selectedDetailedListing.capturedAt).toLocaleString('pt-BR') : 'Sem data'}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-[8px] uppercase tracking-wider">Última Atualização</span>
+                  <span className="text-slate-600 font-extrabold">
+                    {selectedDetailedListing.lastSeenAt ? new Date(selectedDetailedListing.lastSeenAt).toLocaleString('pt-BR') : 'Sem data'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-slate-100 bg-slate-50/50 flex gap-3">
+              <button
+                onClick={() => setSelectedDetailedListing(null)}
+                className="flex-1 py-2.5 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-xl text-button font-black uppercase tracking-wider transition-all"
+              >
+                Fechar
+              </button>
+              {selectedDetailedListing.sourceUrl && (
+                <a
+                  href={selectedDetailedListing.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all shadow-md text-center flex items-center justify-center gap-1.5"
+                >
+                  🔗 Acessar Link Original
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

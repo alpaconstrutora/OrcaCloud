@@ -850,7 +850,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       setMapInstance(null);
       markersLayerRef.current = null;
     };
-  }, [loading]);
+  }, [loading, activeViewMode]);
 
   // Atualizar marcadores e heatmaps sobre o Leaflet reativamente
   React.useEffect(() => {

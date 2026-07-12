@@ -73,7 +73,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   const [cityConfig, setCityConfig] = React.useState<OpuraMarketCityConfig | null>(null);
   const [loadingCityConfig, setLoadingCityConfig] = React.useState(false);
   const [isRulesModalOpen, setIsRulesModalOpen] = React.useState(false);
-  const [isTableModalOpen, setIsTableModalOpen] = React.useState(false);
+  const [showTableView, setShowTableView] = React.useState(false);
   const tableColumns = useTableColumns(CONCORRENCIA_COLUMNS, 'opuraMarketConcorrenciaTable');
 
   // Carrega configurações da praça selecionada
@@ -1351,6 +1351,182 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           <div className="w-8 h-8 border-4 border-slate-950 border-t-transparent rounded-full animate-spin mb-3" />
           <span className="text-xs font-bold uppercase tracking-widest text-slate-400">Construindo Atlas Dinâmico...</span>
         </div>
+      ) : showTableView ? (
+        <div className="bg-white rounded-[10px] border border-slate-200/60 p-6 space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <span>📋</span> Tabela de Ocorrências
+              </h2>
+              <p className="text-xs text-slate-500 font-semibold mt-1">
+                Visualizando todos os {sortedListings.length} anúncios de concorrência da praça ativa.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowTableView(false)}
+              className="flex items-center gap-1.5 h-9 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shadow-sm"
+            >
+              <span>🗺️ Voltar para o Mapa</span>
+            </button>
+          </div>
+
+          {/* Painel de busca e config de colunas superior (§5.1) */}
+          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="flex-1 relative w-full max-w-md">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar nesta tabela..."
+                className="w-full h-9 pl-9 pr-4 bg-slate-50 border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={filterSource}
+                onChange={(e) => setFilterSource(e.target.value)}
+                className="h-9 px-3 bg-white border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-600 focus:outline-none"
+              >
+                <option value="Todos">Todas as Fontes</option>
+                {sources.map(src => (
+                  <option key={src} value={src}>{src}</option>
+                ))}
+              </select>
+              <ColumnConfigButton
+                columns={CONCORRENCIA_COLUMNS}
+                visibleColumns={tableColumns.visibleColumns}
+                showColumnConfig={tableColumns.showColumnConfig}
+                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                onToggleColumn={tableColumns.toggleColumn}
+                onReset={tableColumns.resetColumns}
+              />
+            </div>
+          </div>
+
+          {/* Tabela Scrollável (§6.5) */}
+          <div className="overflow-x-auto max-h-[70vh] border border-gray-100 rounded-[10px]">
+            <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
+              <thead className="sticky top-0 bg-slate-50 border-b border-gray-200 z-10">
+                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                  {CONCORRENCIA_COLUMNS.map(col =>
+                    tableColumns.visibleColumns.includes(col.key) && (
+                      <SortableHeader
+                        key={col.key}
+                        label={col.label}
+                        colKey={col.key}
+                        sortable={col.sortable}
+                        sortColumn={tableColumns.sortColumn || undefined}
+                        sortDirection={tableColumns.sortDirection}
+                        onSort={tableColumns.handleColumnSort}
+                        className="px-5 py-3 text-xs font-bold text-slate-500 text-left border-r border-gray-100 last:border-r-0"
+                        uppercase={false}
+                      />
+                    )
+                  )}
+                  <th className="px-5 py-3 text-right text-xs font-bold text-slate-500">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-xs">
+                {sortedListings.length > 0 ? (
+                  sortedListings.map(l => {
+                    return (
+                      <tr
+                        key={l.id}
+                        onClick={() => {
+                          handleFocusListing(l);
+                          setShowTableView(false);
+                        }}
+                        className="hover:bg-slate-50/80 cursor-pointer transition-colors"
+                      >
+                        {tableColumns.visibleColumns.includes('propertyType') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 truncate">{l.propertyType}</td>
+                        )}
+                        {tableColumns.visibleColumns.includes('neighborhood') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 truncate">
+                            {neighborhoods.find(n => n.id === l.neighborhoodId)?.name || 'Desconhecido'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('price') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                            R$ {l.price.toLocaleString('pt-BR')}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('pricePerM2') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                            {l.pricePerM2 ? `R$ ${Math.round(l.pricePerM2).toLocaleString('pt-BR')}/m²` : '-'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('areaPrivate') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                            {l.areaPrivate ? `${l.areaPrivate}m²` : '-'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('bedrooms') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                            {l.bedrooms || '-'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('suites') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                            {l.suites || '-'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('bathrooms') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                            {l.bathrooms || '-'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('parkingSpaces') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                            {l.parkingSpaces || '-'}
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('source') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 truncate">
+                            <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-bold rounded uppercase">
+                              {l.source}
+                            </span>
+                          </td>
+                        )}
+                        {tableColumns.visibleColumns.includes('constructionStandard') && (
+                          <td className="px-5 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                            {l.constructionStandard ? (
+                              <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold rounded uppercase">
+                                {l.constructionStandard}
+                              </span>
+                            ) : '-'}
+                          </td>
+                        )}
+                        <td className="px-5 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => {
+                              handleFocusListing(l);
+                              setShowTableView(false);
+                            }}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
+                          >
+                            Ver no Mapa
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={tableColumns.visibleColumns.length + 1} className="text-center py-12 text-slate-400 font-bold bg-white rounded-b-[10px]">
+                      <div className="text-center">
+                        <span className="text-3xl block mb-2">📂</span>
+                        <h3 className="text-sm font-bold text-gray-900 mb-1">Nenhum anúncio encontrado</h3>
+                        <p className="text-xs text-gray-500">Tente ajustar seus filtros de busca ou fonte.</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
@@ -1842,7 +2018,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                       </select>
                       <button
                         type="button"
-                        onClick={() => setIsTableModalOpen(true)}
+                        onClick={() => setShowTableView(true)}
                         className="flex items-center gap-1 h-9 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0"
                       >
                         <span>📋 Tabela</span>
@@ -1960,186 +2136,6 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           cityName={cities.find(c => c.id === selectedCityId)?.name || 'Cambuí'}
           initialConfig={cityConfig}
         />
-      )}
-      {isTableModalOpen && (
-        <Modal
-          open={isTableModalOpen}
-          onClose={() => setIsTableModalOpen(false)}
-          className="max-w-6xl w-full"
-        >
-          <ModalHeader
-            title="Ocorrências de Concorrência"
-            description={`Exibindo ${sortedListings.length} anúncios mapeados no território atual.`}
-            onClose={() => setIsTableModalOpen(false)}
-            icon={<span className="text-xl">📋</span>}
-          />
-          <ModalBody className="p-0 overflow-hidden flex flex-col h-[70vh]">
-            {/* Painel de busca rápido e config de colunas superior (§5.1) */}
-            <div className="px-6 py-4 bg-slate-50/50 border-b border-gray-100 flex items-center justify-between gap-4 shrink-0">
-              <div className="flex items-center gap-2 flex-1 max-w-md">
-                <span className="text-slate-400">🔍</span>
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Buscar nesta tabela..."
-                  className="w-full bg-white border border-gray-200 rounded-[6px] px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-slate-400"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={filterSource}
-                  onChange={(e) => setFilterSource(e.target.value)}
-                  className="px-3 py-1.5 bg-white border border-gray-200 rounded-[6px] text-xs font-semibold text-slate-600 focus:outline-none"
-                >
-                  <option value="Todos">Todas as Fontes</option>
-                  {sources.map(src => (
-                    <option key={src} value={src}>{src}</option>
-                  ))}
-                </select>
-                <ColumnConfigButton
-                  columns={CONCORRENCIA_COLUMNS}
-                  visibleColumns={tableColumns.visibleColumns}
-                  showColumnConfig={tableColumns.showColumnConfig}
-                  onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                  onToggleColumn={tableColumns.toggleColumn}
-                  onReset={tableColumns.resetColumns}
-                />
-              </div>
-            </div>
-
-            {/* Tabela Scrollável (§6.5) */}
-            <div className="flex-1 overflow-auto">
-              <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
-                <thead className="sticky top-0 bg-slate-50 border-b border-gray-200 z-10">
-                  <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                    {CONCORRENCIA_COLUMNS.map(col =>
-                      tableColumns.visibleColumns.includes(col.key) && (
-                        <SortableHeader
-                          key={col.key}
-                          label={col.label}
-                          colKey={col.key}
-                          sortable={col.sortable}
-                          sortColumn={tableColumns.sortColumn || undefined}
-                          sortDirection={tableColumns.sortDirection}
-                          onSort={tableColumns.handleColumnSort}
-                          className="px-5 py-3 text-xs font-bold text-slate-500 text-left border-r border-gray-100 last:border-r-0"
-                          uppercase={false}
-                        />
-                      )
-                    )}
-                    <th className="px-5 py-3 text-right text-xs font-bold text-slate-500">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 text-xs">
-                  {sortedListings.length > 0 ? (
-                    sortedListings.map(l => {
-                      return (
-                        <tr
-                          key={l.id}
-                          onClick={() => {
-                            handleFocusListing(l);
-                            setIsTableModalOpen(false);
-                          }}
-                          className="hover:bg-slate-50/80 cursor-pointer transition-colors"
-                        >
-                          {tableColumns.visibleColumns.includes('propertyType') && (
-                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 truncate">{l.propertyType}</td>
-                          )}
-                          {tableColumns.visibleColumns.includes('neighborhood') && (
-                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 truncate">
-                              {neighborhoods.find(n => n.id === l.neighborhoodId)?.name || 'Desconhecido'}
-                            </td>
-                          )}
-                          {tableColumns.visibleColumns.includes('price') && (
-                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                              R$ {l.price.toLocaleString('pt-BR')}
-                            </td>
-                          )}
-                          {tableColumns.visibleColumns.includes('pricePerM2') && (
-                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
-                              {l.pricePerM2 ? `R$ ${Math.round(l.pricePerM2).toLocaleString('pt-BR')}/m²` : '-'}
-                            </td>
-                          )}
-                          {tableColumns.visibleColumns.includes('areaPrivate') && (
-                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                              {l.areaPrivate ? `${l.areaPrivate}m²` : '-'}
-                            </td>
-                          )}
-                          {tableColumns.visibleColumns.includes('bedrooms') && (
-                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                              {l.bedrooms || '-'}
-                            </td>
-                          )}
-                          {tableColumns.visibleColumns.includes('suites') && (
-                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                              {l.suites || '-'}
-                            </td>
-                          )}
-                          {tableColumns.visibleColumns.includes('bathrooms') && (
-                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                              {l.bathrooms || '-'}
-                            </td>
-                          )}
-                          {tableColumns.visibleColumns.includes('parkingSpaces') && (
-                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                              {l.parkingSpaces || '-'}
-                            </td>
-                          )}
-                          {tableColumns.visibleColumns.includes('source') && (
-                            <td className="px-5 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 truncate">
-                              <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-500 text-[10px] font-bold rounded uppercase">
-                                {l.source}
-                              </span>
-                            </td>
-                          )}
-                          {tableColumns.visibleColumns.includes('constructionStandard') && (
-                            <td className="px-5 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                              {l.constructionStandard ? (
-                                <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold rounded uppercase">
-                                  {l.constructionStandard}
-                                </span>
-                              ) : '-'}
-                            </td>
-                          )}
-                          <td className="px-5 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => {
-                                handleFocusListing(l);
-                                setIsTableModalOpen(false);
-                              }}
-                              className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
-                            >
-                              Ver no Mapa
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={tableColumns.visibleColumns.length + 1} className="text-center py-12 text-slate-400 font-bold bg-white rounded-b-3xl">
-                        <div className="text-center">
-                          <span className="text-3xl block mb-2">📂</span>
-                          <h3 className="text-sm font-bold text-gray-900 mb-1">Nenhum anúncio encontrado</h3>
-                          <p className="text-xs text-gray-500">Tente ajustar seus filtros de busca ou fonte.</p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <button
-              onClick={() => setIsTableModalOpen(false)}
-              className="px-4 py-2 border rounded-[6px] text-xs font-bold text-slate-600 bg-white border-slate-200 hover:bg-slate-50 active:scale-95 transition-all"
-            >
-              Fechar Janela
-            </button>
-          </ModalFooter>
-        </Modal>
       )}
     </div>
   );

@@ -334,30 +334,23 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         const item = listingsBatch[i];
         setScrapingStatus(`Geocodificando ${i + 1}/${listingsBatch.length}...`);
 
-        // Mapear ou criar bairro
+        // Mapear bairro existente (busca exata)
         let neighborhood = localNeighborhoods.find(n => n.name.toLowerCase().trim() === item.neighborhoodName.toLowerCase().trim());
+        
+        // Mapeamento flexível por busca aproximada (caso de caracteres/termos extras)
+        if (!neighborhood) {
+          neighborhood = localNeighborhoods.find(n => 
+            item.neighborhoodName.toLowerCase().trim().includes(n.name.toLowerCase().trim()) ||
+            n.name.toLowerCase().trim().includes(item.neighborhoodName.toLowerCase().trim())
+          );
+        }
+
         let neighborhoodId = neighborhood ? neighborhood.id : '';
 
+        // Fallback seguro: mapeia para Centro ou para o primeiro bairro existente na praça, evitando INSERTs 403 por RLS
         if (!neighborhoodId) {
-          setScrapingStatus(`Cadastrando bairro "${item.neighborhoodName}"...`);
-          const { data: newNeigh, error: neighError } = await supabase
-            .from('opura_market_neighborhoods')
-            .insert({
-              city_id: selectedCityId,
-              name: item.neighborhoodName,
-              created_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-          
-          if (!neighError && newNeigh) {
-            neighborhoodId = newNeigh.id;
-            localNeighborhoods.push(newNeigh as any);
-            // Atualiza o estado global de bairros
-            setNeighborhoods(prev => [...prev, newNeigh as any]);
-          } else {
-            neighborhoodId = neighborhoods[0]?.id || '';
-          }
+          const centroNeigh = localNeighborhoods.find(n => n.name.toLowerCase().trim() === 'centro');
+          neighborhoodId = centroNeigh ? centroNeigh.id : (neighborhoods[0]?.id || '');
         }
 
         // Chamada de geocodificação Nominatim
@@ -393,9 +386,12 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         });
       }
 
+      // Filtrar anúncios que não possuem preço de venda explícito para evitar violação de constraint NOT NULL
+      const validProcessedListings = processedListings.filter(l => l.price && l.price > 0);
+
       // 3. Salvar e Deduplicar
       setScrapingStatus('Salvando lote...');
-      const result = await opuraMarketService.importListingsInBatch(processedListings);
+      const result = await opuraMarketService.importListingsInBatch(validProcessedListings);
 
       alert(`Sincronização concluída com sucesso!\n\n- Importados: ${result.importedCount} anúncios únicos\n- Duplicados ignorados: ${result.deduplicatedCount} anúncios`);
       

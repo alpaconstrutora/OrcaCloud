@@ -2656,14 +2656,32 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                 </div>
               </div>
 
-              {/* Endereço */}
-              <div className="space-y-1">
+              {/* Localização detalhada */}
+              <div className="space-y-3">
                 <span className="block text-[9px] font-black text-slate-400 uppercase tracking-widest">Localização</span>
-                <div className="flex items-start gap-2 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-                  <span className="text-base mt-0.5">📍</span>
-                  <span className="text-xs font-semibold text-slate-700 leading-normal">
-                    {selectedDetailedListing.address || 'Endereço não geocodificado'}
-                  </span>
+                <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="block text-[9px] text-slate-400 font-bold uppercase">Cidade</span>
+                      <span className="block font-extrabold text-slate-700 mt-0.5">
+                        {cities.find(c => c.id === selectedDetailedListing.cityId)?.name || 'Cambuí'} - MG
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[9px] text-slate-400 font-bold uppercase">Bairro</span>
+                      <span className="block font-extrabold text-slate-700 mt-0.5">
+                        {neighborhoods.find(n => n.id === selectedDetailedListing.neighborhoodId)?.name || 'Centro'}
+                      </span>
+                    </div>
+                  </div>
+                  {selectedDetailedListing.address && (
+                    <div className="border-t border-slate-100/70 pt-2">
+                      <span className="block text-[9px] text-slate-400 font-bold uppercase">Endereço</span>
+                      <span className="block text-xs font-semibold text-slate-600 mt-0.5 leading-normal">
+                        📍 {selectedDetailedListing.address}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 

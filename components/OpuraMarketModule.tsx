@@ -736,6 +736,11 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       if (mapInstanceRef.current) {
         mapInstanceRef.current.setView([centerLat, centerLng], 16);
       }
+
+      // Redireciona o usuário de volta para a tela de Estudos após 1 segundo
+      setTimeout(() => {
+        setActiveViewMode('studies');
+      }, 1000);
     } catch (err: any) {
       console.error('Erro ao calcular a área do polígono:', err);
       alert('Não foi possível calcular a área do polígono: ' + err.message);
@@ -2295,12 +2300,61 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                 </div>
               </div>
 
-              {/* Contêiner do Mapa Leaflet Real */}
-              <div 
-                ref={mapContainerRef} 
-                className="w-full h-[400px] rounded-2xl overflow-hidden border border-slate-200/80 shadow-inner z-10"
-                style={{ background: '#111827' }}
-              />
+              {/* Contêiner do Mapa Leaflet Real envolto em Wrapper Relativo para Flutuantes */}
+              <div className="relative w-full h-[400px] rounded-2xl overflow-hidden shadow-inner border border-slate-200/80">
+                {/* Sobreposição do UI de Desenho */}
+                {isDrawingPolygon && (
+                  <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] w-11/12 max-w-sm p-4 bg-white/95 backdrop-blur-md border border-indigo-200 rounded-2xl text-xs shadow-2xl animate-fadeIn">
+                    <span className="block font-black text-indigo-800 uppercase text-[9px] tracking-wider mb-2 font-sans">📏 Modo de Desenho Ativo</span>
+                    <p className="text-slate-600 font-semibold leading-normal text-[11px] mb-3 font-sans">
+                      Clique no mapa para marcar os limites (vértices) do seu terreno. 
+                    </p>
+                    <div className="text-[10px] text-slate-500 font-bold bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-1 mb-3 font-sans">
+                      <div className="flex justify-between items-center">
+                        <span>Vértices marcados:</span>
+                        <span className="font-extrabold text-indigo-600 text-xs">{drawingPoints.length}</span>
+                      </div>
+                      {drawingPoints.length < 3 && <div className="text-rose-500 font-extrabold mt-1">⚠️ Mínimo de 3 pontos para formar a área.</div>}
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <button
+                        onClick={completeDrawing}
+                        disabled={drawingPoints.length < 3 || analyzing}
+                        className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 text-center shadow-md font-sans"
+                      >
+                        {analyzing ? 'Analisando...' : 'Concluir'}
+                      </button>
+                      <button
+                        onClick={cancelDrawing}
+                        disabled={analyzing}
+                        className="flex-1 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 text-center shadow-sm font-sans"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Overlay pós-desenho caso o usuário continue na aba do mapa */}
+                {!isDrawingPolygon && terrainPin && activeViewMode === 'map' && (
+                  <div className="absolute top-4 right-4 z-[1000] animate-fadeIn">
+                    <button
+                      onClick={() => setActiveViewMode('studies')}
+                      className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 shadow-xl flex items-center gap-2 border border-emerald-400 font-sans"
+                    >
+                      🚀 Ver Estudo da IA
+                    </button>
+                  </div>
+                )}
+
+                {/* Mapa */}
+                <div 
+                  ref={mapContainerRef} 
+                  className="w-full h-full z-10 relative"
+                  style={{ background: '#111827' }}
+                />
+              </div>
             </div>
 
             {/* DNA do Bairro Selecionado */}

@@ -1415,17 +1415,19 @@ const ContractsDashboardShell: React.FC<ShellProps> = ({
 
     return (
         <div className="h-full flex flex-col">
-            <div className="flex items-center gap-1 px-4 pt-3 pb-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-                {TABS.map(t => (
-                    <button key={t.id} onClick={() => setTab(t.id)}
-                        className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
-                            tab === t.id
-                                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
-                        }`}>
-                        {t.label}
-                    </button>
-                ))}
+            <div className="px-4 pt-3 pb-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {TABS.map(t => (
+                        <button key={t.id} onClick={() => setTab(t.id)}
+                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                tab === t.id
+                                    ? 'bg-white text-blue-600 shadow-sm'
+                                    : 'text-gray-400 hover:text-gray-600'
+                            }`}>
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
             </div>
             <div className="flex-1 overflow-auto">
                 {tab === 'obra' && (

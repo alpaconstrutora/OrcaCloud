@@ -121,40 +121,40 @@ const Settings: React.FC = () => {
         <div className="max-w-4xl mx-auto p-6">
             <h1 className="text-2xl font-bold text-gray-900 mb-6">Configurações do Sistema</h1>
 
-            <div className="flex border-b border-gray-200 mb-6 overflow-x-auto scrollbar-hide">
+            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full mb-6">
                 <button
                     onClick={() => setActiveTab('geral')}
-                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'geral' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'geral' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                     Geral
                 </button>
                 <button
                     onClick={() => setActiveTab('categorias')}
-                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'categorias' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'categorias' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                     Categorias Gerais
                 </button>
                 <button
                     onClick={() => setActiveTab('indices')}
-                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'indices' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'indices' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                     Índices de Reajuste
                 </button>
                 <button
                     onClick={() => setActiveTab('whatsapp')}
-                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'whatsapp' ? 'border-green-600 text-green-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'whatsapp' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                     WhatsApp & Integrações
                 </button>
                 <button
                     onClick={() => setActiveTab('email')}
-                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'email' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'email' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                     Templates de E-mail
                 </button>
                 <button
                     onClick={() => setActiveTab('database')}
-                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'database' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'database' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                     Banco de Dados
                 </button>

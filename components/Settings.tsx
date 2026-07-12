@@ -10,10 +10,11 @@ import ClientCategoriesSettings from './ClientCategoriesSettings';
 import SupplierCategoriesSettings from './SupplierCategoriesSettings';
 import FinancialCategoriesManager from './FinancialCategoriesManager';
 import ContractTypesSettings from './ContractTypesSettings';
+import ContractIndexManager from './ContractIndexManager';
 
 const Settings: React.FC = () => {
     const confirm = useConfirm();
-    const [activeTab, setActiveTab] = React.useState<'geral' | 'categorias' | 'whatsapp' | 'email' | 'database'>('geral');
+    const [activeTab, setActiveTab] = React.useState<'geral' | 'categorias' | 'indices' | 'whatsapp' | 'email' | 'database'>('geral');
     
     const [status, setStatus] = React.useState<'IDLE' | 'MIGRATING' | 'SUCCESS' | 'ERROR'>('IDLE');
     const [message, setMessage] = React.useState('');
@@ -132,6 +133,12 @@ const Settings: React.FC = () => {
                     className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'categorias' ? 'border-purple-600 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
                 >
                     Categorias Gerais
+                </button>
+                <button
+                    onClick={() => setActiveTab('indices')}
+                    className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'indices' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}
+                >
+                    Índices de Reajuste
                 </button>
                 <button
                     onClick={() => setActiveTab('whatsapp')}
@@ -447,6 +454,12 @@ const Settings: React.FC = () => {
                     <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                         <FinancialCategoriesManager />
                     </div>
+                </div>
+            )}
+
+            {activeTab === 'indices' && (
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+                    <ContractIndexManager />
                 </div>
             )}
         </div>

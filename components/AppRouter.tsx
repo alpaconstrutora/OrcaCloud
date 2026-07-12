@@ -40,7 +40,7 @@ const SupplyChainQuotationComparison = React.lazy(() => import('./SupplyChainQuo
 const SupplyChainContractList = React.lazy(() => import('./SupplyChainContractList'));
 const ContractDetailView    = React.lazy(() => import('./ContractDetailView'));
 const ContractTemplateManager = React.lazy(() => import('./ContractTemplateManager'));
-const ContractIndexManager  = React.lazy(() => import('./ContractIndexManager'));
+const ContractReajusteDue  = React.lazy(() => import('./ContractReajusteDue'));
 const SupplyChainReceiptManager = React.lazy(() => import('./SupplyChainReceiptManager'));
 const AutomationManager     = React.lazy(() => import('./AutomationManager'));
 const ImovibDashboard       = React.lazy(() => import('./ImovibDashboard'));
@@ -1405,12 +1405,12 @@ const ContractsDashboardShell: React.FC<ShellProps> = ({
     organizationId, projectId, contractsVersion, setContractsVersion,
     setSelectedContractId, setIsCreatingContract, setEditingContract,
 }) => {
-    const [tab, setTab] = React.useState<'obra' | 'templates' | 'indices'>('obra');
+    const [tab, setTab] = React.useState<'obra' | 'templates' | 'reajustes'>('obra');
 
     const TABS = [
         { id: 'obra',      label: 'Por Obra' },
         { id: 'templates', label: 'Templates' },
-        { id: 'indices',   label: 'Índices' },
+        { id: 'reajustes', label: 'Reajustes' },
     ] as const;
 
     return (
@@ -1443,8 +1443,8 @@ const ContractsDashboardShell: React.FC<ShellProps> = ({
                 {tab === 'templates' && (
                     <ContractTemplateManager organizationId={organizationId} />
                 )}
-                {tab === 'indices' && (
-                    <ContractIndexManager organizationId={organizationId} />
+                {tab === 'reajustes' && (
+                    <ContractReajusteDue organizationId={organizationId} />
                 )}
             </div>
         </div>

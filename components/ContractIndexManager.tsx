@@ -1,10 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-    TrendingUp, Plus, Trash2, RefreshCw, AlertTriangle, CheckCircle2,
-    ChevronDown, ChevronUp,
-} from 'lucide-react';
+import { TrendingUp, Plus, Trash2, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { contractIndexService, ContractIndexValue, IndexName } from '../services/contractIndexService';
-import { contractService } from '../services/contractService';
+import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
 import Button from './ui/Button';
 
@@ -16,10 +13,6 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'actions', label: '', sortable: false },
 ];
 
-interface Props {
-    organizationId: string;
-}
-
 const INDEX_NAMES: IndexName[] = ['INCC-M', 'INCC', 'IPCA', 'IGP-M', 'CUB', 'OUTROS'];
 
 const fmtDate = (d: string) => {
@@ -27,17 +20,12 @@ const fmtDate = (d: string) => {
     return `${m}/${y}`;
 };
 const fmtVal = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-const fmtCur = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
+const ContractIndexManager: React.FC = () => {
+    const activeOrganizationId = useStore(state => state.activeOrganizationId);
     const [selectedIndex, setSelectedIndex] = useState<IndexName>('INCC-M');
     const [values, setValues] = useState<ContractIndexValue[]>([]);
-    const [dueContracts, setDueContracts] = useState<{
-        id: string; number: string; title: string; reajuste_index: string;
-        reajuste_proximo: string; current_value: number;
-    }[]>([]);
     const [loading, setLoading] = useState(false);
-    const [loadingDue, setLoadingDue] = useState(false);
     const [notification, setNotification] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(null);
 
     // form para novo valor
@@ -47,9 +35,6 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
     });
     const [newValue, setNewValue] = useState('');
     const [saving, setSaving] = useState(false);
-
-    // reajuste em lote
-    const [applyingId, setApplyingId] = useState<string | null>(null);
 
     const tableColumns = useTableColumns(COLUMNS, 'contractIndexColumns');
 
@@ -70,27 +55,22 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
     };
 
     const loadValues = useCallback(async () => {
+        if (!activeOrganizationId) return;
         setLoading(true);
-        try { setValues(await contractIndexService.list(selectedIndex, organizationId)); }
+        try { setValues(await contractIndexService.list(selectedIndex, activeOrganizationId)); }
         finally { setLoading(false); }
-    }, [selectedIndex, organizationId]);
-
-    const loadDue = useCallback(async () => {
-        setLoadingDue(true);
-        try { setDueContracts(await contractIndexService.listDueForReajuste(organizationId)); }
-        finally { setLoadingDue(false); }
-    }, [organizationId]);
+    }, [selectedIndex, activeOrganizationId]);
 
     useEffect(() => { loadValues(); }, [loadValues]);
-    useEffect(() => { loadDue(); }, [loadDue]);
 
     const handleAdd = async () => {
+        if (!activeOrganizationId) return;
         const v = parseFloat(newValue.replace(',', '.'));
         if (isNaN(v) || v <= 0 || !newMonth) return;
         setSaving(true);
         try {
             const [y, m] = newMonth.split('-').map(Number);
-            await contractIndexService.upsert(organizationId, selectedIndex, new Date(y, m - 1, 1), v);
+            await contractIndexService.upsert(activeOrganizationId, selectedIndex, new Date(y, m - 1, 1), v);
             setNewValue('');
             notify('Valor salvo.', 'success');
             loadValues();
@@ -104,38 +84,8 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
         loadValues();
     };
 
-    const handleApplyReajuste = async (contractId: string, indexName: string) => {
-        setApplyingId(contractId);
-        try {
-            // busca o contrato para saber data_base
-            const contract = await contractService.getContractById(contractId);
-            if (!contract?.reajuste_data_base) {
-                notify('Contrato sem data-base de reajuste definida. Aplique o primeiro reajuste manualmente.', 'error');
-                return;
-            }
-            const [baseRow, currentRow] = await Promise.all([
-                contractIndexService.getClosestTo(indexName as IndexName, contract.reajuste_data_base, organizationId),
-                contractIndexService.getClosestTo(indexName as IndexName, new Date().toISOString().slice(0, 10), organizationId),
-            ]);
-            if (!baseRow || !currentRow) {
-                notify(`Índice ${indexName} não encontrado para as datas necessárias. Cadastre os valores primeiro.`, 'error');
-                return;
-            }
-            if (baseRow.value === currentRow.value) {
-                notify('Índice base e atual são iguais — nenhum reajuste necessário.', 'info');
-                return;
-            }
-            await contractService.applyReajuste(contractId, baseRow.value, currentRow.value,
-                `${indexName} ${fmtDate(baseRow.reference_month)} → ${fmtDate(currentRow.reference_month)}`);
-            notify(`Reajuste aplicado ao contrato ${contract.number}.`, 'success');
-            loadDue();
-        } catch (e) {
-            notify(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
-        } finally { setApplyingId(null); }
-    };
-
     return (
-        <div className="p-6 space-y-6 max-w-4xl mx-auto">
+        <div className="space-y-4">
             {notification && (
                 <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl text-sm shadow-lg font-medium ${
                     notification.type === 'success' ? 'bg-emerald-600 text-white' :
@@ -147,41 +97,9 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <TrendingUp size={20} className="text-blue-600" /> Índices de Reajuste
             </h2>
-
-            {/* Contratos com reajuste vencido */}
-            {dueContracts.length > 0 && (
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-2xl p-5 space-y-3">
-                    <p className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
-                        <AlertTriangle size={16} />
-                        {dueContracts.length} contrato(s) com reajuste vencido
-                    </p>
-                    <div className="space-y-2">
-                        {dueContracts.map(c => (
-                            <div key={c.id} className="flex items-center justify-between gap-3 bg-white dark:bg-gray-800 rounded-xl px-4 py-2.5">
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{c.number} — {c.title}</p>
-                                    <p className="text-xs text-gray-400">
-                                        {c.reajuste_index} · venceu {new Date(c.reajuste_proximo).toLocaleDateString('pt-BR')} · valor atual {fmtCur(c.current_value)}
-                                    </p>
-                                </div>
-                                <button
-                                    onClick={() => handleApplyReajuste(c.id, c.reajuste_index)}
-                                    disabled={applyingId === c.id}
-                                    className="shrink-0 px-3 py-1.5 bg-amber-600 text-white text-button font-semibold rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
-                                >
-                                    {applyingId === c.id ? 'Aplicando…' : 'Aplicar'}
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {dueContracts.length === 0 && !loadingDue && (
-                <div className="flex items-center gap-2 text-sm text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2.5 rounded-xl">
-                    <CheckCircle2 size={15} /> Nenhum reajuste vencido no momento.
-                </div>
-            )}
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+                Catálogo de valores mensais (INCC, IPCA, IGP-M, CUB) usado para calcular reajustes de contratos e outras correções monetárias.
+            </p>
 
             {/* Seletor de índice */}
             <div className="flex items-center gap-3 flex-wrap">
@@ -264,7 +182,7 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
-                            {sortedValues.map((v, i) => {
+                            {sortedValues.map((v) => {
                                 const originalIndex = values.indexOf(v);
                                 const prev = values[originalIndex + 1];
                                 const varPct = prev ? ((v.value - prev.value) / prev.value) * 100 : null;
@@ -274,7 +192,7 @@ const ContractIndexManager: React.FC<Props> = ({ organizationId }) => {
                                             <td className="px-4 py-2.5 font-medium text-gray-900 dark:text-white">{fmtDate(v.reference_month)}</td>
                                         )}
                                         {tableColumns.visibleColumns.includes('value') && (
-                                            <td className="px-4 py-2.5 text-right font-mono text-gray-700 dark:text-gray-200">{fmtVal(v.value)}</td>
+                                            <td className="px-4 py-2.5 text-right font-medium text-gray-700 dark:text-gray-200">{fmtVal(v.value)}</td>
                                         )}
                                         {tableColumns.visibleColumns.includes('variation') && (
                                             <td className="px-4 py-2.5 text-right">

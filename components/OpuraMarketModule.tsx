@@ -2280,61 +2280,63 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                   <span className="text-xs text-slate-500 font-semibold">Selecione uma camada e clique no mapa para analisar a vocação imobiliária</span>
                 </div>
                 
-                {/* Camadas do Mapa */}
+                {/* Camadas do Mapa ou Controles de Desenho */}
                 <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
-                  {(['preco', 'saturacao', 'concorrencia', 'oportunidade'] as const).map(layer => (
-                    <button
-                      key={layer}
-                      onClick={() => setActiveLayer(layer)}
-                      className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
-                        activeLayer === layer 
-                          ? 'bg-white text-slate-900 shadow-xs' 
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      {layer === 'preco' ? '💰 Preço/m²' :
-                       layer === 'saturacao' ? '⚠️ Saturação' :
-                       layer === 'concorrencia' ? '🏢 Concorrência' : '✨ Oportunidades'}
-                    </button>
-                  ))}
+                  {isDrawingPolygon ? (
+                    <div className="flex items-center gap-3 px-2">
+                      <span className="text-[11px] font-black text-indigo-600 uppercase tracking-wider flex items-center gap-1.5 animate-fadeIn">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                        </span>
+                        Desenho Ativo
+                      </span>
+                      
+                      <div className="flex items-center gap-2 bg-white px-2 py-0.5 rounded border border-slate-200">
+                        <span className="text-[10px] font-bold text-slate-500">Vértices:</span>
+                        <span className="text-xs font-extrabold text-indigo-600">{drawingPoints.length}</span>
+                      </div>
+
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={completeDrawing}
+                          disabled={drawingPoints.length < 3 || analyzing}
+                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm"
+                        >
+                          {analyzing ? '...' : 'Concluir'}
+                        </button>
+                        <button
+                          onClick={cancelDrawing}
+                          disabled={analyzing}
+                          className="px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    (['preco', 'saturacao', 'concorrencia', 'oportunidade'] as const).map(layer => (
+                      <button
+                        key={layer}
+                        onClick={() => setActiveLayer(layer)}
+                        className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+                          activeLayer === layer 
+                            ? 'bg-white text-slate-900 shadow-xs' 
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        {layer === 'preco' ? '💰 Preço/m²' :
+                         layer === 'saturacao' ? '⚠️ Saturação' :
+                         layer === 'concorrencia' ? '🏢 Concorrência' : '✨ Oportunidades'}
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
 
               {/* Contêiner do Mapa Leaflet Real envolto em Wrapper Relativo para Flutuantes */}
               <div className="relative w-full h-[400px] rounded-2xl overflow-hidden shadow-inner border border-slate-200/80">
-                {/* Sobreposição do UI de Desenho */}
-                {isDrawingPolygon && (
-                  <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] w-11/12 max-w-sm p-4 bg-white/95 backdrop-blur-md border border-indigo-200 rounded-2xl text-xs shadow-2xl animate-fadeIn">
-                    <span className="block font-black text-indigo-800 uppercase text-[9px] tracking-wider mb-2 font-sans">📏 Modo de Desenho Ativo</span>
-                    <p className="text-slate-600 font-semibold leading-normal text-[11px] mb-3 font-sans">
-                      Clique no mapa para marcar os limites (vértices) do seu terreno. 
-                    </p>
-                    <div className="text-[10px] text-slate-500 font-bold bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-1 mb-3 font-sans">
-                      <div className="flex justify-between items-center">
-                        <span>Vértices marcados:</span>
-                        <span className="font-extrabold text-indigo-600 text-xs">{drawingPoints.length}</span>
-                      </div>
-                      {drawingPoints.length < 3 && <div className="text-rose-500 font-extrabold mt-1">⚠️ Mínimo de 3 pontos para formar a área.</div>}
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <button
-                        onClick={completeDrawing}
-                        disabled={drawingPoints.length < 3 || analyzing}
-                        className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 text-center shadow-md font-sans"
-                      >
-                        {analyzing ? 'Analisando...' : 'Concluir'}
-                      </button>
-                      <button
-                        onClick={cancelDrawing}
-                        disabled={analyzing}
-                        className="flex-1 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 text-center shadow-sm font-sans"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                )}
+                {/* Overlay de Desenho foi movido para o Header acima do mapa para evitar obstrução visual */}
                 
                 {/* Overlay pós-desenho caso o usuário continue na aba do mapa */}
                 {!isDrawingPolygon && terrainPin && activeViewMode === 'map' && (

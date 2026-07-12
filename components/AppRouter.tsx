@@ -1414,41 +1414,44 @@ const ContractsDashboardShell: React.FC<ShellProps> = ({
     ] as const;
 
     return (
-        <div className="h-full flex flex-col">
-            <div className="px-4 pt-3 pb-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    {TABS.map(t => (
-                        <button key={t.id} onClick={() => setTab(t.id)}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                                tab === t.id
-                                    ? 'bg-white text-blue-600 shadow-sm'
-                                    : 'text-gray-400 hover:text-gray-600'
-                            }`}>
-                            {t.label}
-                        </button>
-                    ))}
-                </div>
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Contratos</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Empreitadas, aditivos, templates e reajustes.</p>
             </div>
-            <div className="flex-1 overflow-auto">
-                {tab === 'obra' && (
-                    <SupplyChainContractList
-                        projectId={projectId}
-                        domain="SUPRIMENTOS"
-                        onCreateNew={() => setIsCreatingContract(true)}
-                        onViewDetails={(id) => setSelectedContractId(id)}
-                        onEdit={(contract) => { setEditingContract(contract); setIsCreatingContract(true); }}
-                        onDelete={() => setContractsVersion(v => v + 1)}
-                        organizationId={organizationId || undefined}
-                        version={contractsVersion}
-                    />
-                )}
-                {tab === 'templates' && (
-                    <ContractTemplateManager organizationId={organizationId} />
-                )}
-                {tab === 'reajustes' && (
-                    <ContractReajusteDue organizationId={organizationId} />
-                )}
+
+            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                {TABS.map(t => (
+                    <button key={t.id} onClick={() => setTab(t.id)}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            tab === t.id
+                                ? 'bg-white text-blue-600 shadow-sm'
+                                : 'text-gray-400 hover:text-gray-600'
+                        }`}>
+                        {t.label}
+                    </button>
+                ))}
             </div>
+
+            {tab === 'obra' && (
+                <SupplyChainContractList
+                    projectId={projectId}
+                    domain="SUPRIMENTOS"
+                    hideHeader
+                    onCreateNew={() => setIsCreatingContract(true)}
+                    onViewDetails={(id) => setSelectedContractId(id)}
+                    onEdit={(contract) => { setEditingContract(contract); setIsCreatingContract(true); }}
+                    onDelete={() => setContractsVersion(v => v + 1)}
+                    organizationId={organizationId || undefined}
+                    version={contractsVersion}
+                />
+            )}
+            {tab === 'templates' && (
+                <ContractTemplateManager organizationId={organizationId} />
+            )}
+            {tab === 'reajustes' && (
+                <ContractReajusteDue organizationId={organizationId} />
+            )}
         </div>
     );
 };

@@ -41,6 +41,7 @@ interface SupplyChainContractListProps {
     title?: string;
     subtitle?: string;
     extraActions?: React.ReactNode;
+    hideHeader?: boolean;
 }
 
 const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
@@ -56,6 +57,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     title = 'Gestão de Contratos',
     subtitle = 'Controle de empreitadas, aditivos e medições físico-financeiras.',
     extraActions,
+    hideHeader = false,
 }) => {
     const [contracts, setContracts] = React.useState<Contract[]>([]);
     const [supplierMap, setSupplierMap] = React.useState<Record<string, string>>({});
@@ -220,10 +222,12 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
             )}
 
             {/* Header */}
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{title}</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">{subtitle}</p>
-            </div>
+            {!hideHeader && (
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{title}</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">{subtitle}</p>
+                </div>
+            )}
 
             {/* Stats Dashboard */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

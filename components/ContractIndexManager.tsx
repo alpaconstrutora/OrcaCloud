@@ -94,10 +94,10 @@ const ContractIndexManager: React.FC = () => {
                 }`}>{notification.msg}</div>
             )}
 
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <TrendingUp size={20} className="text-blue-600" /> Índices de Reajuste
             </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-gray-500">
                 Catálogo de valores mensais (INCC, IPCA, IGP-M, CUB) usado para calcular reajustes de contratos e outras correções monetárias.
             </p>
 
@@ -108,7 +108,7 @@ const ContractIndexManager: React.FC = () => {
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                             selectedIndex === n
                                 ? 'bg-blue-600 text-white'
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}>
                         {n}
                     </button>
@@ -130,7 +130,7 @@ const ContractIndexManager: React.FC = () => {
             </div>
 
             {/* Adicionar valor */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4">
+            <div className="bg-white rounded-2xl border border-gray-100 p-4">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
                     Cadastrar valor — {selectedIndex}
                 </p>
@@ -138,13 +138,13 @@ const ContractIndexManager: React.FC = () => {
                     <div>
                         <label className="block text-xs text-gray-400 mb-1">Mês de referência</label>
                         <input type="month" value={newMonth} onChange={e => setNewMonth(e.target.value)}
-                            className="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div className="flex-1">
                         <label className="block text-xs text-gray-400 mb-1">Valor do índice</label>
                         <input type="number" step="0.0001" min="0" value={newValue} onChange={e => setNewValue(e.target.value)}
                             placeholder="ex: 3326.33"
-                            className="w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <Button onClick={handleAdd} disabled={saving || !newValue || !newMonth}>
                         <Plus size={14} /> {saving ? 'Salvando…' : 'Adicionar'}
@@ -153,10 +153,10 @@ const ContractIndexManager: React.FC = () => {
             </div>
 
             {/* Tabela de valores */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                 {loading ? (
                     <div className="space-y-px">
-                        {[...Array(6)].map((_, i) => <div key={i} className="h-10 bg-gray-50 dark:bg-gray-700/50 animate-pulse" />)}
+                        {[...Array(6)].map((_, i) => <div key={i} className="h-10 bg-gray-50 animate-pulse" />)}
                     </div>
                 ) : values.length === 0 ? (
                     <div className="py-10 text-center text-sm text-gray-400">
@@ -165,7 +165,7 @@ const ContractIndexManager: React.FC = () => {
                 ) : (
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
+                            <tr className="bg-gray-50 border-b border-gray-100">
                                 {tableColumns.visibleColumns.includes('reference') && (
                                     <SortableHeader colKey="reference" label="Referência" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide" />
                                 )}
@@ -181,18 +181,18 @@ const ContractIndexManager: React.FC = () => {
                                 {tableColumns.visibleColumns.includes('actions') && <th className="w-8" />}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
+                        <tbody className="divide-y divide-gray-50">
                             {sortedValues.map((v) => {
                                 const originalIndex = values.indexOf(v);
                                 const prev = values[originalIndex + 1];
                                 const varPct = prev ? ((v.value - prev.value) / prev.value) * 100 : null;
                                 return (
-                                    <tr key={v.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                    <tr key={v.id} className="hover:bg-gray-50">
                                         {tableColumns.visibleColumns.includes('reference') && (
-                                            <td className="px-4 py-2.5 font-medium text-gray-900 dark:text-white">{fmtDate(v.reference_month)}</td>
+                                            <td className="px-4 py-2.5 font-medium text-gray-900">{fmtDate(v.reference_month)}</td>
                                         )}
                                         {tableColumns.visibleColumns.includes('value') && (
-                                            <td className="px-4 py-2.5 text-right font-medium text-gray-700 dark:text-gray-200">{fmtVal(v.value)}</td>
+                                            <td className="px-4 py-2.5 text-right font-medium text-gray-700">{fmtVal(v.value)}</td>
                                         )}
                                         {tableColumns.visibleColumns.includes('variation') && (
                                             <td className="px-4 py-2.5 text-right">

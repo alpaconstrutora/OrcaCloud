@@ -22,7 +22,8 @@ import {
   X,
   Package,
   TrendingUp,
-  Ruler
+  Ruler,
+  ArrowLeft
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
@@ -954,7 +955,192 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           )}
 
           {/* TAB: CONTRATOS */}
-          {activeTab === 'contratos' && (
+          {activeTab === 'contratos' && detailContract && (
+            <div className="flex flex-col gap-6">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setDetailContract(null)}
+                  className="p-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 active:scale-95 transition-all shrink-0"
+                >
+                  <ArrowLeft className="w-4 h-4 text-gray-600" />
+                </button>
+                <div className="min-w-0">
+                  <span className="text-xs text-gray-400 font-bold uppercase">Nº {detailContract.number}</span>
+                  <h3 className="text-md font-bold text-gray-900 truncate">{detailContract.title || 'Contrato'}</h3>
+                </div>
+              </div>
+
+              <div className="flex gap-1 border-b border-gray-100 overflow-x-auto shrink-0">
+                {([
+                  { id: 'overview', label: 'Visão Geral', icon: TrendingUp },
+                  { id: 'items', label: `Itens (${contractItems.length})`, icon: Package },
+                  { id: 'addendums', label: `Aditivos (${contractAddendums.length})`, icon: FileText },
+                  { id: 'measurements', label: `Medições (${contractMeasurements.length})`, icon: Ruler },
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setDetailTab(tab.id)}
+                    className={`px-3 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-all
+                      ${detailTab === tab.id ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+                  >
+                    <tab.icon className="w-3.5 h-3.5" />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {detailLoading ? (
+                <div className="text-center py-12 text-xs text-gray-400">Carregando...</div>
+              ) : (
+                <>
+                  {detailTab === 'overview' && (
+                    <div className="flex flex-col gap-4">
+                      <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4">
+                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Resumo de Execução</h4>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-4">
+                          <div>
+                            <span className="text-gray-400 block">Data Início</span>
+                            <span className="font-bold text-gray-900">{detailContract.start_date ? new Date(detailContract.start_date).toLocaleDateString() : '-'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 block">Data Término</span>
+                            <span className="font-bold text-gray-900">{detailContract.end_date ? new Date(detailContract.end_date).toLocaleDateString() : '-'}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 block">Tempo Decorrido</span>
+                            <span className="font-bold text-gray-900">{timeProgress.toFixed(1)}%</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 block">Progresso Físico-Financeiro</span>
+                            <span className="font-bold text-gray-900">{physicalProgress.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2.5">
+                          <div>
+                            <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                              <span>Execução do Prazo</span><span>{timeProgress.toFixed(1)}%</span>
+                            </div>
+                            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-500" style={{ width: `${Math.min(100, timeProgress)}%` }}></div>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex justify-between text-[10px] text-gray-400 mb-1">
+                              <span>Progresso Físico-Financeiro</span><span>{physicalProgress.toFixed(1)}%</span>
+                            </div>
+                            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div className="h-full bg-orange-500" style={{ width: `${Math.min(100, physicalProgress)}%` }}></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Valor Atual</span>
+                          <span className="text-sm font-black text-gray-900">R$ {Number(detailContract.current_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Valor Original</span>
+                          <span className="text-sm font-black text-gray-900">R$ {Number(detailContract.original_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">% em Aditivos</span>
+                          <span className="text-sm font-black text-gray-900">{addendumsPercentage.toFixed(1)}%</span>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Total Medido</span>
+                          <span className="text-sm font-black text-gray-900">R$ {totalMeasured.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-white border border-gray-200 rounded-xl p-3">
+                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Retenções</span>
+                          <span className="text-sm font-black text-gray-900">R$ {retentionValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
+                          <span className="text-[10px] text-orange-600 uppercase font-semibold block">Saldo a Faturar</span>
+                          <span className="text-sm font-black text-orange-700">R$ {saldoAFaturar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {detailTab === 'items' && (
+                    <div className="flex flex-col gap-2">
+                      {contractItems.map((item) => (
+                        <div key={item.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-gray-900 truncate">{item.description}</p>
+                            <p className="text-[10px] text-gray-400">{item.quantity} {item.unit} × R$ {Number(item.unit_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          </div>
+                          <span className="text-xs font-black text-gray-900 shrink-0">R$ {Number(item.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      ))}
+                      {contractItems.length === 0 && (
+                        <div className="text-center py-8 text-xs text-gray-400">Nenhum item cadastrado.</div>
+                      )}
+                    </div>
+                  )}
+
+                  {detailTab === 'addendums' && (
+                    <div className="flex flex-col gap-2">
+                      {contractAddendums.map((a) => (
+                        <div key={a.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-xs font-bold text-gray-900">Aditivo Nº {a.number} — {a.type}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
+                              ${a.status === 'Aprovado' ? 'bg-green-100 text-green-700' : a.status === 'Rejeitado' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                              {a.status}
+                            </span>
+                          </div>
+                          {a.description && <p className="text-[11px] text-gray-500 mb-1">{a.description}</p>}
+                          <div className="flex flex-wrap gap-4 text-[10px] text-gray-400">
+                            {a.value_impact ? <span>Impacto: R$ {Number(a.value_impact).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span> : null}
+                            {a.new_end_date ? <span>Novo término: {new Date(a.new_end_date).toLocaleDateString()}</span> : null}
+                          </div>
+                        </div>
+                      ))}
+                      {contractAddendums.length === 0 && (
+                        <div className="text-center py-8 text-xs text-gray-400">Nenhum aditivo registrado.</div>
+                      )}
+                    </div>
+                  )}
+
+                  {detailTab === 'measurements' && (
+                    <div className="flex flex-col gap-2">
+                      {contractMeasurements.map((m) => (
+                        <div key={m.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-xs font-bold text-gray-900">Medição Nº {m.number}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
+                              ${m.status === 'Paga' || m.status === 'Processada' ? 'bg-green-100 text-green-700' : m.status === 'Cancelada' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                              {m.status}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-500 mb-1">
+                            Período: {m.period_start ? new Date(m.period_start).toLocaleDateString() : '-'} até {m.period_end ? new Date(m.period_end).toLocaleDateString() : '-'}
+                          </p>
+                          <div className="flex flex-wrap gap-4 text-[10px] text-gray-400">
+                            <span>Bruto: R$ {Number(m.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span>Retenção: R$ {Number(m.retention_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span>Líquido: R$ {Number(m.net_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            {m.invoice_url && (
+                              <a href={m.invoice_url} target="_blank" rel="noreferrer" className="text-orange-500 hover:text-orange-600 font-semibold">Ver Nota</a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {contractMeasurements.length === 0 && (
+                        <div className="text-center py-8 text-xs text-gray-400">Nenhuma medição registrada.</div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* TAB: CONTRATOS (lista) */}
+          {activeTab === 'contratos' && !detailContract && (
             <div className="flex flex-col gap-6">
               <h3 className="text-md font-bold text-gray-900">Seus Contratos Ativos</h3>
               <div className="flex flex-col gap-4">
@@ -1241,194 +1427,6 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
         </div>
       )}
 
-      {/* MODAL: DETALHE DO CONTRATO (Visão Geral / Itens / Aditivos / Medições) */}
-      {detailContract && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white border border-gray-200 max-w-3xl w-full max-h-[90vh] rounded-2xl shadow-2xl relative flex flex-col">
-            <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
-              <div className="min-w-0">
-                <span className="text-xs text-gray-400 font-bold uppercase">Nº {detailContract.number}</span>
-                <h3 className="text-md font-bold text-gray-900 truncate">{detailContract.title || 'Contrato'}</h3>
-              </div>
-              <button
-                onClick={() => setDetailContract(null)}
-                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 shrink-0"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex gap-1 px-6 pt-3 border-b border-gray-100 shrink-0 overflow-x-auto">
-              {([
-                { id: 'overview', label: 'Visão Geral', icon: TrendingUp },
-                { id: 'items', label: `Itens (${contractItems.length})`, icon: Package },
-                { id: 'addendums', label: `Aditivos (${contractAddendums.length})`, icon: FileText },
-                { id: 'measurements', label: `Medições (${contractMeasurements.length})`, icon: Ruler },
-              ] as const).map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setDetailTab(tab.id)}
-                  className={`px-3 py-2.5 text-xs font-bold border-b-2 flex items-center gap-1.5 whitespace-nowrap transition-all
-                    ${detailTab === tab.id ? 'border-orange-500 text-orange-500' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
-                >
-                  <tab.icon className="w-3.5 h-3.5" />
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="p-6 flex-1 overflow-y-auto">
-              {detailLoading ? (
-                <div className="text-center py-12 text-xs text-gray-400">Carregando...</div>
-              ) : (
-                <>
-                  {detailTab === 'overview' && (
-                    <div className="flex flex-col gap-4">
-                      <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4">
-                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Resumo de Execução</h4>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-4">
-                          <div>
-                            <span className="text-gray-400 block">Data Início</span>
-                            <span className="font-bold text-gray-900">{detailContract.start_date ? new Date(detailContract.start_date).toLocaleDateString() : '-'}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400 block">Data Término</span>
-                            <span className="font-bold text-gray-900">{detailContract.end_date ? new Date(detailContract.end_date).toLocaleDateString() : '-'}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400 block">Tempo Decorrido</span>
-                            <span className="font-bold text-gray-900">{timeProgress.toFixed(1)}%</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400 block">Progresso Físico-Financeiro</span>
-                            <span className="font-bold text-gray-900">{physicalProgress.toFixed(1)}%</span>
-                          </div>
-                        </div>
-                        <div className="flex flex-col gap-2.5">
-                          <div>
-                            <div className="flex justify-between text-[10px] text-gray-400 mb-1">
-                              <span>Execução do Prazo</span><span>{timeProgress.toFixed(1)}%</span>
-                            </div>
-                            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                              <div className="h-full bg-blue-500" style={{ width: `${Math.min(100, timeProgress)}%` }}></div>
-                            </div>
-                          </div>
-                          <div>
-                            <div className="flex justify-between text-[10px] text-gray-400 mb-1">
-                              <span>Progresso Físico-Financeiro</span><span>{physicalProgress.toFixed(1)}%</span>
-                            </div>
-                            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                              <div className="h-full bg-orange-500" style={{ width: `${Math.min(100, physicalProgress)}%` }}></div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <div className="bg-white border border-gray-200 rounded-xl p-3">
-                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Valor Atual</span>
-                          <span className="text-sm font-black text-gray-900">R$ {Number(detailContract.current_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-3">
-                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Valor Original</span>
-                          <span className="text-sm font-black text-gray-900">R$ {Number(detailContract.original_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-3">
-                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">% em Aditivos</span>
-                          <span className="text-sm font-black text-gray-900">{addendumsPercentage.toFixed(1)}%</span>
-                        </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-3">
-                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Total Medido</span>
-                          <span className="text-sm font-black text-gray-900">R$ {totalMeasured.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="bg-white border border-gray-200 rounded-xl p-3">
-                          <span className="text-[10px] text-gray-400 uppercase font-semibold block">Retenções</span>
-                          <span className="text-sm font-black text-gray-900">R$ {retentionValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
-                          <span className="text-[10px] text-orange-600 uppercase font-semibold block">Saldo a Faturar</span>
-                          <span className="text-sm font-black text-orange-700">R$ {saldoAFaturar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {detailTab === 'items' && (
-                    <div className="flex flex-col gap-2">
-                      {contractItems.map((item) => (
-                        <div key={item.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-gray-900 truncate">{item.description}</p>
-                            <p className="text-[10px] text-gray-400">{item.quantity} {item.unit} × R$ {Number(item.unit_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          </div>
-                          <span className="text-xs font-black text-gray-900 shrink-0">R$ {Number(item.total_price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                        </div>
-                      ))}
-                      {contractItems.length === 0 && (
-                        <div className="text-center py-8 text-xs text-gray-400">Nenhum item cadastrado.</div>
-                      )}
-                    </div>
-                  )}
-
-                  {detailTab === 'addendums' && (
-                    <div className="flex flex-col gap-2">
-                      {contractAddendums.map((a) => (
-                        <div key={a.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="text-xs font-bold text-gray-900">Aditivo Nº {a.number} — {a.type}</span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
-                              ${a.status === 'Aprovado' ? 'bg-green-100 text-green-700' : a.status === 'Rejeitado' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                              {a.status}
-                            </span>
-                          </div>
-                          {a.description && <p className="text-[11px] text-gray-500 mb-1">{a.description}</p>}
-                          <div className="flex flex-wrap gap-4 text-[10px] text-gray-400">
-                            {a.value_impact ? <span>Impacto: R$ {Number(a.value_impact).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span> : null}
-                            {a.new_end_date ? <span>Novo término: {new Date(a.new_end_date).toLocaleDateString()}</span> : null}
-                          </div>
-                        </div>
-                      ))}
-                      {contractAddendums.length === 0 && (
-                        <div className="text-center py-8 text-xs text-gray-400">Nenhum aditivo registrado.</div>
-                      )}
-                    </div>
-                  )}
-
-                  {detailTab === 'measurements' && (
-                    <div className="flex flex-col gap-2">
-                      {contractMeasurements.map((m) => (
-                        <div key={m.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="text-xs font-bold text-gray-900">Medição Nº {m.number}</span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
-                              ${m.status === 'Paga' || m.status === 'Processada' ? 'bg-green-100 text-green-700' : m.status === 'Cancelada' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                              {m.status}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-gray-500 mb-1">
-                            Período: {m.period_start ? new Date(m.period_start).toLocaleDateString() : '-'} até {m.period_end ? new Date(m.period_end).toLocaleDateString() : '-'}
-                          </p>
-                          <div className="flex flex-wrap gap-4 text-[10px] text-gray-400">
-                            <span>Bruto: R$ {Number(m.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            <span>Retenção: R$ {Number(m.retention_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            <span>Líquido: R$ {Number(m.net_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            {m.invoice_url && (
-                              <a href={m.invoice_url} target="_blank" rel="noreferrer" className="text-orange-500 hover:text-orange-600 font-semibold">Ver Nota</a>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                      {contractMeasurements.length === 0 && (
-                        <div className="text-center py-8 text-xs text-gray-400">Nenhuma medição registrada.</div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

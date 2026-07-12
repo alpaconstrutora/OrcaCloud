@@ -1165,6 +1165,45 @@ export const contractService = {
         }
     },
 
+    // Lançamentos financeiros gerados a partir deste contrato (Conciliação / internal_transactions)
+    listFinancialEntries: async (contract: Contract): Promise<{
+        id: string; source_system: string; reference_id: string | null;
+        transaction_date: string; amount: number; direction: 'CREDIT' | 'DEBIT';
+        description: string | null; category: string | null; status: string;
+    }[]> => {
+        if (!contract.organization_id) return [];
+
+        const measurementSources = ['CONTRACT_AVISTA', 'CONTRACT_PARCELADO', 'CONTRACT_RECURRING'];
+        const { data: byContract, error: e1 } = await supabase
+            .from('internal_transactions')
+            .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status')
+            .eq('organization_id', contract.organization_id)
+            .in('source_system', measurementSources)
+            .like('reference_id', `${contract.id}%`);
+        if (e1) throw e1;
+
+        const { data: measurementRows } = await supabase
+            .from('contract_measurements')
+            .select('id')
+            .eq('contract_id', contract.id);
+        const measurementIds = (measurementRows ?? []).map((m: { id: string }) => m.id);
+
+        let byMeasurement: typeof byContract = [];
+        if (measurementIds.length > 0) {
+            const { data, error: e2 } = await supabase
+                .from('internal_transactions')
+                .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status')
+                .eq('organization_id', contract.organization_id)
+                .eq('source_system', 'CONTRACT_MEASUREMENT')
+                .in('reference_id', measurementIds);
+            if (e2) throw e2;
+            byMeasurement = data ?? [];
+        }
+
+        return [...(byContract ?? []), ...byMeasurement]
+            .sort((a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime());
+    },
+
     // Medições (Measurements)
     listMeasurements: async (contractId: string): Promise<ContractMeasurement[]> => {
         const { data, error } = await supabase

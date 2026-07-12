@@ -47,7 +47,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     // Contrato não pode existir sem organização — exigimos a escolha aqui dentro.
     const { organizations: storeOrganizations } = useStore();
     const [pickedOrgId, setPickedOrgId] = React.useState<string>('');
-    const organizationId = organizationIdProp || pickedOrgId || undefined;
+    const organizationId = organizationIdProp || pickedOrgId || initialData?.organization_id || undefined;
     const needsOrgPicker = !organizationIdProp && !initialData?.id;
     const [formData, setFormData] = React.useState<Partial<Contract>>({
         number: '',

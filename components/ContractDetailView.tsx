@@ -67,7 +67,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [projectBudget, setProjectBudget] = React.useState<BudgetEntry[]>([]);
     const [utilityBills, setUtilityBills] = React.useState<ContractUtilityBill[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [activeTab, setActiveTab] = React.useState<'overview' | 'items' | 'addendums' | 'measurements' | 'utility_bills' | 'emissao'>('overview');
+    const [activeTab, setActiveTab] = React.useState<'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'utility_bills' | 'emissao'>('overview');
     const [isBudgetPickerOpen, setIsBudgetPickerOpen] = React.useState(false);
     const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingIndex: number | null; initial: AvulsoItem | null }>({ open: false, editingIndex: null, initial: null });
     const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
@@ -100,6 +100,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [rejectModal, setRejectModal] = React.useState<{ measurementId: string } | null>(null);
     const [rejectReason, setRejectReason] = React.useState('');
     const [measurementActionBusy, setMeasurementActionBusy] = React.useState<string | null>(null);
+    const [financialEntries, setFinancialEntries] = React.useState<{
+        id: string; source_system: string; reference_id: string | null;
+        transaction_date: string; amount: number; direction: 'CREDIT' | 'DEBIT';
+        description: string | null; category: string | null; status: string;
+    }[]>([]);
+    const [loadingFinancialEntries, setLoadingFinancialEntries] = React.useState(false);
 
     const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setNotification({ message, type });
@@ -231,6 +237,14 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             setAddendums(a);
             setMeasurements(m);
             setUtilityBills(u);
+
+            if (c) {
+                setLoadingFinancialEntries(true);
+                contractService.listFinancialEntries(c)
+                    .then(setFinancialEntries)
+                    .catch(err => console.error('Erro ao carregar lançamentos financeiros:', err))
+                    .finally(() => setLoadingFinancialEntries(false));
+            }
 
             // 0. Load counterparty name (client for OUTGOING, supplier for INCOMING)
             if ((c as any).direction === 'OUTGOING' && (c as any).client_id) {
@@ -967,11 +981,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     { id: 'items', label: 'Itens do Contrato', icon: FileText },
                     { id: 'addendums', label: 'Aditivos (VA/PR)', icon: History },
                     { id: 'measurements', label: (contract as any).direction === 'OUTGOING' ? 'Faturamento (M/F)' : 'Medições (M/F)', icon: BarChart3 },
+                    { id: 'financeiro', label: 'Financeiro', icon: DollarSign },
                     { id: 'emissao', label: 'Emissão', icon: FileDown },
                 ]).map((tab) => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'utility_bills' | 'emissao')}
+                        onClick={() => setActiveTab(tab.id as 'overview' | 'items' | 'addendums' | 'measurements' | 'financeiro' | 'utility_bills' | 'emissao')}
                         className={`flex items-center gap-2 px-5 py-2 rounded-2xl transition-all font-medium text-button uppercase tracking-widest ${activeTab === tab.id
                             ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                             : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
@@ -2028,6 +2043,106 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     </div>
                 </div>
             )}
+
+            {/* Tab: Financeiro (lançamentos gerados pelo contrato) */}
+            {activeTab === 'financeiro' && (() => {
+                const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                const statusLabel: Record<string, string> = {
+                    PENDING: 'Pendente', PAID: 'Pago', CONCILIATED: 'Conciliado', CANCELLED: 'Cancelado'
+                };
+                const statusClass: Record<string, string> = {
+                    PENDING: 'bg-amber-100 text-amber-800',
+                    PAID: 'bg-green-100 text-green-800',
+                    CONCILIATED: 'bg-blue-100 text-blue-800',
+                    CANCELLED: 'bg-gray-100 text-gray-500',
+                };
+                const sourceLabel: Record<string, string> = {
+                    CONTRACT_AVISTA: 'À Vista', CONTRACT_PARCELADO: 'Parcela', CONTRACT_RECURRING: 'Recorrência', CONTRACT_MEASUREMENT: 'Medição',
+                };
+                const totalGeral = financialEntries.reduce((s, e) => s + (e.amount || 0), 0);
+                const totalPago = financialEntries.filter(e => e.status === 'PAID' || e.status === 'CONCILIATED').reduce((s, e) => s + (e.amount || 0), 0);
+                const totalPendente = financialEntries.filter(e => e.status === 'PENDING').reduce((s, e) => s + (e.amount || 0), 0);
+
+                return (
+                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                        <div className="flex justify-between items-center mb-2">
+                            <div>
+                                <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
+                                    Lançamentos Financeiros <span className="text-xs font-medium bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full uppercase tracking-widest">{financialEntries.length} registro(s)</span>
+                                </h3>
+                                <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-1">Boletos, parcelas e valores gerados a partir deste contrato no módulo Financeiro.</p>
+                            </div>
+                            <button
+                                onClick={handleSyncFinance}
+                                disabled={syncingFinance}
+                                className="flex items-center gap-2 px-6 py-3 bg-white border border-emerald-200 text-emerald-700 rounded-2xl hover:bg-emerald-50 transition-all font-medium text-button uppercase tracking-widest shadow-sm disabled:opacity-50"
+                            >
+                                <DollarSign className="w-4 h-4" />
+                                {syncingFinance ? 'Lançando...' : 'Lançar / Atualizar'}
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm space-y-1">
+                                <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Total Lançado</p>
+                                <p className="text-xl font-medium text-gray-900 tracking-tighter">R$ {fmt(totalGeral)}</p>
+                            </div>
+                            <div className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm space-y-1">
+                                <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Pago / Conciliado</p>
+                                <p className="text-xl font-medium text-emerald-600 tracking-tighter">R$ {fmt(totalPago)}</p>
+                            </div>
+                            <div className="bg-white p-5 rounded-[28px] border border-gray-100 shadow-sm space-y-1">
+                                <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Pendente</p>
+                                <p className="text-xl font-medium text-amber-600 tracking-tighter">R$ {fmt(totalPendente)}</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-gray-50 border-b border-gray-100">
+                                    <tr>
+                                        <th className="px-8 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Data</th>
+                                        <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Descrição</th>
+                                        <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Origem</th>
+                                        <th className="px-6 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Status</th>
+                                        <th className="px-8 py-5 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50 text-gray-700">
+                                    {loadingFinancialEntries ? (
+                                        <tr><td colSpan={5} className="px-8 py-20 text-center text-sm font-medium text-gray-400">Carregando lançamentos...</td></tr>
+                                    ) : financialEntries.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} className="px-8 py-20 text-center">
+                                                <p className="text-sm font-bold text-gray-400">Nenhum lançamento financeiro gerado para este contrato ainda.</p>
+                                                <p className="text-xs text-gray-400 mt-1">Use "Lançar / Atualizar" para gerar as parcelas/boletos no Financeiro.</p>
+                                            </td>
+                                        </tr>
+                                    ) : financialEntries.map((e) => (
+                                        <tr key={e.id} className="hover:bg-blue-50/20 transition-all group">
+                                            <td className="px-8 py-5 text-sm font-medium text-gray-700">
+                                                {new Date(e.transaction_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                            </td>
+                                            <td className="px-6 py-5 text-sm text-gray-700">{e.description || '—'}</td>
+                                            <td className="px-6 py-5">
+                                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">{sourceLabel[e.source_system] || e.source_system}</span>
+                                            </td>
+                                            <td className="px-6 py-5">
+                                                <span className={`inline-flex px-2 py-1 rounded-lg text-button font-medium uppercase tracking-widest w-fit ${statusClass[e.status] || 'bg-gray-100 text-gray-500'}`}>
+                                                    {statusLabel[e.status] || e.status}
+                                                </span>
+                                            </td>
+                                            <td className={`px-8 py-5 text-right text-base font-medium tracking-tighter ${e.direction === 'CREDIT' ? 'text-emerald-600' : 'text-gray-900'}`}>
+                                                {e.direction === 'DEBIT' ? '- ' : ''}R$ {fmt(e.amount)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* Tab: Faturas de Consumo */}
             {activeTab === 'utility_bills' && (

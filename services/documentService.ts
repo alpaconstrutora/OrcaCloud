@@ -860,15 +860,15 @@ export const documentService = {
 
   // ─── GERENCIAMENTO DE PASTAS VIRTUAIS ────────────────────────
   async listFolders(
-    organizationId: string,
+    organizationId: string | null,
     categoria: OpuraDocumentCategoria,
     projectId?: string
   ): Promise<OpuraFolder[]> {
     let query = supabase
       .from('opura_folders')
       .select('*')
-      .eq('organization_id', organizationId)
       .eq('categoria', categoria);
+    if (organizationId) query = query.eq('organization_id', organizationId);
 
     if (projectId && projectId !== 'all') {
       query = query.eq('project_id', projectId);

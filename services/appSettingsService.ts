@@ -5,6 +5,9 @@ export interface AppSettings {
     orderPrefix: string;
     orderDuplicateSuffix: string;
 
+    // Exibição de fornecedores: razão social ou apelido curto
+    supplierNameDisplay: 'razao' | 'apelido';
+
     // WhatsApp templates
     whatsappOrderSentTemplate: string;
     whatsappStatusChangeTemplate: string;
@@ -17,6 +20,8 @@ export interface AppSettings {
 export const APP_SETTINGS_DEFAULTS: AppSettings = {
     orderPrefix: 'PO-',
     orderDuplicateSuffix: '-DUP',
+
+    supplierNameDisplay: 'razao',
 
     whatsappOrderSentTemplate:
         `Olá, {fornecedor}!\n\nVocê recebeu um novo Pedido de Compra:\n\n📋 Pedido: #{pedido}\n🏢 Obra: {obra}\n📦 {itens} item(s) — Total: {total}\n📅 Entrega prevista: {entrega}\n\nAcesse o portal do fornecedor para confirmar ou negociar o pedido.`,

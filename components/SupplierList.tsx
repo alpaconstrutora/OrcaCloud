@@ -1,7 +1,8 @@
 import React from 'react';
 import { Search, Plus, Edit2, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, Table2, Loader2, AlertCircle, Building2, Users, Pencil, X, RefreshCw } from 'lucide-react';
 import { Supplier } from '../types';
-import { supplierService } from '../services/supplierService';
+import { supplierService, getSupplierDisplayName, SupplierNameMode } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 import { SupplierModal } from './SupplierModal';
 import { ColumnConfigButton, SortableHeader, usePersistedState, ColumnConfig, useTableColumns, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
@@ -63,6 +64,12 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     const [editingSupplier, setEditingSupplier] = React.useState<Supplier | undefined>();
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('supplierListFilters:viewMode', 'list');
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    // Preferência global (localStorage via appSettingsService) — razão social ou apelido curto na exibição.
+    const [nameMode, setNameMode] = React.useState<SupplierNameMode>(() => appSettingsService.get().supplierNameDisplay);
+    const handleNameModeChange = (mode: SupplierNameMode) => {
+        setNameMode(mode);
+        appSettingsService.save({ supplierNameDisplay: mode });
+    };
     const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
     const [isBulkEditOpen, setIsBulkEditOpen] = React.useState(false);
     const confirm = useConfirm();
@@ -219,6 +226,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
         let result = suppliers
             .filter(s =>
                 s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                s.nickname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 s.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 s.document?.includes(searchTerm) ||
                 s.category?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -305,6 +313,30 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 >
                     <RefreshCw className="w-4 h-4" />
                 </button>
+
+                {/* Separador entre grupo "filtrar" e grupo "exibição" (razão social/apelido) */}
+                <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0" title="Escolha se as listas mostram a Razão Social ou o Apelido do fornecedor">
+                    <button
+                        onClick={() => handleNameModeChange('razao')}
+                        className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${nameMode === 'razao'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-400 hover:text-gray-600'
+                            }`}
+                    >
+                        Razão Social
+                    </button>
+                    <button
+                        onClick={() => handleNameModeChange('apelido')}
+                        className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${nameMode === 'apelido'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-400 hover:text-gray-600'
+                            }`}
+                    >
+                        Apelido
+                    </button>
+                </div>
 
                 {/* Separador entre grupo "filtrar" (busca/ordenar/filtros/refresh) e grupo "visualizar" (colunas/grid/lista) */}
                 <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
@@ -455,7 +487,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             )}
                                             {tableColumns.visibleColumns.includes('name') && (
                                                 <td className="px-6 py-2.5">
-                                                    <p className="text-sm font-normal text-gray-700 group-hover:text-blue-700 transition-colors">{supplier.name}</p>
+                                                    <p className="text-sm font-normal text-gray-700 group-hover:text-blue-700 transition-colors truncate" title={supplier.name}>{getSupplierDisplayName(supplier, nameMode)}</p>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('type') && (
@@ -551,8 +583,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                         </div>
                                         <span className="text-sm font-normal text-gray-600">{supplier.category}</span>
                                     </div>
-                                    <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-700 transition-colors mb-1 line-clamp-1">
-                                        {supplier.name}
+                                    <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-700 transition-colors mb-1 line-clamp-1" title={supplier.name}>
+                                        {getSupplierDisplayName(supplier, nameMode)}
                                     </h3>
                                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">
                                         {supplier.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}
@@ -593,7 +625,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                         <Edit2 className="w-4 h-4" />
                                     </button>
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); handleDelete(supplier.id, supplier.name); }}
+                                        onClick={(e) => { e.stopPropagation(); handleDelete(supplier.id, getSupplierDisplayName(supplier, nameMode)); }}
                                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-white rounded-xl transition-all shadow-sm border border-transparent hover:border-red-100"
                                         title="Excluir"
                                     >

@@ -2,6 +2,8 @@ import { supabase } from '../lib/supabase';
 import { Invoice } from '../types';
 import { financialService } from './financialService';
 import { sanitizeFileName } from '../utils/storageUtils';
+import { getSupplierDisplayName } from './supplierService';
+import { appSettingsService } from './appSettingsService';
 
 export const invoiceService = {
     /**
@@ -159,15 +161,16 @@ export const invoiceService = {
 
         // Busca fornecedores únicos referenciados
         const supplierIds = [...new Set(rows.map((r: any) => r.supplier_id).filter(Boolean))];
-        let supplierMap: Record<string, { name: string; organization_id: string }> = {};
+        let supplierMap: Record<string, { name: string; nickname?: string | null; organization_id: string }> = {};
 
         if (supplierIds.length > 0) {
             const { data: suppData } = await supabase
                 .from('suppliers')
-                .select('id, name, organization_id')
+                .select('id, name, nickname, organization_id')
                 .in('id', supplierIds);
             (suppData || []).forEach((s: any) => { supplierMap[s.id] = s; });
         }
+        const nameMode = appSettingsService.get().supplierNameDisplay;
 
         return rows
             .filter((row: any) => {
@@ -187,7 +190,7 @@ export const invoiceService = {
                 status: row.status,
                 notes: row.notes,
                 createdAt: row.created_at,
-                supplierName: supplierMap[row.supplier_id]?.name,
+                supplierName: supplierMap[row.supplier_id] ? getSupplierDisplayName(supplierMap[row.supplier_id], nameMode) : undefined,
                 supplierOrganizationId: supplierMap[row.supplier_id]?.organization_id,
             }));
     },

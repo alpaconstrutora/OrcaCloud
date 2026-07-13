@@ -3,8 +3,8 @@ import { Supplier, SupplierCnaeActivity, SupplierPartner, SupplierStateRegistrat
 import { isRealEstateBrokerCategory, REAL_ESTATE_BROKER_CATEGORY } from '../constants/supplierCategories';
 
 const CNPJA_COLUMNS = 'cnpj_status, cnpj_status_date, cnpj_updated_at, cnpj_founded_at, cnpj_legal_nature, cnpj_company_size, cnpj_main_activity_code, cnpj_main_activity_text, cnpj_side_activities, cnpj_partners, cnpj_simples_optant, cnpj_simples_since, cnpj_simei_optant, cnpj_simei_since, cnpj_state_registrations';
-const SUPPLIER_SELECT = `id, code, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}`;
-const SUPPLIER_LIST_SELECT = `id, code, name, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}, organizations:organization_id(name)`;
+const SUPPLIER_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}`;
+const SUPPLIER_LIST_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}, organizations:organization_id(name)`;
 const CNPJA_PUBLIC_API_BASE = 'https://open.cnpja.com/office';
 const CNPJA_PUBLIC_LIMIT = 5;
 const CNPJA_PUBLIC_WINDOW_MS = 60_000;
@@ -17,6 +17,18 @@ const isDuplicateEmailError = (error: unknown) => {
     return err?.code === '23505' && text.includes('email');
 };
 const onlyDigits = (value?: string | null) => (value || '').replace(/\D/g, '');
+
+export type SupplierNameMode = 'razao' | 'apelido';
+
+// Se o modo for 'apelido' mas o fornecedor não tem apelido cadastrado, cai
+// para a razão social — nunca deve exibir campo vazio.
+export function getSupplierDisplayName(
+    supplier: { name: string; nickname?: string | null },
+    mode: SupplierNameMode,
+): string {
+    if (mode === 'apelido' && supplier.nickname?.trim()) return supplier.nickname;
+    return supplier.name;
+}
 export interface CnpjaSupplierUpdate {
     name: string;
     document: string;

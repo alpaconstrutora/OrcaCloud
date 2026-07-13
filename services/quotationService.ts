@@ -129,7 +129,7 @@ export const quotationService = {
     async listResponses(requestId: string): Promise<QuotationResponse[]> {
         const { data, error } = await supabase
             .from('quotation_responses')
-            .select('*, supplier:suppliers(name)')
+            .select('*, supplier:suppliers(name, nickname)')
             .eq('request_id', requestId);
 
         if (error) throw error;
@@ -138,7 +138,10 @@ export const quotationService = {
             id: item.id,
             requestId: item.request_id,
             supplierId: item.supplier_id,
+            // supplierName = razão social sempre (reaproveitado em mensagens WhatsApp/webhook
+            // externos); apelido vai à parte em supplierNickname, só para exibição em tabela.
             supplierName: item.supplier?.name || '-',
+            supplierNickname: item.supplier?.nickname || null,
             items: item.items,
             deliveryDate: item.delivery_date,
             deliveryMethod: item.delivery_method,

@@ -23,7 +23,8 @@ import { QuotationRequest, QuotationResponse } from '../types';
 import { quotationService } from '../services/quotationService';
 import { webhookService } from '../services/webhookService';
 import { projectService } from '../services/projectService';
-import { supplierService } from '../services/supplierService';
+import { supplierService, getSupplierDisplayName } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 
 interface SupplyChainQuotationComparisonProps {
     requestId: string;
@@ -38,6 +39,8 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
     const [negotiatingId, setNegotiatingId] = React.useState<string | null>(null);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
+    // Só a coluna de comparação exibe o apelido — mensagens WhatsApp/webhook abaixo usam supplierName (razão social) direto.
+    const nameMode = React.useMemo(() => appSettingsService.get().supplierNameDisplay, []);
 
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
         setNotification({ message, type });
@@ -317,7 +320,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                     <th key={resp.id} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 border-l border-gray-100 text-center min-w-[200px]">
                                         <div className="flex flex-col items-center gap-1">
                                             <User className="w-4 h-4 text-blue-500" />
-                                            <span className="text-gray-900">{resp.supplierName}</span>
+                                            <span className="text-gray-900">{getSupplierDisplayName({ name: resp.supplierName || '-', nickname: resp.supplierNickname }, nameMode)}</span>
                                             <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
                                                 {resp.negotiationStatus !== 'Original' && (
                                                     <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${resp.negotiationStatus === 'Contraproposta' ? 'bg-orange-100 text-orange-600' :

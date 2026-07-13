@@ -48,7 +48,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     const [cnpjaLookupStatus, setCnpjaLookupStatus] = React.useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
     const emptyForm = (): Omit<Supplier, 'id' | 'created_at'> => ({
-        name: '', contact_name: '', email: '', phone: '', document: '',
+        name: '', nickname: '', contact_name: '', email: '', phone: '', document: '',
         type: 'PJ', category: DEFAULT_CATEGORIES[0],
         street: '', number: '', neighborhood: '', address: '', city: '', state: '', zip_code: '',
         organization_id: activeOrganizationId || null,
@@ -92,6 +92,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
             setFormData({
                 code: initialData.code,
                 name: initialData.name,
+                nickname: initialData.nickname || '',
                 contact_name: initialData.contact_name || '',
                 email: initialData.email || '',
                 phone: initialData.phone || '',
@@ -303,6 +304,21 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                                 className={inputWithIconCls}
                                 value={formData.name}
                                 onChange={e => set({ name: e.target.value })}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Apelido */}
+                    <div>
+                        <label className={labelCls}>Apelido</label>
+                        <div className="relative">
+                            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+                            <input
+                                type="text"
+                                placeholder="Ex: Alpa (nome curto para exibição em tabelas)"
+                                className={inputWithIconCls}
+                                value={formData.nickname ?? ''}
+                                onChange={e => set({ nickname: e.target.value })}
                             />
                         </div>
                     </div>

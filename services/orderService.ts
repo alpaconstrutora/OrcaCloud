@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { PurchaseOrder, PurchaseOrderItem, FinancialTransaction } from '../types';
 import { notificationService } from './notificationService';
-import { supplierService } from './supplierService';
+import { supplierService, getSupplierDisplayName } from './supplierService';
 import { financialService } from './financialService';
 import { sanitizeFileName } from '../utils/storageUtils';
 import { webhookService } from './webhookService';
@@ -124,14 +124,15 @@ export const orderService = {
 
         // Fetch suppliers separately — implicit FK join can return 404 when schema cache is stale
         const uniqueSupplierIds = Array.from(new Set((orders || []).map(o => o.supplier_id).filter(Boolean)));
-        let supplierMap: Record<string, string> = {};
+        let supplierMap: Record<string, { name: string; nickname?: string | null }> = {};
         if (uniqueSupplierIds.length > 0) {
             const { data: sups } = await supabase
                 .from('suppliers')
-                .select('id, name')
+                .select('id, name, nickname')
                 .in('id', uniqueSupplierIds);
-            if (sups) sups.forEach(s => { supplierMap[s.id] = s.name; });
+            if (sups) sups.forEach(s => { supplierMap[s.id] = { name: s.name, nickname: s.nickname }; });
         }
+        const nameMode = appSettingsService.get().supplierNameDisplay;
 
         // Fetch projects separately — same reason: avoid implicit FK join 404
         const uniqueProjectIds = Array.from(new Set((orders || []).map(o => o.project_id).filter(Boolean)));
@@ -156,7 +157,7 @@ export const orderService = {
                 projectClassification: project?.settings?.classification,
                 linkedProjectName: project?.settings?.linkedProjectName,
                 supplierId: item.supplier_id,
-                supplierName: supplierMap[item.supplier_id] || '-', // From manual map
+                supplierName: supplierMap[item.supplier_id] ? getSupplierDisplayName(supplierMap[item.supplier_id], nameMode) : '-', // From manual map
                 deliveryDate: item.delivery_date,
                 separationDate: item.separation_date,
                 shippedDate: item.shipped_date,
@@ -396,13 +397,14 @@ export const orderService = {
         return data;
     },
 
-    mapDbOrderToType(item: DbOrderRow, supplierMap: Record<string, string>): PurchaseOrder {
+    mapDbOrderToType(item: DbOrderRow, supplierMap: Record<string, { name: string; nickname?: string | null }>): PurchaseOrder {
+        const nameMode = appSettingsService.get().supplierNameDisplay;
         return {
             id: item.id,
             number: item.number,
             projectId: item.project_id,
             supplierId: item.supplier_id,
-            supplierName: supplierMap[item.supplier_id] || '-',
+            supplierName: supplierMap[item.supplier_id] ? getSupplierDisplayName(supplierMap[item.supplier_id], nameMode) : '-',
             deliveryDate: item.delivery_date,
             separationDate: item.separation_date,
             shippedDate: item.shipped_date,

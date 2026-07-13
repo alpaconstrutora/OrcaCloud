@@ -108,6 +108,7 @@ export interface QuotationResponse {
     requestId: string;
     supplierId: string;
     supplierName?: string;
+    supplierNickname?: string | null;
     items: {
         code: string;
         description: string;

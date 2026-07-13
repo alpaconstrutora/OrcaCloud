@@ -84,6 +84,7 @@ export interface Supplier {
     id: string;
     code?: string;
     name: string;
+    nickname?: string | null;
     contact_name?: string;
     email?: string;
     phone?: string;

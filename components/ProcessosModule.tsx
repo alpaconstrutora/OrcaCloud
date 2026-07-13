@@ -415,13 +415,13 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
 
 // ─── pendências ("pendente comigo") ─────────────────────────
 
-function PendingList({ organizationId, userId, onOpen }: { organizationId: string; userId: string; onOpen: (instanceId: string) => void }) {
+function PendingList({ organizationId, userId, onOpen }: { organizationId: string | null; userId: string; onOpen: (instanceId: string) => void }) {
     const [items, setItems] = useState<PendingStepItem[]>([]);
     const [approvals, setApprovals] = useState<PendingStepItem[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!organizationId || !userId) return;
+        if (!userId) return;
         setLoading(true);
         Promise.all([
             processService.listMyPendingSteps(organizationId, userId),
@@ -476,13 +476,12 @@ function InstanceCard({ instance, onOpen }: { instance: ProcessInstance & { temp
     );
 }
 
-function InstanceList({ organizationId, onOpen }: { organizationId: string; onOpen: (id: string) => void }) {
+function InstanceList({ organizationId, onOpen }: { organizationId: string | null; onOpen: (id: string) => void }) {
     const [instances, setInstances] = useState<(ProcessInstance & { template_name?: string })[]>([]);
     const [loading, setLoading] = useState(true);
     const [view, setView] = useState<'lista' | 'kanban'>('lista');
 
     useEffect(() => {
-        if (!organizationId) return;
         setLoading(true);
         processService.listInstances(organizationId).then(setInstances).finally(() => setLoading(false));
     }, [organizationId]);
@@ -533,13 +532,12 @@ function InstanceList({ organizationId, onOpen }: { organizationId: string; onOp
 
 // ─── dashboard de gargalos ──────────────────────────────────
 
-function ProcessDashboard({ organizationId }: { organizationId: string }) {
+function ProcessDashboard({ organizationId }: { organizationId: string | null }) {
     const [bottlenecks, setBottlenecks] = useState<ProcessStepBottleneck[]>([]);
     const [instances, setInstances] = useState<ProcessInstance[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!organizationId) return;
         setLoading(true);
         Promise.all([
             processService.getBottlenecks(organizationId),
@@ -609,14 +607,13 @@ function ProcessDashboard({ organizationId }: { organizationId: string }) {
 
 // ─── templates ──────────────────────────────────────────────
 
-function TemplateList({ organizationId, onCreate }: { organizationId: string; onCreate: () => void }) {
+function TemplateList({ organizationId, onCreate }: { organizationId: string | null; onCreate: () => void }) {
     const [templates, setTemplates] = useState<ProcessTemplate[]>([]);
     const [steps, setSteps] = useState<Record<string, ProcessTemplateStep[]>>({});
     const [expanded, setExpanded] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
     const reload = useCallback(() => {
-        if (!organizationId) return;
         setLoading(true);
         processService.listTemplates(organizationId).then(setTemplates).finally(() => setLoading(false));
     }, [organizationId]);
@@ -707,7 +704,10 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
                             <p className="text-xs text-gray-500">Fluxos padronizados, auditáveis e executáveis</p>
                         </div>
                     </div>
-                    <Button size="sm" onClick={() => setShowStart(true)}><Plus className="w-3.5 h-3.5" /> Iniciar Processo</Button>
+                    <Button size="sm" onClick={() => {
+                        if (!organizationId) { alert('Selecione uma organização específica para iniciar um processo.'); return; }
+                        setShowStart(true);
+                    }}><Plus className="w-3.5 h-3.5" /> Iniciar Processo</Button>
                 </div>
                 <div className="flex items-center gap-1 border-b border-gray-100 -mb-4 -mx-6 px-6">
                     {TABS.map(t => {
@@ -730,7 +730,10 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
                 {tab === 'pendente'  && <PendingList key={refreshKey} organizationId={organizationId} userId={userId} onOpen={setOpenInstanceId} />}
                 {tab === 'processos' && <InstanceList key={refreshKey} organizationId={organizationId} onOpen={setOpenInstanceId} />}
                 {tab === 'dashboard' && <ProcessDashboard key={refreshKey} organizationId={organizationId} />}
-                {tab === 'templates' && <TemplateList organizationId={organizationId} onCreate={() => setShowNewTemplate(true)} />}
+                {tab === 'templates' && <TemplateList organizationId={organizationId} onCreate={() => {
+                    if (!organizationId) { alert('Selecione uma organização específica para criar um template.'); return; }
+                    setShowNewTemplate(true);
+                }} />}
             </div>
 
             <StartInstanceModal

@@ -10,12 +10,13 @@ export const financialApprovalService = {
 
     // ── Configuração de faixas ────────────────────────────────
 
-    async listConfig(organizationId: string): Promise<FinancialApprovalConfig[]> {
-        const { data, error } = await supabase
+    async listConfig(organizationId: string | null): Promise<FinancialApprovalConfig[]> {
+        let q = supabase
             .from('financial_approval_config')
             .select('id,organization_id,faixa_min,faixa_max,required_levels,level1_label,level2_label,is_active,sort_order,created_at')
-            .eq('organization_id', organizationId)
             .order('faixa_min', { ascending: true });
+        if (organizationId) q = q.eq('organization_id', organizationId);
+        const { data, error } = await q;
         if (error) throw error;
         return (data || []) as FinancialApprovalConfig[];
     },

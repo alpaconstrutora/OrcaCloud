@@ -16,7 +16,7 @@ import MyTasksWidget from './MyTasksWidget';
 import { ApproveRejectModal, ENTITY_TAG } from './FinancialApprovalModule';
 
 interface Props {
-    organizationId: string;
+    organizationId: string | null;
     userEmail?: string;
     onNavigate: (view: string) => void;
 }
@@ -81,10 +81,6 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     const [cashflowLoading, setCashflowLoading] = React.useState(false);
 
     const load = React.useCallback(async () => {
-        if (!organizationId) {
-            setLoading(false);
-            return;
-        }
         setLoading(true);
 
         // Cada fonte é independente — uma RPC fora do ar não pode apagar as outras
@@ -225,7 +221,6 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // Faixa 3 — recarrega só o caixa projetado ao trocar o período (30/60/90 dias),
     // sem re-buscar as demais 5 fontes.
     React.useEffect(() => {
-        if (!organizationId) return;
         let cancelled = false;
         setCashflowLoading(true);
         financialIntelligenceService.getCashflowProjection(organizationId, cashflowDays)
@@ -266,14 +261,6 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         [scorecards],
     );
     const caixaProjetado = cashflow.length > 0 ? cashflow[cashflow.length - 1].saldo_acum : null;
-
-    if (!organizationId) {
-        return (
-            <div className="flex items-center justify-center h-48 text-sm text-gray-400">
-                Selecione uma organização para carregar a Central de Controle.
-            </div>
-        );
-    }
 
     return (
         <div className="space-y-6">
@@ -451,7 +438,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                 </div>
 
                 {/* Minhas Tarefas — movido de dentro do BIDashboard */}
-                <MyTasksWidget orgId={organizationId} onNavigate={onNavigate} />
+                <MyTasksWidget orgId={organizationId ?? undefined} onNavigate={onNavigate} />
             </div>
 
             {/* Faixa 3 — Resumo macro. Só 2 âncoras + link; o BI Executivo (BIDashboard)

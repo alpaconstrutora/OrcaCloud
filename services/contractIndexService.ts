@@ -98,19 +98,20 @@ export const contractIndexService = {
     },
 
     /** Verifica contratos com reajuste_proximo <= hoje e retorna lista */
-    listDueForReajuste: async (organizationId: string): Promise<{
+    listDueForReajuste: async (organizationId: string | null): Promise<{
         id: string; number: string; title: string; reajuste_index: string;
         reajuste_proximo: string; current_value: number;
     }[]> => {
         const today = new Date().toISOString().slice(0, 10);
-        const { data, error } = await supabase
+        let q = supabase
             .from('contracts')
             .select('id, number, title, reajuste_index, reajuste_proximo, current_value')
-            .eq('organization_id', organizationId)
             .eq('status', 'Ativo')
             .not('reajuste_index', 'is', null)
             .not('reajuste_proximo', 'is', null)
             .lte('reajuste_proximo', today);
+        if (organizationId) q = q.eq('organization_id', organizationId);
+        const { data, error } = await q;
         if (error) throw error;
         return data ?? [];
     },

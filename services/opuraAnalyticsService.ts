@@ -144,12 +144,12 @@ export const opuraAnalyticsService = {
    * sem trocar de tela = trocar o group-by sem novo round-trip de schema.
    */
   async pivot(
-    organizationId: string,
+    organizationId: string | null,
     dimension: OpuraDimension,
     filters: OpuraFilters = {},
   ): Promise<OpuraPivotRow[]> {
     const { data, error } = await supabase.rpc('fn_opura_pivot', {
-      p_organization_id:   organizationId,
+      p_organization_id:   organizationId || null,
       p_dimension:         dimension,
       p_date_field:        filters.dateField ?? 'transaction',
       p_date_from:         filters.dateFrom ?? null,
@@ -177,7 +177,7 @@ export const opuraAnalyticsService = {
    * Reusa fn_opura_pivot (sem RPC nova).
    */
   async compare(
-    organizationId: string,
+    organizationId: string | null,
     dimension: OpuraDimension,
     filtersA: OpuraFilters,
     filtersB: OpuraFilters,
@@ -267,13 +267,13 @@ export const opuraAnalyticsService = {
   },
 
   async entries(
-    organizationId: string,
+    organizationId: string | null,
     filters: OpuraEntryFilters = {},
     limit = 100,
     offset = 0,
   ): Promise<OpuraEntry[]> {
     const { data, error } = await supabase.rpc('fn_opura_entries', {
-      p_organization_id:    organizationId,
+      p_organization_id:    organizationId || null,
       p_date_field:         filters.dateField ?? 'transaction',
       p_date_from:          filters.dateFrom ?? null,
       p_date_to:            filters.dateTo ?? null,
@@ -301,13 +301,13 @@ export const opuraAnalyticsService = {
   },
 
   async obraKpis(
-    organizationId: string,
+    organizationId: string | null,
     projectId: string,
     dateFrom?: string,
     dateTo?: string,
   ): Promise<OpuraObraKpis | null> {
     const { data, error } = await supabase.rpc('fn_opura_obra_kpis', {
-      p_organization_id: organizationId,
+      p_organization_id: organizationId || null,
       p_project_id:      projectId,
       p_date_from:       dateFrom ?? null,
       p_date_to:         dateTo ?? null,
@@ -318,13 +318,13 @@ export const opuraAnalyticsService = {
   },
 
   async obraMensal(
-    organizationId: string,
+    organizationId: string | null,
     projectId: string,
     dateFrom?: string,
     dateTo?: string,
   ): Promise<OpuraObraMes[]> {
     const { data, error } = await supabase.rpc('fn_opura_obra_mensal', {
-      p_organization_id: organizationId,
+      p_organization_id: organizationId || null,
       p_project_id:      projectId,
       p_date_from:       dateFrom ?? null,
       p_date_to:         dateTo ?? null,
@@ -334,13 +334,13 @@ export const opuraAnalyticsService = {
   },
 
   async clienteKpis(
-    organizationId: string,
+    organizationId: string | null,
     clientId: string,
     dateFrom?: string,
     dateTo?: string,
   ): Promise<OpuraClienteKpis | null> {
     const { data, error } = await supabase.rpc('fn_opura_cliente_kpis', {
-      p_organization_id: organizationId,
+      p_organization_id: organizationId || null,
       p_client_id:       clientId,
       p_date_from:       dateFrom ?? null,
       p_date_to:         dateTo ?? null,
@@ -351,13 +351,13 @@ export const opuraAnalyticsService = {
   },
 
   async fornecedorKpis(
-    organizationId: string,
+    organizationId: string | null,
     supplierId: string,
     dateFrom?: string,
     dateTo?: string,
   ): Promise<OpuraFornecedorKpis | null> {
     const { data, error } = await supabase.rpc('fn_opura_fornecedor_kpis', {
-      p_organization_id: organizationId,
+      p_organization_id: organizationId || null,
       p_supplier_id:     supplierId,
       p_date_from:       dateFrom ?? null,
       p_date_to:         dateTo ?? null,

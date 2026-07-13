@@ -45,7 +45,7 @@ import type {
 } from '../types/areaEngine';
 
 interface AreaEngineModuleProps {
-    organizationId?: string;
+    organizationId?: string | null;
 }
 
 type TableView = 'resumo' | 'estrutura' | 'quadro_i' | 'quadro_ii' | 'quadro_ivb' | 'aprovacoes';
@@ -143,11 +143,10 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
     const canWriteBack = !!selectedVersion && !['draft', 'superseded', 'cancelled'].includes(selectedVersion.status);
 
     const loadProjects = React.useCallback(async () => {
-        if (!organizationId) return;
         setLoading(true);
         setError(null);
         try {
-            const rows = await areaEngineService.listProjects(organizationId);
+            const rows = await areaEngineService.listProjects(organizationId ?? null);
             setProjects(rows);
             setSelectedProjectId(prev => prev || rows[0]?.id || '');
         } catch (err) {
@@ -1000,10 +999,6 @@ export default function AreaEngineModule({ organizationId }: AreaEngineModulePro
         }
         return items;
     }, [structure]);
-
-    if (!organizationId) {
-        return <EmptyState message="Selecione uma organizacao para acessar o motor de areas." />;
-    }
 
     return (
         <div className="min-h-screen bg-slate-50 p-6 space-y-5">

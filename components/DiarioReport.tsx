@@ -16,7 +16,7 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 interface Props {
-  organizationId: string;
+  organizationId: string | null;
 }
 
 export default function DiarioReport({ organizationId }: Props) {
@@ -32,7 +32,6 @@ export default function DiarioReport({ organizationId }: Props) {
   const [dateTo,   setDateTo]   = useState(defaultTo);
 
   useEffect(() => {
-    if (!organizationId) return;
     setLoading(true);
     setError('');
     listJournalEntries(organizationId, { dateFrom, dateTo })

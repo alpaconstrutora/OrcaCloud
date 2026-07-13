@@ -210,7 +210,7 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
 // ── Componente Principal ──────────────────────────────────────────────────────
 
 interface DREReportProps {
-    organizationId: string;
+    organizationId: string | null;
 }
 
 const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
@@ -231,7 +231,6 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
     const [viewMode, setViewMode] = React.useState<'resumo' | 'detalhe' | 'por_obra'>('resumo');
 
     const load = React.useCallback(async () => {
-        if (!organizationId) return;
         setLoading(true);
         try {
             const [s, p] = await Promise.all([
@@ -250,7 +249,6 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
 
     // Lista de obras para o filtro (independe do período) — todas as obras
     React.useEffect(() => {
-        if (!organizationId) return;
         financialReportService.listObras(organizationId)
             .then(setObras)
             .catch(e => console.error('[DRE] obras', e));

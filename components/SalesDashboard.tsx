@@ -20,8 +20,8 @@ interface SalesDashboardProps {
 }
 
 export function SalesDashboard({ selectedBuildingId, mode = 'results', simulationParams, organizationId: propsOrganizationId }: SalesDashboardProps) {
-  const { activeOrganizationId, organizations } = useStore();
-  const organizationId = propsOrganizationId || activeOrganizationId || organizations[0]?.id;
+  const { activeOrganizationId } = useStore();
+  const organizationId = propsOrganizationId || activeOrganizationId || null;
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [periodMonths, setPeriodMonths] = useState(() => {
@@ -45,8 +45,6 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
   }, [startDate]);
 
   useEffect(() => {
-    if (!organizationId) return;
-    
     let isMounted = true;
     setLoading(true);
 

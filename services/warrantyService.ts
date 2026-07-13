@@ -24,9 +24,9 @@ export const warrantyService = {
         let query = supabase
             .from('warranty_claims')
             .select('*, warranty_term:warranty_terms(*)')
-            .eq('organization_id', filters.organization_id)
             .order('created_at', { ascending: false });
 
+        if (filters.organization_id) query = query.eq('organization_id', filters.organization_id);
         if (filters.project_id)  query = query.eq('project_id', filters.project_id);
         if (filters.client_id)   query = query.eq('client_id', filters.client_id);
         if (filters.in_warranty !== undefined) query = query.eq('in_warranty', filters.in_warranty);
@@ -214,14 +214,15 @@ export const warrantyService = {
     },
 
     // ── KPIs ─────────────────────────────────────────────────
-    async getKPIs(organizationId: string): Promise<WarrantyKPIs> {
+    async getKPIs(organizationId: string | null): Promise<WarrantyKPIs> {
         const now = new Date();
         const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
 
-        const { data, error } = await supabase
+        let q = supabase
             .from('warranty_claims')
-            .select('state, in_warranty, nps_nota, custo_real, sla_deadline, created_at')
-            .eq('organization_id', organizationId);
+            .select('state, in_warranty, nps_nota, custo_real, sla_deadline, created_at');
+        if (organizationId) q = q.eq('organization_id', organizationId);
+        const { data, error } = await q;
         if (error) throw error;
 
         const rows = data || [];

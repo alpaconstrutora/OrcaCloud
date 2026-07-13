@@ -4,13 +4,13 @@ import type { FinancialKPIs, FinancialTopSupplier, DREProjectSummary } from '../
 export const financialOverviewService = {
 
     async getKPIs(
-        organizationId: string,
+        organizationId: string | null,
         dateFrom: string,
         dateTo: string,
         projectId?: string,
     ): Promise<FinancialKPIs> {
         const { data, error } = await supabase.rpc('fn_financial_kpis', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_date_from:       dateFrom,
             p_date_to:         dateTo,
             p_project_id:      projectId ?? null,
@@ -24,13 +24,13 @@ export const financialOverviewService = {
     },
 
     async getTopSuppliers(
-        organizationId: string,
+        organizationId: string | null,
         dateFrom: string,
         dateTo: string,
         limit = 10,
     ): Promise<FinancialTopSupplier[]> {
         const { data, error } = await supabase.rpc('fn_top_suppliers_ap', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_date_from:       dateFrom,
             p_date_to:         dateTo,
             p_limit:           limit,
@@ -40,12 +40,12 @@ export const financialOverviewService = {
     },
 
     async getTopProjects(
-        organizationId: string,
+        organizationId: string | null,
         dateFrom: string,
         dateTo: string,
     ): Promise<DREProjectSummary[]> {
         const { data, error } = await supabase.rpc('fn_dre_projects_summary', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_date_from:       dateFrom,
             p_date_to:         dateTo,
         });

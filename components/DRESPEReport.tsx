@@ -9,7 +9,7 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 const fmtPct = (v: number | null) => v === null ? '—' : `${v.toFixed(1)}%`
 
 interface Props {
-    organizationId: string
+    organizationId: string | null
 }
 
 const COLS: { label: string; key: keyof DRESPELine; help?: string }[] = [
@@ -41,7 +41,6 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
     const [loading, setLoading]   = React.useState(false)
 
     const load = React.useCallback(async () => {
-        if (!organizationId) return
         setLoading(true)
         try {
             const rows = await financialReportService.getDRESPESummary(organizationId, dateFrom, dateTo, regime)

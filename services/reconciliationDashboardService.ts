@@ -23,12 +23,12 @@ export const reconciliationDashboardService = {
      * por conta e no total da organização, na data de referência informada.
      */
     async getDashboard(
-        organizationId: string,
+        organizationId: string | null,
         asOf?: string,
     ): Promise<ReconciliationDashboard> {
         const asOfDate = asOf ?? new Date().toISOString().split('T')[0];
         const { data, error } = await supabase.rpc('fn_reconciliation_dashboard', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_as_of:           asOfDate,
         });
         if (error) throw error;
@@ -39,12 +39,12 @@ export const reconciliationDashboardService = {
      * Visão consolidada multicontas: caixa por empresa (SPE) e por obra.
      */
     async getConsolidated(
-        organizationId: string,
+        organizationId: string | null,
         asOf?: string,
     ): Promise<ReconciliationConsolidated> {
         const asOfDate = asOf ?? new Date().toISOString().split('T')[0];
         const { data, error } = await supabase.rpc('fn_reconciliation_consolidated', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_as_of:           asOfDate,
         });
         if (error) throw error;

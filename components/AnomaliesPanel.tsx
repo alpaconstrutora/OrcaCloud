@@ -47,7 +47,7 @@ function Section({ title, subtitle, count, icon: Icon, accent, children }: Secti
 }
 
 interface AnomaliesPanelProps {
-    organizationId: string;
+    organizationId: string | null;
 }
 
 const AnomaliesPanel: React.FC<AnomaliesPanelProps> = ({ organizationId }) => {
@@ -56,7 +56,6 @@ const AnomaliesPanel: React.FC<AnomaliesPanelProps> = ({ organizationId }) => {
     const [loading, setLoading] = useState(false);
 
     const load = useCallback(async () => {
-        if (!organizationId) return;
         setLoading(true);
         try {
             setData(await reconciliationAnomalyService.getAnomalies(organizationId));

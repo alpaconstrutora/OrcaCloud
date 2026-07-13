@@ -240,8 +240,7 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
 
     // load projects
     useEffect(() => {
-        if (!activeOrganizationId) return;
-        projectService.listProjects(undefined, activeOrganizationId).then(list => {
+        projectService.listProjects(undefined, activeOrganizationId ?? undefined).then(list => {
             const filtered = (list ?? []).filter(p =>
                 ((p.settings as any)?.classification === 'PLANEJAMENTO' ||
                 (p.settings as any)?.classification === 'OBRA') &&
@@ -259,14 +258,13 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
 
     // load suppliers
     useEffect(() => {
-        if (!activeOrganizationId) return;
-        supplierService.listSuppliers(activeOrganizationId).then(list =>
+        supplierService.listSuppliers(activeOrganizationId ?? undefined).then(list =>
             setSuppliers((list ?? []).map(s => ({ id: s.id, name: s.name })))
         );
     }, [activeOrganizationId]);
 
     const loadData = useCallback(async () => {
-        if (!activeOrganizationId || !selectedProjectId) return;
+        if (!selectedProjectId) return;
         setLoading(true);
         setError(null);
         try {

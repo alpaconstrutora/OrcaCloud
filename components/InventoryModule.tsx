@@ -385,7 +385,6 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     const [approvingRequest, setApprovingRequest] = React.useState<MaterialRequest | null>(null);
 
     const load = React.useCallback(async () => {
-        if (!activeOrganizationId) return;
         setLoading(true);
         try {
             const whs = await inventoryService.listWarehouses(activeOrganizationId, false);
@@ -416,7 +415,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     React.useEffect(() => { load(); }, [load]);
 
     React.useEffect(() => {
-        if (!activeOrganizationId || tab !== 'requisicoes') return;
+        if (tab !== 'requisicoes') return;
         inventoryService.listMaterialRequests(activeOrganizationId).then(setRequests).catch(console.error);
     }, [tab, activeOrganizationId]);
 
@@ -434,14 +433,6 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
 
     const totalValue = balances.reduce((s, b) => s + b.totalValue, 0);
     const lowStock = balances.filter(b => b.quantity <= 0).length;
-
-    if (!activeOrganizationId) {
-        return (
-            <div className="flex items-center justify-center h-64 text-gray-400">
-                <p>Selecione uma organização para acessar o Almoxarifado.</p>
-            </div>
-        );
-    }
 
     return (
         <div className="space-y-6">
@@ -1063,7 +1054,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     )}
 
                     {/* ── TAB: REQUISIÇÕES ── */}
-                    {tab === 'requisicoes' && (
+                    {tab === 'requisicoes' && activeOrganizationId && (
                         <RequisitionsTab
                             orgId={activeOrganizationId}
                             warehouses={warehouses.filter(w => w.isActive)}
@@ -1077,10 +1068,15 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                             reload={() => inventoryService.listMaterialRequests(activeOrganizationId).then(setRequests)}
                         />
                     )}
+                    {tab === 'requisicoes' && !activeOrganizationId && (
+                        <p className="text-sm text-gray-400 text-center py-12">
+                            Requisições de materiais exigem uma organização específica — selecione uma (não "Todas") para criar ou ver requisições.
+                        </p>
+                    )}
                 </>
             )}
 
-            {movementModal && (
+            {movementModal && activeOrganizationId && (
                 <MovementModal
                     orgId={activeOrganizationId}
                     warehouses={warehouses.filter(w => w.isActive)}
@@ -1089,7 +1085,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     onCreated={() => { setMovementModal(null); load(); }}
                 />
             )}
-            {warehouseModal && (
+            {warehouseModal && activeOrganizationId && (
                 <WarehouseModal
                     orgId={activeOrganizationId}
                     projects={projects.filter(p => p.id).map(p => ({ id: p.id as string, name: p.name }))}
@@ -1098,7 +1094,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                     onSaved={() => { setWarehouseModal(null); load(); }}
                 />
             )}
-            {transferModal && (
+            {transferModal && activeOrganizationId && (
                 <TransferModal
                     orgId={activeOrganizationId}
                     warehouses={warehouses.filter(w => w.isActive)}

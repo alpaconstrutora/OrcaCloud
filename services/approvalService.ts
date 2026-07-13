@@ -76,9 +76,9 @@ export const approvalService = {
      * aprovação mas ainda não estão APROVADO, por entidade. Read-only — alimenta
      * o indicador/alerta na UI. Não bloqueia nada.
      */
-    async getPendingSummary(organizationId: string): Promise<ApprovalPendingSummary[]> {
+    async getPendingSummary(organizationId: string | null): Promise<ApprovalPendingSummary[]> {
         const { data, error } = await supabase.rpc('fn_approval_pending_summary', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
         });
         if (error) {
             console.error('[approvalService] getPendingSummary:', error);
@@ -92,9 +92,9 @@ export const approvalService = {
      * da faixa que precisam de ação — RASCUNHO (a submeter) ou PENDENTE (a aprovar).
      * Cada item traz `entity` para a UI despachar a ação ao serviço de domínio.
      */
-    async listActionQueue(organizationId: string): Promise<ActionQueueItem[]> {
+    async listActionQueue(organizationId: string | null): Promise<ActionQueueItem[]> {
         const { data, error } = await supabase.rpc('fn_approval_action_queue', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
         });
         if (error) {
             console.error('[approvalService] listActionQueue:', error);

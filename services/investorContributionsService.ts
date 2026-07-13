@@ -63,13 +63,13 @@ export const investorContributionsService = {
     },
 
     /** Lista contribuições de um investidor em toda a organização (visão de portfólio). */
-    async listByInvestor(organizationId: string, investorId?: string): Promise<InvestorContribution[]> {
+    async listByInvestor(organizationId: string | null, investorId?: string): Promise<InvestorContribution[]> {
         let query = supabase
             .from('investor_contributions')
             .select(CONTRIB_COLS)
-            .eq('organization_id', organizationId)
             .order('due_date', { ascending: true });
 
+        if (organizationId) query = query.eq('organization_id', organizationId);
         if (investorId) query = query.eq('investor_id', investorId);
 
         const { data, error } = await query;

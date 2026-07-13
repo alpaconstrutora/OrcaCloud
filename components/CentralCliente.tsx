@@ -47,7 +47,7 @@ function KPICard({ label, value, sub, icon: Icon, color }: {
 
 // ── Componente ──────────────────────────────────────────────────────────────────
 interface CentralClienteProps {
-    organizationId: string;
+    organizationId: string | null;
 }
 
 const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
@@ -69,15 +69,13 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
     const [entriesLoading, setEntriesLoading] = React.useState(false);
 
     React.useEffect(() => {
-        if (!organizationId) return;
         (async () => {
             // Clientes legados têm organization_id = NULL (globais) — incluí-los,
-            // como faz o clientService padrão.
-            const { data, error } = await supabase
-                .from('clients')
-                .select('id, name, document')
-                .or(`organization_id.eq.${organizationId},organization_id.is.null`)
-                .order('name');
+            // como faz o clientService padrão. Sem organização selecionada
+            // ("Todas"), não filtra — a RLS já restringe às organizações do usuário.
+            let query = supabase.from('clients').select('id, name, document').order('name');
+            if (organizationId) query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
+            const { data, error } = await query;
             if (error) { showToast(`Erro ao carregar clientes: ${error.message}`, 'error'); return; }
             const list = (data || []) as ClientLite[];
             setClients(list);
@@ -88,7 +86,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
     const selected = clients.find(c => c.id === clientId) ?? null;
 
     const load = React.useCallback(async () => {
-        if (!organizationId || !clientId) return;
+        if (!clientId) return;
         setLoading(true);
         setError(null);
         try {

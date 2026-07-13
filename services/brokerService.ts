@@ -165,13 +165,13 @@ export const brokerService = {
     },
 
     // --- Broker Commissions ---
-    async listCommissions(organizationId: string, brokerEmail?: string) {
+    async listCommissions(organizationId: string | null, brokerEmail?: string) {
         console.log(`[BROKER SERVICE] listing commissions for org: ${organizationId}, email: ${brokerEmail}`);
         let query = supabase
             .from('broker_portal_commissions')
             .select('id, organization_id, proposal_id, broker_email, unit_number, block, buyer_name, sale_value, commission_pct, commission_predicted, commission_released, commission_paid, status, milestones, created_at, updated_at')
-            .eq('organization_id', organizationId)
             .order('created_at', { ascending: false });
+        if (organizationId) query = query.eq('organization_id', organizationId);
 
         if (brokerEmail) {
             // Case insensitive search using ilike

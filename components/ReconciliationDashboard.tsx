@@ -44,7 +44,7 @@ function KPICard({ label, value, icon: Icon, iconBg, hint, tone = 'neutral' }: K
 }
 
 interface ReconciliationDashboardProps {
-    organizationId: string;
+    organizationId: string | null;
 }
 
 const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ organizationId }) => {
@@ -61,7 +61,6 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
     const [saving, setSaving] = useState(false);
 
     const load = useCallback(async () => {
-        if (!organizationId) return;
         setLoading(true);
         try {
             const [d, cons] = await Promise.all([

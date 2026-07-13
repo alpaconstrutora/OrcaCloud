@@ -412,7 +412,7 @@ const HORIZONS = [7, 30, 60, 90, 180, 365] as const;
 type Horizon = typeof HORIZONS[number];
 
 interface Props {
-    organizationId: string;
+    organizationId: string | null;
 }
 
 export default function FinancialCalendar({ organizationId }: Props) {
@@ -437,7 +437,6 @@ export default function FinancialCalendar({ organizationId }: Props) {
 
     // Reload events when org or horizon changes
     const loadEvents = useCallback(async () => {
-        if (!organizationId) return;
         setLoading(true);
         setError(null);
         try {
@@ -454,7 +453,7 @@ export default function FinancialCalendar({ organizationId }: Props) {
 
     // Load titles when a date is selected
     useEffect(() => {
-        if (!selectedDate || !organizationId) return;
+        if (!selectedDate) return;
         setLoadingTitles(true);
         financialCalendarService.getTitlesForDay(organizationId, selectedDate)
             .then(setDayTitles)

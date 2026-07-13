@@ -462,7 +462,7 @@ export interface TaxonomyPathology {
 // ────────────────────────────────────────────────────────────
 
 export interface ConditionFilters {
-  organizationId: string
+  organizationId: string | null
   empreendimentoId?: string
   state?: ConditionState[]
   severity?: Severity[]

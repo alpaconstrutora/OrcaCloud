@@ -117,13 +117,14 @@ export const processService = {
 
     // ── Templates ────────────────────────────────────────────
 
-    async listTemplates(organizationId: string): Promise<ProcessTemplate[]> {
-        const { data, error } = await supabase
+    async listTemplates(organizationId: string | null): Promise<ProcessTemplate[]> {
+        let q = supabase
             .from('process_templates')
             .select('*')
-            .eq('organization_id', organizationId)
             .neq('status', 'ARQUIVADO')
             .order('name');
+        if (organizationId) q = q.eq('organization_id', organizationId);
+        const { data, error } = await q;
         if (error) {
             console.error('[processService] listTemplates:', error);
             throw new Error(`Erro ao carregar templates: ${error.message}`);
@@ -182,12 +183,12 @@ export const processService = {
 
     // ── Instâncias ───────────────────────────────────────────
 
-    async listInstances(organizationId: string, filters?: { status?: ProcessInstanceStatus }): Promise<(ProcessInstance & { template_name?: string })[]> {
+    async listInstances(organizationId: string | null, filters?: { status?: ProcessInstanceStatus }): Promise<(ProcessInstance & { template_name?: string })[]> {
         let q = supabase
             .from('process_instances')
             .select('*, process_templates(name)')
-            .eq('organization_id', organizationId)
             .order('started_at', { ascending: false });
+        if (organizationId) q = q.eq('organization_id', organizationId);
         if (filters?.status) q = q.eq('status', filters.status);
 
         const { data, error } = await q;
@@ -387,8 +388,8 @@ export const processService = {
 
     // ── Dashboard de gargalos (Fase 2) ───────────────────────────
 
-    async getBottlenecks(organizationId: string): Promise<ProcessStepBottleneck[]> {
-        const { data, error } = await supabase.rpc('fn_process_bottlenecks', { p_organization_id: organizationId });
+    async getBottlenecks(organizationId: string | null): Promise<ProcessStepBottleneck[]> {
+        const { data, error } = await supabase.rpc('fn_process_bottlenecks', { p_organization_id: organizationId || null });
         if (error) {
             console.error('[processService] getBottlenecks:', error);
             throw new Error(`Erro ao carregar gargalos: ${error.message}`);
@@ -483,13 +484,14 @@ export const processService = {
 
     // ── Pendências ("pendente comigo") ──────────────────────────
 
-    async listMyPendingSteps(organizationId: string, userId: string): Promise<PendingStepItem[]> {
-        const { data, error } = await supabase
+    async listMyPendingSteps(organizationId: string | null, userId: string): Promise<PendingStepItem[]> {
+        let q = supabase
             .from('process_instance_steps')
             .select('*, process_instances!inner(title, status, priority, organization_id)')
             .eq('responsible_user_id', userId)
-            .eq('process_instances.organization_id', organizationId)
             .in('status', ['PENDENTE', 'EM_ANDAMENTO']);
+        if (organizationId) q = q.eq('process_instances.organization_id', organizationId);
+        const { data, error } = await q;
         if (error) {
             console.error('[processService] listMyPendingSteps:', error);
             throw new Error(`Erro ao carregar pendências: ${error.message}`);
@@ -503,13 +505,14 @@ export const processService = {
     },
 
     /** Aprovações de etapa pendentes (fila própria — fn_approval_action_queue ainda não cobre 'process_step'). */
-    async listMyPendingApprovals(organizationId: string): Promise<PendingStepItem[]> {
-        const { data, error } = await supabase
+    async listMyPendingApprovals(organizationId: string | null): Promise<PendingStepItem[]> {
+        let q = supabase
             .from('process_instance_steps')
             .select('*, process_instances!inner(title, status, priority, organization_id)')
             .eq('step_type', 'approval')
-            .eq('approval_status', 'PENDENTE')
-            .eq('process_instances.organization_id', organizationId);
+            .eq('approval_status', 'PENDENTE');
+        if (organizationId) q = q.eq('process_instances.organization_id', organizationId);
+        const { data, error } = await q;
         if (error) {
             console.error('[processService] listMyPendingApprovals:', error);
             throw new Error(`Erro ao carregar aprovações pendentes: ${error.message}`);

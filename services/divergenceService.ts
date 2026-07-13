@@ -28,12 +28,12 @@ export const divergenceService = {
      * Retorna as divergências de conciliação classificadas em três tipos.
      */
     async getDivergences(
-        organizationId: string,
+        organizationId: string | null,
         opts: DivergenceOptions = {},
     ): Promise<ReconciliationDivergences> {
         const asOf = opts.asOf ?? new Date().toISOString().split('T')[0];
         const { data, error } = await supabase.rpc('fn_reconciliation_divergences', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_as_of:           asOf,
             p_aging_days:      opts.agingDays ?? 5,
             p_value_tolerance: opts.valueTolerance ?? 50,

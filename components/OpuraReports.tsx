@@ -72,7 +72,7 @@ function toDisplay(rows: OpuraPivotRow[]): DisplayRow[] {
 // ── Componente principal ───────────────────────────────────────────────────────
 
 interface OpuraReportsProps {
-    organizationId: string;
+    organizationId: string | null;
 }
 
 const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
@@ -109,11 +109,6 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
     }), [dateField, dateFrom, dateTo, direction, status]);
 
     const load = React.useCallback(async () => {
-        if (!organizationId) {
-            setRows([]);
-            setError('Nenhuma organização ativa selecionada.');
-            return;
-        }
         setLoading(true);
         setError(null);
         try {

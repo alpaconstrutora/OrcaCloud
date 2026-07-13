@@ -236,12 +236,13 @@ function floorLabelFromNumber(floorNumber: number): string {
 }
 
 export const areaEngineService = {
-    async listProjects(organizationId: string): Promise<AreaProject[]> {
-        const { data, error } = await supabase
+    async listProjects(organizationId: string | null): Promise<AreaProject[]> {
+        let q = supabase
             .from('area_projects')
             .select('*')
-            .eq('organization_id', organizationId)
             .order('updated_at', { ascending: false });
+        if (organizationId) q = q.eq('organization_id', organizationId);
+        const { data, error } = await q;
 
         if (error) raiseAreaEngineError('listProjects', error);
         return (data || []) as AreaProject[];

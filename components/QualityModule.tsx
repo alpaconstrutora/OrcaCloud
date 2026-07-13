@@ -14,7 +14,7 @@ import ConditionDetailPanel from './quality/ConditionDetailPanel';
 interface ObraRef { id: string; name: string; }
 
 interface QualityModuleProps {
-  organizationId: string;
+  organizationId: string | null;
   userId: string;
   userName: string;
   userRole?: string;
@@ -101,11 +101,6 @@ const QualityModule: React.FC<QualityModuleProps> = ({
   }), [userId, userName, userRole]);
 
   const loadConditions = React.useCallback(async () => {
-    if (!organizationId) {
-      setConditions([]);
-      setIsLoading(false);
-      return;
-    }
     setIsLoading(true);
     setError(null);
     try {
@@ -262,7 +257,7 @@ const QualityModule: React.FC<QualityModuleProps> = ({
         </div>
 
         {/* Painel de detalhe */}
-        {selectedId && selectedCondition && (
+        {selectedId && selectedCondition && organizationId && (
           <div className="w-3/5 border-l border-gray-200 bg-white overflow-y-auto">
             <ConditionDetailPanel
               condition={selectedCondition}
@@ -276,7 +271,7 @@ const QualityModule: React.FC<QualityModuleProps> = ({
       </div>
 
       {/* Modal de detecção */}
-      {isDetectOpen && (
+      {isDetectOpen && organizationId && (
         <DetectConditionModal
           organizationId={organizationId}
           obras={obras}

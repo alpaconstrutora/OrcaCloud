@@ -29,7 +29,7 @@ export const financialReportService = {
 
     // ── DRE ───────────────────────────────────────────────────
     async getDREDetail(
-        organizationId: string,
+        organizationId: string | null,
         dateFrom: string,
         dateTo: string,
         empresaId?: string,
@@ -37,7 +37,7 @@ export const financialReportService = {
         regime: RegimeContabil = 'CAIXA',
     ): Promise<DRELine[]> {
         const { data, error } = await supabase.rpc('fn_dre', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_date_from:       dateFrom,
             p_date_to:         dateTo,
             p_empresa_id:      empresaId ?? null,
@@ -49,7 +49,7 @@ export const financialReportService = {
     },
 
     async getDRESummary(
-        organizationId: string,
+        organizationId: string | null,
         dateFrom: string,
         dateTo: string,
         projectId?: string,
@@ -57,14 +57,14 @@ export const financialReportService = {
     ): Promise<DRESummary> {
         const [summaryRes, detailRes] = await Promise.all([
             supabase.rpc('fn_dre_summary', {
-                p_organization_id: organizationId,
+                p_organization_id: organizationId || null,
                 p_date_from:       dateFrom,
                 p_date_to:         dateTo,
                 p_project_id:      projectId ?? null,
                 p_regime:          regime,
             }),
             supabase.rpc('fn_dre', {
-                p_organization_id: organizationId,
+                p_organization_id: organizationId || null,
                 p_date_from:       dateFrom,
                 p_date_to:         dateTo,
                 p_empresa_id:      null,
@@ -107,10 +107,10 @@ export const financialReportService = {
     // Todas as obras da org, com ou sem movimentação. Exclui
     // orçamentos/planejamentos/diários e o vault "Gestão Comercial".
     async listObras(
-        organizationId: string,
+        organizationId: string | null,
     ): Promise<{ project_id: string; project_name: string; code: string | null }[]> {
         const { data, error } = await supabase.rpc('fn_list_obras', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
         });
         if (error) throw error;
         return (data || []) as { project_id: string; project_name: string; code: string | null }[];
@@ -118,12 +118,12 @@ export const financialReportService = {
 
     // ── DRE por Obra (comparativo) ────────────────────────────
     async getDREByProject(
-        organizationId: string,
+        organizationId: string | null,
         dateFrom: string,
         dateTo: string,
     ): Promise<DREProjectSummary[]> {
         const { data, error } = await supabase.rpc('fn_dre_projects_summary', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_date_from:       dateFrom,
             p_date_to:         dateTo,
         });
@@ -136,14 +136,14 @@ export const financialReportService = {
 
     // ── Balancete Gerencial ───────────────────────────────────
     async getBalancete(
-        organizationId: string,
+        organizationId: string | null,
         dateFrom: string,
         dateTo: string,
         projectId?: string,
         regime: RegimeContabil = 'CAIXA',
     ): Promise<BalanceteLine[]> {
         const { data, error } = await supabase.rpc('fn_balancete', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_date_from:       dateFrom,
             p_date_to:         dateTo,
             p_project_id:      projectId ?? null,
@@ -155,13 +155,13 @@ export const financialReportService = {
 
     // ── DRE por SPE ───────────────────────────────────────────
     async getDRESPESummary(
-        organizationId: string,
+        organizationId: string | null,
         dateFrom: string,
         dateTo: string,
         regime: RegimeContabil = 'CAIXA',
     ): Promise<DRESPELine[]> {
         const { data, error } = await supabase.rpc('fn_dre_spe_summary', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_date_from:       dateFrom,
             p_date_to:         dateTo,
             p_regime:          regime,
@@ -178,11 +178,11 @@ export const financialReportService = {
 
     // ── WIP — Work In Progress ────────────────────────────────
     async getProjectWIP(
-        organizationId: string,
+        organizationId: string | null,
         dateTo?: string,
     ): Promise<WIPLine[]> {
         const { data, error } = await supabase.rpc('fn_project_wip', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_date_to:         dateTo ?? new Date().toISOString().slice(0, 10),
         });
         if (error) throw error;
@@ -191,13 +191,11 @@ export const financialReportService = {
 
     // ── Empresas da org (para filtro SPE) ────────────────────
     async listEmpresas(
-        organizationId: string,
+        organizationId: string | null,
     ): Promise<{ id: string; nome: string }[]> {
-        const { data, error } = await supabase
-            .from('companies')
-            .select('id, nome_fantasia, razao_social')
-            .eq('org_id', organizationId)
-            .order('razao_social');
+        let query = supabase.from('companies').select('id, nome_fantasia, razao_social').order('razao_social');
+        if (organizationId) query = query.eq('org_id', organizationId);
+        const { data, error } = await query;
         if (error) throw error;
         return (data || []).map(c => ({
             id:   c.id as string,
@@ -207,13 +205,13 @@ export const financialReportService = {
 
     // ── Fluxo de Caixa ────────────────────────────────────────
     async getCashFlow(
-        organizationId: string,
+        organizationId: string | null,
         dateFrom: string,
         dateTo: string,
         granularity: CashFlowGranularity = 'month',
     ): Promise<CashFlowSummary> {
         const { data, error } = await supabase.rpc('fn_cash_flow', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_date_from:       dateFrom,
             p_date_to:         dateTo,
             p_granularity:     granularity,

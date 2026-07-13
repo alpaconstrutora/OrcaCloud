@@ -24,14 +24,14 @@ export interface DashboardMetrics {
 }
 
 export const salesDashboardService = {
-  async getDashboardMetrics(organizationId: string, projectId?: string | null, periodMonths: number = 12, startDate?: string): Promise<DashboardMetrics> {
+  async getDashboardMetrics(organizationId: string | null, projectId?: string | null, periodMonths: number = 12, startDate?: string): Promise<DashboardMetrics> {
     try {
-      
+
       // 1. Fetch properties for VGV Total and Estoque
       let propertiesQuery = supabase
         .from('commercial_properties')
-        .select('id, initial_price, price, status, purpose')
-        .eq('organization_id', organizationId);
+        .select('id, initial_price, price, status, purpose');
+      if (organizationId) propertiesQuery = propertiesQuery.eq('organization_id', organizationId);
 
       if (projectId) {
         propertiesQuery = propertiesQuery.eq('parent_id', projectId);
@@ -58,8 +58,8 @@ export const salesDashboardService = {
       let dealsQuery = supabase
         .from('commercial_deals')
         .select('id, value, status, type, date, property_id, origin_channel')
-        .eq('organization_id', organizationId)
         .eq('type', 'SALE');
+      if (organizationId) dealsQuery = dealsQuery.eq('organization_id', organizationId);
 
       const { data: deals, error: dealsError } = await dealsQuery;
       if (dealsError) throw dealsError;
@@ -76,11 +76,12 @@ export const salesDashboardService = {
       // 3. Fetch Proposals for Funnel and Brokers (Graceful error handling)
       let filteredProposals: any[] = [];
       try {
-        const { data: proposals, error: proposalsError } = await supabase
+        let proposalsQuery = supabase
           .from('broker_portal_proposals')
-          .select('id, broker_email, total_value, status, created_at')
-          .eq('organization_id', organizationId);
-        
+          .select('id, broker_email, total_value, status, created_at');
+        if (organizationId) proposalsQuery = proposalsQuery.eq('organization_id', organizationId);
+        const { data: proposals, error: proposalsError } = await proposalsQuery;
+
         if (!proposalsError) filteredProposals = proposals || [];
       } catch (e) {
         // Silently fail
@@ -89,11 +90,12 @@ export const salesDashboardService = {
       // 4. Fetch Clients for Funnel (Leads)
       let leadsCount = 0;
       try {
-        const { count, error: leadsError } = await supabase
+        let leadsQuery = supabase
           .from('clients')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', organizationId);
-        
+          .select('*', { count: 'exact', head: true });
+        if (organizationId) leadsQuery = leadsQuery.eq('organization_id', organizationId);
+        const { count, error: leadsError } = await leadsQuery;
+
         if (!leadsError) leadsCount = count || 0;
       } catch (e) {
         // Silently fail

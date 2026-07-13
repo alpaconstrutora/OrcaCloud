@@ -417,7 +417,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<Spinner />}>
           <OpuraMarketModule
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
             setActiveView={setActiveView}
           />
         </React.Suspense>
@@ -916,7 +916,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
     case 'controladoria':
       return (
         <ControladoriaModule
-          organizationId={activeOrganizationId || organizations[0]?.id || ''}
+          organizationId={activeOrganizationId || ''}
           organizations={organizations}
           userEmail={session?.user?.email}
           defaultTab={VIEW_TO_CONTROLADORIA_TAB[activeView] || 'dre'}
@@ -1194,7 +1194,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
     case 'central':
       return (
         <CentralControle
-          organizationId={activeOrganizationId || organizations[0]?.id || ''}
+          organizationId={activeOrganizationId || ''}
           userEmail={session?.user?.email}
           onNavigate={setActiveView}
         />
@@ -1204,7 +1204,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
     case 'bi-executivo':
       return (
         <BIDashboard
-          organizationId={activeOrganizationId || organizations[0]?.id || ''}
+          organizationId={activeOrganizationId || ''}
           onNavigate={setActiveView}
         />
       );
@@ -1214,7 +1214,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <OpuraReports
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
           />
         </React.Suspense>
       );
@@ -1224,7 +1224,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" /></div>}>
           <CentralObra
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
           />
         </React.Suspense>
       );
@@ -1234,7 +1234,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <CentralCliente
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
           />
         </React.Suspense>
       );
@@ -1244,7 +1244,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <CentralFornecedor
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
           />
         </React.Suspense>
       );
@@ -1254,7 +1254,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <FinancialDashboard
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
             onNavigate={setActiveView}
           />
         </React.Suspense>
@@ -1266,7 +1266,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <ClientChargesModule
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
           />
         </React.Suspense>
       );
@@ -1276,7 +1276,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <BoletoManager
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
             userEmail={session?.user?.email}
             organizations={organizations}
             onOrgChange={(id) => setActiveOrganizationId(id)}
@@ -1289,7 +1289,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <BankReconciliation
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
             defaultView="statement"
           />
         </React.Suspense>
@@ -1298,7 +1298,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <BankReconciliation
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
             defaultView="dashboard"
           />
         </React.Suspense>
@@ -1309,7 +1309,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <FinancialIntelligence
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
             onNavigate={setActiveView}
           />
         </React.Suspense>
@@ -1320,7 +1320,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <DunningModule
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
           />
         </React.Suspense>
       );
@@ -1330,7 +1330,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <FinancialCalendar
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
           />
         </React.Suspense>
       );
@@ -1340,7 +1340,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <FinancialApprovalModule
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
             userEmail={session?.user?.email}
           />
         </React.Suspense>
@@ -1351,7 +1351,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <ProcessosModule
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
             userId={session?.user?.id || ''}
             userEmail={session?.user?.email || ''}
           />
@@ -1363,7 +1363,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" /></div>}>
           <ContasReceberManager
-            organizationId={activeOrganizationId || organizations[0]?.id || ''}
+            organizationId={activeOrganizationId || ''}
             organizations={organizations}
             onOrgChange={(id) => setActiveOrganizationId(id)}
           />
@@ -1375,7 +1375,7 @@ const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
     case 'financial-cashflow':
       return (
         <ControladoriaModule
-          organizationId={activeOrganizationId || organizations[0]?.id || ''}
+          organizationId={activeOrganizationId || ''}
           organizations={organizations}
           userEmail={session?.user?.email}
           defaultTab={VIEW_TO_CONTROLADORIA_TAB[activeView] || 'dre'}

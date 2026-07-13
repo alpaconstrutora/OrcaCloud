@@ -399,7 +399,7 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
 // ─── main ────────────────────────────────────────────────────
 
 interface Props {
-    organizationId: string;
+    organizationId: string | null;
     onNavigate?: (view: string) => void;
 }
 
@@ -423,7 +423,6 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
     const [sendMsg, setSendMsg]             = useState<string | null>(null);
 
     const load = useCallback(async () => {
-        if (!organizationId) return;
         setLoading(true);
         setError(null);
         try {
@@ -474,7 +473,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
     async function handleSendNow(s: ReportSchedule) {
         setSendingId(s.id); setSendMsg(null);
         try {
-            const r = await reportScheduleService.sendNow(organizationId, s.id);
+            const r = await reportScheduleService.sendNow(s.organization_id, s.id);
             setSendMsg(r.message);
             setSchedules(prev => prev.map(x => x.id === s.id ? { ...x, last_sent_at: new Date().toISOString() } : x));
         } catch (e) {
@@ -728,7 +727,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                 </div>
 
                                 {/* Formulário */}
-                                {(showForm || editTarget) && (
+                                {(showForm || editTarget) && organizationId && (
                                     <ScheduleForm
                                         organizationId={organizationId}
                                         initial={editTarget}

@@ -16,12 +16,12 @@ export const reconciliationAnomalyService = {
      * valores fora do padrão histórico por contraparte.
      */
     async getAnomalies(
-        organizationId: string,
+        organizationId: string | null,
         opts: AnomalyOptions = {},
     ): Promise<ReconciliationAnomalies> {
         const asOf = opts.asOf ?? new Date().toISOString().split('T')[0];
         const { data, error } = await supabase.rpc('fn_reconciliation_anomalies', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_as_of:           asOf,
             p_lookback_days:   opts.lookbackDays ?? 180,
             p_dup_window_days: opts.dupWindowDays ?? 7,

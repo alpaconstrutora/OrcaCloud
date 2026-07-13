@@ -52,7 +52,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 };
 
 interface CashFlowDashboardProps {
-    organizationId: string;
+    organizationId: string | null;
 }
 
 const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId }) => {
@@ -66,7 +66,6 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId })
     const [chartMode, setChartMode] = React.useState<'acumulado' | 'periodo'>('acumulado');
 
     const load = React.useCallback(async () => {
-        if (!organizationId) return;
         setLoading(true);
         try {
             const d = await financialReportService.getCashFlow(organizationId, dateFrom, dateTo, granularity);

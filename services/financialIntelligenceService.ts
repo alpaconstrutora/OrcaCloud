@@ -33,25 +33,25 @@ export interface CashflowProjectionPoint {
 
 export const financialIntelligenceService = {
 
-    async getAlerts(organizationId: string): Promise<FinancialAlert[]> {
+    async getAlerts(organizationId: string | null): Promise<FinancialAlert[]> {
         const { data, error } = await supabase.rpc('fn_financial_alerts', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
         });
         if (error) throw error;
         return (data || []) as FinancialAlert[];
     },
 
-    async getProjectScorecards(organizationId: string): Promise<ProjectScorecard[]> {
+    async getProjectScorecards(organizationId: string | null): Promise<ProjectScorecard[]> {
         const { data, error } = await supabase.rpc('fn_project_scorecard', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
         });
         if (error) throw error;
         return (data || []) as ProjectScorecard[];
     },
 
-    async getCashflowProjection(organizationId: string, days = 90): Promise<CashflowProjectionPoint[]> {
+    async getCashflowProjection(organizationId: string | null, days = 90): Promise<CashflowProjectionPoint[]> {
         const { data, error } = await supabase.rpc('fn_cashflow_projection', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_days: days,
         });
         if (error) throw error;

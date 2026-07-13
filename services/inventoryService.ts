@@ -109,12 +109,12 @@ export const inventoryService = {
 
     // ─── ALMOXARIFADOS ─────────────────────────────────────────────────────────
 
-    async listWarehouses(organizationId: string, activeOnly = true): Promise<Warehouse[]> {
+    async listWarehouses(organizationId: string | null, activeOnly = true): Promise<Warehouse[]> {
         let query = supabase
             .from('warehouses')
             .select(WAREHOUSE_COLS)
-            .eq('organization_id', organizationId)
             .order('name');
+        if (organizationId) query = query.eq('organization_id', organizationId);
         if (activeOnly) query = query.eq('is_active', true);
         const { data, error } = await query;
         if (error) throw error;
@@ -166,16 +166,16 @@ export const inventoryService = {
     // ─── MOVIMENTOS ────────────────────────────────────────────────────────────
 
     async listMovements(
-        organizationId: string,
+        organizationId: string | null,
         opts?: { warehouseId?: string; inputCode?: string; limit?: number }
     ): Promise<StockMovement[]> {
         let query = supabase
             .from('stock_movements')
             .select(MOVEMENT_COLS)
-            .eq('organization_id', organizationId)
             .order('moved_at', { ascending: false })
             .order('created_at', { ascending: false })
             .limit(opts?.limit ?? 200);
+        if (organizationId) query = query.eq('organization_id', organizationId);
         if (opts?.warehouseId) query = query.eq('warehouse_id', opts.warehouseId);
         if (opts?.inputCode) query = query.eq('input_code', opts.inputCode);
         const { data, error } = await query;
@@ -219,14 +219,14 @@ export const inventoryService = {
     // ─── SALDOS ────────────────────────────────────────────────────────────────
 
     async listBalances(
-        organizationId: string,
+        organizationId: string | null,
         opts?: { warehouseId?: string; positiveOnly?: boolean }
     ): Promise<StockBalance[]> {
         let query = supabase
             .from('stock_balances')
             .select(BALANCE_COLS)
-            .eq('organization_id', organizationId)
             .order('input_description');
+        if (organizationId) query = query.eq('organization_id', organizationId);
         if (opts?.warehouseId) query = query.eq('warehouse_id', opts.warehouseId);
         if (opts?.positiveOnly) query = query.gt('quantity', 0);
         const { data, error } = await query;
@@ -247,12 +247,12 @@ export const inventoryService = {
 
     // ─── LEAD TIME ─────────────────────────────────────────────────────────────
 
-    async listLeadTimes(organizationId: string, supplierId?: string): Promise<SupplierLeadTime[]> {
+    async listLeadTimes(organizationId: string | null, supplierId?: string): Promise<SupplierLeadTime[]> {
         let query = supabase
             .from('supplier_lead_times')
             .select(LEAD_TIME_COLS)
-            .eq('organization_id', organizationId)
             .order('created_at', { ascending: false });
+        if (organizationId) query = query.eq('organization_id', organizationId);
         if (supplierId) query = query.eq('supplier_id', supplierId);
         const { data, error } = await query;
         if (error) throw error;
@@ -391,7 +391,7 @@ export const inventoryService = {
     // ─── TRANSFERÊNCIAS (Fase 2) ───────────────────────────────────────────────
 
     async listTransfers(
-        organizationId: string,
+        organizationId: string | null,
         opts?: { status?: StockTransfer['status'] }
     ): Promise<StockTransfer[]> {
         let query = supabase
@@ -403,8 +403,8 @@ export const inventoryService = {
                 to_warehouse:warehouses!to_warehouse_id(name),
                 stock_transfer_items(id, transfer_id, input_code, input_description, input_unit, quantity)
             `)
-            .eq('organization_id', organizationId)
             .order('created_at', { ascending: false });
+        if (organizationId) query = query.eq('organization_id', organizationId);
         if (opts?.status) query = query.eq('status', opts.status);
         const { data, error } = await query;
         if (error) throw error;
@@ -487,11 +487,11 @@ export const inventoryService = {
     // ─── POSIÇÃO LÍQUIDA / fn_net_position (Fase 3) ────────────────────────────
 
     async getNetPositions(
-        organizationId: string,
+        organizationId: string | null,
         opts?: { warehouseId?: string; inputCode?: string }
     ): Promise<StockNetPosition[]> {
         const { data, error } = await supabase.rpc('fn_net_position', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_warehouse_id: opts?.warehouseId ?? null,
             p_input_code: opts?.inputCode ?? null,
         });
@@ -527,11 +527,11 @@ export const inventoryService = {
     // ─── INDICADORES DE GIRO (Fase 3) ──────────────────────────────────────────
 
     async getStockSummary(
-        organizationId: string,
+        organizationId: string | null,
         warehouseId?: string
     ): Promise<StockSummary[]> {
         const { data, error } = await supabase.rpc('fn_stock_summary', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_warehouse_id: warehouseId ?? null,
         });
         if (error) throw error;
@@ -619,12 +619,12 @@ export const inventoryService = {
 
     // ─── REQUISIÇÕES DE MATERIAIS ──────────────────────────────────────────────
 
-    async listMaterialRequests(organizationId: string, projectId?: string): Promise<MaterialRequest[]> {
+    async listMaterialRequests(organizationId: string | null, projectId?: string): Promise<MaterialRequest[]> {
         let q = supabase
             .from('material_requests')
             .select('id, organization_id, project_id, warehouse_id, number, requested_by, approved_by, status, notes, requested_at, approved_at, delivered_at, created_at, projects(name), warehouses(name)')
-            .eq('organization_id', organizationId)
             .order('created_at', { ascending: false });
+        if (organizationId) q = q.eq('organization_id', organizationId);
         if (projectId) q = q.eq('project_id', projectId);
         const { data, error } = await q;
         if (error) throw error;

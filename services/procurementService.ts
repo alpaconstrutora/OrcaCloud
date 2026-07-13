@@ -580,7 +580,7 @@ export const procurementService = {
     },
 
     async listPlanItems(
-        organizationId: string,
+        organizationId: string | null,
         projectId?: string,
         status?: ProcurementStatus | ProcurementStatus[],
         onlyStale?: boolean,
@@ -599,9 +599,9 @@ export const procurementService = {
                 generated_quotation_id, generated_order_id,
                 notes, created_at, updated_at
             `)
-            .eq('organization_id', organizationId)
             .order('suggested_buy_date', { ascending: true });
 
+        if (organizationId) q = q.eq('organization_id', organizationId);
         if (projectId) q = q.eq('project_id', projectId);
         if (onlyStale) q = q.eq('is_stale', true);
         if (status) {
@@ -639,11 +639,11 @@ export const procurementService = {
     },
 
     async getMonthlySpend(
-        organizationId: string,
+        organizationId: string | null,
         projectId?: string,
     ): Promise<ProcurementMonthlySpend[]> {
         const { data, error } = await supabase.rpc('fn_procurement_monthly_spend', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_project_id:      projectId ?? null,
         });
         if (error) throw error;
@@ -657,13 +657,13 @@ export const procurementService = {
         }));
     },
 
-    async getKPIs(organizationId: string, projectId?: string): Promise<ProcurementKPIs> {
+    async getKPIs(organizationId: string | null, projectId?: string): Promise<ProcurementKPIs> {
         let q = supabase
             .from('procurement_plan_items')
             .select('id, net_required_qty, estimated_total, suggested_buy_date, is_stale, status')
-            .eq('organization_id', organizationId)
             .neq('status', 'cancelled');
 
+        if (organizationId) q = q.eq('organization_id', organizationId);
         if (projectId) q = q.eq('project_id', projectId);
 
         const { data, error } = await q;

@@ -48,7 +48,7 @@ interface GroupSubtotal {
 // ── Componente ────────────────────────────────────────────────────────────────
 
 interface Props {
-    organizationId: string
+    organizationId: string | null
 }
 
 const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
@@ -62,7 +62,6 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
     const [expanded, setExpanded] = React.useState<Set<DREGroup>>(new Set(GROUP_ORDER))
 
     const load = React.useCallback(async () => {
-        if (!organizationId) return
         setLoading(true)
         try {
             const data = await financialReportService.getBalancete(organizationId, dateFrom, dateTo, undefined, regime)

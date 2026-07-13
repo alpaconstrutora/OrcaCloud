@@ -105,7 +105,7 @@ function ClaimRow({ claim, onSelect, projects }: { claim: WarrantyClaim; onSelec
 interface ProjectOption { id: string; name: string; }
 
 interface WarrantyModuleProps {
-    activeOrganizationId?: string;
+    activeOrganizationId?: string | null;
     projects?: ProjectOption[];
     onOpenClaim?: () => void;
 }
@@ -121,14 +121,13 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
     const [filterState, setFilterState] = React.useState<ClaimState | ''>('');
 
     const load = React.useCallback(async () => {
-        if (!activeOrganizationId) return;
         setLoading(true);
         try {
-            const filters: ClaimFilters = { organization_id: activeOrganizationId };
+            const filters: ClaimFilters = { organization_id: activeOrganizationId ?? null };
             if (filterState) filters.state = [filterState as ClaimState];
             const [cls, kpiData] = await Promise.all([
                 warrantyService.list(filters),
-                warrantyService.getKPIs(activeOrganizationId),
+                warrantyService.getKPIs(activeOrganizationId ?? null),
             ]);
             setClaims(cls);
             setKpis(kpiData);
@@ -141,14 +140,6 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
     }, [activeOrganizationId, filterState, showToast]);
 
     React.useEffect(() => { load(); }, [load]);
-
-    if (!activeOrganizationId) {
-        return (
-            <div className="flex items-center justify-center h-64 text-sm text-gray-400">
-                Selecione uma organização para acessar o módulo de Pós-Obra.
-            </div>
-        );
-    }
 
     return (
         <div className="space-y-6">
@@ -236,7 +227,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
             </div>
 
             {/* Modal novo chamado */}
-            {showModal && (
+            {showModal && activeOrganizationId && (
                 <WarrantyClaimModal
                     organizationId={activeOrganizationId}
                     projects={projects}
@@ -246,7 +237,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
             )}
 
             {/* Detalhe do chamado */}
-            {selected && (
+            {selected && activeOrganizationId && (
                 <WarrantyClaimDetail
                     claim={selected}
                     organizationId={activeOrganizationId}

@@ -132,24 +132,21 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
     const [narrative, setNarrative] = React.useState<string | null>(null);
 
     const load = React.useCallback(async () => {
-        if (!organizationId) {
-            setSummary(null);
-            setError('Nenhuma organização ativa selecionada. Selecione uma empresa para carregar o painel.');
-            return;
-        }
         setLoading(true);
         setError(null);
         try {
             const [s, orgRes] = await Promise.all([
-                biService.getSummary(organizationId, dateFrom, dateTo),
-                (async () => {
-                    const { data } = await (await import('../lib/supabase')).supabase
-                        .from('organizations').select('name').eq('id', organizationId).maybeSingle();
-                    return (data as { name?: string } | null)?.name ?? '';
-                })(),
+                biService.getSummary(organizationId || null, dateFrom, dateTo),
+                organizationId
+                    ? (async () => {
+                        const { data } = await (await import('../lib/supabase')).supabase
+                            .from('organizations').select('name').eq('id', organizationId).maybeSingle();
+                        return (data as { name?: string } | null)?.name ?? '';
+                    })()
+                    : Promise.resolve('Todas as Organizações'),
             ]);
             setSummary(s);
-            if (orgRes) setOrgName(orgRes);
+            setOrgName(orgRes);
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message
                 : (e as { message?: string })?.message ?? String(e);
@@ -478,14 +475,20 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
                                 organizationName={orgName}
                                 onNarrativeChange={setNarrative}
                             />
-                            <BIReportScheduler
-                                orgId={organizationId}
-                                organizationName={orgName || 'Empresa'}
-                                summary={summary}
-                                dateFrom={dateFrom}
-                                dateTo={dateTo}
-                                narrative={narrative}
-                            />
+                            {organizationId ? (
+                                <BIReportScheduler
+                                    orgId={organizationId}
+                                    organizationName={orgName || 'Empresa'}
+                                    summary={summary}
+                                    dateFrom={dateFrom}
+                                    dateTo={dateTo}
+                                    narrative={narrative}
+                                />
+                            ) : (
+                                <p className="text-xs text-gray-400 text-center py-4">
+                                    Agendamento de relatórios exige uma organização específica — selecione uma organização (não "Todas") para configurar.
+                                </p>
+                            )}
                         </div>
                     )}
                     {activeTab === 'ia_relatorios' && !summary && !loading && (

@@ -45,8 +45,7 @@ const PaymentsPanel: React.FC<PaymentsPanelProps> = ({ organizationId, investorI
     const [loading, setLoading] = React.useState(true);
 
     React.useEffect(() => {
-        if (!organizationId) { setLoading(false); return; }
-        investorContributionsService.listByInvestor(organizationId, investorId)
+        investorContributionsService.listByInvestor(organizationId ?? null, investorId)
             .then(setContributions)
             .catch(err => console.error('Error loading contributions', err))
             .finally(() => setLoading(false));

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, Legend } from 'recharts';
 import { Target, TrendingUp, AlertTriangle, Users, DollarSign, Activity, Percent, Clock, Key, Building2 } from 'lucide-react';
 import type { Property } from '../types';
-import { useStore } from '../store/useStore';
 import { rentalsDashboardService, RentalsDashboardMetrics } from '../services/rentalsDashboardService';
 
 const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
@@ -14,8 +13,7 @@ interface RentalsDashboardProps {
 }
 
 export function RentalsDashboard({ selectedBuildingId, organizationId: propOrganizationId }: RentalsDashboardProps) {
-  const { organizations } = useStore();
-  const organizationId = propOrganizationId || organizations[0]?.id;
+  const organizationId = propOrganizationId || null;
   const [metrics, setMetrics] = useState<RentalsDashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [periodMonths, setPeriodMonths] = useState(() => {
@@ -39,8 +37,6 @@ export function RentalsDashboard({ selectedBuildingId, organizationId: propOrgan
   }, [startDate]);
 
   useEffect(() => {
-    if (!organizationId) return;
-    
     let isMounted = true;
     setLoading(true);
 

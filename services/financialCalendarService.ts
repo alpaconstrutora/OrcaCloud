@@ -4,12 +4,12 @@ import type { CalendarEvent, CalendarDayTitle } from '../types/financial';
 export const financialCalendarService = {
 
     async getCalendarEvents(
-        organizationId: string,
+        organizationId: string | null,
         dateFrom: string,
         dateTo: string,
     ): Promise<CalendarEvent[]> {
         const { data, error } = await supabase.rpc('fn_calendar_events', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_date_from:       dateFrom,
             p_date_to:         dateTo,
         });
@@ -18,14 +18,15 @@ export const financialCalendarService = {
     },
 
     async getTitlesForDay(
-        organizationId: string,
+        organizationId: string | null,
         date: string,
     ): Promise<CalendarDayTitle[]> {
-        const { data, error } = await supabase
+        let q = supabase
             .from('internal_transactions')
             .select('id,direction,amount,description,party_name,project_id,business_status,status,due_date,transaction_date')
-            .eq('organization_id', organizationId)
-            .neq('status', 'CANCELLED')
+            .neq('status', 'CANCELLED');
+        if (organizationId) q = q.eq('organization_id', organizationId);
+        const { data, error } = await q
             .or(`due_date.eq.${date},and(due_date.is.null,transaction_date.eq.${date})`)
             .order('direction', { ascending: false })
             .order('amount', { ascending: false });

@@ -57,16 +57,17 @@ function toJournalEntryPair(row: JournalEntry): JournalEntryPair {
 }
 
 export async function listJournalEntries(
-  organizationId: string,
+  organizationId: string | null,
   opts?: { dateFrom?: string; dateTo?: string; projectId?: string }
 ): Promise<JournalEntryPair[]> {
   let q = supabase
     .from('vw_journal_entries')
     .select('*')
-    .eq('organization_id', organizationId)
     .order('entry_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(200);
+
+  if (organizationId) q = q.eq('organization_id', organizationId);
 
   if (opts?.dateFrom) q = q.gte('entry_date', opts.dateFrom);
   if (opts?.dateTo)   q = q.lte('entry_date', opts.dateTo);

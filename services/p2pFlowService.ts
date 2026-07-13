@@ -77,17 +77,15 @@ const fmtDate = (iso?: string) => {
 };
 
 export const p2pFlowService = {
-  async listProjects(organizationId: string): Promise<{ id: string; name: string }[]> {
-    const { data } = await supabase
-      .from('projects')
-      .select('id, name')
-      .eq('organization_id', organizationId)
-      .order('name');
+  async listProjects(organizationId: string | null): Promise<{ id: string; name: string }[]> {
+    let q = supabase.from('projects').select('id, name').order('name');
+    if (organizationId) q = q.eq('organization_id', organizationId);
+    const { data } = await q;
     return (data ?? []) as { id: string; name: string }[];
   },
 
-  async getSnapshot(organizationId: string, projectId?: string): Promise<P2PFlowSnapshot> {
-    const org: Filters = { organization_id: organizationId };
+  async getSnapshot(organizationId: string | null, projectId?: string): Promise<P2PFlowSnapshot> {
+    const org: Filters = organizationId ? { organization_id: organizationId } : {};
     const proj: Filters = projectId ? { project_id: projectId } : {};
 
     const [
@@ -161,10 +159,10 @@ export const p2pFlowService = {
 
   async getStageRecords(
     stageId: string,
-    organizationId: string,
+    organizationId: string | null,
     projectId?: string,
   ): Promise<P2PRecord[]> {
-    const org: Filters = { organization_id: organizationId };
+    const org: Filters = organizationId ? { organization_id: organizationId } : {};
     const proj: Filters = projectId ? { project_id: projectId } : {};
 
     switch (stageId) {

@@ -31,7 +31,7 @@ function KPI({ label, value, sub, variant = 'neutral' }: {
 }
 
 interface Props {
-    organizationId: string
+    organizationId: string | null
 }
 
 const WIPReport: React.FC<Props> = ({ organizationId }) => {
@@ -44,7 +44,6 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
     const [sortAsc, setSortAsc] = React.useState(false)
 
     const load = React.useCallback(async () => {
-        if (!organizationId) return
         setLoading(true)
         try {
             const data = await financialReportService.getProjectWIP(organizationId, dateTo)

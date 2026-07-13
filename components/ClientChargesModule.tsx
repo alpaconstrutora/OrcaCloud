@@ -44,7 +44,7 @@ const FILTERS: { id: StatusFilter; label: string }[] = [
 // ─── main ────────────────────────────────────────────────────
 
 interface Props {
-    organizationId: string;
+    organizationId: string | null;
 }
 
 export default function ClientChargesModule({ organizationId }: Props) {
@@ -70,7 +70,6 @@ export default function ClientChargesModule({ organizationId }: Props) {
     };
 
     const load = useCallback(async () => {
-        if (!organizationId) return;
         setLoading(true);
         setError(null);
         try {
@@ -147,7 +146,7 @@ export default function ClientChargesModule({ organizationId }: Props) {
         let okCount = 0;
         for (const c of alvos) {
             try {
-                await clientChargeService.cancel(organizationId, c.transaction_id!);
+                await clientChargeService.cancel(c.organization_id, c.transaction_id!);
                 okCount++;
             } catch {
                 falhas.push(c.party_name ?? c.id);
@@ -185,7 +184,7 @@ export default function ClientChargesModule({ organizationId }: Props) {
     async function handleResend(c: ClientCharge) {
         setResending(c.id); setResentId(null);
         try {
-            const r = await clientChargeService.resend(organizationId, c.id);
+            const r = await clientChargeService.resend(c.organization_id, c.id);
             setResentId(c.id);
             setTimeout(() => setResentId(null), 3000);
             notify(r.email ? `Boleto reenviado para ${r.email}` : 'Boleto reenviado.');
@@ -210,7 +209,7 @@ export default function ClientChargesModule({ organizationId }: Props) {
         if (!ok) return;
         setCancelling(c.id);
         try {
-            await clientChargeService.cancel(organizationId, c.transaction_id);
+            await clientChargeService.cancel(c.organization_id, c.transaction_id);
             await load();
             notify('Cobrança cancelada.');
         } catch (e) {

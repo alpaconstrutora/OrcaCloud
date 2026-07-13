@@ -277,8 +277,10 @@ export const qualityConditionService = {
         condition_validations(*),
         condition_contestations(*)
       `)
-      .eq('organization_id', filters.organizationId)
       .order('created_at', { ascending: false })
+
+    if (filters.organizationId)
+      query = query.eq('organization_id', filters.organizationId)
 
     if (filters.empreendimentoId)
       query = query.eq('asset_empreendimento_id', filters.empreendimentoId)

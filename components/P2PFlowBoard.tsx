@@ -34,7 +34,7 @@ const SEAM_CFG: Record<SeamStatus, { label: string; color: string; lineColor: st
 // ── Detalhe de um nó expandido ──────────────────────────────────────────────
 function StageDetail({ stageId, organizationId, projectId }: {
   stageId: string;
-  organizationId: string;
+  organizationId: string | null;
   projectId?: string;
 }) {
   const [records, setRecords] = useState<P2PRecord[]>([]);
@@ -84,7 +84,7 @@ function StageCard({
   stage, organizationId, projectId, expanded, onToggle, onNavigate,
 }: {
   stage: P2PStage;
-  organizationId: string;
+  organizationId: string | null;
   projectId?: string;
   expanded: boolean;
   onToggle: () => void;
@@ -170,7 +170,6 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!activeOrganizationId) { setStages([]); return; }
     setLoading(true);
     try {
       const snap = await p2pFlowService.getSnapshot(
@@ -184,20 +183,12 @@ export const P2PFlowBoard: React.FC<Props> = ({ activeOrganizationId, onChangeVi
     }
   }, [activeOrganizationId, selectedProjectId]);
 
-  // Carrega lista de projetos uma vez
+  // Carrega lista de projetos uma vez (todas as organizações do usuário, se nenhuma estiver selecionada)
   useEffect(() => {
-    if (!activeOrganizationId) return;
     p2pFlowService.listProjects(activeOrganizationId).then(setProjects);
   }, [activeOrganizationId]);
 
   useEffect(() => { load(); }, [load]);
-
-  if (!activeOrganizationId) return (
-    <div className="p-8 text-center">
-      <Workflow className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-      <p className="text-sm font-bold text-slate-600">Selecione uma organização para ver o fluxo.</p>
-    </div>
-  );
 
   const gaps    = stages.filter(s => s.inboundSeam === 'gap').length;
   const manuais = stages.filter(s => s.inboundSeam === 'manual').length;

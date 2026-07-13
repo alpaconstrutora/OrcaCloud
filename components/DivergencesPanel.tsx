@@ -72,7 +72,7 @@ function Section({ title, subtitle, count, icon: Icon, accent, children }: Secti
 }
 
 interface DivergencesPanelProps {
-    organizationId: string;
+    organizationId: string | null;
     onChanged?: () => void;
 }
 
@@ -93,7 +93,6 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
     const [form, setForm] = useState<CreateForm>({ category: '', projectId: '', costCenterId: '', partyKey: '', description: '' });
 
     const load = useCallback(async () => {
-        if (!organizationId) return;
         setLoading(true);
         try {
             setData(await divergenceService.getDivergences(organizationId));
@@ -167,6 +166,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
             const pool = type === 'CLIENT' ? clients : suppliers;
             party = pool.find(p => p.id === id);
         }
+        if (!organizationId) { showToast('Selecione uma organização específica para esta ação.', 'error'); return; }
         setFormBank(null);
         await run(bank.id, () => divergenceService.createInternalAndMatch(organizationId, bank, {
             category: form.category || undefined,
@@ -186,6 +186,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
     const partySecondaryLabel = formBank?.direction === 'CREDIT' ? 'Fornecedores' : 'Clientes';
 
     const onConfirmNoTitle = async (b: BankWithoutInternal) => {
+        if (!organizationId) { showToast('Selecione uma organização específica para esta ação.', 'error'); return; }
         if (!await confirm({
             title: 'Confirmar sem título?',
             message: 'O movimento será marcado como conciliado sem gerar lançamento (use para tarifas/impostos já contabilizados).',
@@ -195,6 +196,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
     };
 
     const onReverse = async (i: InternalWithoutBank) => {
+        if (!organizationId) { showToast('Selecione uma organização específica para esta ação.', 'error'); return; }
         if (!await confirm({
             title: 'Estornar título?',
             message: 'O lançamento será cancelado. Esta ação fica registrada na auditoria.',
@@ -203,10 +205,13 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
         run(i.id, () => divergenceService.reverseInternal(organizationId, i.id), 'Título estornado');
     };
 
-    const onReopen = (i: InternalWithoutBank) =>
+    const onReopen = (i: InternalWithoutBank) => {
+        if (!organizationId) { showToast('Selecione uma organização específica para esta ação.', 'error'); return; }
         run(i.id, () => divergenceService.reopenInternal(organizationId, i.id), 'Título reaberto');
+    };
 
     const onReconcileDiff = async (m: ValueMismatch) => {
+        if (!organizationId) { showToast('Selecione uma organização específica para esta ação.', 'error'); return; }
         if (!await confirm({
             title: 'Conciliar com diferença?',
             message: `Será criado o vínculo e um lançamento de ajuste de ${formatBRL(Math.abs(m.difference))} (tarifa/juros/desconto).`,

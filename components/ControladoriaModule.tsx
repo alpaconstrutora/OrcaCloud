@@ -40,7 +40,7 @@ const ControladoriaModule: React.FC<Props> = ({
   organizationId, organizations = [], userEmail, defaultTab = 'dre', onOrgChange,
 }) => {
   const [activeTab, setActiveTab] = useState<ControladoriaTab>(defaultTab)
-  const orgId = organizationId || organizations[0]?.id || ''
+  const orgId = organizationId || null
 
   return (
     <div className="space-y-0">

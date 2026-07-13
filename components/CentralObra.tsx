@@ -156,7 +156,7 @@ function KPICard({ label, value, sub, icon: Icon, color }: {
 
 // ── Componente ──────────────────────────────────────────────────────────────────
 interface CentralObraProps {
-    organizationId: string;
+    organizationId: string | null;
 }
 
 const CentralObra: React.FC<CentralObraProps> = ({ organizationId }) => {
@@ -180,13 +180,10 @@ const CentralObra: React.FC<CentralObraProps> = ({ organizationId }) => {
 
     // Carrega a lista de obras uma vez
     React.useEffect(() => {
-        if (!organizationId) return;
         (async () => {
-            const { data, error } = await supabase
-                .from('projects')
-                .select('id, name, budget, settings')
-                .eq('organization_id', organizationId)
-                .order('name');
+            let query = supabase.from('projects').select('id, name, budget, settings').order('name');
+            if (organizationId) query = query.eq('organization_id', organizationId);
+            const { data, error } = await query;
             if (error) { showToast(`Erro ao carregar obras: ${error.message}`, 'error'); return; }
             const all = (data || []) as ProjectLite[];
             // prioriza classificação OBRA; se nenhuma marcada, mostra todas
@@ -201,7 +198,7 @@ const CentralObra: React.FC<CentralObraProps> = ({ organizationId }) => {
     const orcado = selected ? calcOrcado(selected) : 0;
 
     const load = React.useCallback(async () => {
-        if (!organizationId || !projectId) return;
+        if (!projectId) return;
         setLoading(true);
         setError(null);
         try {

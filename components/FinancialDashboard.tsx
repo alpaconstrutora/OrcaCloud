@@ -81,7 +81,7 @@ const CustomBarTooltip = ({ active, payload, label }: { active?: boolean; payloa
 // ─── main component ──────────────────────────────────────────
 
 interface FinancialDashboardProps {
-    organizationId: string;
+    organizationId: string | null;
     onNavigate?: (view: string) => void;
 }
 
@@ -100,7 +100,6 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ organizationId,
     const [pendingSoma, setPendingSoma] = useState(0);
 
     useEffect(() => {
-        if (!organizationId) return;
         approvalService.getPendingSummary(organizationId)
             .then(s => {
                 setPendingQtd(s.reduce((a, x) => a + Number(x.qtd), 0));
@@ -112,7 +111,6 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ organizationId,
     const period = getPeriodBounds(preset, offset);
 
     const load = useCallback(async () => {
-        if (!organizationId) return;
         setLoading(true);
         setError(null);
         try {

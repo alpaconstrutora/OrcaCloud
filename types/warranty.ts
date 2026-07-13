@@ -217,7 +217,7 @@ export interface CloseClaimCommand {
 // ────────────────────────────────────────────────────────────
 
 export interface ClaimFilters {
-  organization_id: string;
+  organization_id: string | null;
   project_id?: string;
   client_id?: string;
   state?: ClaimState[];

@@ -16,16 +16,16 @@ export interface RentalsDashboardMetrics {
 }
 
 export const rentalsDashboardService = {
-  async getDashboardMetrics(organizationId: string, projectId?: string | null, periodMonths: number = 12, startDate?: string): Promise<RentalsDashboardMetrics> {
+  async getDashboardMetrics(organizationId: string | null, projectId?: string | null, periodMonths: number = 12, startDate?: string): Promise<RentalsDashboardMetrics> {
     try {
       console.log('[RentalsService] Fetching metrics for:', { organizationId, projectId });
-      
+
       // 1. Fetch properties (purpose RENTAL or BOTH)
       let propertiesQuery = supabase
         .from('commercial_properties')
-        .select('id, initial_price, price, status, purpose, type')
-        .eq('organization_id', organizationId);
+        .select('id, initial_price, price, status, purpose, type');
 
+      if (organizationId) propertiesQuery = propertiesQuery.eq('organization_id', organizationId);
       if (projectId) {
         propertiesQuery = propertiesQuery.eq('parent_id', projectId);
       }
@@ -49,8 +49,8 @@ export const rentalsDashboardService = {
       let dealsQuery = supabase
         .from('commercial_deals')
         .select('id, value, status, type, date, property_id')
-        .eq('organization_id', organizationId)
         .eq('type', 'RENTAL');
+      if (organizationId) dealsQuery = dealsQuery.eq('organization_id', organizationId);
 
       const { data: deals, error: dealsError } = await dealsQuery;
       if (dealsError) throw dealsError;

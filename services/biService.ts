@@ -30,12 +30,12 @@ function variacao(realizado: number | null, meta: number | null): number | null 
 export const biService = {
 
     async getExecutiveKPIs(
-        organizationId: string,
+        organizationId: string | null,
         dateFrom: string,
         dateTo: string,
     ): Promise<ExecutiveKPIs> {
         const { data, error } = await supabase.rpc('fn_bi_executive', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_date_from:       dateFrom,
             p_date_to:         dateTo,
         });
@@ -44,18 +44,18 @@ export const biService = {
     },
 
     async getTrend(
-        organizationId: string,
+        organizationId: string | null,
         months = 12,
     ): Promise<BITrendPoint[]> {
         const { data, error } = await supabase.rpc('fn_bi_trend', {
-            p_organization_id: organizationId,
+            p_organization_id: organizationId || null,
             p_months:          months,
         });
         if (error) throw error;
         return (data || []) as BITrendPoint[];
     },
 
-    async getCompanyTarget(organizationId: string): Promise<CompanyTarget | null> {
+    async getCompanyTarget(organizationId: string | null): Promise<CompanyTarget | null> {
         const ano = new Date().getFullYear();
         const { data, error } = await supabase
             .from('company_targets')
@@ -150,7 +150,7 @@ export const biService = {
     },
 
     async getSummary(
-        organizationId: string,
+        organizationId: string | null,
         dateFrom: string,
         dateTo: string,
         trendMonths = 12,

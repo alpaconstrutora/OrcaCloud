@@ -96,15 +96,15 @@ export const clientChargeService = {
 
     /** Lista as cobranças de uma organização. */
     async list(
-        organizationId: string,
+        organizationId: string | null,
         filters?: { status?: string; transactionId?: string; limit?: number },
     ): Promise<ClientCharge[]> {
         let q = supabase
             .from('client_charges')
             .select(COLS)
-            .eq('organization_id', organizationId)
             .order('created_at', { ascending: false })
             .limit(filters?.limit ?? 200);
+        if (organizationId) q = q.eq('organization_id', organizationId);
         if (filters?.status)        q = q.eq('status', filters.status);
         if (filters?.transactionId) q = q.eq('transaction_id', filters.transactionId);
         const { data, error } = await q;

@@ -31,8 +31,7 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
                     const data = await brokerPortalService.getCommissionsByToken(portalToken);
                     setCommissions(data as BrokerCommission[]);
                 } else {
-                    if (!organizationId) return;
-                    const data = await brokerService.listCommissions(organizationId, brokerEmail);
+                    const data = await brokerService.listCommissions(organizationId ?? null, brokerEmail);
                     setCommissions(data);
                 }
             } catch (err) {

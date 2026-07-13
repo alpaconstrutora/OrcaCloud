@@ -12,10 +12,34 @@ import {
 import {
     Contract, ContractItem, ContractAddendum,
     ContractMeasurement, ContractMeasurementItem, BudgetEntry, ProjectSettings, ContractTemplate,
-    ContractUtilityBill, SinapiItem, CustomDatabase, SinapiType, MinutaVersion
+    ContractUtilityBill, SinapiItem, CustomDatabase, SinapiType, MinutaVersion,
+    ContractGuarantee, ContractPenalty, ContractRetentionLedger, ContractRetentionRelease, GuaranteeKind, PenaltyKind
 } from '../types';
 import { contractService } from '../services/contractService';
 import { contractIndexService, IndexName } from '../services/contractIndexService';
+import { contractGuaranteeService } from '../services/contractGuaranteeService';
+import { contractPenaltyService } from '../services/contractPenaltyService';
+import ContractGuaranteeModal from './ContractGuaranteeModal';
+import ContractPenaltyModal from './ContractPenaltyModal';
+import ContractRetentionReleaseModal from './ContractRetentionReleaseModal';
+
+const GUARANTEE_KIND_LABELS: Record<GuaranteeKind, string> = {
+    RC_GERAL: 'RC Geral',
+    RC_PROFISSIONAL: 'RC Profissional',
+    SEGURO_GARANTIA: 'Seguro-Garantia',
+    FIANCA: 'Fiança Bancária',
+    CAUCAO: 'Caução',
+    EQUIPAMENTOS: 'Equipamentos/Veículos',
+    AMBIENTAL: 'Riscos Ambientais',
+    GARANTIA_ADIANTAMENTO: 'Garantia de Adiantamento',
+};
+
+const PENALTY_KIND_LABELS: Record<PenaltyKind, string> = {
+    MORATORIA: 'Moratória',
+    COMPENSATORIA: 'Compensatória',
+    SST: 'SST/Compliance',
+    OUTRA: 'Outra',
+};
 import { contractTemplateService, ContractTemplate as DBContractTemplate, renderTemplate, buildVariableMap } from '../services/contractTemplateService';
 import { documentTemplateService, DocumentTemplate } from '../services/documentTemplateService';
 import EmitDocumentModal from './EmitDocumentModal';
@@ -106,6 +130,16 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         description: string | null; category: string | null; status: string;
     }[]>([]);
     const [loadingFinancialEntries, setLoadingFinancialEntries] = React.useState(false);
+
+    // Fase 5 — Seguros/Garantias, Penalidades e Retenção faseada (PLANO_MODULO_CONTRATOS_GAPS.md)
+    const [guarantees, setGuarantees] = React.useState<ContractGuarantee[]>([]);
+    const [penalties, setPenalties] = React.useState<ContractPenalty[]>([]);
+    const [retentionLedger, setRetentionLedger] = React.useState<ContractRetentionLedger | null>(null);
+    const [retentionReleases, setRetentionReleases] = React.useState<ContractRetentionRelease[]>([]);
+    const [guaranteeModal, setGuaranteeModal] = React.useState<{ open: boolean; editing: ContractGuarantee | null }>({ open: false, editing: null });
+    const [penaltyModal, setPenaltyModal] = React.useState(false);
+    const [releaseModal, setReleaseModal] = React.useState(false);
+    const [fase5Busy, setFase5Busy] = React.useState(false);
 
     const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setNotification({ message, type });
@@ -225,18 +259,26 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const loadContractData = async () => {
         try {
             setLoading(true);
-            const [c, i, a, m, u] = await Promise.all([
+            const [c, i, a, m, u, g, pen, ledger, releases] = await Promise.all([
                 contractService.getContractById(contractId),
                 contractService.listContractItems(contractId),
                 contractService.listAddendums(contractId),
                 contractService.listMeasurements(contractId),
-                contractService.listUtilityBills(contractId)
+                contractService.listUtilityBills(contractId),
+                contractGuaranteeService.list(contractId),
+                contractPenaltyService.list(contractId),
+                contractService.getRetentionLedger(contractId),
+                contractService.listRetentionReleases(contractId)
             ]);
             setContract(c);
             setItems(i);
             setAddendums(a);
             setMeasurements(m);
             setUtilityBills(u);
+            setGuarantees(g);
+            setPenalties(pen);
+            setRetentionLedger(ledger);
+            setRetentionReleases(releases);
 
             if (c) {
                 setLoadingFinancialEntries(true);
@@ -1445,6 +1487,55 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             </div>
                         )}
 
+                        {/* Seguros & Garantias (Fase 5.1 — CP-08/CP-10/Cl.24/Anexo VIII) */}
+                        {contract && (
+                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                                <div className="flex items-center justify-between px-2">
+                                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                        <Shield className="w-3.5 h-3.5" /> Seguros & Garantias
+                                    </h4>
+                                    <button
+                                        type="button"
+                                        onClick={() => setGuaranteeModal({ open: true, editing: null })}
+                                        className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                                    >
+                                        + Adicionar
+                                    </button>
+                                </div>
+                                {guarantees.length === 0 ? (
+                                    <p className="text-xs text-gray-400 px-2 py-1">Nenhum seguro ou garantia cadastrado.</p>
+                                ) : (
+                                    guarantees.map(g => {
+                                        const today = new Date().toISOString().split('T')[0];
+                                        const expired = g.status === 'VIGENTE' && g.valid_until && g.valid_until < today;
+                                        const statusColor = expired ? 'text-red-600' : g.status === 'VIGENTE' ? 'text-green-700'
+                                            : g.status === 'CANCELADA' ? 'text-red-600' : g.status === 'SUBSTITUIDA' ? 'text-gray-500' : 'text-amber-700';
+                                        const statusLabel = expired ? 'Vencida' : g.status === 'VIGENTE' ? 'Vigente'
+                                            : g.status === 'CANCELADA' ? 'Cancelada' : g.status === 'SUBSTITUIDA' ? 'Substituída' : 'Vencida';
+                                        return (
+                                            <button
+                                                key={g.id}
+                                                type="button"
+                                                onClick={() => setGuaranteeModal({ open: true, editing: g })}
+                                                className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-colors"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-semibold text-gray-800">{GUARANTEE_KIND_LABELS[g.kind]}</span>
+                                                    <span className={`text-sm font-normal ${statusColor}`}>{statusLabel}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between mt-1">
+                                                    <span className="text-xs text-gray-500">{g.insurer || 'Sem seguradora informada'}</span>
+                                                    {g.valid_until && (
+                                                        <span className="text-xs text-gray-400">até {new Date(g.valid_until + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                                    )}
+                                                </div>
+                                            </button>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        )}
+
                         {/* Payment Info Card */}
                         <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
                             <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest px-2">Pagamento</h4>
@@ -2140,6 +2231,127 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Retenção faseada (Fase 5.2 — CP-08/Cl.18) */}
+                        {contract && (
+                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                        <HandCoins className="w-4 h-4 text-amber-500" /> Retenção de Garantia
+                                    </h3>
+                                    <button
+                                        type="button"
+                                        onClick={() => setReleaseModal(true)}
+                                        disabled={!retentionLedger || retentionLedger.balance <= 0}
+                                        className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-gray-300 disabled:cursor-not-allowed"
+                                    >
+                                        Liberar Retenção
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="bg-gray-50 p-4 rounded-2xl space-y-1">
+                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Retido</p>
+                                        <p className="text-lg font-medium text-gray-900 tracking-tighter">R$ {fmt(retentionLedger?.total_retained ?? 0)}</p>
+                                    </div>
+                                    <div className="bg-gray-50 p-4 rounded-2xl space-y-1">
+                                        <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Liberado</p>
+                                        <p className="text-lg font-medium text-emerald-600 tracking-tighter">R$ {fmt(retentionLedger?.total_released ?? 0)}</p>
+                                    </div>
+                                    <div className="bg-amber-50 p-4 rounded-2xl space-y-1">
+                                        <p className="text-xs font-medium text-amber-600 uppercase tracking-widest">Saldo Retido</p>
+                                        <p className="text-lg font-medium text-amber-700 tracking-tighter">R$ {fmt(retentionLedger?.balance ?? 0)}</p>
+                                    </div>
+                                </div>
+                                {retentionReleases.length > 0 && (
+                                    <div className="pt-2 space-y-1.5">
+                                        {retentionReleases.map(r => (
+                                            <div key={r.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl text-xs">
+                                                <span className="text-gray-500">
+                                                    {r.kind === 'PROVISORIO' ? 'Provisório' : r.kind === 'DEFINITIVO' ? 'Definitivo' : 'Manual'} — {new Date(r.released_at + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                </span>
+                                                <span className="font-medium text-gray-700">R$ {fmt(r.amount)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Penalidades (Fase 5.3 — CP-09/CP-10/Cl.23/Cl.31) */}
+                        {contract && (
+                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                        <AlertCircle className="w-4 h-4 text-red-500" /> Penalidades
+                                    </h3>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPenaltyModal(true)}
+                                        className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                                    >
+                                        + Notificar Penalidade
+                                    </button>
+                                </div>
+                                {penalties.length === 0 ? (
+                                    <p className="text-xs text-gray-400">Nenhuma penalidade registrada.</p>
+                                ) : (
+                                    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead className="bg-gray-50 border-b border-gray-100">
+                                                <tr>
+                                                    <th className="px-5 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest">Tipo</th>
+                                                    <th className="px-5 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest">Motivo</th>
+                                                    <th className="px-5 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest">Status</th>
+                                                    <th className="px-5 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Valor</th>
+                                                    <th className="px-5 py-3 text-table-header font-medium text-gray-400 uppercase tracking-widest text-right">Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {penalties.map(p => {
+                                                    const penaltyStatusColor: Record<string, string> = {
+                                                        NOTIFICADA: 'text-amber-700', EM_CURA: 'text-blue-700',
+                                                        APLICADA: 'text-red-600', CANCELADA: 'text-gray-500',
+                                                    };
+                                                    const penaltyStatusLabel: Record<string, string> = {
+                                                        NOTIFICADA: 'Notificada', EM_CURA: 'Em Cura', APLICADA: 'Aplicada', CANCELADA: 'Cancelada',
+                                                    };
+                                                    return (
+                                                        <tr key={p.id} className="hover:bg-red-50/20 transition-all">
+                                                            <td className="px-5 py-3 text-sm text-gray-700">{PENALTY_KIND_LABELS[p.kind]}</td>
+                                                            <td className="px-5 py-3 text-sm text-gray-700 max-w-xs truncate">{p.reason}</td>
+                                                            <td className="px-5 py-3">
+                                                                <span className={`text-sm font-normal ${penaltyStatusColor[p.status]}`}>{penaltyStatusLabel[p.status]}</span>
+                                                            </td>
+                                                            <td className="px-5 py-3 text-right text-sm font-medium text-gray-900">R$ {fmt(p.amount)}</td>
+                                                            <td className="px-5 py-3 text-right">
+                                                                {p.status === 'NOTIFICADA' && (
+                                                                    <div className="flex items-center justify-end gap-2">
+                                                                        <button
+                                                                            onClick={async () => { setFase5Busy(true); try { await contractPenaltyService.cure(p.id); await loadContractData(); } finally { setFase5Busy(false); } }}
+                                                                            disabled={fase5Busy}
+                                                                            className="text-xs font-medium text-emerald-600 hover:text-emerald-800 disabled:opacity-50"
+                                                                        >
+                                                                            Aceitar Cura
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={async () => { setFase5Busy(true); try { await contractPenaltyService.apply(p.id); await loadContractData(); } finally { setFase5Busy(false); } }}
+                                                                            disabled={fase5Busy}
+                                                                            className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+                                                                        >
+                                                                            Aplicar
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 );
             })()}
@@ -2288,6 +2500,35 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     contract={contract}
                     onSuccess={loadContractData}
                     initialData={editingUtilityBill || undefined}
+                />
+            )}
+
+            {contract && (
+                <ContractGuaranteeModal
+                    isOpen={guaranteeModal.open}
+                    onClose={() => setGuaranteeModal({ open: false, editing: null })}
+                    contract={contract}
+                    onSuccess={loadContractData}
+                    initialData={guaranteeModal.editing}
+                />
+            )}
+
+            {contract && (
+                <ContractPenaltyModal
+                    isOpen={penaltyModal}
+                    onClose={() => setPenaltyModal(false)}
+                    contract={contract}
+                    onSuccess={loadContractData}
+                />
+            )}
+
+            {contract && (
+                <ContractRetentionReleaseModal
+                    isOpen={releaseModal}
+                    onClose={() => setReleaseModal(false)}
+                    contract={contract}
+                    ledger={retentionLedger}
+                    onSuccess={loadContractData}
                 />
             )}
 

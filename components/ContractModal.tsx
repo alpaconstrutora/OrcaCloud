@@ -1335,6 +1335,56 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
                             </div>
                         </div>
+
+                        {/* Section: Identificação da Obra (Fase 5.4 — CP-02) */}
+                        <div className="space-y-6 pb-10">
+                            <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
+                                <MapPin className="w-4 h-4 text-blue-600" />
+                                <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Identificação da Obra</h3>
+                            </div>
+                            <div className="grid grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">CNO / Matrícula CEI</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Ex: 12.345.67890/12"
+                                        value={formData.cno || ''}
+                                        onChange={(e) => setFormData({ ...formData, cno: e.target.value })}
+                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Matrícula / Registro da Obra</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Registro alternativo (opcional)"
+                                        value={formData.obra_registration || ''}
+                                        onChange={(e) => setFormData({ ...formData, obra_registration: e.target.value })}
+                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Gestor da Obra</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Nome do gestor responsável"
+                                        value={formData.manager_name || ''}
+                                        onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })}
+                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Fiscal do Contrato</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Nome do fiscal responsável"
+                                        value={formData.inspector_name || ''}
+                                        onChange={(e) => setFormData({ ...formData, inspector_name: e.target.value })}
+                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Sidebar Summary (1/3) */}

@@ -10,7 +10,9 @@ import {
     ContractAddendum,
     ContractMeasurement,
     ContractMeasurementItem,
-    ContractUtilityBill
+    ContractUtilityBill,
+    ContractRetentionLedger,
+    ContractRetentionRelease
 } from '../types';
 
 // Resolve supplier name from DB (returns fallback string on error)
@@ -1763,5 +1765,58 @@ export const contractService = {
         }
 
         return updated as Contract;
+    },
+
+    // ─────────────────────────────────────────────────────────
+    // Fase 5.2 — Retenção faseada / liberação (CP-08, Cl.18)
+    // PLANO_MODULO_CONTRATOS_GAPS.md
+    // ─────────────────────────────────────────────────────────
+
+    /** Retido (soma das medições) vs liberado vs saldo — card "Retenção" na aba Financeiro */
+    getRetentionLedger: async (contractId: string): Promise<ContractRetentionLedger> => {
+        const { data, error } = await supabase
+            .rpc('fn_contract_retention_ledger', { p_contract_id: contractId })
+            .single();
+        if (error) throw error;
+        return data as ContractRetentionLedger;
+    },
+
+    listRetentionReleases: async (contractId: string): Promise<ContractRetentionRelease[]> => {
+        const { data, error } = await supabase
+            .from('contract_retention_releases')
+            .select('*')
+            .eq('contract_id', contractId)
+            .order('released_at', { ascending: false });
+        if (error) throw error;
+        return data ?? [];
+    },
+
+    /** Registra a liberação de uma parcela da retenção (provisório/definitivo/manual) */
+    releaseRetention: async (payload: {
+        organization_id: string;
+        contract_id: string;
+        kind: 'PROVISORIO' | 'DEFINITIVO' | 'MANUAL';
+        amount: number;
+        released_by?: string;
+        notes?: string;
+    }): Promise<ContractRetentionRelease> => {
+        if (payload.amount <= 0) throw new Error('O valor a liberar deve ser maior que zero.');
+
+        const { data: ledger, error: ledgerErr } = await supabase
+            .rpc('fn_contract_retention_ledger', { p_contract_id: payload.contract_id })
+            .single();
+        if (ledgerErr) throw ledgerErr;
+        const balance = (ledger as ContractRetentionLedger).balance;
+        if (payload.amount > balance) {
+            throw new Error(`Valor solicitado (R$ ${payload.amount.toFixed(2)}) excede o saldo retido disponível (R$ ${balance.toFixed(2)}).`);
+        }
+
+        const { data, error } = await supabase
+            .from('contract_retention_releases')
+            .insert({ ...payload, released_at: new Date().toISOString().split('T')[0] })
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
     },
 };

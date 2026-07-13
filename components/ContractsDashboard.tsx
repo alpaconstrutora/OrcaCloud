@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     FileText, AlertTriangle, TrendingUp, Clock, DollarSign,
-    CheckCircle2, XCircle, RotateCcw, ChevronRight, RefreshCw, Plus,
+    CheckCircle2, XCircle, RotateCcw, ChevronRight, RefreshCw, Plus, Shield,
 } from 'lucide-react';
 import { contractService } from '../services/contractService';
+import { contractGuaranteeService, ContractGuaranteeExpiring } from '../services/contractGuaranteeService';
 import { supabase } from '../lib/supabase';
 import { Contract } from '../types';
 import Button from './ui/Button';
@@ -42,6 +43,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     const [tab, setTab] = useState<'alerts' | 'active' | 'all'>('alerts');
     const [measuredTotal, setMeasuredTotal] = useState(0);
     const [clientNames, setClientNames] = useState<Record<string, string>>({});
+    const [guaranteesExpiring, setGuaranteesExpiring] = useState<ContractGuaranteeExpiring[]>([]);
 
     // Layout "com cliente" (mostra coluna Contratante): qualquer domínio OUTGOING.
     const showsClient = direction === 'OUTGOING' || domain === 'SERVICOS' || domain === 'LOCACAO' || domain === 'VENDAS';
@@ -64,6 +66,13 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     }, [organizationId, direction, domain]);
 
     useEffect(() => { load(); }, [load]);
+
+    // Fase 5.1 — apólices/garantias vigentes vencendo em até 30 dias (PLANO_MODULO_CONTRATOS_GAPS.md)
+    useEffect(() => {
+        contractGuaranteeService.listExpiring(organizationId, 30)
+            .then(setGuaranteesExpiring)
+            .catch(() => setGuaranteesExpiring([]));
+    }, [organizationId]);
 
     useEffect(() => {
         if (!showsClient) { setClientNames({}); return; }
@@ -119,8 +128,20 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
 
     // ── Alertas consolidados ────────────────────────────────────────────────
     type Alert = { id: string; level: 'critical' | 'warning' | 'info'; label: string; contract: Contract };
+    const guaranteeAlerts: Alert[] = guaranteesExpiring
+        .map((g): Alert | null => {
+            const c = contracts.find(x => x.id === g.contract_id);
+            if (!c) return null;
+            const label = g.days_remaining < 0
+                ? `Apólice vencida há ${Math.abs(g.days_remaining)} dia(s)`
+                : `Apólice vence em ${g.days_remaining} dia(s)`;
+            const level: Alert['level'] = g.days_remaining < 0 ? 'critical' : 'warning';
+            return { id: c.id, level, label, contract: c };
+        })
+        .filter((a): a is Alert => a !== null);
     const alerts: Alert[] = [
         ...vencidos.map(c => ({ id: c.id, level: 'critical' as const, label: `Vencido há ${Math.abs(daysUntil(c.end_date!))} dia(s)`, contract: c })),
+        ...guaranteeAlerts,
         ...vencendo30.map(c => ({ id: c.id, level: 'warning' as const, label: `Vence em ${daysUntil(c.end_date!)} dia(s)`, contract: c })),
         ...reajustePendente.map(c => ({ id: c.id, level: 'warning' as const, label: `Reajuste ${c.reajuste_index} em ${daysUntil(c.reajuste_proximo!)} dia(s)`, contract: c })),
         ...semAprovacao.map(c => ({ id: c.id, level: 'info' as const, label: 'Aguardando aprovação', contract: c })),
@@ -150,6 +171,11 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
             sub: `${vencidos.length > 0 ? `${vencidos.length} contrato(s) vencido(s)` : 'Sem vencimentos'}`,
             icon: Clock, color: saldoContratual < 0 ? 'text-red-600' : 'text-gray-500', bg: saldoContratual < 0 ? 'bg-red-50' : 'bg-gray-50',
         },
+        {
+            label: 'Apólices Vencendo', value: guaranteesExpiring.length.toString(),
+            sub: guaranteesExpiring.some(g => g.days_remaining < 0) ? `${guaranteesExpiring.filter(g => g.days_remaining < 0).length} já vencida(s)` : 'Próximos 30 dias',
+            icon: Shield, color: guaranteesExpiring.length > 0 ? 'text-red-600' : 'text-gray-400', bg: guaranteesExpiring.length > 0 ? 'bg-red-50' : 'bg-gray-50',
+        },
     ] : [
         {
             label: 'Contratos Ativos', value: active.length.toString(),
@@ -170,6 +196,11 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
             label: 'Reajustes Pendentes', value: reajustePendente.length.toString(),
             sub: `${semAprovacao.length} aguardando aprovação`,
             icon: RotateCcw, color: reajustePendente.length > 0 ? 'text-orange-600' : 'text-gray-400', bg: reajustePendente.length > 0 ? 'bg-orange-50' : 'bg-gray-50',
+        },
+        {
+            label: 'Apólices Vencendo', value: guaranteesExpiring.length.toString(),
+            sub: guaranteesExpiring.some(g => g.days_remaining < 0) ? `${guaranteesExpiring.filter(g => g.days_remaining < 0).length} já vencida(s)` : 'Próximos 30 dias',
+            icon: Shield, color: guaranteesExpiring.length > 0 ? 'text-red-600' : 'text-gray-400', bg: guaranteesExpiring.length > 0 ? 'bg-red-50' : 'bg-gray-50',
         },
     ];
 
@@ -205,7 +236,7 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
             )}
 
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 {kpis.map(k => (
                     <div key={k.label} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 space-y-3">
                         <div className={`w-9 h-9 ${k.bg} rounded-xl flex items-center justify-center`}>

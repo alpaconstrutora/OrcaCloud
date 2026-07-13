@@ -104,6 +104,21 @@ export interface Contract {
     billing_mode?: BillingMode;
     release_requirements?: ReleaseRequirements;
     minuta_versions?: MinutaVersion[];
+    // Fase 5 — Retenção faseada (CP-08 / Cl.18)
+    retention_cap?: number;
+    retention_release_provisional?: number;
+    retention_release_definitive?: number;
+    retention_definitive_days?: number;
+    // Fase 5 — Penalidades e limite de responsabilidade (CP-09/10, Cl.23/31)
+    liability_cap?: number;
+    penalty_daily_rate?: number;
+    penalty_moratoria_cap?: number;
+    penalty_material_rate?: number;
+    // Fase 5 — Identificação da obra (CP-02)
+    cno?: string;
+    obra_registration?: string;
+    manager_name?: string;
+    inspector_name?: string;
     created_at?: string;
 }
 
@@ -198,4 +213,76 @@ export interface ContractUtilityBill {
     due_date?: string;
     notes?: string;
     created_at?: string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Fase 5 — Blindagem Jurídico-Financeira (Seguros/Garantias/Penalidades)
+// PLANO_MODULO_CONTRATOS_GAPS.md
+// ─────────────────────────────────────────────────────────────
+
+export type GuaranteeKind =
+    | 'RC_GERAL' | 'RC_PROFISSIONAL' | 'SEGURO_GARANTIA' | 'FIANCA'
+    | 'CAUCAO' | 'EQUIPAMENTOS' | 'AMBIENTAL' | 'GARANTIA_ADIANTAMENTO';
+
+export type GuaranteeStatus = 'VIGENTE' | 'VENCIDA' | 'CANCELADA' | 'SUBSTITUIDA';
+
+export interface ContractGuarantee {
+    id: string;
+    organization_id: string;
+    contract_id: string;
+    kind: GuaranteeKind;
+    insurer?: string;
+    policy_number?: string;
+    coverage_limit?: number;
+    premium?: number;
+    valid_from?: string;
+    valid_until?: string;
+    document_url?: string;
+    status: GuaranteeStatus;
+    notes?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export type PenaltyKind = 'MORATORIA' | 'COMPENSATORIA' | 'SST' | 'OUTRA';
+export type PenaltyStatus = 'NOTIFICADA' | 'EM_CURA' | 'APLICADA' | 'CANCELADA';
+
+export interface ContractPenalty {
+    id: string;
+    organization_id: string;
+    contract_id: string;
+    kind: PenaltyKind;
+    reason: string;
+    base_value?: number;
+    amount: number;
+    status: PenaltyStatus;
+    cure_deadline?: string;
+    applied_at?: string;
+    compensated_measurement_id?: string;
+    notes?: string;
+    created_by?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export type RetentionReleaseKind = 'PROVISORIO' | 'DEFINITIVO' | 'MANUAL';
+
+export interface ContractRetentionRelease {
+    id: string;
+    organization_id: string;
+    contract_id: string;
+    kind: RetentionReleaseKind;
+    amount: number;
+    released_at: string;
+    released_by?: string;
+    notes?: string;
+    internal_transaction_id?: string;
+    created_at?: string;
+}
+
+export interface ContractRetentionLedger {
+    total_retained: number;
+    total_released: number;
+    balance: number;
+    retention_cap?: number;
 }

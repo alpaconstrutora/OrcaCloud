@@ -14,6 +14,7 @@ import Button from './ui/Button';
 const SUPPLIER_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
     { key: 'name', label: 'Fornecedor', sortable: true },
+    { key: 'nickname', label: 'Apelido', sortable: true },
     { key: 'type', label: 'Tipo', sortable: true },
     { key: 'category', label: 'Categoria', sortable: true },
     { key: 'organization', label: 'Organização', sortable: true },
@@ -24,13 +25,14 @@ const SUPPLIER_COLUMNS: ColumnConfig[] = [
 ];
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    code: 90, name: 260, type: 130, category: 160, organization: 200, contact: 220, document: 160, actions: 110,
+    code: 90, name: 260, nickname: 140, type: 130, category: 160, organization: 200, contact: 220, document: 160, actions: 110,
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca/ordenação já existentes, não os substitui.
 const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'name', label: 'Fornecedor', type: 'text' },
+    { key: 'nickname', label: 'Apelido', type: 'text' },
     { key: 'category', label: 'Categoria', type: 'text' },
     { key: 'organization', label: 'Organização', type: 'text' },
     { key: 'document', label: 'Documento', type: 'text' },
@@ -42,6 +44,7 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
 function getAdvancedFilterValue(supplier: Supplier, key: string): unknown {
     switch (key) {
         case 'name': return supplier.name;
+        case 'nickname': return supplier.nickname ?? '';
         case 'category': return supplier.category ?? '';
         case 'organization': return supplier.organization_name ?? '';
         case 'document': return supplier.document ?? '';
@@ -215,6 +218,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     const tableTotalWidth = 40
         + (tableColumns.visibleColumns.includes('code') ? cols.getWidth('code') : 0)
         + (tableColumns.visibleColumns.includes('name') ? cols.getWidth('name') : 0)
+        + (tableColumns.visibleColumns.includes('nickname') ? cols.getWidth('nickname') : 0)
         + (tableColumns.visibleColumns.includes('type') ? cols.getWidth('type') : 0)
         + (tableColumns.visibleColumns.includes('category') ? cols.getWidth('category') : 0)
         + (tableColumns.visibleColumns.includes('organization') ? cols.getWidth('organization') : 0)
@@ -241,6 +245,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
                     if (col === 'code') return (a.code || '').localeCompare(b.code || '', 'pt-BR', { numeric: true }) * dir;
                     if (col === 'name') return a.name.localeCompare(b.name) * dir;
+                    if (col === 'nickname') return (a.nickname || '').localeCompare(b.nickname || '') * dir;
                     if (col === 'type') return (a.type || '').localeCompare(b.type || '') * dir;
                     if (col === 'category') return (a.category || '').localeCompare(b.category || '') * dir;
                     if (col === 'organization') return (a.organization_name || '').localeCompare(b.organization_name || '') * dir;
@@ -398,6 +403,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                 <col style={{ width: '40px' }} />
                                 {tableColumns.visibleColumns.includes('code') && <col data-col-key="code" style={{ width: `${cols.getWidth('code')}px` }} />}
                                 {tableColumns.visibleColumns.includes('name') && <col data-col-key="name" style={{ width: `${cols.getWidth('name')}px` }} />}
+                                {tableColumns.visibleColumns.includes('nickname') && <col data-col-key="nickname" style={{ width: `${cols.getWidth('nickname')}px` }} />}
                                 {tableColumns.visibleColumns.includes('type') && <col data-col-key="type" style={{ width: `${cols.getWidth('type')}px` }} />}
                                 {tableColumns.visibleColumns.includes('category') && <col data-col-key="category" style={{ width: `${cols.getWidth('category')}px` }} />}
                                 {tableColumns.visibleColumns.includes('organization') && <col data-col-key="organization" style={{ width: `${cols.getWidth('organization')}px` }} />}
@@ -429,6 +435,11 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                     {tableColumns.visibleColumns.includes('name') && (
                                         <SortableHeader label="Fornecedor" colKey="name" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
                                             <cols.ResizeHandle colKey="name" />
+                                        </SortableHeader>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('nickname') && (
+                                        <SortableHeader label="Apelido" colKey="nickname" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5 overflow-hidden">
+                                            <cols.ResizeHandle colKey="nickname" />
                                         </SortableHeader>
                                     )}
                                     {tableColumns.visibleColumns.includes('type') && (
@@ -488,6 +499,11 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             {tableColumns.visibleColumns.includes('name') && (
                                                 <td className="px-6 py-2.5">
                                                     <p className="text-sm font-normal text-gray-700 group-hover:text-blue-700 transition-colors truncate" title={supplier.name}>{getSupplierDisplayName(supplier, nameMode)}</p>
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('nickname') && (
+                                                <td className="px-6 py-2.5">
+                                                    <span className="text-sm font-normal text-gray-700 truncate block">{supplier.nickname || '-'}</span>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('type') && (

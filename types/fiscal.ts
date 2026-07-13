@@ -169,6 +169,9 @@ export interface ProcessingJob {
   finished_at: string | null;
   next_retry_at: string | null;
   created_at: string;
+  dismissed_at: string | null;
+  dismissed_by: string | null;
+  dismissal_reason: string | null;
 }
 
 // ProcessingJob enriquecido com dados do raw_document

@@ -298,6 +298,114 @@ export const commercialFinanceService = {
     },
 
     /**
+     * Visão consolidada (somente leitura) do Vault Comercial de "Todas as
+     * Organizações". Reconstrói a antiga "Global View" (removida no commit
+     * dbf5f12 por vazar dados de QUALQUER tenant do sistema — a busca era
+     * `.eq('name', 'Gestão Comercial')` sem filtro de organização nenhum),
+     * mas agora escopada explicitamente à lista de organizações que o
+     * usuário chamador de fato pertence (`userOrganizationIds`, vinda de
+     * useStore().organizations no front — nunca uma varredura livre da
+     * tabela). Cada projeto "Gestão Comercial" fora dessa lista nunca é
+     * lido, então não há como um usuário ver dados de uma organização à
+     * qual não pertence.
+     *
+     * Retorna um "projeto virtual" (isVirtual: true) com installments e
+     * transactions mesclados e deduplicados — cada item carrega
+     * sourceProjectId para permitir "save-through" ao vault real de origem
+     * (ProjectFinancialManager já sabe fazer isso).
+     */
+    async getConsolidatedVault(userOrganizationIds: string[]) {
+        if (!userOrganizationIds || userOrganizationIds.length === 0) {
+            return null;
+        }
+
+        const { data: projects, error } = await supabase
+            .from('projects')
+            .select('id, name, settings, budget, organization_id')
+            .eq('name', 'Gestão Comercial')
+            .in('organization_id', userOrganizationIds)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('[COMMERCIAL-FINANCE] Error consolidating vaults:', error);
+            return null;
+        }
+
+        if (!projects || projects.length === 0) return null;
+
+        if (projects.length === 1) {
+            return await this.cleanupOrphanedInstallments(projects[0] as CommercialProjectRow);
+        }
+
+        console.log(`[COMMERCIAL-FINANCE] Consolidating ${projects.length} commercial vaults (organizações do usuário) for "Todas as Organizações".`);
+
+        const consolidatedInstallments: (PaymentInstallment & { sourceProjectId?: string })[] = [];
+        const consolidatedTransactions: (Record<string, unknown> & { sourceProjectId?: string })[] = [];
+
+        for (const p of projects) {
+            const cleanedP = await this.cleanupOrphanedInstallments(p as CommercialProjectRow);
+
+            const info = cleanedP.settings?.financialInfo;
+            if (!info) continue;
+
+            if (info.installments) {
+                info.installments.forEach((i: PaymentInstallment) => {
+                    // Deduplicação por "biometria" do lançamento (dealId + descrição normalizada + valor),
+                    // já que o mesmo negócio pode ter sido salvo em contratos/vaults diferentes.
+                    const descr = i.description || 'sem-titulo';
+                    const normalizedDescr = descr
+                        .replace(/^Receita: (Venda|Aluguel) - /, '')
+                        .replace(/ - Deal #.{8}$/, '')
+                        .trim();
+                    const compositeKey = `${i.dealId || 'manual'}-${normalizedDescr}-${i.value}`;
+
+                    const existingIndex = consolidatedInstallments.findIndex(existing => {
+                        const existDescr = (existing.description || 'sem-titulo')
+                            .replace(/^Receita: (Venda|Aluguel) - /, '')
+                            .replace(/ - Deal #.{8}$/, '')
+                            .trim();
+                        const existingKey = `${existing.dealId || 'manual'}-${existDescr}-${existing.value}`;
+                        return existingKey === compositeKey;
+                    });
+
+                    if (existingIndex === -1) {
+                        consolidatedInstallments.push({ ...i, sourceProjectId: cleanedP.id });
+                    } else if (i.status === 'PAID' && consolidatedInstallments[existingIndex].status !== 'PAID') {
+                        consolidatedInstallments[existingIndex] = { ...i, sourceProjectId: cleanedP.id };
+                    }
+                });
+            }
+
+            if (info.transactions) {
+                info.transactions.forEach((t: Record<string, unknown>) => {
+                    const compositeKey = `${t['dealId'] || 'manual'}-${t['title']}-${t['value']}-${t['date']}`;
+                    const alreadyExists = consolidatedTransactions.some(existing => {
+                        const existingKey = `${existing['dealId'] || 'manual'}-${existing['title']}-${existing['value']}-${existing['date']}`;
+                        return existingKey === compositeKey;
+                    });
+                    if (!alreadyExists) {
+                        consolidatedTransactions.push({ ...t, sourceProjectId: cleanedP.id });
+                    }
+                });
+            }
+        }
+
+        return {
+            ...projects[0],
+            isVirtual: true,
+            settings: {
+                ...projects[0].settings,
+                organizationId: undefined,
+                financialInfo: {
+                    ...projects[0].settings.financialInfo,
+                    installments: consolidatedInstallments,
+                    transactions: consolidatedTransactions,
+                },
+            },
+        };
+    },
+
+    /**
      * Sincroniza todas as negociações finalizadas de uma organização.
      * Útil para recuperar dados históricos ou forçar atualização total.
      */

@@ -236,9 +236,11 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             try {
                 // Sincronização Flexível: Removidas as travas de memória para garantir que o Waldir termine o resgate.
                 // Carregar todas as organizações para o filtro se estivermos no modo Gestão Comercial
+                // (variável local — não depende do próximo render para refletir o valor carregado agora)
+                let orgListLocal = allOrgs;
                 if (settings.name === 'Gestão Comercial' && allOrgs.length === 0) {
-                    const orgList = await organizationService.listOrganizations();
-                    setAllOrgs(orgList || []);
+                    orgListLocal = await organizationService.listOrganizations() || [];
+                    setAllOrgs(orgListLocal);
                 }
 
                 // Determinar a organização atual baseada no filtro ou na prop fixa
@@ -251,18 +253,34 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 } else if (currentOrgId) {
                     // Se temos o ID mas não o objeto da organização (ou o objeto atual é diferente), buscamos
                     if (!organization || organization.id !== currentOrgId) {
-                        const orgs = allOrgs.length > 0 ? allOrgs : await organizationService.listOrganizations();
+                        const orgs = orgListLocal.length > 0 ? orgListLocal : await organizationService.listOrganizations();
                         const currentOrg = orgs.find(o => o.id === currentOrgId);
                         if (currentOrg) setOrganization(currentOrg);
                     }
                 }
 
-                // Fase 0.1 (Gestão de Vendas): bloqueia "Global Mode" que vazava
-                // dados cross-tenant. Sem org definida → não carrega Vault.
+                // Fase 0.1 (Gestão de Vendas) fechou o "Global Mode" que vazava dados
+                // de QUALQUER tenant do sistema (buscava por nome, sem filtro de
+                // organização). Agora que a causa raiz foi corrigida — a consolidação
+                // é escopada explicitamente à lista de organizações do próprio
+                // usuário (orgListLocal, carregada via RLS) — "Todas as Organizações"
+                // volta a funcionar aqui, só que com o mesmo isolamento das demais
+                // telas: nunca lê o vault de uma organização que o usuário não integra.
                 if (!currentOrgId) {
-                    console.log('[FINANCIAL] Sem organização selecionada — Vault não carregado (anti-leak)');
-                    setCommercialProject(null);
-                    setCommercialDeals([]);
+                    if (settings.name === 'Gestão Comercial' && orgListLocal.length > 0) {
+                        console.log(`[FINANCIAL] Todas as Organizações: consolidando ${orgListLocal.length} vault(s) do usuário.`);
+                        const [proj, deals, clientsData] = await Promise.all([
+                            commercialFinanceService.getConsolidatedVault(orgListLocal.map(o => o.id)),
+                            commercialService.listDeals(),
+                            clientService.listClients()
+                        ]);
+                        setCommercialProject(proj);
+                        setCommercialDeals(deals);
+                        setClients(clientsData);
+                    } else {
+                        setCommercialProject(null);
+                        setCommercialDeals([]);
+                    }
                     return;
                 }
 

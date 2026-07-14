@@ -72,23 +72,28 @@ export const documentService = {
     }
 
     let targetProjectIds: string[] = [];
-    if (filters?.projectId && organizationId) {
+    if (filters?.projectId) {
       targetProjectIds.push(filters.projectId);
       try {
+        // Deriva a organização do próprio projeto selecionado — não depende
+        // do organizationId do chamador (que fica ausente em "Todas as
+        // Organizações"), então a busca de irmãos funciona igual nos dois casos.
         const { data: currentProj } = await supabase
           .from('projects')
-          .select('name')
+          .select('name, organization_id')
           .eq('id', filters.projectId)
           .maybeSingle();
 
-        if (currentProj?.name) {
+        const projectOrgId = currentProj?.organization_id ?? organizationId;
+
+        if (currentProj?.name && projectOrgId) {
           const normTarget = normalizeProjectName(currentProj.name);
-          
+
           if (normTarget) {
             const { data: allProjects } = await supabase
               .from('projects')
               .select('id, name')
-              .eq('organization_id', organizationId);
+              .eq('organization_id', projectOrgId);
 
             if (allProjects && allProjects.length > 0) {
               const matchedSiblings = allProjects.filter((p: any) => {
@@ -103,7 +108,7 @@ export const documentService = {
             const { data: siblings } = await supabase
               .from('projects')
               .select('id')
-              .eq('organization_id', organizationId)
+              .eq('organization_id', projectOrgId)
               .ilike('name', currentProj.name);
 
             if (siblings && siblings.length > 0) {

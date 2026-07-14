@@ -1,5 +1,6 @@
 import React from 'react';
 import ActionIconButton from './ui/ActionIconButton';
+import { InlineActionTray } from './ui/InlineActionTray';
 import {
   FolderOpen,
   Upload,
@@ -1152,7 +1153,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     if (currentFolderId && newDocFile) {
       const targetFolder = folders.find(f => f.id === currentFolderId);
       if (targetFolder?.naming_mask) {
-        if (!validateFileNameAgainstMask(newDocFile.name, targetFolder.naming_mask)) {
+        const fileExt = newDocFile.name.split('.').pop() || 'pdf';
+        const baseName = newDocName || newDocFile.name.split('.').slice(0, -1).join('.');
+        const typedNameWithExt = `${baseName}.${fileExt}`;
+        
+        if (!validateFileNameAgainstMask(newDocFile.name, targetFolder.naming_mask) || 
+            !validateFileNameAgainstMask(typedNameWithExt, targetFolder.naming_mask)) {
           // Calcula pré-preenchimentos inteligentes
           const uploadProjId = selectedProjectId !== 'all' ? selectedProjectId : newDocProjectId;
           const uploadProj = projects?.find(p => p.id === uploadProjId);
@@ -2114,30 +2120,34 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                   )}
                                   {!doc.is_integrated && (
                                     <>
-                                      {isOrgAdmin && (
-                                        <ActionIconButton kind="move" onClick={() => { setMovingDocId(doc.id); setTargetFolderId(doc.folder_id || null); setMoveModalOpen(true); }} />
-                                      )}
-                                      <ActionIconButton kind="qrcode" onClick={() => setSelectedDocForQrCode(doc)} />
-                                      {doc.active_version && (doc.active_version.mime_type === 'application/pdf' || doc.nome.toLowerCase().endsWith('.pdf')) && (
-                                        <ActionIconButton kind="annotate" onClick={() => setSelectedDocForMarkup(doc)} />
-                                      )}
+                                      {/* Sempre visíveis: Editar + (Download acima) */}
                                       <ActionIconButton kind="settings" onClick={() => handleStartEditDoc(doc)} />
-                                      {isOrgAdmin && (
-                                        <ActionIconButton kind="share" onClick={() => openShareModal(doc.id)} />
-                                      )}
-                                      <ActionIconButton kind="history" onClick={async (e: React.MouseEvent<HTMLButtonElement>) => {
-                                        const btn = e.currentTarget; btn.style.pointerEvents = 'none'; btn.style.opacity = '0.7';
-                                        try {
-                                          const fullDoc = await documentService.getDocumentById(doc.id);
-                                          if (!fullDoc) return;
-                                          setSelectedDocForVersions(fullDoc); loadApprovalsForDoc(fullDoc.id); loadAuditLogsForDoc(fullDoc.id);
-                                        } finally {
-                                          btn.style.pointerEvents = 'auto'; btn.style.opacity = '1';
-                                        }
-                                      }} />
-                                      {isOrgAdmin && (
-                                        <ActionIconButton kind="delete" onClick={() => handleDeleteDoc(doc.id)} />
-                                      )}
+                                      {/* Ações secundárias — bandeja horizontal (abre para a esquerda) */}
+                                      <InlineActionTray>
+                                        {isOrgAdmin && (
+                                          <ActionIconButton kind="move" onClick={() => { setMovingDocId(doc.id); setTargetFolderId(doc.folder_id || null); setMoveModalOpen(true); }} />
+                                        )}
+                                        <ActionIconButton kind="qrcode" onClick={() => setSelectedDocForQrCode(doc)} />
+                                        {doc.active_version && (doc.active_version.mime_type === 'application/pdf' || doc.nome.toLowerCase().endsWith('.pdf')) && (
+                                          <ActionIconButton kind="annotate" onClick={() => setSelectedDocForMarkup(doc)} />
+                                        )}
+                                        {isOrgAdmin && (
+                                          <ActionIconButton kind="share" onClick={() => openShareModal(doc.id)} />
+                                        )}
+                                        <ActionIconButton kind="history" onClick={async (e: React.MouseEvent<HTMLButtonElement>) => {
+                                          const btn = e.currentTarget; btn.style.pointerEvents = 'none'; btn.style.opacity = '0.7';
+                                          try {
+                                            const fullDoc = await documentService.getDocumentById(doc.id);
+                                            if (!fullDoc) return;
+                                            setSelectedDocForVersions(fullDoc); loadApprovalsForDoc(fullDoc.id); loadAuditLogsForDoc(fullDoc.id);
+                                          } finally {
+                                            btn.style.pointerEvents = 'auto'; btn.style.opacity = '1';
+                                          }
+                                        }} />
+                                        {isOrgAdmin && (
+                                          <ActionIconButton kind="delete" onClick={() => handleDeleteDoc(doc.id)} />
+                                        )}
+                                      </InlineActionTray>
                                     </>
                                   )}
                                 </div>

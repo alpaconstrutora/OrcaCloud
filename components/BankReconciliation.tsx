@@ -1259,9 +1259,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         setIsLoading(true);
         try {
             // Datas efetivas: competência tem precedência sobre início/fim manual
-            const effStart = competencia ? `${competencia}-01` : startDate;
+            // (competência pode ser "AAAA" — ano todo — ou "AAAA-MM")
+            const competenciaIsYearOnly = !!competencia && !competencia.includes('-');
+            const effStart = competencia
+                ? (competenciaIsYearOnly ? `${competencia}-01-01` : `${competencia}-01`)
+                : startDate;
             const effEnd = competencia
-                ? `${competencia}-${String(new Date(+competencia.split('-')[0], +competencia.split('-')[1], 0).getDate()).padStart(2, '0')}`
+                ? (competenciaIsYearOnly
+                    ? `${competencia}-12-31`
+                    : `${competencia}-${String(new Date(+competencia.split('-')[0], +competencia.split('-')[1], 0).getDate()).padStart(2, '0')}`)
                 : endDate;
 
             // Load Bank Transactions
@@ -3294,21 +3300,30 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         </button>
                     </div>
 
-                    {/* Filtro de competência mensal */}
+                    {/* Filtro de competência — ano isolado (ano todo) ou ano+mês */}
                     <div className="flex items-center gap-1.5 h-9 bg-indigo-50 px-2.5 rounded-[6px] border border-indigo-100">
                         <span className="text-xs font-medium text-indigo-400">Competência</span>
                         <select
                             value={competencia ? competencia.split('-')[0] : ''}
                             onChange={(e) => {
                                 const year = e.target.value;
-                                const month = competencia ? competencia.split('-')[1] : '01';
-                                if (year && month) {
+                                if (!year) {
+                                    setCompetencia('');
+                                    setStartDate('');
+                                    setEndDate('');
+                                    return;
+                                }
+                                const month = competencia.includes('-') ? competencia.split('-')[1] : '';
+                                if (month) {
                                     const val = `${year}-${month}`;
                                     setCompetencia(val);
-                                    const [y, m] = [parseInt(year), parseInt(month)];
-                                    const lastDay = new Date(y, m, 0).getDate();
+                                    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
                                     setStartDate(`${val}-01`);
                                     setEndDate(`${val}-${String(lastDay).padStart(2, '0')}`);
+                                } else {
+                                    setCompetencia(year);
+                                    setStartDate(`${year}-01-01`);
+                                    setEndDate(`${year}-12-31`);
                                 }
                             }}
                             className="bg-transparent border-none text-xs font-semibold text-indigo-700 focus:ring-0 p-0 w-14 cursor-pointer"
@@ -3319,22 +3334,27 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             ))}
                         </select>
                         <select
-                            value={competencia ? competencia.split('-')[1] : ''}
+                            value={competencia.includes('-') ? competencia.split('-')[1] : ''}
+                            disabled={!competencia}
                             onChange={(e) => {
                                 const month = e.target.value;
-                                const year = competencia ? competencia.split('-')[0] : String(new Date().getFullYear());
-                                if (year && month) {
+                                const year = competencia.split('-')[0];
+                                if (!year) return;
+                                if (month) {
                                     const val = `${year}-${month}`;
                                     setCompetencia(val);
-                                    const [y, m] = [parseInt(year), parseInt(month)];
-                                    const lastDay = new Date(y, m, 0).getDate();
+                                    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
                                     setStartDate(`${val}-01`);
                                     setEndDate(`${val}-${String(lastDay).padStart(2, '0')}`);
+                                } else {
+                                    setCompetencia(year);
+                                    setStartDate(`${year}-01-01`);
+                                    setEndDate(`${year}-12-31`);
                                 }
                             }}
-                            className="bg-transparent border-none text-xs font-semibold text-indigo-700 focus:ring-0 p-0 w-12 cursor-pointer"
+                            className="bg-transparent border-none text-xs font-semibold text-indigo-700 focus:ring-0 p-0 w-16 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                            <option value="">Mês</option>
+                            <option value="">Ano todo</option>
                             {['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'].map((m, i) => (
                                 <option key={i} value={String(i + 1).padStart(2, '0')}>{m}</option>
                             ))}
@@ -4118,8 +4138,17 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     placeholder="Buscar por descrição, categoria ou cliente/fornecedor..."
                                     value={bankSearch}
                                     onChange={(e) => setBankSearch(e.target.value)}
-                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    className="w-full h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                 />
+                                {bankSearch && (
+                                    <button
+                                        onClick={() => setBankSearch('')}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                        title="Limpar busca"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
                             </div>
                             )}
                             <div className={activeView === 'statement' ? "flex items-center gap-2 order-2 shrink-0" : "flex items-center gap-2"}>

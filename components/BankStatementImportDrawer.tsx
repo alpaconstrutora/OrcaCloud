@@ -52,7 +52,7 @@ export default function BankStatementImportDrawer({
     const inputRef = useRef<HTMLInputElement>(null);
 
     const year = competencia ? competencia.split('-')[0] : '';
-    const month = competencia ? competencia.split('-')[1] : '';
+    const month = competencia.includes('-') ? competencia.split('-')[1] : '';
 
     const processFiles = useCallback(async (fileList: FileList | null) => {
         if (!fileList || fileList.length === 0) return;

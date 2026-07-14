@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     Bell,
     Settings,
     History,
     Plus,
-    Trash2,
-    Edit2,
     Play,
     CheckCircle2,
     XCircle,
@@ -453,19 +452,9 @@ function ReguaTab({ organizationId }: { organizationId: string }) {
                             </div>
 
                             {/* Actions */}
-                            <div className="flex items-center gap-1 shrink-0">
-                                <button
-                                    onClick={() => setEditing(rule)}
-                                    className="p-1.5 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-colors"
-                                >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    onClick={() => rule.id && handleDelete(rule.id)}
-                                    className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                <ActionIconButton kind="edit" size="sm" onClick={() => setEditing(rule)} />
+                                <ActionIconButton kind="delete" size="sm" onClick={() => rule.id && handleDelete(rule.id)} />
                             </div>
                         </div>
                     ))}

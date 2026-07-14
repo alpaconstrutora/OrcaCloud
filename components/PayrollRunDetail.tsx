@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import {
     Play, FileText, CheckCircle2, History, Loader2, AlertCircle,
-    ArrowRight, X, Trash2, ShieldAlert, Plus, RefreshCw
+    ArrowRight, X, ShieldAlert, Plus, RefreshCw
 } from 'lucide-react';
 import { PayrollRun } from '../services/payrollService';
 import { formatDate } from '../lib/payrollUIHelpers';
 import Button from './ui/Button';
+import ActionIconButton from './ui/ActionIconButton';
 
 interface PayrollRunDetailProps {
     run: PayrollRun;
@@ -110,15 +111,7 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
                             </button>
                         )}
 
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => onDeleteRun(run.id)}
-                            className="text-slate-300 hover:text-rose-500"
-                            title="Excluir Ciclo"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <ActionIconButton kind="delete" title="Excluir Ciclo" onClick={() => onDeleteRun(run.id)} />
                     </div>
                 </div>
 

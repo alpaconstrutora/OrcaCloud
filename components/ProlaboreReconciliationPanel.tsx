@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-    Send, Lock, Unlock, Loader2, Check, X, AlertTriangle, Wallet, CheckCircle2, Clock, Building2, Undo2, Plus, Trash2, PencilLine,
+    Send, Lock, Unlock, Loader2, Check, X, AlertTriangle, Wallet, CheckCircle2, Clock, Building2, Undo2, Plus, PencilLine,
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { companyService } from '../services/companyService';
 import { remuneracaoSocietariaService } from '../services/remuneracaoSocietariaService';
@@ -608,11 +609,13 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                                         <td className="px-6 py-2.5 text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 {row.source === 'manual' ? (
-                                                    <button onClick={() => handleDeleteManualEntry(row)} disabled={actingId === row.id}
+                                                    <ActionIconButton
+                                                        kind="delete"
+                                                        disabled={actingId === row.id}
                                                         title="Excluir lançamento manual"
-                                                        className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50">
-                                                        {actingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                                                    </button>
+                                                        icon={actingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+                                                        onClick={() => handleDeleteManualEntry(row)}
+                                                    />
                                                 ) : row.source === 'internal' ? (
                                                     <>
                                                         {row.approval_status !== 'APROVADO' && (

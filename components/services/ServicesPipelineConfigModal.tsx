@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { X, Plus } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import {
   servicesCommercialService,
   PipelineStageConfig,
@@ -142,9 +143,7 @@ const ServicesPipelineConfigModal: React.FC<Props> = ({ organizationId, onClose,
                       placeholder="Ex: 1º contato, Em análise…"
                       className="flex-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1 text-form-input text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-400"
                     />
-                    <button onClick={() => removeSubStatus(r.stage, idx)} className="text-gray-300 hover:text-red-500">
-                      <Trash2 size={13} />
-                    </button>
+                    <ActionIconButton kind="delete" size="sm" onClick={() => removeSubStatus(r.stage, idx)} />
                   </div>
                 ))}
                 <button

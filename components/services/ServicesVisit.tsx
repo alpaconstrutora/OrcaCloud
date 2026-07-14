@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { ArrowLeft, Camera, MapPin, Plus, Check, X, Trash2 } from 'lucide-react';
+import { ArrowLeft, Camera, MapPin, Plus, Check, X } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import { servicesCommercialService, ServiceVisit } from '../../services/servicesCommercialService';
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
@@ -170,9 +171,7 @@ const ServicesVisit: React.FC<Props> = ({ opportunityId, organizationId, onBack 
                 {c.ok && <Check size={12} className="text-white" />}
               </button>
               <span className={`text-sm flex-1 ${c.ok ? 'line-through text-gray-400' : 'text-gray-900 dark:text-white'}`}>{c.item}</span>
-              <button onClick={() => removeItem(i)} className="text-gray-300 hover:text-red-400">
-                <Trash2 size={14} />
-              </button>
+              <ActionIconButton kind="delete" size="sm" onClick={() => removeItem(i)} />
             </div>
             <input
               className="ml-8 w-[calc(100%-2.5rem)] text-form-input rounded border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1 text-gray-600 dark:text-gray-400"

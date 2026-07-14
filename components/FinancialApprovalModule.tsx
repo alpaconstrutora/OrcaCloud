@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     AlertCircle, Check, CheckCircle2, ChevronDown, ChevronUp,
-    Loader2, Plus, Send, Settings, Shield, Trash2, X,
+    Loader2, Plus, Send, Settings, Shield, X,
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { financialApprovalService } from '../services/financialApprovalService';
 import { contractService } from '../services/contractService';
 import { orderService } from '../services/orderService';
@@ -416,12 +417,7 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
                                 >
                                     <Settings className="w-4 h-4" />
                                 </button>
-                                <button
-                                    onClick={() => item.id && handleDelete(item.id)}
-                                    className="p-1.5 hover:bg-red-50 rounded-lg transition-colors text-gray-400 hover:text-red-500"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
+                                <ActionIconButton kind="delete" onClick={() => item.id && handleDelete(item.id)} />
                             </div>
                         </div>
                     ))}

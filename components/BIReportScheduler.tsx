@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-    Mail, Plus, Power, Trash2, Send, Loader2, Clock,
+    Mail, Plus, Power, Send, Loader2, Clock,
     CheckCircle, AlertCircle, Download, X, Calendar,
 } from 'lucide-react';
 import Button from './ui/Button';
+import ActionIconButton from './ui/ActionIconButton';
 import { biReportService, BIReportSchedule, NewSchedule, ReportFrequency } from '../services/biReportService';
 import type { BIExecutiveSummary } from '../types/bi';
 
@@ -214,13 +215,7 @@ const BIReportScheduler: React.FC<Props> = ({
                                     title="Editar">
                                     <Calendar size={14} />
                                 </button>
-                                <button
-                                    disabled={busy === s.id}
-                                    onClick={() => handleDelete(s.id)}
-                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
-                                    title="Excluir">
-                                    <Trash2 size={14} />
-                                </button>
+                                <ActionIconButton kind="delete" size="sm" disabled={busy === s.id} onClick={() => handleDelete(s.id)} />
                             </div>
                         </div>
                     ))}

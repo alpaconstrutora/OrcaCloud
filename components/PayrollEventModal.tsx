@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Loader2, Edit2, Trash2, Check } from 'lucide-react';
+import { X, Plus, Loader2, Check } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { payrollService, PayrollRun, PayrollRubric, PayrollEvent, PayrollItem, PayrollAuditLog, PayrollResultWithEmployee } from '../services/payrollService';
 import { payrollEngine } from '../services/payrollEngine';
 import {
@@ -358,24 +359,17 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                                 </p>
                                                 {run.status !== 'FECHADO' && (
                                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                        <button
-                                                            onClick={() => startEditing(ev)}
-                                                            className="p-1.5 text-slate-300 hover:text-indigo-600 transition-all rounded-lg hover:bg-indigo-50"
-                                                            title="Editar Lançamento"
-                                                        >
-                                                            <Edit2 className="w-3.5 h-3.5" />
-                                                        </button>
-                                                        <button
+                                                        <ActionIconButton kind="edit" size="sm" title="Editar Lançamento" onClick={() => startEditing(ev)} />
+                                                        <ActionIconButton
+                                                            kind="delete"
+                                                            size="sm"
+                                                            title="Excluir Lançamento"
                                                             onClick={() => {
                                                                 if (confirm('Deseja excluir este lançamento manual?')) {
                                                                     handleDeleteEvent(ev.id!);
                                                                 }
                                                             }}
-                                                            className="p-1.5 text-slate-300 hover:text-rose-500 transition-all rounded-lg hover:bg-rose-50"
-                                                            title="Excluir Lançamento"
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                        </button>
+                                                        />
                                                     </div>
                                                 )}
                                             </div>

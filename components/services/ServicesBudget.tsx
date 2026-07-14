@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import { servicesCommercialService, ServiceBudget, ServiceBudgetItem } from '../../services/servicesCommercialService';
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
@@ -112,9 +113,7 @@ const ServicesBudget: React.FC<Props> = ({ opportunityId, organizationId, onBack
             <input className={INPUT} value={it.unit ?? 'un'} onChange={e => updateItem(idx, 'unit', e.target.value)} />
             <input className={INPUT} type="number" min="0" value={it.quantity ?? ''} onChange={e => updateItem(idx, 'quantity', parseFloat(e.target.value) || 0)} />
             <input className={INPUT} type="number" min="0" step="0.01" value={it.unit_price ?? ''} onChange={e => updateItem(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
-            <button onClick={() => removeItem(idx)} className="text-gray-300 hover:text-red-400 flex justify-center">
-              <Trash2 size={15} />
-            </button>
+            <ActionIconButton kind="delete" className="flex justify-center" onClick={() => removeItem(idx)} />
           </div>
         ))}
 

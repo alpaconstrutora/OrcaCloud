@@ -177,6 +177,21 @@ substituir botões hand-rolled por `ActionIconButton`, rodar
   mesmíssimo tamanho — convertê-lo sozinho quebraria o pareamento visual dos
   dois ícones lado a lado.
 - **Lote D — RH (Labor*):** ~25 telas `Labor*` (muitas com 1 botão cada → rápido).
+  ✅ **Concluído (2026-07-14).** 26 arquivos auditados, 22 migrados (30+ pontos):
+  `LaborValeRefeicao`, `LaborEncargos`, `LaborAbsences`, `LaborTrainings`,
+  `LaborPortal`, `LaborContractors`, `LaborEPIs`, `LaborDiary`,
+  `LaborBIAnalytics`, `LaborTimeTracking`, `LaborTimeBank`, `LaborAllocations`,
+  `LaborTermination`, `LaborCargos` (4 pares), `LaborSST` (2 pares),
+  `LaborTeams`, `LaborRubrics`, `LaborProductivity`, `LaborEvaluation`
+  (2 pares), `LaborFiscalSettings` (2 pontos), `LaborDocuments` (2 blocos,
+  trio Editar+Download+Excluir — os 3 kinds de uma vez), `LaborATS` (2 pontos).
+  **Não migrados, com motivo:** `LaborEmployeeList` e `LaborIncentivos` têm
+  fileiras de 3–4 botões com cor **semântica** (violeta=compartilhado,
+  vermelho/verde=ativar-inativar, indigo=ambos "editar" e "ativar/desativar")
+  — converter só 2 quebraria o agrupamento visual. `LaborComunicacao` tem
+  Editar+Enviar+Excluir com 3 propósitos distintos igualmente estilizados —
+  mesmo risco. `LaborDocumentModal` não tinha botão algum, era um ícone
+  decorativo de cabeçalho de modal (Pencil/Upload conforme o modo).
 - **Lote E — suprimentos/estoque/qualidade:** `SupplyChain*`, `InventoryModule`,
   `quality/*`, `ProcessosModule`.
 - **Lote F — resto (empreendimento, investor, structural, schedule, offices…).**

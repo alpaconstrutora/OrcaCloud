@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import {
     Star, Plus, X, ChevronRight, Loader2, Award, Target,
-    Users, Calendar, Check, BarChart3, TrendingUp, Edit3,
-    Trash2, AlertTriangle, BookOpen, ClipboardCheck, ChevronDown,
+    Users, Calendar, Check, BarChart3, TrendingUp,
+    AlertTriangle, BookOpen, ClipboardCheck, ChevronDown,
     Play, Lock, RotateCcw, FileText
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     evaluationService,
@@ -897,16 +898,10 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
                                 </div>
                                 <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                                     {cycle.status === 'RASCUNHO' && (
-                                        <button onClick={() => { setEditingCycle(cycle); setShowCycleForm(true); }}
-                                            className="p-2 hover:bg-slate-100 rounded-xl transition-colors" title="Editar">
-                                            <Edit3 className="w-4 h-4 text-slate-400" />
-                                        </button>
+                                        <ActionIconButton kind="edit" onClick={() => { setEditingCycle(cycle); setShowCycleForm(true); }} />
                                     )}
                                     {cycle.status === 'RASCUNHO' && (
-                                        <button onClick={() => { if (confirm('Excluir este ciclo?')) deleteCycleMut.mutate(cycle.id); }}
-                                            className="p-2 hover:bg-red-100 rounded-xl transition-colors" title="Excluir">
-                                            <Trash2 className="w-4 h-4 text-red-400" />
-                                        </button>
+                                        <ActionIconButton kind="delete" onClick={() => { if (confirm('Excluir este ciclo?')) deleteCycleMut.mutate(cycle.id); }} />
                                     )}
                                     <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
                                 </div>
@@ -970,14 +965,8 @@ const LaborEvaluation: React.FC<LaborEvaluationProps> = ({ orgId, employees }) =
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <div className="flex items-center gap-1">
-                                                        <button onClick={() => { setEditingPdi(p); setShowPdiForm(true); }}
-                                                            className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors">
-                                                            <Edit3 className="w-3.5 h-3.5 text-slate-400" />
-                                                        </button>
-                                                        <button onClick={() => { if (confirm('Excluir?')) deletePdiMut.mutate(p.id); }}
-                                                            className="p-1.5 hover:bg-red-100 rounded-lg transition-colors">
-                                                            <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                                                        </button>
+                                                        <ActionIconButton kind="edit" size="sm" onClick={() => { setEditingPdi(p); setShowPdiForm(true); }} />
+                                                        <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir?')) deletePdiMut.mutate(p.id); }} />
                                                     </div>
                                                 </td>
                                             </tr>

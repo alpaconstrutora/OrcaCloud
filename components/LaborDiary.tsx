@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import {
     BookOpen, Plus, X, ChevronDown, Loader2, Search,
     CheckCircle2, Clock, Users, CloudRain, Sun, Cloud,
-    Zap, Trash2, Eye, ChevronRight
+    Zap, Eye, ChevronRight
 } from 'lucide-react';
 import Button from './ui/Button';
+import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     laborService, Employee, LaborTeam,
@@ -391,9 +392,7 @@ const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projec
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
-                                            <button onClick={() => { setEditingDiary(d); setShowForm(true); }} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors">
-                                                <Eye className="w-3.5 h-3.5" />
-                                            </button>
+                                            <ActionIconButton kind="edit" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => { setEditingDiary(d); setShowForm(true); }} />
                                             {d.status === 'ABERTO' && !d.batch_generated && (
                                                 <button
                                                     onClick={() => handleClose(d.id)}
@@ -404,9 +403,7 @@ const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projec
                                                     Fechar + Gerar Ponto
                                                 </button>
                                             )}
-                                            <button onClick={() => { if (confirm('Excluir este diário?')) deleteDiary.mutate(d.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors">
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                            <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir este diário?')) deleteDiary.mutate(d.id); }} />
                                         </div>
                                     </div>
                                 </div>

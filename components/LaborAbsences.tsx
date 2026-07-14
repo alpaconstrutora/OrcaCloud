@@ -2,8 +2,9 @@ import React, { useState, useRef } from 'react';
 import {
     CalendarDays, Plus, Check, X, Clock, AlertTriangle, ChevronDown,
     Loader2, Search, FileText, RotateCcw, Umbrella, Stethoscope,
-    Baby, ShieldAlert, Ban, HelpCircle, Upload, Eye, Trash2
+    Baby, ShieldAlert, Ban, HelpCircle, Upload, Eye
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     laborService, Employee,
@@ -720,12 +721,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                                                     </button>
                                                 )}
                                                 {(absence.status === 'REJEITADO' || absence.status === 'CANCELADO') && (
-                                                    <button
-                                                        onClick={() => { if (confirm('Excluir este registro?')) deleteMutation.mutate(absence.id); }}
-                                                        className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir este registro?')) deleteMutation.mutate(absence.id); }} />
                                                 )}
                                             </div>
                                         </div>

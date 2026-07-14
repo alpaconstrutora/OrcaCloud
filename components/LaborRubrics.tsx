@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-    Search, Plus, Filter, Edit2, Trash2, CheckCircle2,
+    Search, Plus, Filter, CheckCircle2,
     XCircle, AlertTriangle, Shield, X,
     Info, Calculator, AlertCircle, Save, Building2,
     TrendingUp, Loader2, DollarSign, Users, Banknote, Calendar
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { payrollService, PayrollRubric } from '../services/payrollService';
 import { rubricValidationService, ValidationResult } from '../services/rubricValidationService';
 
@@ -291,20 +292,8 @@ const LaborRubrics: React.FC = () => {
                                 </td>
                                 <td className="px-8 py-5 text-right">
                                     <div className="flex items-center justify-end gap-2">
-                                        <button 
-                                            onClick={() => handleOpenModal(r)}
-                                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                                            title="Editar"
-                                        >
-                                            <Edit2 size={16} />
-                                        </button>
-                                        <button 
-                                            onClick={() => handleDelete(r.code)}
-                                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                                            title="Excluir"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
+                                        <ActionIconButton kind="edit" onClick={() => handleOpenModal(r)} />
+                                        <ActionIconButton kind="delete" onClick={() => handleDelete(r.code)} />
                                     </div>
                                 </td>
                             </tr>

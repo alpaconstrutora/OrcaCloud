@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Clock, CheckCircle2, XCircle, Trash2, Loader2, ChevronDown, Calendar, Filter } from 'lucide-react';
+import { Plus, Clock, CheckCircle2, XCircle, Loader2, ChevronDown, Calendar, Filter } from 'lucide-react';
 import { laborService, TimeEntry, Employee } from '../services/laborService';
 import Button from './ui/Button';
+import ActionIconButton from './ui/ActionIconButton';
 
 interface LaborTimeTrackingProps {
     employees: Employee[];
@@ -272,9 +273,7 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                                                     </button>
                                                 </>
                                             )}
-                                            <button onClick={() => handleDelete(entry.id)} className="p-1.5 bg-slate-50 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Excluir">
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                            <ActionIconButton kind="delete" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleDelete(entry.id)} />
                                         </div>
                                     </td>
                                 </tr>

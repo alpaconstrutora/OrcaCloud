@@ -3,8 +3,9 @@ import {
     User, Clock, Umbrella, BookOpen, FileText, DollarSign,
     LogOut, Loader2, AlertTriangle, CheckCircle2, ChevronRight,
     Calendar, Shield, QrCode, Copy, X, Plus, RefreshCw,
-    Smartphone, Key, Trash2, Search, ChevronDown
+    Smartphone, Key, Search, ChevronDown
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { atsService, PortalToken, PortalEmployeeSummary } from '../services/atsService';
 import { laborService, Employee } from '../services/laborService';
@@ -490,9 +491,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
                                             <button onClick={() => handleGenerate(emp)} disabled={generating} className="p-1.5 hover:bg-amber-50 rounded-lg text-slate-300 hover:text-amber-500 transition-colors" title="Regenerar token">
                                                 {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                                             </button>
-                                            <button onClick={() => { if (confirm('Revogar acesso ao portal?')) revokeMutation.mutate(tok.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-slate-300 hover:text-rose-500 transition-colors">
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                            <ActionIconButton kind="delete" size="sm" title="Revogar acesso ao portal" onClick={() => { if (confirm('Revogar acesso ao portal?')) revokeMutation.mutate(tok.id); }} />
                                         </div>
                                     ) : (
                                         <button

@@ -3,6 +3,7 @@ import {
     Briefcase, Plus, Trash2, Pencil, X, Building2, Loader2, AlertCircle,
     Layers, DollarSign, Star, ChevronRight, Wrench, LayoutGrid, GitBranch
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { orgGovernanceService } from '../services/orgGovernanceService';
 import { companyService } from '../services/companyService';
@@ -153,14 +154,8 @@ const OrgCard: React.FC<OrgCardProps> = ({ role, nodeRef, funcaoById, deptById, 
             {/* Action buttons on hover */}
             {hovered && (
                 <div className="absolute top-2 right-2 flex gap-1 bg-white/90 rounded-lg border border-slate-100 shadow-sm p-0.5">
-                    <button onClick={e => { e.stopPropagation(); onEdit(); }}
-                        className="text-slate-400 hover:text-indigo-600 p-1 rounded-md hover:bg-slate-50">
-                        <Pencil className="w-3 h-3" />
-                    </button>
-                    <button onClick={e => { e.stopPropagation(); onDelete(); }}
-                        className="text-slate-400 hover:text-rose-600 p-1 rounded-md hover:bg-slate-50">
-                        <Trash2 className="w-3 h-3" />
-                    </button>
+                    <ActionIconButton kind="edit" size="sm" icon={<Pencil className="w-3 h-3" />} onClick={e => { e.stopPropagation(); onEdit(); }} />
+                    <ActionIconButton kind="delete" size="sm" icon={<Trash2 className="w-3 h-3" />} onClick={e => { e.stopPropagation(); onDelete(); }} />
                 </div>
             )}
         </div>
@@ -641,8 +636,8 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-1 shrink-0">
-                                                        <button onClick={() => openEditRole(role)} className="text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-slate-50"><Pencil className="w-4 h-4" /></button>
-                                                        <button onClick={() => handleDeleteRole(role)} className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-slate-50"><Trash2 className="w-4 h-4" /></button>
+                                                        <ActionIconButton kind="edit" onClick={() => openEditRole(role)} />
+                                                        <ActionIconButton kind="delete" onClick={() => handleDeleteRole(role)} />
                                                     </div>
                                                 </div>
                                             );
@@ -707,8 +702,8 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-1 shrink-0">
-                                                            <button onClick={() => openEditFuncao(f)} className="text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-slate-50"><Pencil className="w-4 h-4" /></button>
-                                                            <button onClick={() => handleDeleteFuncao(f)} className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-slate-50"><Trash2 className="w-4 h-4" /></button>
+                                                            <ActionIconButton kind="edit" onClick={() => openEditFuncao(f)} />
+                                                            <ActionIconButton kind="delete" onClick={() => handleDeleteFuncao(f)} />
                                                         </div>
                                                     </div>
                                                 );
@@ -736,8 +731,8 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId }) => {
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-1 shrink-0">
-                                                        <button onClick={() => openEditFuncao(f)} className="text-slate-400 hover:text-indigo-600 p-1.5 rounded-lg hover:bg-slate-50"><Pencil className="w-4 h-4" /></button>
-                                                        <button onClick={() => handleDeleteFuncao(f)} className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-slate-50"><Trash2 className="w-4 h-4" /></button>
+                                                        <ActionIconButton kind="edit" onClick={() => openEditFuncao(f)} />
+                                                        <ActionIconButton kind="delete" onClick={() => handleDeleteFuncao(f)} />
                                                     </div>
                                                 </div>
                                             );

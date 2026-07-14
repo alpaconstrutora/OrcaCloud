@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
-    FileText, Plus, Search, Trash2, Download,
-    AlertTriangle, Clock, User, Calendar, Pencil,
+    FileText, Plus, Search,
+    AlertTriangle, Clock, User, Calendar,
     LayoutGrid, List
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     laborService, Employee, EmployeeDocument, DocumentCategory
 } from '../services/laborService';
@@ -203,28 +204,10 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
                                     <div className={`p-3 rounded-2xl ${expired ? 'bg-red-50 text-red-600' : near ? 'bg-amber-50 text-amber-600' : 'bg-indigo-50 text-indigo-600'}`}>
                                         <FileText className="w-6 h-6" />
                                     </div>
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={() => handleEdit(doc)}
-                                            className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all"
-                                            title="Editar"
-                                        >
-                                            <Pencil className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDownload(doc)}
-                                            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
-                                            title="Download"
-                                        >
-                                            <Download className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(doc.id, doc.file_url)}
-                                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                                            title="Excluir"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                    <div className="flex items-center gap-1.5">
+                                        <ActionIconButton kind="edit" onClick={() => handleEdit(doc)} />
+                                        <ActionIconButton kind="download" onClick={() => handleDownload(doc)} />
+                                        <ActionIconButton kind="delete" onClick={() => handleDelete(doc.id, doc.file_url)} />
                                     </div>
                                 </div>
 
@@ -296,28 +279,10 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap">{getExpiryBadge(doc)}</td>
                                         <td className="px-4 py-3">
-                                            <div className="flex items-center gap-1 justify-end">
-                                                <button
-                                                    onClick={() => handleEdit(doc)}
-                                                    className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                                                    title="Editar"
-                                                >
-                                                    <Pencil className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDownload(doc)}
-                                                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                                                    title="Download"
-                                                >
-                                                    <Download className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(doc.id, doc.file_url)}
-                                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                    title="Excluir"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
+                                            <div className="flex items-center gap-1.5 justify-end">
+                                                <ActionIconButton kind="edit" size="sm" onClick={() => handleEdit(doc)} />
+                                                <ActionIconButton kind="download" size="sm" onClick={() => handleDownload(doc)} />
+                                                <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(doc.id, doc.file_url)} />
                                             </div>
                                         </td>
                                     </tr>

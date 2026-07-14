@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    Target, Building2, Users, Plus, Trash2,
+    Target, Building2, Users, Plus,
     Save, Loader2, AlertCircle, CheckCircle2, ChevronRight, Calendar, Copy, DollarSign, ArrowRightCircle, Banknote, Search, X, FileText
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { payrollService, Worksite, EmployeeAllocation } from '../services/payrollService';
 import { Employee } from '../services/laborService';
 import { getCodeLevelStyle, sortByCode } from '../utils/codeHierarchy';
@@ -476,12 +477,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees })
                                                     className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                                                 />
                                             </div>
-                                            <button 
-                                                onClick={() => handleRemoveAllocation(idx)}
-                                                className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors mt-5"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            <ActionIconButton kind="delete" className="mt-5" onClick={() => handleRemoveAllocation(idx)} />
                                         </div>
                                     ))
                                 )}

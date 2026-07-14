@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import {
     UserSearch, Plus, X, ChevronDown, Loader2, Search,
     Star, Phone, Mail, FileText, Check, ChevronRight,
-    Trash2, Eye, Pencil, Users, Briefcase, Calendar, AlertTriangle,
+    Eye, Users, Briefcase, Calendar, AlertTriangle,
     Building2, DollarSign, MessageSquare, Award, UserCheck
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     DndContext, DragEndEvent, DragOverlay, DragStartEvent,
     PointerSensor, useSensor, useSensors, useDroppable, useDraggable,
@@ -420,9 +421,7 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
                     </div>
                     <div className="flex items-center gap-2">
                         {!editing ? (
-                            <button onClick={() => setEditing(true)} className="p-2 bg-white/60 hover:bg-white rounded-xl" title="Editar candidato">
-                                <Pencil className="w-4 h-4 text-slate-500" />
-                            </button>
+                            <ActionIconButton kind="edit" title="Editar candidato" onClick={() => setEditing(true)} />
                         ) : (
                             <>
                                 <button onClick={() => { setEditing(false); }} className="px-3 py-1.5 text-button font-bold text-slate-600 bg-white/60 hover:bg-white rounded-xl">Cancelar</button>
@@ -823,12 +822,8 @@ const LaborATS: React.FC<LaborATSProps> = ({ orgId, projects = [] }) => {
                                                 className="flex items-center gap-1 px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-xs font-black">
                                                 Pipeline <ChevronRight className="w-3 h-3" />
                                             </button>
-                                            <button onClick={() => { setEditingJob(j); setShowJobForm(true); }} className="p-1.5 hover:bg-indigo-50 rounded-lg text-slate-400 hover:text-indigo-600" title="Editar vaga">
-                                                <Pencil className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button onClick={() => { if (confirm('Cancelar esta vaga?')) deleteJobMutation.mutate(j.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-rose-600">
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                            <ActionIconButton kind="edit" size="sm" title="Editar vaga" onClick={() => { setEditingJob(j); setShowJobForm(true); }} />
+                                            <ActionIconButton kind="delete" size="sm" title="Cancelar vaga" onClick={() => { if (confirm('Cancelar esta vaga?')) deleteJobMutation.mutate(j.id); }} />
                                         </div>
                                     </div>
                                 );

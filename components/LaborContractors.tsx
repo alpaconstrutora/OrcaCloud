@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import {
     Building2, Plus, X, ChevronDown, Loader2, Search,
-    AlertTriangle, FileText, DollarSign, Eye, Trash2,
+    AlertTriangle, FileText, DollarSign, Eye,
     CheckCircle2, Clock, CreditCard
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     laborService, Contractor, ContractorTipo,
@@ -468,12 +469,8 @@ const LaborContractors: React.FC<LaborContractorsProps> = ({ orgId, projects = [
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
-                                        <button onClick={() => { setEditingContractor(c); setShowContractorForm(true); }} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors">
-                                            <Eye className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button onClick={() => { if (confirm('Inativar?')) deleteContractor.mutate(c.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors">
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                        <ActionIconButton kind="edit" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => { setEditingContractor(c); setShowContractorForm(true); }} />
+                                        <ActionIconButton kind="delete" size="sm" title="Inativar" onClick={() => { if (confirm('Inativar?')) deleteContractor.mutate(c.id); }} />
                                     </div>
                                 </div>
                             ))}

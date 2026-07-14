@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import {
     Clock, Plus, X, ChevronDown, Loader2, Search,
     TrendingUp, TrendingDown, Minus, QrCode,
-    AlertTriangle, CheckCircle2, RefreshCw, Trash2
+    AlertTriangle, CheckCircle2, RefreshCw
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { laborService, Employee, TimeBankBalance, TimeBankEntry, QrCodeObra } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
@@ -386,9 +387,7 @@ const LaborTimeBank: React.FC<LaborTimeBankProps> = ({ orgId, employees, project
                                             className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${qr.is_active ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
                                             {qr.is_active ? 'Desativar' : 'Ativar'}
                                         </button>
-                                        <button onClick={() => { if (confirm('Excluir este QR Code?')) deleteQr.mutate(qr.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors">
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                        <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir este QR Code?')) deleteQr.mutate(qr.id); }} />
                                     </div>
                                 </div>
                             ))}

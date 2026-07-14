@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
     ShieldAlert, Plus, X, ChevronDown, Loader2, Search,
-    AlertTriangle, CheckCircle2, FileText, Trash2, Eye,
+    AlertTriangle, CheckCircle2, FileText, Eye,
     Activity, Users, Clock, Stethoscope, ClipboardList, BookOpen,
-    Pencil, Calendar, Building2
+    Calendar, Building2
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     laborService, Employee,
@@ -542,12 +543,8 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                                                 <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[400px]">{a.descricao}</p>
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0">
-                                                <button onClick={() => { setEditingAccident(a); setShowForm(true); }} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors">
-                                                    <Eye className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button onClick={() => { if (confirm('Excluir?')) deleteAcc.mutate(a.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors">
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
+                                                <ActionIconButton kind="edit" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => { setEditingAccident(a); setShowForm(true); }} />
+                                                <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir?')) deleteAcc.mutate(a.id); }} />
                                             </div>
                                         </div>
                                     </div>
@@ -718,12 +715,8 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [] }) 
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">
-                                                    <button onClick={() => { setEditingRegDoc(doc); setShowRegForm(true); }} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors">
-                                                        <Pencil className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button onClick={() => { if (confirm('Excluir documento regulatório?')) deleteReg.mutate(doc.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors">
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    <ActionIconButton kind="edit" size="sm" onClick={() => { setEditingRegDoc(doc); setShowRegForm(true); }} />
+                                                    <ActionIconButton kind="delete" size="sm" title="Excluir documento regulatório" onClick={() => { if (confirm('Excluir documento regulatório?')) deleteReg.mutate(doc.id); }} />
                                                 </div>
                                             </div>
                                         </div>

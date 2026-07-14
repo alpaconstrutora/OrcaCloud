@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Calendar, Shield, Building2, AlertCircle, 
-    Plus, Save, History, TrendingUp, Info, Loader2, Trash2
+import {
+    Calendar, Shield, Building2, AlertCircle,
+    Plus, Save, History, TrendingUp, Info, Loader2
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { fiscalService, INSSBracket, IRRFBracket, FGTSConfig } from '../services/fiscalService';
 
 const LaborFiscalSettings: React.FC = () => {
@@ -335,13 +336,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                         )}
                                                     </div>
                                                     {editingINSS && (
-                                                        <button 
-                                                            onClick={() => handleDeleteINSSBracket(bracket.id)}
-                                                            className="p-2 text-rose-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-all"
-                                                            title="Excluir Faixa"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
+                                                        <ActionIconButton kind="delete" title="Excluir Faixa" onClick={() => handleDeleteINSSBracket(bracket.id)} />
                                                     )}
                                                 </div>
                                             </div>
@@ -504,13 +499,7 @@ const LaborFiscalSettings: React.FC = () => {
                                                         )}
                                                     </div>
                                                     {editingIRRF && (
-                                                        <button 
-                                                            onClick={() => handleDeleteIRRFBracket(bracket.id)}
-                                                            className="p-2 text-rose-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-all"
-                                                            title="Excluir Faixa"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
+                                                        <ActionIconButton kind="delete" title="Excluir Faixa" onClick={() => handleDeleteIRRFBracket(bracket.id)} />
                                                     )}
                                                 </div>
                                             </div>

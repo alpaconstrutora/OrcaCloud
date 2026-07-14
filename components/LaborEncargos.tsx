@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Percent, Save, RotateCcw, Calculator, Edit3, Check, X,
+    Percent, Save, RotateCcw, Calculator, Check, X,
     Info, AlertCircle, ChevronRight, TrendingUp, Calendar, Loader2, RefreshCw, FileText
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     TerceiroTax,
     TERCEIROS_TAXES_DEFAULT,
@@ -374,12 +375,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId }) => {
                                             </td>
                                             <td className="px-6 py-4">
                                                 {!isEditing && (
-                                                    <button
-                                                        onClick={() => handleStartEdit(tax.code, tax.rate)}
-                                                        className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                                                    >
-                                                        <Edit3 className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    <ActionIconButton kind="edit" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleStartEdit(tax.code, tax.rate)} />
                                                 )}
                                             </td>
                                         </tr>

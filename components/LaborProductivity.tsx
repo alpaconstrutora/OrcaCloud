@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Target, Trash2, TrendingUp, TrendingDown, Minus, ChevronDown, Loader2, AlertTriangle } from 'lucide-react';
+import { Plus, Target, TrendingUp, TrendingDown, Minus, ChevronDown, Loader2, AlertTriangle } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { laborService, ProductivityLog, Employee, LaborTeam } from '../services/laborService';
 
 interface LaborProductivityProps {
@@ -272,9 +273,7 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
                                         <ProductivityBadge pct={log.productivity_pct} />
                                     </td>
                                     <td className="px-4 py-3">
-                                        <button onClick={() => handleDelete(log.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                        <ActionIconButton kind="delete" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleDelete(log.id)} />
                                     </td>
                                 </tr>
                             ))}

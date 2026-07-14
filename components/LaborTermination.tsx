@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import {
     UserMinus, Plus, X, ChevronDown, Loader2, Search,
     CheckSquare, Square, AlertTriangle, CheckCircle2,
-    FileText, HardHat, Shield, MessageSquare, Trash2,
+    FileText, HardHat, Shield, MessageSquare,
     ClipboardList, Lock, DollarSign, Eye
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     laborService, Employee,
@@ -611,12 +612,7 @@ const LaborTermination: React.FC<LaborTerminationProps> = ({ orgId, employees, o
                                                     <Eye className="w-3 h-3" /> Continuar
                                                 </button>
                                             )}
-                                            <button
-                                                onClick={() => { if (confirm('Excluir este processo?')) deleteMutation.mutate(t.id); }}
-                                                className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                            <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir este processo?')) deleteMutation.mutate(t.id); }} />
                                         </div>
                                     </div>
                                 </div>

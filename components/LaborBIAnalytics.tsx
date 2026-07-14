@@ -3,9 +3,10 @@ import {
     TrendingUp, TrendingDown, Users, UserPlus, UserMinus,
     Target, BarChart3, Activity, Calendar, Loader2, RefreshCw,
     Plus, X, Check, AlertTriangle, Building2, Clock,
-    DollarSign, Percent, ChevronDown, Trash2, Settings,
+    DollarSign, Percent, ChevronDown, Settings,
     ArrowUpRight, ArrowDownRight, Minus
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     hrAnalyticsService,
@@ -799,10 +800,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees })
                                                 </td>
                                                 <td className="px-4 py-3 text-slate-400 text-table-body max-w-[160px] truncate">{ev.motivo || '–'}</td>
                                                 <td className="px-4 py-3">
-                                                    <button onClick={() => { if (confirm('Excluir movimentação?')) deleteEventMut.mutate(ev.id); }}
-                                                        className="p-1.5 hover:bg-red-100 rounded-lg transition-colors">
-                                                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                                                    </button>
+                                                    <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir movimentação?')) deleteEventMut.mutate(ev.id); }} />
                                                 </td>
                                             </tr>
                                         );

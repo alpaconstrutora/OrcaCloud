@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Users, Trash2, UserPlus, X, Loader2, Shield, ChevronDown, Edit3 } from 'lucide-react';
+import { Plus, Users, UserPlus, X, Loader2, Shield, ChevronDown } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { laborService, LaborTeam, Employee } from '../services/laborService';
 
 interface LaborTeamsProps {
@@ -170,13 +171,9 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex gap-1">
-                                            <button onClick={() => openForm(team)} className="p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-colors">
-                                                <Edit3 className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button onClick={() => handleDelete(team.id)} className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors">
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                        <div className="flex gap-1.5">
+                                            <ActionIconButton kind="edit" size="sm" onClick={() => openForm(team)} />
+                                            <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(team.id)} />
                                         </div>
                                     </div>
                                     {foreman && (

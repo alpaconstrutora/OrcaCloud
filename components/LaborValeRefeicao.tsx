@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import {
-    UtensilsCrossed, Plus, Trash2, Check, RefreshCw, Settings,
+    UtensilsCrossed, Plus, Check, RefreshCw, Settings,
     CalendarDays, Calculator, ChevronDown, Loader2, AlertCircle,
     CheckCheck, X, Edit2, Save, Calendar, FileText
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vrService, VrRegra, VrFeriado, VrCalculo } from '../services/vrService';
 import { laborService, Employee } from '../services/laborService';
@@ -245,12 +246,7 @@ const AbaRegras: React.FC<{ orgId: string; projects: { id: string; name: string 
                             <button onClick={() => setModal(r)} className="flex-1 px-3 py-1.5 text-button font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors flex items-center justify-center gap-1.5">
                                 <Edit2 className="w-3.5 h-3.5" /> Editar
                             </button>
-                            <button
-                                onClick={() => { if (confirm('Excluir esta regra?')) del.mutate(r.id); }}
-                                className="px-3 py-1.5 text-button font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors"
-                            >
-                                <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir esta regra?')) del.mutate(r.id); }} />
                         </div>
                     </div>
                 ))}
@@ -404,9 +400,7 @@ const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name
                                                 {f.project_id && <p className="text-xs text-slate-400">{projects.find(p => p.id === f.project_id)?.name}</p>}
                                             </div>
                                             <span className={`text-xs font-black px-2 py-1 rounded-full ${ec.bg} ${ec.color}`}>{ec.label}</span>
-                                            <button onClick={() => del.mutate(f.id)} className="ml-3 p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors">
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                            <ActionIconButton kind="delete" size="sm" className="ml-3" onClick={() => del.mutate(f.id)} />
                                         </div>
                                     );
                                 })}

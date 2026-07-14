@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
 import {
     BookOpen, Plus, X, ChevronDown, Loader2, Search,
-    AlertTriangle, CheckCircle2, FileText, Trash2, Eye,
+    AlertTriangle, CheckCircle2, FileText, Eye,
     Upload, Award, Clock, Users, Shield
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     laborService, Employee,
@@ -546,9 +547,7 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees }) => 
                                                     {r.certificado_url && (
                                                         <span className="p-1.5 text-indigo-400" title="Certificado anexado"><Award className="w-3.5 h-3.5" /></span>
                                                     )}
-                                                    <button onClick={() => { if (confirm('Excluir este registro?')) deleteRecord.mutate(r.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors">
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir este registro?')) deleteRecord.mutate(r.id); }} />
                                                 </div>
                                             </td>
                                         </tr>
@@ -605,12 +604,8 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({ orgId, employees }) => 
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-1">
-                                                    <button onClick={() => { setEditingCourse(c); setShowCourseForm(true); }} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors">
-                                                        <Eye className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button onClick={() => { if (confirm('Inativar este curso?')) deleteCourse.mutate(c.id); }} className="p-1.5 hover:bg-red-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors">
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    <ActionIconButton kind="edit" size="sm" icon={<Eye className="w-3.5 h-3.5" />} onClick={() => { setEditingCourse(c); setShowCourseForm(true); }} />
+                                                    <ActionIconButton kind="delete" size="sm" title="Inativar" onClick={() => { if (confirm('Inativar este curso?')) deleteCourse.mutate(c.id); }} />
                                                 </div>
                                             </td>
                                         </tr>

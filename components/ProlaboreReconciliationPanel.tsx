@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-    Send, Lock, Unlock, Loader2, Check, X, AlertTriangle, Wallet, CheckCircle2, Clock, Building2,
+    Send, Lock, Unlock, Loader2, Check, X, AlertTriangle, Wallet, CheckCircle2, Clock, Building2, Undo2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { companyService } from '../services/companyService';
@@ -14,19 +14,31 @@ import { KpiCard } from './ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import type { Company } from '../types';
 
-// Categorias que o RH grava em internal_transactions ao enviar a folha ao
-// financeiro (remuneracaoSocietariaService.sendPayrollToFinancial) — a aba
-// puxa automaticamente tudo que estiver classificado assim no extrato.
-const PROLABORE_CATEGORIES = ['Pró-labore', 'INSS Patronal (Pró-labore)', 'Contribuições de Terceiros (Pró-labore)'];
+// A categoria pode ter sido gravada de formas diferentes: o RH grava
+// 'Pró-labore' (com acento/hífen) ao enviar a folha ao financeiro
+// (remuneracaoSocietariaService.sendPayrollToFinancial); no Extrato Bancário,
+// o usuário costuma classificar manualmente como 'Prolabore' (sem acento/hífen).
+// Casa as duas formas em vez de depender de um valor único.
+const PROLABORE_ILIKE_PATTERNS = ['%prolabore%', '%pró-labore%'];
 
-interface ProlaboreTx {
+interface ProlaboreRow {
     id: string;
+    source: 'bank' | 'internal';
     transaction_date: string;
     amount: number;
     description?: string;
     category?: string;
     party_name?: string | null;
+    // internal_transactions: aprovação multinível já existente (approval_status).
     approval_status?: string | null;
+    // bank_transactions: flag simples dedicado (não participa do motor multinível,
+    // que exige internal_transactions/contracts/purchase_orders).
+    prolabore_approved_at?: string | null;
+    prolabore_approved_by?: string | null;
+}
+
+function isApproved(row: ProlaboreRow): boolean {
+    return row.source === 'internal' ? row.approval_status === 'APROVADO' : !!row.prolabore_approved_at;
 }
 
 interface ProlaboreReconciliationPanelProps {
@@ -35,7 +47,7 @@ interface ProlaboreReconciliationPanelProps {
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'description', label: 'Descrição',    sortable: true  },
-    { key: 'party',       label: 'Sócio',        sortable: true  },
+    { key: 'party',       label: 'Contraparte',  sortable: true  },
     { key: 'category',    label: 'Categoria',    sortable: true  },
     { key: 'date',        label: 'Data',         sortable: true  },
     { key: 'amount',      label: 'Valor',        sortable: true  },
@@ -77,7 +89,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
     const [companies, setCompanies] = useState<Company[]>([]);
     const [companyId, setCompanyId] = useState<string>('');
     const [competenceMonth, setCompetenceMonth] = usePersistedState<string>('prolaboreReconciliation:competence', currentMonthISO());
-    const [transactions, setTransactions] = useState<ProlaboreTx[]>([]);
+    const [rows, setRows] = useState<ProlaboreRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [actingId, setActingId] = useState<string | null>(null);
     const [periodLocked, setPeriodLocked] = useState<boolean | null>(null);
@@ -99,16 +111,39 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
         setLoading(true);
         try {
             const { start, end } = monthRange(competenceMonth);
-            const { data, error } = await supabase
-                .from('internal_transactions')
-                .select('id, transaction_date, amount, description, category, party_name, approval_status')
-                .eq('organization_id', organizationId)
-                .in('category', PROLABORE_CATEGORIES)
-                .gte('transaction_date', start)
-                .lte('transaction_date', end)
-                .order('transaction_date', { ascending: false });
-            if (error) throw error;
-            setTransactions((data || []) as ProlaboreTx[]);
+            const orFilter = PROLABORE_ILIKE_PATTERNS.map(p => `category.ilike.${p}`).join(',');
+
+            const [internalRes, bankRes] = await Promise.all([
+                supabase
+                    .from('internal_transactions')
+                    .select('id, transaction_date, amount, description, category, party_name, approval_status')
+                    .eq('organization_id', organizationId)
+                    .or(orFilter)
+                    .gte('transaction_date', start)
+                    .lte('transaction_date', end),
+                supabase
+                    .from('bank_transactions')
+                    .select('id, transaction_date, amount, description_raw, description_normalized, counterparty_name, category, status, prolabore_approved_at, prolabore_approved_by')
+                    .eq('organization_id', organizationId)
+                    .or(orFilter)
+                    .neq('status', 'MATCHED') // já conciliado — o internal_transactions correspondente representa o lançamento
+                    .gte('transaction_date', start)
+                    .lte('transaction_date', end),
+            ]);
+            if (internalRes.error) throw internalRes.error;
+            if (bankRes.error) throw bankRes.error;
+
+            const internalRows: ProlaboreRow[] = (internalRes.data || []).map((t: any) => ({
+                id: t.id, source: 'internal', transaction_date: t.transaction_date, amount: t.amount,
+                description: t.description, category: t.category, party_name: t.party_name, approval_status: t.approval_status,
+            }));
+            const bankRows: ProlaboreRow[] = (bankRes.data || []).map((t: any) => ({
+                id: t.id, source: 'bank', transaction_date: t.transaction_date, amount: t.amount,
+                description: t.description_normalized || t.description_raw, category: t.category, party_name: t.counterparty_name,
+                prolabore_approved_at: t.prolabore_approved_at, prolabore_approved_by: t.prolabore_approved_by,
+            }));
+
+            setRows([...internalRows, ...bankRows]);
         } catch (e) {
             showToast(e instanceof Error ? e.message : 'Erro ao carregar lançamentos de pró-labore', 'error');
         } finally {
@@ -133,13 +168,13 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
     }, [companyId, competenceMonth]);
 
     const totals = useMemo(() => {
-        const pendente = transactions.filter(t => t.approval_status !== 'APROVADO').reduce((s, t) => s + t.amount, 0);
-        const aprovado = transactions.filter(t => t.approval_status === 'APROVADO').reduce((s, t) => s + t.amount, 0);
-        return { pendente, aprovado, total: pendente + aprovado, count: transactions.length };
-    }, [transactions]);
+        const pendente = rows.filter(r => !isApproved(r)).reduce((s, r) => s + r.amount, 0);
+        const aprovado = rows.filter(isApproved).reduce((s, r) => s + r.amount, 0);
+        return { pendente, aprovado, total: pendente + aprovado, count: rows.length };
+    }, [rows]);
 
-    const sortedTransactions = useMemo(() => {
-        const arr = [...transactions];
+    const sortedRows = useMemo(() => {
+        const arr = [...rows];
         return arr.sort((a, b) => {
             if (tableColumns.sortColumn) {
                 const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
@@ -149,24 +184,32 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                     case 'category':    return (a.category || '').localeCompare(b.category || '') * dir;
                     case 'date':        return a.transaction_date.localeCompare(b.transaction_date) * dir;
                     case 'amount':      return (a.amount - b.amount) * dir;
-                    case 'approval':    return (a.approval_status || '').localeCompare(b.approval_status || '') * dir;
+                    case 'approval':    return Number(isApproved(a)) - Number(isApproved(b)) * dir;
                 }
             }
             return b.transaction_date.localeCompare(a.transaction_date);
         });
-    }, [transactions, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [rows, tableColumns.sortColumn, tableColumns.sortDirection]);
 
-    const handleApprove = async (tx: ProlaboreTx) => {
-        setActingId(tx.id);
+    const handleApprove = async (row: ProlaboreRow) => {
+        setActingId(row.id);
         try {
             const { data: { user } } = await supabase.auth.getUser();
             const approvedBy = user?.email || 'sistema';
-            const cfg = await financialApprovalService.resolveRequiredLevels(organizationId, tx.amount);
-            const labels = { level1_label: cfg?.level1_label || 'Financeiro', level2_label: cfg?.level2_label };
-            if (!tx.approval_status || tx.approval_status === 'RASCUNHO') {
-                await financialApprovalService.submitForApproval(tx.id);
+            if (row.source === 'internal') {
+                const cfg = await financialApprovalService.resolveRequiredLevels(organizationId, row.amount);
+                const labels = { level1_label: cfg?.level1_label || 'Financeiro', level2_label: cfg?.level2_label };
+                if (!row.approval_status || row.approval_status === 'RASCUNHO') {
+                    await financialApprovalService.submitForApproval(row.id);
+                }
+                await financialApprovalService.approve(row.id, 1, approvedBy, labels);
+            } else {
+                const { error } = await supabase
+                    .from('bank_transactions')
+                    .update({ prolabore_approved_at: new Date().toISOString(), prolabore_approved_by: approvedBy })
+                    .eq('id', row.id);
+                if (error) throw error;
             }
-            await financialApprovalService.approve(tx.id, 1, approvedBy, labels);
             showToast('Lançamento aprovado.');
             await loadTransactions();
         } catch (e) {
@@ -176,16 +219,33 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
         }
     };
 
-    const handleReject = async (tx: ProlaboreTx) => {
-        if (!await confirm({ title: 'Rejeitar lançamento?', message: `${tx.description || 'Lançamento'} — ${formatMoney(tx.amount)}`, variant: 'danger', confirmLabel: 'Rejeitar' })) return;
-        setActingId(tx.id);
+    const handleReject = async (row: ProlaboreRow) => {
+        if (!await confirm({ title: 'Rejeitar lançamento?', message: `${row.description || 'Lançamento'} — ${formatMoney(row.amount)}`, variant: 'danger', confirmLabel: 'Rejeitar' })) return;
+        setActingId(row.id);
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            await financialApprovalService.reject(tx.id, user?.email || 'sistema', 'Rejeitado na Conciliação Bancária (aba Pró-labore)');
+            await financialApprovalService.reject(row.id, user?.email || 'sistema', 'Rejeitado na Conciliação Bancária (aba Pró-labore)');
             showToast('Lançamento rejeitado.');
             await loadTransactions();
         } catch (e) {
             showToast(e instanceof Error ? e.message : 'Erro ao rejeitar lançamento', 'error');
+        } finally {
+            setActingId(null);
+        }
+    };
+
+    const handleUndoBankApproval = async (row: ProlaboreRow) => {
+        setActingId(row.id);
+        try {
+            const { error } = await supabase
+                .from('bank_transactions')
+                .update({ prolabore_approved_at: null, prolabore_approved_by: null })
+                .eq('id', row.id);
+            if (error) throw error;
+            showToast('Aprovação desfeita.');
+            await loadTransactions();
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Erro ao desfazer aprovação', 'error');
         } finally {
             setActingId(null);
         }
@@ -309,7 +369,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                                     className="px-6 py-2 border-r border-gray-100" />
                             )}
                             {tableColumns.visibleColumns.includes('party') && (
-                                <SortableHeader colKey="party" label="Sócio" uppercase={false}
+                                <SortableHeader colKey="party" label="Contraparte" uppercase={false}
                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
                                     className="px-6 py-2 border-r border-gray-100" />
                             )}
@@ -343,59 +403,82 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                             <tr><td colSpan={7} className="text-center py-12 text-gray-400">
                                 <Loader2 className="w-6 h-6 animate-spin mx-auto" />
                             </td></tr>
-                        ) : sortedTransactions.length === 0 ? (
+                        ) : sortedRows.length === 0 ? (
                             <tr><td colSpan={7} className="text-center py-12">
                                 <div className="flex flex-col items-center gap-2 text-gray-400">
                                     <Wallet className="w-8 h-8 opacity-30" />
                                     <p className="text-sm font-medium">Nenhum lançamento de pró-labore nesta competência.</p>
                                 </div>
                             </td></tr>
-                        ) : sortedTransactions.map(tx => (
-                            <tr key={tx.id} className="hover:bg-blue-50/50 transition-colors">
-                                {tableColumns.visibleColumns.includes('description') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{tx.description || '—'}</td>
-                                )}
-                                {tableColumns.visibleColumns.includes('party') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{tx.party_name || '—'}</td>
-                                )}
-                                {tableColumns.visibleColumns.includes('category') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{tx.category || '—'}</td>
-                                )}
-                                {tableColumns.visibleColumns.includes('date') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{formatDateBR(tx.transaction_date)}</td>
-                                )}
-                                {tableColumns.visibleColumns.includes('amount') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">{formatMoney(tx.amount)}</td>
-                                )}
-                                {tableColumns.visibleColumns.includes('approval') && (
-                                    <td className="px-6 py-2.5 border-r border-gray-100">
-                                        <span className={`text-sm font-normal ${APPROVAL_COLORS[tx.approval_status || 'RASCUNHO'] || 'text-gray-500'}`}>
-                                            {APPROVAL_LABELS[tx.approval_status || 'RASCUNHO'] || tx.approval_status}
-                                        </span>
-                                    </td>
-                                )}
-                                {tableColumns.visibleColumns.includes('actions') && (
-                                    <td className="px-6 py-2.5 text-right">
-                                        <div className="flex items-center justify-end gap-2">
-                                            {tx.approval_status !== 'APROVADO' && (
-                                                <button onClick={() => handleApprove(tx)} disabled={actingId === tx.id}
-                                                    title="Aprovar"
-                                                    className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-100 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50">
-                                                    {actingId === tx.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                                </button>
-                                            )}
-                                            {tx.approval_status !== 'REJEITADO' && (
-                                                <button onClick={() => handleReject(tx)} disabled={actingId === tx.id}
-                                                    title="Rejeitar"
-                                                    className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50">
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                )}
-                            </tr>
-                        ))}
+                        ) : sortedRows.map(row => {
+                            const approved = isApproved(row);
+                            const approvalLabel = row.source === 'internal'
+                                ? (APPROVAL_LABELS[row.approval_status || 'RASCUNHO'] || row.approval_status)
+                                : (approved ? 'Aprovado' : 'Pendente');
+                            const approvalColor = row.source === 'internal'
+                                ? (APPROVAL_COLORS[row.approval_status || 'RASCUNHO'] || 'text-gray-500')
+                                : (approved ? 'text-emerald-700' : 'text-amber-700');
+                            return (
+                                <tr key={`${row.source}:${row.id}`} className="hover:bg-blue-50/50 transition-colors">
+                                    {tableColumns.visibleColumns.includes('description') && (
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{row.description || '—'}</td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('party') && (
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{row.party_name || '—'}</td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('category') && (
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{row.category || '—'}</td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('date') && (
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{formatDateBR(row.transaction_date)}</td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('amount') && (
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">{formatMoney(row.amount)}</td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('approval') && (
+                                        <td className="px-6 py-2.5 border-r border-gray-100">
+                                            <span className={`text-sm font-normal ${approvalColor}`}>{approvalLabel}</span>
+                                        </td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('actions') && (
+                                        <td className="px-6 py-2.5 text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                {row.source === 'internal' ? (
+                                                    <>
+                                                        {row.approval_status !== 'APROVADO' && (
+                                                            <button onClick={() => handleApprove(row)} disabled={actingId === row.id}
+                                                                title="Aprovar"
+                                                                className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-100 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50">
+                                                                {actingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                                            </button>
+                                                        )}
+                                                        {row.approval_status !== 'REJEITADO' && (
+                                                            <button onClick={() => handleReject(row)} disabled={actingId === row.id}
+                                                                title="Rejeitar"
+                                                                className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50">
+                                                                <X className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                ) : approved ? (
+                                                    <button onClick={() => handleUndoBankApproval(row)} disabled={actingId === row.id}
+                                                        title="Desfazer aprovação"
+                                                        className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-amber-600 hover:border-amber-100 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50">
+                                                        {actingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                                                    </button>
+                                                ) : (
+                                                    <button onClick={() => handleApprove(row)} disabled={actingId === row.id}
+                                                        title="Aprovar"
+                                                        className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-emerald-600 hover:border-emerald-100 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50">
+                                                        {actingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    )}
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

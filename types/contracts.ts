@@ -380,3 +380,86 @@ export interface ContractDocumentGateItem {
     last_valid_until?: string;
     is_expired: boolean;
 }
+
+// ─────────────────────────────────────────────────────────────
+// Fase 7 — Ciclo de Vida & Encerramento
+// PLANO_MODULO_CONTRATOS_GAPS.md
+// ─────────────────────────────────────────────────────────────
+
+export type AcceptanceKind = 'PROVISORIO' | 'DEFINITIVO';
+
+export interface AcceptancePendingItem {
+    description: string;
+    deadline?: string;
+    responsible?: string;
+}
+
+export interface ContractAcceptance {
+    id: string;
+    organization_id: string;
+    contract_id: string;
+    kind: AcceptanceKind;
+    issued_at: string;
+    pending_items: AcceptancePendingItem[];
+    term_url?: string;
+    issued_by?: string;
+    notes?: string;
+    created_at?: string;
+}
+
+export type TechnicalCouncil = 'CREA' | 'CAU' | 'CRT';
+export type ArtType = 'ART' | 'RRT' | 'TRT';
+export type TechnicalResponsibilityStatus = 'VALIDA' | 'SUSPENSA' | 'CANCELADA' | 'BAIXADA';
+
+export interface ContractTechnicalResponsibility {
+    id: string;
+    organization_id: string;
+    contract_id: string;
+    professional_name: string;
+    council?: TechnicalCouncil;
+    council_number?: string;
+    art_type: ArtType;
+    art_number?: string;
+    valid_from?: string;
+    valid_until?: string;
+    status: TechnicalResponsibilityStatus;
+    document_url?: string;
+    notes?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface ContractTechnicalGateItem {
+    professional_name: string;
+    art_type: ArtType;
+    art_number?: string;
+    status: TechnicalResponsibilityStatus;
+    valid_until?: string;
+    is_blocking: boolean;
+}
+
+export interface ContractEvaluation {
+    id: string;
+    organization_id: string;
+    contract_id: string;
+    supplier_id?: string;
+    period?: string;
+    score_quality: number;
+    score_deadline: number;
+    score_sst: number;
+    score_compliance: number;
+    score_communication: number;
+    score_commercial: number;
+    weighted: number;
+    critical_occurrence: boolean;
+    evaluated_by?: string;
+    notes?: string;
+    created_at?: string;
+}
+
+export interface SupplierPerformance {
+    evaluation_count: number;
+    average_weighted: number | null;
+    has_critical: boolean;
+    should_block: boolean;
+}

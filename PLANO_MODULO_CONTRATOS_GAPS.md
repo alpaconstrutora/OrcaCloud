@@ -41,8 +41,11 @@
 |---|---|---|---|---|
 | **5** | Blindagem Jurídico-Financeira | Seguros, Garantias, Retenção faseada, Penalidades, Limite de responsabilidade, CNO | 🔴 Alto (risco legal) | ✅ **IMPLEMENTADA** (migrations `20270130000010-13`) |
 | **6** | Governança da Contratação | Risco R1/R2/R3, Questionário trabalhista, Ordem de Início, Pré-mobilização, Matriz documental/condicionantes | 🟠 Alto (compliance) | ✅ **IMPLEMENTADA** (migrations `20270201000010-13`) |
-| **7** | Ciclo de Vida & Encerramento | Recebimento provisório/definitivo, Dossiê, ART/RRT, Avaliação de desempenho | 🟡 Médio | Não iniciada |
+| **7** | Ciclo de Vida & Encerramento | Recebimento provisório/definitivo, Dossiê, ART/RRT, Avaliação de desempenho | 🟡 Médio | ✅ **IMPLEMENTADA** (migrations `20270202000010-12`) |
 | **8** | Detalhamento Técnico & SST | Matriz de fornecimento/interfaces, SST condicionante, Biblioteca de cláusulas, Fiscal parametrizado | 🟢 Médio/baixo | Não iniciada |
+
+> Fase 7 não incluiu geração de dossiê consolidado (as-built/manuais/ART/garantias/medições
+> num pacote único) — ficou só o registro dos termos e das ARTs individualmente.
 
 > Subcontratação (Cl.7, CP-03) ficou fora do escopo da Fase 6 — só o campo
 > `subcontracting_rule` foi criado (migration `20270201000012`); regra de

@@ -15,7 +15,8 @@ import {
     ContractUtilityBill, SinapiItem, CustomDatabase, SinapiType, MinutaVersion,
     ContractGuarantee, ContractPenalty, ContractRetentionLedger, ContractRetentionRelease, GuaranteeKind, PenaltyKind,
     ContractRiskAssessment, ContractLaborQuestionnaire, ContractPrecedentCondition, ContractDocumentRequirement,
-    DocumentRequirementPhase
+    DocumentRequirementPhase, ContractAcceptance, ContractTechnicalResponsibility, ContractEvaluation,
+    AcceptanceKind, ArtType
 } from '../types';
 import { contractService } from '../services/contractService';
 import { contractIndexService, IndexName } from '../services/contractIndexService';
@@ -23,12 +24,18 @@ import { contractGuaranteeService } from '../services/contractGuaranteeService';
 import { contractPenaltyService } from '../services/contractPenaltyService';
 import { contractRiskService } from '../services/contractRiskService';
 import { contractLaborQuestionnaireService, LABOR_ALERT_THRESHOLD } from '../services/contractLaborQuestionnaireService';
+import { contractAcceptanceService } from '../services/contractAcceptanceService';
+import { contractTechnicalResponsibilityService } from '../services/contractTechnicalResponsibilityService';
+import { contractEvaluationService } from '../services/contractEvaluationService';
 import ContractGuaranteeModal from './ContractGuaranteeModal';
 import ContractPenaltyModal from './ContractPenaltyModal';
 import ContractRetentionReleaseModal from './ContractRetentionReleaseModal';
 import ContractRiskModal from './ContractRiskModal';
 import ContractLaborQuestionnaireModal from './ContractLaborQuestionnaireModal';
 import ContractDocumentRequirementModal from './ContractDocumentRequirementModal';
+import ContractAcceptanceModal from './ContractAcceptanceModal';
+import ContractTechnicalResponsibilityModal from './ContractTechnicalResponsibilityModal';
+import ContractEvaluationModal from './ContractEvaluationModal';
 
 const GUARANTEE_KIND_LABELS: Record<GuaranteeKind, string> = {
     RC_GERAL: 'RC Geral',
@@ -164,6 +171,14 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [docReqModal, setDocReqModal] = React.useState<{ open: boolean; editing: ContractDocumentRequirement | null }>({ open: false, editing: null });
     const [fase6Busy, setFase6Busy] = React.useState(false);
 
+    // Fase 7 — Ciclo de Vida & Encerramento (PLANO_MODULO_CONTRATOS_GAPS.md)
+    const [acceptances, setAcceptances] = React.useState<ContractAcceptance[]>([]);
+    const [technicalResponsibilities, setTechnicalResponsibilities] = React.useState<ContractTechnicalResponsibility[]>([]);
+    const [evaluations, setEvaluations] = React.useState<ContractEvaluation[]>([]);
+    const [acceptanceModal, setAcceptanceModal] = React.useState<{ open: boolean; kind: AcceptanceKind }>({ open: false, kind: 'PROVISORIO' });
+    const [technicalModal, setTechnicalModal] = React.useState<{ open: boolean; editing: ContractTechnicalResponsibility | null }>({ open: false, editing: null });
+    const [evaluationModal, setEvaluationModal] = React.useState(false);
+
     const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 4500);
@@ -282,7 +297,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const loadContractData = async () => {
         try {
             setLoading(true);
-            const [c, i, a, m, u, g, pen, ledger, releases, risk, labor, precedent, docReqs] = await Promise.all([
+            const [c, i, a, m, u, g, pen, ledger, releases, risk, labor, precedent, docReqs, acc, tech, evals] = await Promise.all([
                 contractService.getContractById(contractId),
                 contractService.listContractItems(contractId),
                 contractService.listAddendums(contractId),
@@ -295,7 +310,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 contractRiskService.get(contractId),
                 contractLaborQuestionnaireService.get(contractId),
                 contractService.listPrecedentConditions(contractId),
-                contractService.listDocumentRequirements(contractId)
+                contractService.listDocumentRequirements(contractId),
+                contractAcceptanceService.list(contractId),
+                contractTechnicalResponsibilityService.list(contractId),
+                contractEvaluationService.list(contractId)
             ]);
             setContract(c);
             setItems(i);
@@ -310,6 +328,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             setLaborQuestionnaire(labor);
             setPrecedentConditions(precedent);
             setDocumentRequirements(docReqs);
+            setAcceptances(acc);
+            setTechnicalResponsibilities(tech);
+            setEvaluations(evals);
 
             if (c) {
                 setLoadingFinancialEntries(true);
@@ -1413,6 +1434,44 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 )}
                             </div>
                         )}
+
+                        {/* Recebimento Provisório/Definitivo (Fase 7.1 — Cl.21, Manual §18) */}
+                        {contract && (() => {
+                            const hasProvisorio = acceptances.some(a => a.kind === 'PROVISORIO');
+                            const hasDefinitivo = acceptances.some(a => a.kind === 'DEFINITIVO');
+                            const nextKind: AcceptanceKind = hasProvisorio ? 'DEFINITIVO' : 'PROVISORIO';
+                            return (
+                                <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-xs font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                            <CheckCircle2 className="w-4 h-4 text-blue-600" /> Recebimento
+                                        </h3>
+                                        {!hasDefinitivo && (
+                                            <button type="button" onClick={() => setAcceptanceModal({ open: true, kind: nextKind })} className="text-xs font-medium text-blue-600 hover:text-blue-800">
+                                                Emitir {nextKind === 'DEFINITIVO' ? 'Definitivo' : 'Provisório'}
+                                            </button>
+                                        )}
+                                    </div>
+                                    {acceptances.length === 0 ? (
+                                        <p className="text-xs text-gray-400">Nenhum termo de recebimento emitido.</p>
+                                    ) : (
+                                        <div className="space-y-1.5">
+                                            {acceptances.map(a => (
+                                                <div key={a.id} className="p-3 bg-gray-50 rounded-xl">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-sm text-gray-700">{a.kind === 'DEFINITIVO' ? 'Recebimento Definitivo' : 'Recebimento Provisório'}</span>
+                                                        <span className="text-xs text-gray-400">{new Date(a.issued_at + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                                    </div>
+                                                    {a.pending_items.length > 0 && (
+                                                        <p className="text-xs text-amber-600 mt-1">{a.pending_items.length} pendência(s)</p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     <div className="space-y-3">
@@ -1704,6 +1763,46 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     </button>
                                 ) : (
                                     <p className="text-xs text-gray-400 px-2 py-1">Questionário obrigatório para mão de obra (Manual §8).</p>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Responsabilidade Técnica (Fase 7.2 — Cl.10, Anexo E) */}
+                        {contract && (
+                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                                <div className="flex items-center justify-between px-2">
+                                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                        <FileText className="w-3.5 h-3.5" /> Responsabilidade Técnica
+                                    </h4>
+                                    <button type="button" onClick={() => setTechnicalModal({ open: true, editing: null })} className="text-xs font-medium text-blue-600 hover:text-blue-800">
+                                        + Adicionar
+                                    </button>
+                                </div>
+                                {technicalResponsibilities.length === 0 ? (
+                                    <p className="text-xs text-gray-400 px-2 py-1">Nenhuma ART/RRT/TRT cadastrada.</p>
+                                ) : (
+                                    technicalResponsibilities.map(t => {
+                                        const today = new Date().toISOString().split('T')[0];
+                                        const expired = t.status === 'VALIDA' && t.valid_until && t.valid_until < today;
+                                        const statusColor = expired ? 'text-red-600' : t.status === 'VALIDA' ? 'text-emerald-600' : 'text-gray-500';
+                                        const statusLabel = expired ? 'Vencida' : t.status === 'VALIDA' ? 'Válida' : t.status === 'SUSPENSA' ? 'Suspensa' : t.status === 'CANCELADA' ? 'Cancelada' : 'Baixada';
+                                        return (
+                                            <button
+                                                key={t.id}
+                                                type="button"
+                                                onClick={() => setTechnicalModal({ open: true, editing: t })}
+                                                className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-colors"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-semibold text-gray-800">{t.art_type} — {t.professional_name}</span>
+                                                    <span className={`text-sm font-normal ${statusColor}`}>{statusLabel}</span>
+                                                </div>
+                                                {t.valid_until && (
+                                                    <span className="text-xs text-gray-400">até {new Date(t.valid_until + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                                )}
+                                            </button>
+                                        );
+                                    })
                                 )}
                             </div>
                         )}
@@ -2542,6 +2641,32 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 )}
                             </div>
                         )}
+
+                        {/* Avaliação de Desempenho (Fase 7.3 — Manual §17) */}
+                        {contract && (
+                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                        <BarChart3 className="w-4 h-4 text-violet-500" /> Avaliação de Desempenho
+                                    </h3>
+                                    <button type="button" onClick={() => setEvaluationModal(true)} className="text-xs font-medium text-blue-600 hover:text-blue-800">
+                                        + Nova Avaliação
+                                    </button>
+                                </div>
+                                {evaluations.length === 0 ? (
+                                    <p className="text-xs text-gray-400">Nenhuma avaliação registrada.</p>
+                                ) : (
+                                    <div className="space-y-1.5">
+                                        {evaluations.map(ev => (
+                                            <div key={ev.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-xl">
+                                                <span className="text-xs text-gray-500">{ev.period || '—'}{ev.critical_occurrence ? ' · ocorrência crítica' : ''}</span>
+                                                <span className={`text-sm font-normal ${ev.weighted < 2 ? 'text-red-600' : ev.weighted < 3 ? 'text-amber-600' : 'text-emerald-600'}`}>{ev.weighted.toFixed(2)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 );
             })()}
@@ -2749,6 +2874,36 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     contract={contract}
                     onSuccess={loadContractData}
                     initialData={docReqModal.editing}
+                />
+            )}
+
+            {contract && (
+                <ContractAcceptanceModal
+                    isOpen={acceptanceModal.open}
+                    onClose={() => setAcceptanceModal({ open: false, kind: 'PROVISORIO' })}
+                    contract={contract}
+                    onSuccess={loadContractData}
+                    defaultKind={acceptanceModal.kind}
+                />
+            )}
+
+            {contract && (
+                <ContractTechnicalResponsibilityModal
+                    isOpen={technicalModal.open}
+                    onClose={() => setTechnicalModal({ open: false, editing: null })}
+                    contract={contract}
+                    onSuccess={loadContractData}
+                    initialData={technicalModal.editing}
+                />
+            )}
+
+            {contract && (
+                <ContractEvaluationModal
+                    isOpen={evaluationModal}
+                    onClose={() => setEvaluationModal(false)}
+                    contract={contract}
+                    supplierId={contract.supplier_id}
+                    onSuccess={loadContractData}
                 />
             )}
 

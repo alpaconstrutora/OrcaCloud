@@ -1234,6 +1234,15 @@ export const contractService = {
             .single();
         if (contractErr) throw contractErr;
 
+        // Gate de responsabilidade técnica (Cl.10.2): ART/RRT/TRT inválida ou
+        // vencida suspende o pagamento do trecho até regularização.
+        const { data: technicalGate } = await supabase.rpc('fn_contract_technical_gate', { p_contract_id: measurement.contract_id });
+        const blockingTechnical = (technicalGate ?? []).filter((t: { is_blocking: boolean }) => t.is_blocking);
+        if (blockingTechnical.length > 0) {
+            const names = blockingTechnical.map((t: { professional_name: string; art_type: string }) => `${t.art_type} de ${t.professional_name}`).join(', ');
+            throw new Error(`Medição bloqueada: responsabilidade técnica inválida/vencida (${names}). Regularize antes de medir (Cl.10.2).`);
+        }
+
         const { data: prevMeasurements } = await supabase
             .from('contract_measurements')
             .select('total_value')

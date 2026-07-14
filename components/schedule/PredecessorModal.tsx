@@ -1,7 +1,8 @@
 import React from 'react';
-import { Link2, X, Trash2, Plus } from 'lucide-react';
+import { Link2, X, Plus } from 'lucide-react';
 import { HierarchyNode, Predecessor, DependencyType } from '../../types';
 import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
 
 interface PredecessorModalProps {
     taskId: string;
@@ -117,9 +118,7 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                                                     />
                                                     <span className="text-[9px] text-gray-400 font-medium">lag</span>
                                                 </div>
-                                                <button onClick={() => handleRemove(p.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                <ActionIconButton kind="delete" onClick={() => handleRemove(p.id)} />
                                             </div>
                                         </div>
                                     );

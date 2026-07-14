@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Layers, Plus, Trash2, ChevronRight, Settings, FileText, FileSpreadsheet,
+  Layers, Plus, ChevronRight, Settings, FileText, FileSpreadsheet,
   User, Shield, Activity, ArrowLeft, Building2, CheckCircle2, AlertTriangle, XCircle, HelpCircle,
   Loader2
 } from 'lucide-react'
 import Button from '../ui/Button'
+import ActionIconButton from '../ui/ActionIconButton'
 import { structuralService } from '../../services/structuralService'
 import type {
   OpuraStructuralProject,
@@ -505,14 +506,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Button
-                      onClick={(e) => handleDeleteProject(p.id, e)}
-                      variant="ghost"
-                      size="icon"
-                      className="text-slate-300 hover:text-red-500 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <ActionIconButton kind="delete" onClick={(e) => handleDeleteProject(p.id, e)} />
                     <ChevronRight className="w-5 h-5 text-slate-400" />
                   </div>
                 </div>
@@ -657,12 +651,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                             >
                               Dimensionar
                             </button>
-                            <button
-                              onClick={(e) => handleDeleteElement(el.id, e)}
-                              className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                            >
-                              <Trash2 className="w-4.5 h-4.5" />
-                            </button>
+                            <ActionIconButton kind="delete" onClick={(e) => handleDeleteElement(el.id, e)} />
                           </div>
                         </td>
                       </tr>

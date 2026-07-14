@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { Plus, Trash2, Pencil, X, Check, Loader2, Hammer } from 'lucide-react'
+import { Plus, X, Check, Loader2, Hammer } from 'lucide-react'
+import ActionIconButton from '../ui/ActionIconButton'
 import { useRebars, useSteelCatalog } from '../../hooks/useStructuralQueries'
 import { useUpsertRebar, useDeleteRebar } from '../../hooks/useStructuralMutations'
 import type {
@@ -241,14 +242,8 @@ const StructuralRebars: React.FC<Props> = ({ orgId, element }) => {
                   <td className="px-3 py-2.5 text-slate-400 text-table-body">{r.formato_dobra}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => startEdit(r)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => onDelete(r)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <ActionIconButton kind="edit" size="sm" onClick={() => startEdit(r)} />
+                      <ActionIconButton kind="delete" size="sm" onClick={() => onDelete(r)} />
                     </div>
                   </td>
                 </tr>

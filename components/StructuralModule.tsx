@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react'
 import {
-  Layers, Loader2, Plus, Trash2, Pencil, Lock, X, Check,
+  Layers, Loader2, Plus, Lock, X, Check,
   Construction, Scissors, Calculator, ClipboardList, Building2, ChevronRight,
 } from 'lucide-react'
+import ActionIconButton from './ui/ActionIconButton'
 import { useSteelCatalog } from '../hooks/useStructuralQueries'
 import { useUpsertSteel, useDeleteSteel } from '../hooks/useStructuralMutations'
 import type { SteelCatalogItem, SteelType, UpsertSteelInput, StructuralAssembly, StructuralElement } from '../types/structural'
@@ -318,18 +319,8 @@ const SteelCatalog: React.FC<{ orgId?: string }> = ({ orgId }) => {
                           </button>
                         ) : canEdit && (
                           <>
-                            <button
-                              onClick={() => startEdit(item)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => onDelete(item)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <ActionIconButton kind="edit" onClick={() => startEdit(item)} />
+                            <ActionIconButton kind="delete" onClick={() => onDelete(item)} />
                           </>
                         )}
                       </div>

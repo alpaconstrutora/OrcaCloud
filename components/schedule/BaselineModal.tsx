@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { TrendingUp, X, CheckCircle2, Trash2 } from 'lucide-react';
+import { TrendingUp, X, CheckCircle2 } from 'lucide-react';
 import { Baseline } from '../../types';
 import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
 
 interface BaselineModalProps {
     isOpen: boolean;
@@ -86,12 +87,7 @@ export const BaselineModal: React.FC<BaselineModalProps> = ({
                                     </div>
                                     <div className="flex items-center gap-2">
                                         {activeBaselineId === b.id && <CheckCircle2 className="w-4 h-4 text-blue-500" />}
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onDelete(b.id); }}
-                                            className="p-1 hover:text-red-500 transition-colors"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <ActionIconButton kind="delete" onClick={(e) => { e.stopPropagation(); onDelete(b.id); }} />
                                     </div>
                                 </div>
                             ))}

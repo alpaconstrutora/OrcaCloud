@@ -1,5 +1,6 @@
 import React from 'react';
-import { X, Clock, Eye, CalendarOff, Plus, Trash2, Download } from 'lucide-react';
+import { X, Clock, Eye, CalendarOff, Plus, Download } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import { ProjectSchedule, ReplanMode } from '../../types';
 import { getBrazilianHolidays } from '../../utils/brazilianHolidays';
 // ProjectSchedule is used for the workSchedule type helper below
@@ -292,9 +293,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                                 {holidays.map(h => (
                                     <div key={h} className="flex items-center justify-between px-2 py-1 rounded-md hover:bg-gray-50 text-xs">
                                         <span className="font-bold text-gray-600">{h.split('-').reverse().join('/')}</span>
-                                        <button onClick={() => removeHoliday(h)} className="text-gray-300 hover:text-red-500 transition-colors">
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                        <ActionIconButton kind="delete" size="sm" onClick={() => removeHoliday(h)} />
                                     </div>
                                 ))}
                             </div>

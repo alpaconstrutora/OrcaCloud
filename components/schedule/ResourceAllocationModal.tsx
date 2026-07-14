@@ -1,6 +1,7 @@
 import React from 'react';
-import { Users, X, Trash2, Plus } from 'lucide-react';
+import { Users, X, Plus } from 'lucide-react';
 import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
 import { ProjectSchedule, ResourceAllocation } from '../../types';
 
 interface ResourceAllocationModalProps {
@@ -67,14 +68,12 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                                                     {!isNonHuman && !!alloc.overtimeHours && ` • +${alloc.overtimeHours}h extra`}
                                                 </div>
                                             </div>
-                                            <button
+                                            <ActionIconButton
+                                                kind="delete"
                                                 onClick={() => {
                                                     onUpdateAllocation(taskId, taskAllocations.filter(a => a.id !== alloc.id));
                                                 }}
-                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            />
                                         </div>
                                     );
                                 })}

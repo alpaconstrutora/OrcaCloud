@@ -37,11 +37,13 @@ import {
   Table2,
   LayoutDashboard,
   RefreshCw,
+  Edit2,
+  Check
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import {
   documentService,
-  OpuraDmsDiscipline,
+  OpuraDmsDiscipline, OpuraDmsDocumentType,
   OpuraDmsNamingPattern
 } from '../services/documentService';
 import { partnerService } from '../services/partnerService';
@@ -129,11 +131,27 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [disciplines, setDisciplines] = React.useState<OpuraDmsDiscipline[]>([]);
   const [namingPatterns, setNamingPatterns] = React.useState<OpuraDmsNamingPattern[]>([]);
   const [showSettingsModal, setShowSettingsModal] = React.useState(false);
-  const [settingsTab, setSettingsTab] = React.useState<'disciplines' | 'patterns'>('disciplines');
+  const [settingsTab, setSettingsTab] = React.useState<'disciplines' | 'patterns' | 'document_types'>('disciplines');
   const [newDiscCode, setNewDiscCode] = React.useState('');
   const [newDiscName, setNewDiscName] = React.useState('');
   const [newPatName, setNewPatName] = React.useState('');
   const [newPatMask, setNewPatMask] = React.useState('');
+  
+  // -- Edit Disciplines --
+  const [editDiscId, setEditDiscId] = React.useState<string | null>(null);
+  const [editDiscCode, setEditDiscCode] = React.useState('');
+  const [editDiscName, setEditDiscName] = React.useState('');
+
+  // -- Edit Patterns --
+  const [editPatternId, setEditPatternId] = React.useState<string | null>(null);
+  const [editPatternName, setEditPatternName] = React.useState('');
+  const [editPatternMask, setEditPatternMask] = React.useState('');
+
+  // -- Document Types --
+  const [documentTypes, setDocumentTypes] = React.useState<OpuraDmsDocumentType[]>([]);
+  const [newDocTypeName, setNewDocTypeName] = React.useState('');
+  const [editDocTypeId, setEditDocTypeId] = React.useState<string | null>(null);
+  const [editDocTypeName, setEditDocTypeName] = React.useState('');
   const [selectedFolderDisciplines, setSelectedFolderDisciplines] = React.useState<string[]>([]);
   const [leftSearchQuery, setLeftSearchQuery] = React.useState('');
   const [selectedDisciplineCode, setSelectedDisciplineCode] = React.useState<string | null>(null);
@@ -555,52 +573,82 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   };
 
   // Buscar Ajustes Gerais do GED (Disciplinas e Padrões) com injeção automática de presets
-  const fetchDmsSettings = async () => {
-    try {
-      let discs = await documentService.listDisciplines(activeOrganizationId ?? null);
-      let pats = await documentService.listNamingPatterns(activeOrganizationId ?? null);
-
-      // Injeção de presets default é escrita — só faz sentido com uma organização
-      // específica selecionada (não em "Todas as Organizações").
-      if (activeOrganizationId) {
-        // Se a organização não tiver nenhuma disciplina cadastrada, injetar presets default
-        if (discs.length === 0) {
-          const defaultDiscs = [
-            { code: 'ARQ', name: 'Arquitetura' },
-            { code: 'ESTR', name: 'Estrutural' },
-            { code: 'ELEC', name: 'Elétrica' },
-            { code: 'HYDR', name: 'Hidráulica' },
-            { code: 'SANI', name: 'Sanitária' },
-            { code: 'PREV', name: 'Prevenção de Incêndio' },
-          ];
-          for (const d of defaultDiscs) {
-            await documentService.createDiscipline(activeOrganizationId, d.code, d.name).catch(() => {});
-          }
-          discs = await documentService.listDisciplines(activeOrganizationId);
-        }
-
-        // Se a organização não tiver nenhum padrão cadastrado, injetar presets default
-        if (pats.length === 0) {
-          const defaultPats = [
-            { name: 'Padrão ALPA', mask: '[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]' },
-            { name: 'Padrão Simples', mask: '[DISCIPLINA]-[NUMERO]' },
-          ];
-          for (const p of defaultPats) {
-            await documentService.createNamingPattern(activeOrganizationId, p.name, p.mask).catch(() => {});
-          }
-          pats = await documentService.listNamingPatterns(activeOrganizationId);
-        }
+  
+    const fetchDmsSettings = async () => {
+      try {
+        const [discs, pats, docTypes] = await Promise.all([
+          documentService.listDisciplines(activeOrganizationId),
+          documentService.listNamingPatterns(activeOrganizationId),
+          documentService.listDocumentTypes(activeOrganizationId)
+        ]);
+        setDisciplines(discs);
+        setNamingPatterns(pats);
+        setDocumentTypes(docTypes);
+      } catch (err) {
+        console.error('[OpuraDocsModule] Erro ao carregar configurações do GED:', err);
       }
+    };
 
-      setDisciplines(discs);
-      setNamingPatterns(pats);
-    } catch (err) {
-      console.error('[OpuraDocsModule] Erro ao carregar configurações do GED:', err);
-    }
-  };
 
   // Criar nova disciplina
-  const handleCreateDisciplineSubmit = async (e: React.FormEvent) => {
+  
+    // -- Document Types Handlers --
+    const handleCreateDocTypeSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!activeOrganizationId || !newDocTypeName) return;
+      try {
+        await documentService.createDocumentType(activeOrganizationId, newDocTypeName);
+        setNewDocTypeName('');
+        fetchDmsSettings();
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const handleDeleteDocType = async (id: string) => {
+      if (!confirm('Deseja realmente excluir este Tipo de Documento?')) return;
+      try {
+        await documentService.deleteDocumentType(id);
+        fetchDmsSettings();
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const handleSaveEditDocType = async (id: string) => {
+      try {
+        await documentService.updateDocumentType(id, editDocTypeName);
+        setEditDocTypeId(null);
+        fetchDmsSettings();
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    // -- Disciplines Handlers (Edit) --
+    const handleSaveEditDiscipline = async (id: string) => {
+      try {
+        await documentService.updateDiscipline(id, editDiscCode, editDiscName);
+        setEditDiscId(null);
+        fetchDmsSettings();
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    // -- Patterns Handlers (Edit) --
+    const handleSaveEditPattern = async (id: string) => {
+      try {
+        await documentService.updateNamingPattern(id, editPatternName, editPatternMask);
+        setEditPatternId(null);
+        fetchDmsSettings();
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const handleCreateDisciplineSubmit = async (e: React.FormEvent) => {
+
     e.preventDefault();
     if (!activeOrganizationId || !newDiscCode || !newDiscName) return;
     try {
@@ -2141,14 +2189,23 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Tipo de Documento</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder={CATEGORIES.find(c => c.id === newDocCategory)?.placeholder}
-                    value={newDocType}
-                    onChange={(e) => setNewDocType(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
-                  />
+                  <select
+                      required
+                      value={newDocType}
+                      onChange={(e) => setNewDocType(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    >
+                      <option value="">Selecione um tipo...</option>
+                      {documentTypes.map((type) => (
+                        <option key={type.id} value={type.name}>
+                          {type.name}
+                        </option>
+                      ))}
+                      {/* Caso o documento já tenha um tipo não cadastrado (fallback para edição, se necessário) */}
+                      {newDocType && !documentTypes.find(t => t.name === newDocType) && (
+                        <option value={newDocType}>{newDocType}</option>
+                      )}
+                    </select>
                 </div>
               </div>
 
@@ -3237,206 +3294,336 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             </div>
 
             {/* Abas Internas */}
-            <div className="flex border-b border-slate-100 bg-slate-50/20 px-6">
-              <button
-                onClick={() => setSettingsTab('disciplines')}
-                className={`py-3.5 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition-all ${
-                  settingsTab === 'disciplines'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                📋 Disciplinas
-              </button>
-              <button
-                onClick={() => setSettingsTab('patterns')}
-                className={`py-3.5 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition-all ${
-                  settingsTab === 'patterns'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                🏷️ Fórmulas de Nomenclatura
-              </button>
-            </div>
+            
+              <div className="flex border-b border-slate-100 bg-slate-50/20 px-6 overflow-x-auto">
+                <button
+                  onClick={() => setSettingsTab('document_types')}
+                  className={`py-3.5 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
+                    settingsTab === 'document_types'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  📄 Tipos de Documentos
+                </button>
+                <button
+                  onClick={() => setSettingsTab('disciplines')}
+                  className={`py-3.5 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
+                    settingsTab === 'disciplines'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  📑 Disciplinas
+                </button>
+                <button
+                  onClick={() => setSettingsTab('patterns')}
+                  className={`py-3.5 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
+                    settingsTab === 'patterns'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  🏷️ Fórmulas de Nomenclatura
+                </button>
+              </div>
 
-            <div className="p-6 max-h-[500px] overflow-y-auto space-y-6">
-              {settingsTab === 'disciplines' ? (
-                <div className="space-y-5">
-                  {/* Formulário Novo */}
-                  <form onSubmit={handleCreateDisciplineSubmit} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
-                    <h4 className="font-black text-slate-700 text-xs uppercase tracking-wider">Cadastrar Nova Disciplina</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Código (ex: ARQ)</label>
-                        <input
-                          type="text"
-                          required
-                          maxLength={10}
-                          placeholder="ARQ"
-                          value={newDiscCode}
-                          onChange={(e) => setNewDiscCode(e.target.value.toUpperCase())}
-                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
-                        />
-                      </div>
-                      <div className="space-y-1 sm:col-span-2">
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nome da Disciplina (ex: Arquitetura)</label>
-                        <div className="flex gap-2">
+              
+              <div className="p-6 max-h-[500px] overflow-y-auto space-y-6">
+                {settingsTab === 'document_types' && (
+                  <div className="space-y-5">
+                    <form onSubmit={handleCreateDocTypeSubmit} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
+                      <h4 className="font-black text-slate-700 text-xs uppercase tracking-wider">Cadastrar Novo Tipo de Documento</h4>
+                      <div className="flex flex-col sm:flex-row gap-3 items-end">
+                        <div className="space-y-1 flex-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nome do Tipo (ex: Projeto Hidráulico)</label>
                           <input
                             type="text"
                             required
-                            placeholder="Arquitetura e Urbanismo"
-                            value={newDiscName}
-                            onChange={(e) => setNewDiscName(e.target.value)}
-                            className="flex-grow px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                            placeholder="Nome"
+                            value={newDocTypeName}
+                            onChange={(e) => setNewDocTypeName(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                           />
-                          <button
-                            type="submit"
-                            className="px-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap"
-                          >
-                            Adicionar
-                          </button>
+                        </div>
+                        <button type="submit" className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-blue-700 transition-colors whitespace-nowrap">
+                          Adicionar
+                        </button>
+                      </div>
+                    </form>
+
+                    <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-wider">
+                          <tr>
+                            <th className="px-4 py-3">Tipo de Documento</th>
+                            <th className="px-4 py-3 text-right">Ação</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-sm font-semibold text-slate-700">
+                          {documentTypes.map(type => (
+                            <tr key={type.id} className="hover:bg-slate-50/50">
+                              <td className="px-4 py-3">
+                                {editDocTypeId === type.id ? (
+                                  <input
+                                    type="text"
+                                    value={editDocTypeName}
+                                    onChange={(e) => setEditDocTypeName(e.target.value)}
+                                    className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  />
+                                ) : (
+                                  type.name
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {editDocTypeId === type.id ? (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => handleSaveEditDocType(type.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg">
+                                      <Check className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => setEditDocTypeId(null)} className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg">
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => { setEditDocTypeId(type.id); setEditDocTypeName(type.name); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg">
+                                      <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => handleDeleteDocType(type.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg">
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                          {documentTypes.length === 0 && (
+                            <tr><td colSpan={2} className="px-4 py-6 text-center text-slate-400 font-normal">Nenhum tipo cadastrado.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {settingsTab === 'disciplines' && (
+                  <div className="space-y-5">
+                    {/* Formulário Novo */}
+                    <form onSubmit={handleCreateDisciplineSubmit} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
+                      <h4 className="font-black text-slate-700 text-xs uppercase tracking-wider">Cadastrar Nova Disciplina</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Código (ex: ARQ)</label>
+                          <input
+                            type="text"
+                            required
+                            maxLength={10}
+                            placeholder="ARQ"
+                            value={newDiscCode}
+                            onChange={(e) => setNewDiscCode(e.target.value.toUpperCase())}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                          />
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nome da Disciplina (ex: Arquitetura)</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              required
+                              placeholder="Arquitetura e Urbanismo"
+                              value={newDiscName}
+                              onChange={(e) => setNewDiscName(e.target.value)}
+                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                            />
+                            <button type="submit" className="px-5 py-2.5 bg-blue-600 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-blue-700 transition-colors whitespace-nowrap">
+                              Adicionar
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </form>
+                    </form>
 
-                  {/* Listagem */}
-                  <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                          <th className="p-3">Código</th>
-                          <th className="p-3">Nome da Disciplina</th>
-                          <th className="p-3 text-right">Ação</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50 text-xs font-semibold text-slate-700">
-                        {disciplines.length === 0 ? (
+                    {/* Tabela de Disciplinas */}
+                    <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-wider">
                           <tr>
-                            <td colSpan={3} className="p-8 text-center text-slate-400 uppercase font-bold text-[10px]">Nenhuma disciplina cadastrada.</td>
+                            <th className="px-4 py-3">Código</th>
+                            <th className="px-4 py-3">Nome da Disciplina</th>
+                            <th className="px-4 py-3 text-right">Ação</th>
                           </tr>
-                        ) : (
-                          disciplines.map((disc) => (
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-sm font-semibold text-slate-700">
+                          {disciplines.map(disc => (
                             <tr key={disc.id} className="hover:bg-slate-50/50">
-                              <td className="p-3 font-bold text-blue-600">{disc.code}</td>
-                              <td className="p-3">{disc.name}</td>
-                              <td className="p-3 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteDiscipline(disc.id)}
-                                  className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-100 transition-all"
-                                  title="Excluir Disciplina"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                              <td className="px-4 py-3 text-blue-600 font-bold">
+                                {editDiscId === disc.id ? (
+                                  <input
+                                    type="text"
+                                    value={editDiscCode}
+                                    onChange={(e) => setEditDiscCode(e.target.value.toUpperCase())}
+                                    className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  />
+                                ) : (
+                                  disc.code
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                {editDiscId === disc.id ? (
+                                  <input
+                                    type="text"
+                                    value={editDiscName}
+                                    onChange={(e) => setEditDiscName(e.target.value)}
+                                    className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  />
+                                ) : (
+                                  disc.name
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {editDiscId === disc.id ? (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => handleSaveEditDiscipline(disc.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg">
+                                      <Check className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => setEditDiscId(null)} className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg">
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => { setEditDiscId(disc.id); setEditDiscCode(disc.code); setEditDiscName(disc.name); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg">
+                                      <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => handleDeleteDiscipline(disc.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg">
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                )}
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ))}
+                          {disciplines.length === 0 && (
+                            <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-400 font-normal">Nenhuma disciplina cadastrada.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="space-y-5">
-                  {/* Formulário Novo */}
-                  <form onSubmit={handleCreateNamingPatternSubmit} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
-                    <h4 className="font-black text-slate-700 text-xs uppercase tracking-wider">Cadastrar Nova Fórmula</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nome do Padrão</label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="Padrão Obra"
-                          value={newPatName}
-                          onChange={(e) => setNewPatName(e.target.value)}
-                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
-                        />
-                      </div>
-                      <div className="space-y-1 sm:col-span-2">
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Máscara / Fórmula (Tokens: [OBRA], [DISCIPLINA], [NUMERO], [REVISAO])</label>
-                        <div className="flex gap-2">
+                )}
+
+                {settingsTab === 'patterns' && (
+                  <div className="space-y-5">
+                    {/* Formulário Novo */}
+                    <form onSubmit={handleCreateNamingPatternSubmit} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
+                      <h4 className="font-black text-slate-700 text-xs uppercase tracking-wider">Cadastrar Nova Fórmula</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nome do Padrão</label>
                           <input
                             type="text"
                             required
-                            placeholder="[OBRA{3}]-[DISCIPLINA{3}]-[NUMERO{3}]-R[REVISAO{2}]"
-                            value={newPatMask}
-                            onChange={(e) => setNewPatMask(e.target.value)}
-                            className="flex-grow px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                            placeholder="Ex: Padrão ALPA"
+                            value={newPatName}
+                            onChange={(e) => setNewPatName(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                           />
-                          <button
-                            type="submit"
-                            className="px-4 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap"
-                          >
-                            Adicionar
-                          </button>
                         </div>
-                        <span className="text-[9px] text-slate-400 font-bold block mt-1.5 uppercase tracking-wider">
-                          Dica: Defina o tamanho dos caracteres usando chaves. Ex: <strong className="text-blue-600 font-mono select-all">[OBRA{3}]-[DISCIPLINA{3}]-[NUMERO{3}]-R[REVISAO{2}]</strong>
-                        </span>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Máscara de Composição</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              required
+                              placeholder="[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]"
+                              value={newPatMask}
+                              onChange={(e) => setNewPatMask(e.target.value)}
+                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                            />
+                            <button type="submit" className="px-5 py-2.5 bg-blue-600 text-white text-xs font-black uppercase tracking-wider rounded-xl hover:bg-blue-700 transition-colors whitespace-nowrap">
+                              Adicionar
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </form>
+                      <div className="text-[10px] font-medium text-slate-500">
+                        <strong className="text-slate-700">Tags disponíveis:</strong> <code className="bg-white px-1 py-0.5 rounded text-blue-600">[OBRA]</code>, <code className="bg-white px-1 py-0.5 rounded text-blue-600">[DISCIPLINA]</code>, <code className="bg-white px-1 py-0.5 rounded text-blue-600">[NUMERO]</code>, <code className="bg-white px-1 py-0.5 rounded text-blue-600">[REVISAO]</code>
+                      </div>
+                    </form>
 
-                  {/* Listagem */}
-                  <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                          <th className="p-3">Nome</th>
-                          <th className="p-3">Máscara / Nomenclatura</th>
-                          <th className="p-3 text-right">Ação</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50 text-xs font-semibold text-slate-700">
-                        {namingPatterns.length === 0 ? (
+                    {/* Tabela de Padrões */}
+                    <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-wider">
                           <tr>
-                            <td colSpan={3} className="p-8 text-center text-slate-400 uppercase font-bold text-[10px]">Nenhuma fórmula cadastrada.</td>
+                            <th className="px-4 py-3">Nome do Padrão</th>
+                            <th className="px-4 py-3">Fórmula / Máscara</th>
+                            <th className="px-4 py-3 text-right">Ação</th>
                           </tr>
-                        ) : (
-                          namingPatterns.map((pat) => (
-                            <tr key={pat.id} className="hover:bg-slate-50/50">
-                              <td className="p-3 font-bold">{pat.name}</td>
-                              <td className="p-3">
-                                <span className="font-mono text-xs text-blue-600 bg-blue-50/20 px-2 py-0.5 rounded">
-                                  {pat.mask}
-                                </span>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-sm font-semibold text-slate-700">
+                          {namingPatterns.map(pattern => (
+                            <tr key={pattern.id} className="hover:bg-slate-50/50">
+                              <td className="px-4 py-3">
+                                {editPatternId === pattern.id ? (
+                                  <input
+                                    type="text"
+                                    value={editPatternName}
+                                    onChange={(e) => setEditPatternName(e.target.value)}
+                                    className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  />
+                                ) : (
+                                  pattern.name
+                                )}
                               </td>
-                              <td className="p-3 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteNamingPattern(pat.id)}
-                                  className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-100 transition-all"
-                                  title="Excluir Padrão"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                              <td className="px-4 py-3 font-mono text-xs text-blue-600">
+                                {editPatternId === pattern.id ? (
+                                  <input
+                                    type="text"
+                                    value={editPatternMask}
+                                    onChange={(e) => setEditPatternMask(e.target.value)}
+                                    className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  />
+                                ) : (
+                                  pattern.mask
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {editPatternId === pattern.id ? (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => handleSaveEditPattern(pattern.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg">
+                                      <Check className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => setEditPatternId(null)} className="p-1.5 text-slate-400 hover:bg-slate-50 rounded-lg">
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button onClick={() => { setEditPatternId(pattern.id); setEditPatternName(pattern.name); setEditPatternMask(pattern.mask); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg">
+                                      <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => handleDeleteNamingPattern(pattern.id)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg">
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                )}
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ))}
+                          {namingPatterns.length === 0 && (
+                            <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-400 font-normal">Nenhum padrão de nomenclatura cadastrado.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* Rodapé */}
-            <div className="flex items-center justify-end px-6 py-4 bg-slate-50/50 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowSettingsModal(false)}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-button uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95"
-              >
-                Concluir
-              </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
       {/* Modal de Renomeação Inteligente (Smart Rename) */}
       {showRenameModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">

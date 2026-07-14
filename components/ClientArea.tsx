@@ -70,6 +70,31 @@ import { storageService } from '../services/storageService';
 import { PurchaseOrder } from '../types';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import { useConfirm } from './ui/confirm';
+import { Download, Edit2, Trash2 } from 'lucide-react';
+
+const ActionIconButton = ({ kind, icon, onClick, className = '' }: { kind: 'download' | 'edit' | 'delete' | 'settings', icon?: React.ReactNode, onClick: (e: any) => void, className?: string }) => {
+    let defaultIcon = null;
+    let baseClass = "p-1.5 rounded-lg transition-colors ";
+    if (kind === 'download') {
+        defaultIcon = <Download className="w-4 h-4" />;
+        baseClass += "text-slate-400 hover:text-blue-600 hover:bg-blue-50";
+    } else if (kind === 'edit') {
+        defaultIcon = <Edit2 className="w-4 h-4" />;
+        baseClass += "text-slate-400 hover:text-blue-600 hover:bg-blue-50";
+    } else if (kind === 'delete') {
+        defaultIcon = <Trash2 className="w-4 h-4" />;
+        baseClass += "text-slate-400 hover:text-red-600 hover:bg-red-50";
+    } else {
+        defaultIcon = icon;
+        baseClass += "text-slate-400 hover:text-blue-600 hover:bg-blue-50";
+    }
+    
+    return (
+        <button onClick={onClick} className={`${baseClass} ${className}`}>
+            {icon || defaultIcon}
+        </button>
+    );
+};
 
 interface ClientAreaProps {
     settings: ProjectSettings;
@@ -2958,12 +2983,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         <p className="text-sm font-black text-gray-900 truncate">{doc.name}</p>
                                         <span className="text-[9px] font-black uppercase tracking-widest text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">{doc.category || 'Documento'}</span>
                                     </div>
-                                    <button
-                                        onClick={() => handleDownload(doc)}
-                                        className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shrink-0 active:scale-95 transition-transform"
-                                    >
-                                        <Download className="w-4 h-4" />
-                                    </button>
+                                    <ActionIconButton kind="download" className="shrink-0" onClick={() => handleDownload(doc)} />
                                 </div>
                             ))
                         )}
@@ -3021,8 +3041,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         className={`group flex flex-col items-center p-8 rounded-[2rem] border border-gray-50 bg-gray-50/30 hover:bg-white hover:border-indigo-100 hover:shadow-2xl hover:shadow-indigo-100/30 transition-all cursor-pointer relative ${doc.disabled ? 'opacity-50' : ''}`}
                                     >
                                         {isAdmin && !doc.isDummy && (
-                                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-all z-20">
-                                                <button
+                                            <div className="absolute top-4 right-4 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all z-20">
+                                                <ActionIconButton
+                                                    kind="edit"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         const newName = prompt('Novo nome:', doc.name);
@@ -3043,11 +3064,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                             }
                                                         }
                                                     }}
-                                                    className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
-                                                >
-                                                    <Pencil className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button
+                                                />
+                                                <ActionIconButton
+                                                    kind="delete"
+                                                    icon={<X className="w-3.5 h-3.5" />}
                                                     onClick={async (e) => {
                                                         e.stopPropagation();
                                                         if (await confirm({ title: 'Remover este documento?', variant: 'danger', confirmLabel: 'Remover' })) {
@@ -3059,10 +3079,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                             }
                                                         }
                                                     }}
-                                                    className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
-                                                >
-                                                    <X className="w-3.5 h-3.5" />
-                                                </button>
+                                                />
                                             </div>
                                         )}
 

@@ -121,6 +121,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [editDocAlertaDias, setEditDocAlertaDias] = React.useState(30);
   const [editDocTagsInput, setEditDocTagsInput] = React.useState('');
   const [editDocStatus, setEditDocStatus] = React.useState<OpuraDocumentStatus>('ativo');
+  const [editDocProjectId, setEditDocProjectId] = React.useState('');
+  const [editDocType, setEditDocType] = React.useState('');
   const [folderNamingMask, setFolderNamingMask] = React.useState('');
   const [editingFolder, setEditingFolder] = React.useState<OpuraFolder | null>(null);
   const [editFolderName, setEditFolderName] = React.useState('');
@@ -1276,6 +1278,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setEditDocAlertaDias(doc.alerta_dias_antecedencia || 30);
     setEditDocTagsInput(doc.tags ? doc.tags.join(', ') : '');
     setEditDocStatus(doc.status as any || 'ativo');
+    setEditDocProjectId(doc.project_id || '');
+    setEditDocType(doc.tipo_documento || '');
   };
 
   // Submeter Edição do Documento
@@ -1331,6 +1335,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         alerta_dias_antecedencia: editDocAlertaDias,
         tags,
         status: editDocStatus as any,
+          project_id: editDocProjectId || undefined,
+          tipo_documento: editDocType || undefined,
       });
 
       if (activeOrganizationId && currentProfile?.email) {
@@ -3240,7 +3246,39 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 />
               </div>
 
-              {/* Status do Documento */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Tipo de Documento</label>
+                    <select
+                      value={editDocType}
+                      onChange={(e) => setEditDocType(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    >
+                      <option value="">Nenhum (Livre)</option>
+                      {documentTypes.map((type) => (
+                        <option key={type.id} value={type.name}>{type.name}</option>
+                      ))}
+                      {editDocType && !documentTypes.find(t => t.name === editDocType) && (
+                        <option value={editDocType}>{editDocType}</option>
+                      )}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Obra Vinculada</label>
+                    <select
+                      value={editDocProjectId}
+                      onChange={(e) => setEditDocProjectId(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    >
+                      <option value="">Nenhuma Obra</option>
+                      {projects?.map(p => (
+                        <option key={p.id} value={p.id}>{p.code || p.id} - {p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Status do Documento */}
               <div className="space-y-1.5">
                 <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Status do Documento</label>
                 <select

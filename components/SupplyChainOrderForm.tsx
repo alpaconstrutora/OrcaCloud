@@ -1,5 +1,6 @@
 import React from 'react';
-import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Trash2, Pencil, Settings } from 'lucide-react';
+import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Pencil, Settings } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import HierarchicalSelect from './HierarchicalSelect';
 import Button from './ui/Button';
 import { projectService, ProjectData } from '../services/projectService';
@@ -839,20 +840,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                             </td>
                                                             <td className="px-4 py-3 text-right">
                                                                 <div className="flex items-center justify-end gap-1">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setAvulsoModalConfig({ open: true, editingIndex: idx, initial: item })}
-                                                                        className="p-1.5 text-gray-300 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-all"
-                                                                    >
-                                                                        <Pencil className="w-3.5 h-3.5" />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setAvulsoItems(prev => prev.filter((_, i) => i !== idx))}
-                                                                        className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                                                    >
-                                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                                    </button>
+                                                                    <ActionIconButton kind="edit" size="sm" tone="attention" onClick={() => setAvulsoModalConfig({ open: true, editingIndex: idx, initial: item })} />
+                                                                    <ActionIconButton kind="delete" size="sm" onClick={() => setAvulsoItems(prev => prev.filter((_, i) => i !== idx))} />
                                                                 </div>
                                                             </td>
                                                         </tr>
@@ -1142,13 +1131,9 @@ const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClos
                                         <CheckCircle2 className="w-3.5 h-3.5" />
                                     </button>
                                 ) : (
-                                    <button onClick={() => { setEditingIdx(i); setEditVal(unit); }} className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all">
-                                        <Pencil className="w-3.5 h-3.5" />
-                                    </button>
+                                    <ActionIconButton kind="edit" size="sm" onClick={() => { setEditingIdx(i); setEditVal(unit); }} />
                                 )}
-                                <button onClick={() => setUnits(prev => prev.filter((_, j) => j !== i))} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                <ActionIconButton kind="delete" size="sm" onClick={() => setUnits(prev => prev.filter((_, j) => j !== i))} />
                             </div>
                         ))}
                     </div>

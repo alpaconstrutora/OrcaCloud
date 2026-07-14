@@ -1,5 +1,6 @@
 import React from 'react';
-import { Truck, Search, RefreshCw, AlertTriangle, Clock, Camera, Pencil } from 'lucide-react';
+import { Truck, Search, RefreshCw, AlertTriangle, Clock, Camera } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { orderService } from '../services/orderService';
 import { PurchaseOrder } from '../types';
 import OrderReceiptModal from './OrderReceiptModal';
@@ -295,17 +296,16 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                                                         <Camera className="w-4 h-4" />
                                                     </button>
                                                 ) : ['Recebido', 'Divergência'].includes(order.status) ? (
-                                                    <button
+                                                    <ActionIconButton
+                                                        kind="edit"
+                                                        className="ml-1"
+                                                        title="Editar Checkout"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             setSelectedOrder(order);
                                                             setShowReceiptModal(true);
                                                         }}
-                                                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors ml-1"
-                                                        title="Editar Checkout"
-                                                    >
-                                                        <Pencil className="w-4 h-4" />
-                                                    </button>
+                                                    />
                                                 ) : null}
                                             </div>
                                         </td>

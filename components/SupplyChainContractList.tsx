@@ -3,9 +3,10 @@ import {
     Search, Plus,
     FileText, Calendar, Building2, DollarSign,
     ArrowRight, Clock, Shield, LayoutDashboard,
-    Table2, RefreshCw, Copy, Trash2, Pencil,
+    Table2, RefreshCw, Copy,
     AlertCircle
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { contractService } from '../services/contractService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
@@ -357,37 +358,10 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                     <div className="p-4 bg-blue-50 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all duration-500">
                                         <FileText className="w-6 h-6" />
                                     </div>
-                                    <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
-                                        <Button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onEdit && onEdit(contract);
-                                            }}
-                                            variant="secondary"
-                                            size="icon"
-                                            className="!h-8 !w-8 hover:text-emerald-600 hover:border-emerald-100 shadow-sm"
-                                            title="Ajustar Contrato"
-                                        >
-                                            <Pencil className="w-3.5 h-3.5" />
-                                        </Button>
-                                        <Button
-                                            onClick={(e) => handleDuplicate(e, contract.id)}
-                                            variant="secondary"
-                                            size="icon"
-                                            className="!h-8 !w-8 hover:text-blue-600 hover:border-blue-100 shadow-sm"
-                                            title="Duplicar Contrato"
-                                        >
-                                            <Copy className="w-3.5 h-3.5" />
-                                        </Button>
-                                        <Button
-                                            onClick={(e) => handleDelete(e, contract.id)}
-                                            variant="secondary"
-                                            size="icon"
-                                            className="!h-8 !w-8 hover:text-red-600 hover:border-red-100 shadow-sm"
-                                            title="Excluir Contrato"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </Button>
+                                    <div className="flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                        <ActionIconButton kind="edit" size="sm" title="Ajustar Contrato" onClick={(e) => { e.stopPropagation(); onEdit && onEdit(contract); }} />
+                                        <ActionIconButton kind="duplicate" size="sm" title="Duplicar Contrato" onClick={(e) => handleDuplicate(e, contract.id)} />
+                                        <ActionIconButton kind="delete" size="sm" title="Excluir Contrato" onClick={(e) => handleDelete(e, contract.id)} />
                                     </div>
                                 </div>
                                 <StatusBadge status={contract.status} />
@@ -497,13 +471,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                                 >
                                                     Ver Detalhes
                                                 </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onEdit?.(contract); }}
-                                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors ml-1"
-                                                    title="Ajustar Contrato"
-                                                >
-                                                    <Pencil className="w-4 h-4" />
-                                                </button>
+                                                <ActionIconButton kind="edit" className="ml-1" title="Ajustar Contrato" onClick={(e) => { e.stopPropagation(); onEdit?.(contract); }} />
                                                 <InlineDisclosureMenu
                                                     menuItems={[
                                                         { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar Contrato', onClick: () => performDuplicate(contract.id) },

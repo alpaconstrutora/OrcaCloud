@@ -1,5 +1,6 @@
 import React from 'react';
-import { X, AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react';
+import { X, AlertCircle, Loader2, Plus } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import { qualityConditionService } from '../../services/qualityConditionService';
 import type { ConstructionCondition, ActorReference } from '../../types/quality';
 
@@ -176,13 +177,7 @@ const RequestActionModal: React.FC<Props> = ({
                     className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   {steps.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeStep(step.id)}
-                      className="text-gray-300 hover:text-red-400 shrink-0"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <ActionIconButton kind="delete" className="shrink-0" onClick={() => removeStep(step.id)} />
                   )}
                 </div>
               ))}

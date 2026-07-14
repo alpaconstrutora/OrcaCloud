@@ -15,8 +15,6 @@ import {
     AlertTriangle,
     History,
     Clock,
-    Edit,
-    Trash2,
     Check,
     ArrowLeftRight,
     Send,
@@ -29,6 +27,7 @@ import {
 } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import Button from './ui/Button';
+import ActionIconButton from './ui/ActionIconButton';
 import { useStore } from '../store/useStore';
 import { formatMoney, formatDateBR, formatPercent } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
@@ -970,21 +969,17 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                                     <p className="font-semibold text-gray-900">{w.name}</p>
                                                     <p className="text-xs text-gray-500 mt-1">{typeLabel[w.type]}{w.projectName ? ` — ${w.projectName}` : ' — Central'}</p>
                                                 </div>
-                                                <div className="flex gap-1 -mr-2">
-                                                    <Button variant="ghost" onClick={() => setWarehouseModal(w)} className="!p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50">
-                                                        <Edit className="w-4 h-4" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
+                                                <div className="flex gap-1.5 -mr-2">
+                                                    <ActionIconButton kind="edit" onClick={() => setWarehouseModal(w)} />
+                                                    <ActionIconButton
+                                                        kind="delete"
+                                                        title="Desativar"
                                                         onClick={async () => {
                                                             if (!confirm(`Desativar "${w.name}"?`)) return;
                                                             await inventoryService.updateWarehouse(w.id, { isActive: false });
                                                             load();
                                                         }}
-                                                        className="!p-2 text-gray-400 hover:text-red-600 hover:bg-red-50"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </Button>
+                                                    />
                                                 </div>
                                             </div>
                                             <div className="grid grid-cols-2 gap-3 text-center">
@@ -1225,7 +1220,7 @@ const TransferModal: React.FC<TransferModalProps> = ({ orgId, warehouses, onClos
                                         <input type="number" min="0.001" step="0.01" className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" value={item.quantity || ''} onChange={e => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })} />
                                     </div>
                                     <div className="col-span-1 flex justify-center pb-1.5">
-                                        <button onClick={() => removeItem(idx)} className="text-gray-400 hover:text-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                        <ActionIconButton kind="delete" onClick={() => removeItem(idx)} />
                                     </div>
                                 </div>
                             ))}
@@ -1663,9 +1658,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, onClose,
                                         />
                                     </div>
                                     <div className="col-span-1 flex justify-center pb-1.5">
-                                        <button onClick={() => removeItem(idx)} className="text-gray-400 hover:text-red-600 transition-colors">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <ActionIconButton kind="delete" onClick={() => removeItem(idx)} />
                                     </div>
                                 </div>
                             ))}

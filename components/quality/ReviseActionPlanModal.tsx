@@ -1,5 +1,6 @@
 import React from 'react';
-import { X, AlertCircle, Loader2, Plus, Trash2 } from 'lucide-react';
+import { X, AlertCircle, Loader2, Plus } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import { qualityConditionService } from '../../services/qualityConditionService';
 import type { ConstructionCondition, ActorReference } from '../../types/quality';
 
@@ -233,13 +234,7 @@ const ReviseActionPlanModal: React.FC<Props> = ({
                       placeholder={`Etapa ${i + 1}...`}
                       className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    <button
-                      type="button"
-                      onClick={() => removeStep(i)}
-                      className="text-gray-300 hover:text-red-500 shrink-0"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <ActionIconButton kind="delete" className="shrink-0" onClick={() => removeStep(i)} />
                   </li>
                 ))}
               </ul>

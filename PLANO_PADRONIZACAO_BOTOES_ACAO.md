@@ -193,7 +193,22 @@ substituir botões hand-rolled por `ActionIconButton`, rodar
   mesmo risco. `LaborDocumentModal` não tinha botão algum, era um ícone
   decorativo de cabeçalho de modal (Pencil/Upload conforme o modo).
 - **Lote E — suprimentos/estoque/qualidade:** `SupplyChain*`, `InventoryModule`,
-  `quality/*`, `ProcessosModule`.
+  `quality/*`, `ProcessosModule`. ✅ **Concluído (2026-07-14).**
+  Migrados: `SupplyChainContractList` (trio Editar+Duplicar+Excluir via
+  `Button` compartilhado → `ActionIconButton`, + 1 ponto isolado),
+  `SupplyChainOrderDetails` (Duplicar+Excluir do cabeçalho + par Editar/
+  Excluir por item), `SupplyChainOrderList` (2 pontos), `SupplyChainReceiptManager`
+  (1 ponto condicional), `SupplyChainOrderForm` (2 pares — um com
+  `tone="attention"` para manter o laranja de "item avulso"),
+  `SupplyChainQuotationForm` (1 ponto), `InventoryModule` (Editar+Desativar
+  de armazém via `Button` compartilhado + 2 "remover item" de formulário),
+  `ProcessosModule` (1 ponto), `quality/ConditionDetailPanel` (Editar
+  isolado), `quality/RequestActionModal` e `quality/ReviseActionPlanModal`
+  ("remover etapa" — atenção: preservar `shrink-0` do container flex ao
+  converter, perdi e corrigi na hora). Os outros 8 arquivos de `quality/`
+  não tinham nenhum botão-ícone correspondente aos kinds do componente.
+  **Não migrados, com motivo:** nenhum — todos os candidatos encontrados
+  neste lote foram pares/trios limpos, sem risco de fileira multicolor.
 - **Lote F — resto (empreendimento, investor, structural, schedule, offices…).**
 
 Regras da migração (para não introduzir bug):

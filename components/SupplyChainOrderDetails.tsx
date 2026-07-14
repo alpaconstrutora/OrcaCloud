@@ -1,5 +1,6 @@
 import React from 'react';
-import { Package, Truck, Printer, Pencil, ArrowLeft, Building2, CreditCard, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Upload, Plus, Loader2, MessageCircle, Zap, Trash2, Copy, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Package, Truck, Printer, Pencil, ArrowLeft, Building2, CreditCard, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Upload, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { PurchaseOrder, Invoice, PurchaseOrderItem } from '../types';
 import { orderService } from '../services/orderService';
 import { receiptService, PurchaseReceipt } from '../services/receiptService';
@@ -590,22 +591,14 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         <Printer className="w-5 h-5" />
                     </button>
 
-                    <button
-                        onClick={handleDuplicateOrder}
-                        className="p-3 bg-gray-50 text-gray-400 hover:text-indigo-600 hover:bg-gray-100 rounded-2xl transition-all shadow-sm active:scale-95"
-                        title="Duplicar Pedido"
-                    >
-                        <Copy className="w-5 h-5" />
-                    </button>
+                    <ActionIconButton kind="duplicate" title="Duplicar Pedido" onClick={handleDuplicateOrder} />
 
-                    <button
-                        onClick={handleDeleteOrder}
+                    <ActionIconButton
+                        kind="delete"
                         disabled={!canDeleteOrder(order.status)}
-                        className="p-3 bg-gray-50 text-gray-400 hover:text-red-600 hover:bg-gray-100 rounded-2xl transition-all shadow-sm active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:bg-gray-50"
                         title={canDeleteOrder(order.status) ? 'Excluir Pedido' : `Pedido "${order.status}" não pode ser excluído`}
-                    >
-                        <Trash2 className="w-5 h-5" />
-                    </button>
+                        onClick={handleDeleteOrder}
+                    />
 
                     <button
                         onClick={handleWhatsAppShare}
@@ -807,20 +800,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <button
-                                                                onClick={() => handleStartEdit(idx, item)}
-                                                                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                                                title="Editar"
-                                                            >
-                                                                <Pencil className="w-3.5 h-3.5" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDeleteItem(idx)}
-                                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                                                title="Excluir"
-                                                            >
-                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                            </button>
+                                                            <ActionIconButton kind="edit" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleStartEdit(idx, item)} />
+                                                            <ActionIconButton kind="delete" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleDeleteItem(idx)} />
                                                         </>
                                                     )}
                                                 </div>

@@ -2,8 +2,9 @@ import React from 'react';
 import {
   X, Clock, FileText, CheckCircle2, AlertTriangle,
   Image, Loader2, ChevronRight, Gavel, Play,
-  ClipboardList, UserCheck, Wrench, Shield, XCircle, Pencil
+  ClipboardList, UserCheck, Wrench, Shield, XCircle
 } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import { qualityConditionService } from '../../services/qualityConditionService';
 import type { ConstructionCondition, ActorReference, ConditionState } from '../../types/quality';
 import ClassifyConditionModal     from './ClassifyConditionModal';
@@ -164,13 +165,7 @@ const ConditionDetailPanel: React.FC<Props> = ({
             {condition.state !== 'CLOSED' && condition.state !== 'IN_REPAIR' &&
              condition.state !== 'REPAIRED' && condition.state !== 'VALIDATED' &&
              condition.state !== 'CONTESTED' && condition.state !== 'ESCALATED' && (
-              <button
-                onClick={() => setOpenModal('edit')}
-                title="Editar condição"
-                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              >
-                <Pencil className="w-4 h-4" />
-              </button>
+              <ActionIconButton kind="edit" title="Editar condição" onClick={() => setOpenModal('edit')} />
             )}
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <X className="w-5 h-5" />

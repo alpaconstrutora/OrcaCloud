@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     Workflow, ClipboardList, Layers, Plus, CheckCircle2, XCircle, FileText,
-    Loader2, ChevronRight, MessageSquare, Send, Trash2, Shield,
+    Loader2, ChevronRight, MessageSquare, Send, Shield,
     Activity, LayoutGrid, List as ListIcon, AlertTriangle,
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { processService } from '../services/processService';
 import { documentService } from '../services/documentService';
 import { taskService } from '../services/taskService';
@@ -111,9 +112,7 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
                                     ))}
                                 </select>
                                 {steps.length > 1 && (
-                                    <button onClick={() => removeStep(idx)} className="p-2 text-gray-400 hover:text-red-600">
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                    <ActionIconButton kind="delete" onClick={() => removeStep(idx)} />
                                 )}
                             </div>
                         ))}

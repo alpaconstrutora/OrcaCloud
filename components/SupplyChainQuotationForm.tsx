@@ -1,5 +1,6 @@
 import React from 'react';
-import { ArrowLeft, Plus, Trash2, Save, Building2, Calendar, FileText, Package, Filter, HandCoins, Layers, AlertCircle, X } from 'lucide-react';
+import { ArrowLeft, Plus, Save, Building2, Calendar, FileText, Package, Filter, HandCoins, Layers, AlertCircle, X } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { QuotationRequest, ProjectSettings, Supplier, QuotationRequestItem, SinapiType, SinapiCategory, BudgetEntry } from '../types';
 import { quotationService } from '../services/quotationService';
 import { projectService } from '../services/projectService';
@@ -857,13 +858,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3 text-right">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveItem(idx)}
-                                                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
+                                                        <ActionIconButton kind="delete" onClick={() => handleRemoveItem(idx)} />
                                                     </td>
                                                 </tr>
                                             ))}

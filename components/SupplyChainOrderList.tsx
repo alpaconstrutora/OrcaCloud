@@ -1,5 +1,6 @@
 import React from 'react';
-import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, Pencil, FileCheck, X, RefreshCw } from 'lucide-react';
+import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, TrendingUp, AlertTriangle, CheckCircle2, FileCheck, X, RefreshCw } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
@@ -629,13 +630,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                                     >
                                                         Ver Detalhes
                                                     </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); onEdit?.(order.id); }}
-                                                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors ml-1"
-                                                        title="Editar Pedido"
-                                                    >
-                                                        <Pencil className="w-4 h-4" />
-                                                    </button>
+                                                    <ActionIconButton kind="edit" className="ml-1" title="Editar Pedido" onClick={(e) => { e.stopPropagation(); onEdit?.(order.id); }} />
                                                     <InlineDisclosureMenu
                                                         menuItems={[
                                                             {
@@ -740,13 +735,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                         >
                                             Ver Detalhes <ArrowRight className="w-3.5 h-3.5" />
                                         </button>
-                                        <button
-                                            onClick={() => onEdit?.(order.id)}
-                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors ml-2"
-                                            title="Editar Pedido"
-                                        >
-                                            <Pencil className="w-4 h-4" />
-                                        </button>
+                                        <ActionIconButton kind="edit" className="ml-2" title="Editar Pedido" onClick={() => onEdit?.(order.id)} />
                                         <InlineDisclosureMenu
                                             menuItems={[
                                                 {

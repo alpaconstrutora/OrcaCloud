@@ -1300,12 +1300,13 @@ export const documentService = {
   },
 
   // ─── CRUD DE DISCIPLINAS ─────────────────────────────────────
-  async listDisciplines(orgId: string): Promise<OpuraDmsDiscipline[]> {
-    const { data, error } = await supabase
+  async listDisciplines(orgId: string | null): Promise<OpuraDmsDiscipline[]> {
+    let q = supabase
       .from('opura_dms_disciplines')
       .select('*')
-      .eq('organization_id', orgId)
       .order('code', { ascending: true });
+    if (orgId) q = q.eq('organization_id', orgId);
+    const { data, error } = await q;
 
     if (error) {
       console.error('[DocumentService] Erro ao listar disciplinas:', error);
@@ -1341,12 +1342,13 @@ export const documentService = {
   },
 
   // ─── CRUD DE PADRÕES DE NOMENCLATURA ─────────────────────────
-  async listNamingPatterns(orgId: string): Promise<OpuraDmsNamingPattern[]> {
-    const { data, error } = await supabase
+  async listNamingPatterns(orgId: string | null): Promise<OpuraDmsNamingPattern[]> {
+    let q = supabase
       .from('opura_dms_naming_patterns')
       .select('*')
-      .eq('organization_id', orgId)
       .order('name', { ascending: true });
+    if (orgId) q = q.eq('organization_id', orgId);
+    const { data, error } = await q;
 
     if (error) {
       console.error('[DocumentService] Erro ao listar padrões de nomenclatura:', error);

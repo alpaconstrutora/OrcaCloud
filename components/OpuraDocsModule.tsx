@@ -533,37 +533,40 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   // Buscar Ajustes Gerais do GED (Disciplinas e Padrões) com injeção automática de presets
   const fetchDmsSettings = async () => {
-    if (!activeOrganizationId) return;
     try {
-      let discs = await documentService.listDisciplines(activeOrganizationId);
-      let pats = await documentService.listNamingPatterns(activeOrganizationId);
+      let discs = await documentService.listDisciplines(activeOrganizationId ?? null);
+      let pats = await documentService.listNamingPatterns(activeOrganizationId ?? null);
 
-      // Se a organização não tiver nenhuma disciplina cadastrada, injetar presets default
-      if (discs.length === 0) {
-        const defaultDiscs = [
-          { code: 'ARQ', name: 'Arquitetura' },
-          { code: 'ESTR', name: 'Estrutural' },
-          { code: 'ELEC', name: 'Elétrica' },
-          { code: 'HYDR', name: 'Hidráulica' },
-          { code: 'SANI', name: 'Sanitária' },
-          { code: 'PREV', name: 'Prevenção de Incêndio' },
-        ];
-        for (const d of defaultDiscs) {
-          await documentService.createDiscipline(activeOrganizationId, d.code, d.name).catch(() => {});
+      // Injeção de presets default é escrita — só faz sentido com uma organização
+      // específica selecionada (não em "Todas as Organizações").
+      if (activeOrganizationId) {
+        // Se a organização não tiver nenhuma disciplina cadastrada, injetar presets default
+        if (discs.length === 0) {
+          const defaultDiscs = [
+            { code: 'ARQ', name: 'Arquitetura' },
+            { code: 'ESTR', name: 'Estrutural' },
+            { code: 'ELEC', name: 'Elétrica' },
+            { code: 'HYDR', name: 'Hidráulica' },
+            { code: 'SANI', name: 'Sanitária' },
+            { code: 'PREV', name: 'Prevenção de Incêndio' },
+          ];
+          for (const d of defaultDiscs) {
+            await documentService.createDiscipline(activeOrganizationId, d.code, d.name).catch(() => {});
+          }
+          discs = await documentService.listDisciplines(activeOrganizationId);
         }
-        discs = await documentService.listDisciplines(activeOrganizationId);
-      }
 
-      // Se a organização não tiver nenhum padrão cadastrado, injetar presets default
-      if (pats.length === 0) {
-        const defaultPats = [
-          { name: 'Padrão ALPA', mask: '[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]' },
-          { name: 'Padrão Simples', mask: '[DISCIPLINA]-[NUMERO]' },
-        ];
-        for (const p of defaultPats) {
-          await documentService.createNamingPattern(activeOrganizationId, p.name, p.mask).catch(() => {});
+        // Se a organização não tiver nenhum padrão cadastrado, injetar presets default
+        if (pats.length === 0) {
+          const defaultPats = [
+            { name: 'Padrão ALPA', mask: '[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]' },
+            { name: 'Padrão Simples', mask: '[DISCIPLINA]-[NUMERO]' },
+          ];
+          for (const p of defaultPats) {
+            await documentService.createNamingPattern(activeOrganizationId, p.name, p.mask).catch(() => {});
+          }
+          pats = await documentService.listNamingPatterns(activeOrganizationId);
         }
-        pats = await documentService.listNamingPatterns(activeOrganizationId);
       }
 
       setDisciplines(discs);

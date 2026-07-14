@@ -705,6 +705,23 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <span className="text-xs truncate">{folder.name}</span>
           </div>
 
+          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1 mr-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); handleStartEditFolder(folder); }}
+              className="p-1 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50"
+              title="Configurar/Incluir Disciplinas"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id); }}
+              className="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-red-50"
+              title="Excluir Pasta"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+
           {hasChildren && (
             <button
               onClick={() => toggleNode(folder.id)}
@@ -730,7 +747,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               return (
                 <div
                   key={`${folder.id}-${disc.code}`}
-                  className={`flex items-center p-1 rounded-lg transition-all group cursor-pointer ${
+                  className={`flex items-center justify-between p-1 rounded-lg transition-all group cursor-pointer ${
                     isDiscSelected
                       ? 'bg-blue-50 text-blue-700 font-extrabold border border-blue-100/50'
                       : 'hover:bg-slate-50 border border-transparent'
@@ -741,13 +758,35 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     setSelectedDisciplineCode(disc.code);
                   }}
                 >
-                  <span
-                    className="w-5 h-4 flex items-center justify-center text-[8px] font-black uppercase rounded text-white shadow-sm shrink-0 mr-2"
-                    style={{ backgroundColor: getDisciplineColor(disc.code) }}
-                  >
-                    {disc.code.slice(0, 3)}
-                  </span>
-                  <span className="text-xs truncate">{disc.name}</span>
+                  <div className="flex items-center gap-1.5 min-w-0 flex-grow">
+                    <span
+                      className="w-5 h-4 flex items-center justify-center text-[8px] font-black uppercase rounded text-white shadow-sm shrink-0"
+                      style={{ backgroundColor: getDisciplineColor(disc.code) }}
+                    >
+                      {disc.code.slice(0, 3)}
+                    </span>
+                    <span className="text-xs truncate">{disc.name}</span>
+                  </div>
+
+                  <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1 mr-1">
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!confirm(`Remover disciplina ${disc.name} da pasta?`)) return;
+                        try {
+                          const newDisciplines = (folder.disciplines || []).filter(d => d !== disc.code);
+                          await documentService.updateFolder(folder.id, { disciplines: newDisciplines });
+                          fetchFolders();
+                        } catch (err: any) {
+                          alert('Erro ao remover disciplina: ' + err.message);
+                        }
+                      }}
+                      className="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-red-50"
+                      title="Excluir Disciplina desta Pasta"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               );
             })}

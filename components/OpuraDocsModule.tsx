@@ -3067,17 +3067,97 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             </div>
 
             <form onSubmit={handleEditDocSubmit} className="p-6 space-y-5">
-              {/* Nome */}
-              <div className="space-y-1.5">
-                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Nome do Documento / Planta</label>
-                <input
-                  type="text"
-                  required
-                  value={editDocName}
-                  onChange={(e) => setEditDocName(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
-                />
-              </div>
+                {/* Nome ou Tokens */}
+                {(() => {
+                  const docFolder = folders.find(f => f.id === editingDoc?.folder_id);
+                  if (docFolder && docFolder.naming_mask) {
+                    return (
+                      <div className="space-y-4 bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+                        <label className="text-form-label font-black uppercase text-blue-800 tracking-wider flex items-center gap-2">
+                          <Settings className="w-4 h-4" /> Componentes do Nome (Padrão: {docFolder.naming_mask})
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {extractMaskTokens(docFolder.naming_mask).map(token => {
+                            const cleanToken = token.replace(/[\[\]]/g, '');
+                            if (cleanToken === 'OBRA') {
+                              return (
+                                <div key={token} className="space-y-1.5">
+                                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">OBRA</label>
+                                  <select
+                                    required
+                                    value={editDocTokens[token] || ''}
+                                    onChange={(e) => setEditDocTokens(prev => ({ ...prev, [token]: e.target.value }))}
+                                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  >
+                                    <option value="">Selecione uma Obra</option>
+                                    {obras.map(o => (
+                                      <option key={o.id} value={o.code || ''}>{o.code} - {o.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              );
+                            }
+                            if (cleanToken === 'DISCIPLINA') {
+                              const allowedDiscs = docFolder.disciplines?.length ? disciplines.filter(d => docFolder.disciplines!.includes(d.code)) : disciplines;
+                              return (
+                                <div key={token} className="space-y-1.5">
+                                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">DISCIPLINA</label>
+                                  <select
+                                    required
+                                    value={editDocTokens[token] || ''}
+                                    onChange={(e) => setEditDocTokens(prev => ({ ...prev, [token]: e.target.value }))}
+                                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  >
+                                    <option value="">Selecione a Disciplina</option>
+                                    {allowedDiscs.map(d => (
+                                      <option key={d.id} value={d.code}>{d.code} - {d.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={token} className="space-y-1.5">
+                                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">{cleanToken}</label>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder={`Valor para ${cleanToken}`}
+                                  value={editDocTokens[token] || ''}
+                                  onChange={(e) => setEditDocTokens(prev => ({ ...prev, [token]: e.target.value.toUpperCase() }))}
+                                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="pt-2">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Como ficará o arquivo</span>
+                          <div className="font-mono text-xs text-blue-600 font-bold break-all bg-white p-2 rounded border border-blue-100">
+                            {(() => {
+                              const newNameWithExt = generateFileNameFromMask(docFolder.naming_mask, editDocTokens, 'pdf');
+                              return newNameWithExt.split('.').slice(0, -1).join('.');
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  
+                  // Se não tem máscara, mostra input livre padrão
+                  return (
+                    <div className="space-y-1.5">
+                      <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Nome do Documento / Planta</label>
+                      <input
+                        type="text"
+                        required
+                        value={editDocName}
+                        onChange={(e) => setEditDocName(e.target.value)}
+                        className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      />
+                    </div>
+                  );
+                })()}
 
               {/* Descrição */}
               <div className="space-y-1.5">

@@ -1927,7 +1927,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       {tableColumns.visibleColumns.includes('data_emissao') && (
                         <SortableHeader colKey="data_emissao" label="Emissão" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                       )}
-                      {tableColumns.visibleColumns.includes('data_validade') && (
+                      {tableColumns.visibleColumns.includes('data_validade') && activeTab !== 'engenharia' && (
                         <SortableHeader colKey="data_validade" label="Validade" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                       )}
                       {tableColumns.visibleColumns.includes('status') && (
@@ -2019,7 +2019,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                 {doc.data_emissao ? new Date(doc.data_emissao).toLocaleDateString() : '-'}
                               </td>
                             )}
-                            {tableColumns.visibleColumns.includes('data_validade') && (
+                            {tableColumns.visibleColumns.includes('data_validade') && activeTab !== 'engenharia' && (
                               <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
                                 {doc.data_validade ? new Date(doc.data_validade).toLocaleDateString() : '-'}
                               </td>

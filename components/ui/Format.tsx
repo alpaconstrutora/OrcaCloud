@@ -32,6 +32,14 @@ export function formatDateBR(value: string | Date | null | undefined): string {
     return Number.isNaN(value.getTime()) ? EMPTY : value.toLocaleDateString('pt-BR');
 }
 
+/** 02/07/2026 14:32 — timestamp completo (created_at etc.), sempre com hora. */
+export function formatDateTimeBR(value: string | Date | null | undefined): string {
+    if (!value) return EMPTY;
+    const d = typeof value === 'string' ? new Date(value) : value;
+    if (Number.isNaN(d.getTime())) return EMPTY;
+    return `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
 /** 12,5% — recebe fração (0.125) OU já em pontos percentuais quando asPoints. */
 export function formatPercent(value: number | null | undefined, opts?: { asPoints?: boolean; decimals?: number }): string {
     if (value == null || Number.isNaN(value)) return EMPTY;

@@ -3,7 +3,7 @@ import {
     Plus, Search, FileText, Loader2, RefreshCw,
     Building2, Calendar, AlertTriangle, ChevronDown,
     Wallet, Clock, CheckCircle2, SlidersHorizontal, X,
-    ArrowUpDown, Download, LayoutGrid, List, Upload, Pencil, AlertCircle,
+    Download, LayoutGrid, List, Upload, Pencil, AlertCircle,
 } from 'lucide-react';
 import { boletoService } from '../services/boletoService';
 import { financialRegistryService } from '../services/financialRegistryService';
@@ -16,7 +16,7 @@ import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
-import { formatDateBR } from './ui/Format';
+import { formatDateBR, formatDateTimeBR } from './ui/Format';
 import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
 
@@ -55,7 +55,11 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'valor', label: 'Valor', sortable: true },
     { key: 'vencimento', label: 'Vencimento', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
-    { key: 'actions', label: 'Ações', sortable: false },
+    { key: 'capturado_em', label: 'Capturado em', sortable: true },
+    { key: 'capturado_por', label: 'Capturado por', sortable: true },
+    // Sem coluna 'actions': clicar na linha já abre o boleto (ação dominante,
+    // única relevante nesta lista) — guia §9.1. Um botão "Ver Detalhes" extra
+    // seria um segundo controle para a mesma ação do clique na linha.
 ];
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
@@ -107,6 +111,7 @@ const BoletoCardItem = React.memo(function BoletoCardItem({
             >
                 <input
                     type="checkbox"
+                    title="Dica: segure Shift e clique para selecionar um intervalo"
                     checked={selected}
                     onMouseDown={onCheckboxMouseDown}
                     onChange={e => onCheckboxChange(e.target.checked, b.id, idx)}
@@ -192,6 +197,7 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
             <td className="px-4 py-2.5 border-r border-gray-100" onClick={e => e.stopPropagation()}>
                 <input
                     type="checkbox"
+                    title="Dica: segure Shift e clique para selecionar um intervalo"
                     checked={selected}
                     onMouseDown={onCheckboxMouseDown}
                     onChange={e => onCheckboxChange(e.target.checked, b.id, idx)}
@@ -248,14 +254,14 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
                     )}
                 </td>
             )}
-            {visibleColumns.includes('actions') && (
-                <td className="px-6 py-2.5 text-right" onClick={e => e.stopPropagation()}>
-                    <button
-                        onClick={() => onOpen(b)}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
-                    >
-                        Ver Detalhes
-                    </button>
+            {visibleColumns.includes('capturado_em') && (
+                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                    {formatDateTimeBR(b.created_at)}
+                </td>
+            )}
+            {visibleColumns.includes('capturado_por') && (
+                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 max-w-[160px]">
+                    <p className="truncate">{b.created_by_email ?? '—'}</p>
                 </td>
             )}
         </tr>
@@ -310,8 +316,6 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [vencAte, setVencAte] = usePersistedState('boletoManagerFilters:vencAte', '');
     const [valorMin, setValorMin] = usePersistedState('boletoManagerFilters:valorMin', '');
     const [valorMax, setValorMax] = usePersistedState('boletoManagerFilters:valorMax', '');
-    const [ordenarPor, setOrdenarPor] = usePersistedState<'vencimento' | 'valor' | 'created_at' | 'numero' | 'project_id' | 'cost_center_id' | 'beneficiario_nome' | 'status'>('boletoManagerFilters:ordenarPor', 'created_at');
-    const [ordenarDir, setOrdenarDir] = usePersistedState<'asc' | 'desc'>('boletoManagerFilters:ordenarDir', 'desc');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('boletoManagerFilters:viewMode', 'list');
 
     // Lookup maps para exibição nos cards/linhas
@@ -433,11 +437,13 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
 
         list = applyFilterRules(list, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
 
-        // Ordenação
+        // Ordenação — cada coluna já ordena pelo próprio <thead> (SortableHeader,
+        // guia §6.3/§6.4). Sem coluna selecionada, cai no default abaixo
+        // (created_at desc — captura mais recente primeiro).
         list = [...list].sort((a, b) => {
             let va: string | number, vb: string | number;
-            const sortCol = tableColumns.sortColumn || ordenarPor;
-            const sortDir = tableColumns.sortColumn ? tableColumns.sortDirection : ordenarDir;
+            const sortCol = tableColumns.sortColumn || 'created_at';
+            const sortDir = tableColumns.sortColumn ? tableColumns.sortDirection : 'desc';
 
             switch (sortCol) {
                 case 'numero':        va = a.numero ?? 0;                       vb = b.numero ?? 0;                       break;
@@ -447,6 +453,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 case 'centro_custo':  va = ccMap[a.cost_center_id ?? ''] ?? '';  vb = ccMap[b.cost_center_id ?? ''] ?? '';  break;
                 case 'beneficiario':  va = (a.beneficiario_nome ?? '').toLowerCase(); vb = (b.beneficiario_nome ?? '').toLowerCase(); break;
                 case 'status':        va = a.status;                            vb = b.status;                            break;
+                case 'capturado_em':  va = a.created_at;                        vb = b.created_at;                       break;
+                case 'capturado_por': va = (a.created_by_email ?? '').toLowerCase(); vb = (b.created_by_email ?? '').toLowerCase(); break;
                 default:              va = a.created_at;                        vb = b.created_at;
             }
             if (va < vb) return sortDir === 'asc' ? -1 : 1;
@@ -455,7 +463,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         });
 
         return list;
-    }, [boletos, buscaDebounced, vencDe, vencAte, valorMin, valorMax, advancedFilters.rules, ordenarPor, ordenarDir, supplierMap, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [boletos, buscaDebounced, vencDe, vencAte, valorMin, valorMax, advancedFilters.rules, supplierMap, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     // Mantido estável enquanto `filtered` não muda, para que as linhas memoizadas
     // (BoletoCardItem/BoletoRowItem) não re-renderizem a cada seleção.
@@ -620,15 +628,19 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         <Upload className="w-4 h-4" />
                         Importar em Lote
                     </Button>
-                    <Button
-                        variant="primary"
-                        size="lg"
+                    {/* Botão primário compacto — guia seção 17. Não usa o componente
+                        Button compartilhado aqui porque a variante 'primary' dele aplica
+                        font-black uppercase tracking-widest + shadow pesado (ver Button.tsx
+                        BASE), que é exatamente o padrão que a seção 17 substitui. Corrigir
+                        isso na tela sem tocar no componente compartilhado (impacto maior que
+                        o pedido; qualquer outra tela que use variant="primary" mudaria junto). */}
+                    <button
                         onClick={abrirNovo}
-                        className="gap-3 shadow-xl shadow-blue-900/20"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                     >
-                        <Plus className="w-4 h-4" />
-                        Novo Boleto
-                    </Button>
+                        <Plus className="w-[15px] h-[15px]" />
+                        Novo boleto
+                    </button>
                 </div>
             </div>
 
@@ -672,7 +684,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     <button
                         key={s}
                         onClick={() => setFiltroStatus(s as BoletoStatus | 'todos')}
-                        className={`px-4 py-2 rounded-full text-button font-bold uppercase tracking-widest border transition-colors ${
+                        className={`px-4 py-2 rounded-[1.25rem] text-button font-bold uppercase tracking-widest border transition-colors ${
                             filtroStatus === s
                                 ? 'bg-gray-900 text-white border-gray-900'
                                 : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
@@ -711,34 +723,37 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         <span className="ml-0.5 w-2 h-2 rounded-full bg-blue-400 inline-block" />
                     )}
                 </button>
-                {/* Toggle grid / lista */}
-                <div className="flex bg-white border border-gray-100 rounded-2xl overflow-hidden gap-1">
+                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                {/* Agrupador ViewMode + ColumnConfig — padrão guia seção 5 */}
+                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                    {viewMode === 'list' && (
+                        <>
+                            <ColumnConfigButton
+                                columns={BOLETO_COLUMNS}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                            <div className="w-px bg-gray-200 mx-1 my-1"></div>
+                        </>
+                    )}
                     <button
                         onClick={() => setViewMode('grid')}
                         title="Visualização em blocos"
-                        className={`px-3 py-3 transition-colors ${viewMode === 'grid' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         <LayoutGrid className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
                         title="Visualização em lista"
-                        className={`px-3 py-3 transition-colors ${viewMode === 'list' ? 'bg-gray-900 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
+                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         <List className="w-4 h-4" />
                     </button>
                 </div>
-                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-                {viewMode === 'list' && (
-                    <ColumnConfigButton
-                        columns={BOLETO_COLUMNS.filter(c => c.key !== 'actions')}
-                        visibleColumns={tableColumns.visibleColumns}
-                        showColumnConfig={tableColumns.showColumnConfig}
-                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                        onToggleColumn={tableColumns.toggleColumn}
-                        onReset={tableColumns.resetColumns}
-                    />
-                )}
             </div>
 
             {/* Painel de filtros avançados */}
@@ -800,34 +815,6 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm"
                             />
                         </div>
-                    </div>
-
-                    {/* Ordenação */}
-                    <div className="flex items-center gap-3 pt-1 border-t border-gray-200">
-                        <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                        <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Ordenar por</span>
-                        <select
-                            value={ordenarPor}
-                            onChange={(e) => setOrdenarPor(e.target.value as typeof ordenarPor)}
-                            className="px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-form-input font-bold"
-                        >
-                            <option value="numero">Código</option>
-                            <option value="created_at">Data de captura</option>
-                            <option value="vencimento">Vencimento</option>
-                            <option value="valor">Valor</option>
-                            <option value="beneficiario_nome">Beneficiário</option>
-                            <option value="project_id">Obra</option>
-                            <option value="cost_center_id">Centro de Custo</option>
-                            <option value="status">Status</option>
-                        </select>
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setOrdenarDir(d => d === 'asc' ? 'desc' : 'asc')}
-                            className="normal-case font-bold"
-                        >
-                            {ordenarDir === 'asc' ? '↑ Crescente' : '↓ Decrescente'}
-                        </Button>
                     </div>
                 </div>
             )}
@@ -909,9 +896,13 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             ) : (
                 /* ── Vista em lista ── */
                 <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                    {/* Cabeçalho fixo (guia §6.5) — lista pode crescer bastante (captura
+                        contínua de boletos); overflow-auto cobre rolagem vertical E
+                        horizontal (§15) no mesmo container. */}
+                    <div className="overflow-auto max-h-[70vh]">
                     <table className="w-full text-left border-collapse">
                         <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
-                            <tr>
+                            <tr className="sticky top-0 z-10 bg-gray-50">
                                 <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                     <input
                                         type="checkbox"
@@ -998,8 +989,27 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         className="px-6 py-2 border-r border-gray-100 text-center"
                                     />
                                 )}
-                                {tableColumns.visibleColumns.includes('actions') && (
-                                    <th className="px-6 py-2 text-right">Ações</th>
+                                {tableColumns.visibleColumns.includes('capturado_em') && (
+                                    <SortableHeader
+                                        label="Capturado em"
+                                        colKey="capturado_em"
+                                        sortable={true}
+                                        sortColumn={tableColumns.sortColumn}
+                                        sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort}
+                                        className="px-6 py-2 border-r border-gray-100 whitespace-nowrap"
+                                    />
+                                )}
+                                {tableColumns.visibleColumns.includes('capturado_por') && (
+                                    <SortableHeader
+                                        label="Capturado por"
+                                        colKey="capturado_por"
+                                        sortable={true}
+                                        sortColumn={tableColumns.sortColumn}
+                                        sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort}
+                                        className="px-6 py-2 border-r border-gray-100"
+                                    />
                                 )}
                             </tr>
                         </thead>
@@ -1032,10 +1042,11 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 <td className="px-4 py-2 text-right text-sm font-medium text-gray-900">
                                     {formatBRL(filtered.filter(b => !['pago','cancelado'].includes(b.status)).reduce((s, b) => s + (b.valor ?? 0), 0))}
                                 </td>
-                                <td colSpan={3} className="px-4 py-2 text-table-body text-gray-400 text-right">total pendente</td>
+                                <td colSpan={4} className="px-4 py-2 text-table-body text-gray-400 text-right">total pendente</td>
                             </tr>
                         </tfoot>
                     </table>
+                    </div>
                 </div>
             )}
 

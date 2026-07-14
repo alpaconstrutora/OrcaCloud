@@ -1,8 +1,9 @@
 import React from 'react';
 import {
     Plus, Calculator, Calendar, History,
-    AlertTriangle, ChevronRight, Trash2
+    AlertTriangle, ChevronRight
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { PayrollRun } from '../services/payrollService';
 import { formatDate } from '../lib/payrollUIHelpers';
 import { formatMoney as fmtBRL } from './ui/Format';
@@ -199,21 +200,9 @@ const PayrollRunList: React.FC<PayrollRunListProps> = ({
                             </div>
 
                             {/* Ações */}
-                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                    onClick={e => { e.stopPropagation(); onDuplicateRun(run.id); }}
-                                    className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
-                                    title="Duplicar"
-                                >
-                                    <History className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    onClick={e => { e.stopPropagation(); onDeleteRun(run.id); }}
-                                    className="p-1 text-slate-400 hover:text-rose-600 transition-colors"
-                                    title="Excluir"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                            <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <ActionIconButton kind="duplicate" size="sm" title="Duplicar" icon={<History className="w-3.5 h-3.5" />} onClick={e => { e.stopPropagation(); onDuplicateRun(run.id); }} />
+                                <ActionIconButton kind="delete" size="sm" onClick={e => { e.stopPropagation(); onDeleteRun(run.id); }} />
                                 <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:translate-x-0.5 transition-transform" />
                             </div>
                         </div>

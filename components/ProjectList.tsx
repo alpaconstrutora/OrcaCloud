@@ -1,6 +1,7 @@
 import React from 'react';
 import { projectService, ProjectData } from '../services/projectService';
-import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, Pencil, RefreshCw, Clock, CheckCircle2 } from 'lucide-react';
+import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { TipoObra } from '../types/project';
 
 const TIPO_OBRA_LABELS: Record<TipoObra, string> = {
@@ -1050,13 +1051,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                         Ver Detalhes
                                                     </button>
                                                 )}
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }}
-                                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors ml-1"
-                                                    title="Editar"
-                                                >
-                                                    <Pencil className="w-4 h-4" />
-                                                </button>
+                                                <ActionIconButton kind="edit" className="ml-1" onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }} />
                                                 <InlineDisclosureMenu
                                                     menuItems={[
                                                         {
@@ -1178,13 +1173,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             evita duplicar a ação em botão (§9.1). */}
                                     </div>
                                     <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => onEditProject(project.id)}
-                                            className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                                            title="Editar Dados"
-                                        >
-                                            <Pencil className="w-4 h-4" />
-                                        </button>
+                                        <ActionIconButton kind="edit" title="Editar Dados" onClick={() => onEditProject(project.id)} />
                                         <InlineDisclosureMenu
                                             menuItems={[
                                                 {

@@ -79,7 +79,7 @@ suficiente).
 - [ ] §7.1 Campos editáveis inline dentro de TD
 - [ ] §7.2 Altura da linha — `py-2.5` em toda `<td>`, sem exceção não documentada
 - [ ] §8 Status Badge
-- [ ] §9 Coluna de Ações (+ §9.1 ação dominante via clique na linha, se aplicável; + §9.2 estilo do botão-ícone — `bg-white border shadow-sm rounded-xl`, não o flat antigo)
+- [ ] §9 Coluna de Ações (+ §9.1 ação dominante via clique na linha, se aplicável; + §9.2 botão-ícone via `<ActionIconButton>` — `bg-white border shadow-sm rounded-[6px] p-1.5`, não o flat antigo nem o `rounded-xl`/`p-2.5`)
 - [ ] §10 Barra de ações em lote (+ §10.1 seleção de intervalo Shift+clique) — decisão explícita se a tela tem seleção múltipla
 - [ ] §11 Loading State
 - [ ] §12 Empty State
@@ -806,7 +806,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 ```tsx
 {tableColumns.visibleColumns.includes('actions') && (
   <td className="px-6 py-2.5 text-right">
-    <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+    <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
 
       {/* Ação primária — botão de texto azul */}
       <button
@@ -816,14 +816,8 @@ const StatusBadge = ({ status }: { status: string }) => {
         Ver Detalhes
       </button>
 
-      {/* Ação secundária — apenas ícone (§9.2: estilo de botão-ícone padrão) */}
-      <button
-        onClick={(e) => { e.stopPropagation(); onEdit(item.id); }}
-        title="Editar"
-        className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
-      >
-        <Pencil className="w-4 h-4" />
-      </button>
+      {/* Ação secundária — apenas ícone (§9.2: usar sempre <ActionIconButton>) */}
+      <ActionIconButton kind="edit" onClick={(e) => { e.stopPropagation(); onEdit(item.id); }} />
 
       {/* Menu de ações terciárias (Logística, Duplicar, Excluir) */}
       <InlineDisclosureMenu
@@ -868,64 +862,61 @@ propósito para não ser acionada sem querer:
 > na linha já faz — são dois controles para uma ação, não dois controles para
 > duas ações. Extraído de `components/SupplierList.tsx`.
 
-### 9.2 Estilo do botão-ícone — flat sem borda está deprecado
+### 9.2 Estilo do botão-ícone — usar sempre `<ActionIconButton>`
 
-**Padrão único de botão-ícone de ação** (secundária, fora do texto azul de "Ver
-Detalhes" e fora do `InlineDisclosureMenu`, que é componente compartilhado e
-mantém seu próprio estilo): `bg-white` + borda `border-slate-200` + `shadow-sm`
-+ `rounded-xl` + `active:scale-95`, cor neutra `text-slate-600` em repouso,
-mudando para a cor de destaque só no hover (`hover:text-blue-600
-hover:border-blue-100` para ação neutra/informativa; `hover:text-orange-600
-hover:border-orange-100` para uma ação de "atenção" como Compartilhar; para
-ação destrutiva ver variante abaixo). Extraído de `components/OpuraDocsModule.tsx`
-(aba Projetos de Gestão de Documentos), adotado como padrão em 2026-07-10.
+**Componente único e obrigatório:** `components/ui/ActionIconButton.tsx`. Não
+escrever `className` de botão-ícone à mão em tela nova — os dois estilos
+hand-rolled que já circularam neste guia (o flat sem borda mais antigo, e o
+`p-2.5 rounded-xl border-slate-200` documentado entre 2026-07-10 e 2026-07-14)
+estão **ambos deprecados**. O estilo canônico agora é o compacto abaixo, já
+embutido no componente — extraído de `components/OpuraDocsModule.tsx` (aba
+Projetos de Gestão de Documentos), adotado como padrão em 2026-07-14.
+
+Estilo canônico (não precisa reescrever — já é o `className` interno do
+componente): `bg-white` + `border border-gray-200` + `shadow-sm` +
+`rounded-[6px]` + `p-1.5` + `active:scale-95`, cor neutra `text-gray-500` em
+repouso, mudando no hover conforme o `tone`:
+- `neutral` (padrão da maioria dos `kind`): `hover:text-blue-600 hover:border-blue-200`
+- `attention` (ex: `share`): `hover:text-orange-600 hover:border-orange-200`
+- `danger` (ex: `delete`): `border-red-100 text-red-500 hover:bg-red-50`
 
 ```tsx
-{/* Botão-ícone neutro — padrão */}
-<button
-  onClick={(e) => { e.stopPropagation(); onAction(item.id); }}
-  title="Descrição da ação"
-  className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
->
-  <IconName className="w-4 h-4" />
-</button>
+import ActionIconButton from './ui/ActionIconButton';
 
-{/* Variante com texto (quando o ícone sozinho não é auto-explicativo) */}
-<button
-  onClick={(e) => { e.stopPropagation(); onAction(item.id); }}
-  title="Descrição da ação"
-  className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm text-sm font-bold active:scale-95"
->
-  <IconName className="w-4 h-4" />
-  Rótulo
-</button>
+{/* kinds prontos — cada um já traz ícone + title + tone padrão:
+    download · edit · settings · history · delete · view · share ·
+    qrcode · move · duplicate · annotate */}
+<ActionIconButton kind="download" onClick={() => handleDownload(item)} />
+<ActionIconButton kind="edit" onClick={() => onEdit(item.id)} />
+<ActionIconButton kind="history" onClick={() => onHistory(item.id)} />
+<ActionIconButton kind="delete" onClick={() => onDelete(item.id)} />
 
-{/* Variante destrutiva */}
-<button
-  onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
-  title="Excluir"
-  className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95"
->
-  <Trash2 className="w-4 h-4" />
-</button>
+{/* override pontual — só quando a semântica da tela diverge do default do kind */}
+<ActionIconButton kind="edit" title="Configurar" icon={<Settings className="w-4 h-4" />} onClick={() => onConfig(item.id)} />
 ```
 
-> ❌ **Deprecado:** o estilo flat sem borda/sombra (`text-blue-600 hover:bg-blue-50
-> rounded-lg`, sem `bg-white`/`border`/`shadow-sm`) que ainda aparece no snippet
-> da seção 9 acima para a ação secundária — era o padrão antigo, mantido ali só
-> como histórico da estrutura (texto+ícone+kebab), não como referência visual.
-> Ao aplicar/corrigir uma tela, use sempre o estilo desta seção para qualquer
-> botão-ícone solto na coluna de ações.
-> ℹ️ Esta seção define só o **estilo visual** do botão-ícone. A **estrutura**
-> continua sendo a da seção 9 (texto azul para a ação dominante, ícones soltos
-> só para 1-2 ações secundárias de fato relevantes, `InlineDisclosureMenu` para
-> o resto) — não é para transformar toda ação terciária em botão solto na linha
-> só porque o estilo ficou mais bonito. `OpuraDocsModule.tsx` hoje expõe até 6
-> botões soltos por linha sem kebab (por não ter refeito a estrutura ainda) —
-> isso não é o padrão a copiar, é o próximo item de correção da própria tela.
-> ℹ️ `gap-2` (não `gap-3`) entre os botões da coluna de ações — o padding
-> próprio do botão (`p-2.5`/borda) já dá respiro suficiente; `gap-3` fica
-> espaçado demais com o novo estilo.
+> ✅ Use `kind` sempre que existir um dos 11 tipos prontos — ele já resolve
+> ícone, `title` (tooltip/acessibilidade) e tom de hover. Só passe
+> `icon`/`title`/`tone` quando a tela realmente precisa de algo diferente do
+> default (ex: um "Editar" que na verdade abre configurações — nesse caso já
+> existe `kind="settings"` pronto com esse mapeamento).
+> ❌ **Deprecado:** tanto o flat sem borda (`text-blue-600 hover:bg-blue-50
+> rounded-lg`) quanto o `p-2.5 rounded-xl border-slate-200` que este guia
+> chegou a documentar — nenhum dos dois deve ser copiado em tela nova. Ao
+> tocar uma tela antiga que ainda usa qualquer um dos dois, trocar para
+> `ActionIconButton`.
+> ℹ️ `gap-1.5` (não `gap-2`/`gap-3`) entre os botões da coluna de ações — o
+> padding compacto do componente (`p-1.5`) já dá respiro suficiente.
+> ℹ️ Esta seção define só o **estilo visual/componente** do botão-ícone. A
+> **estrutura** continua sendo a da seção 9 (texto azul para a ação
+> dominante, ícones soltos só para 1-2 ações secundárias de fato relevantes,
+> `InlineDisclosureMenu` para o resto) — não é para transformar toda ação
+> terciária em botão solto na linha só porque o componente ficou mais
+> conveniente. `OpuraDocsModule.tsx` já usa `ActionIconButton` (2026-07-14),
+> mas ainda expõe até 8 botões soltos por linha sem agrupar em kebab — a
+> migração de **componente/estilo** está feita ali; a migração de
+> **estrutura** (mover ações terciárias para `InlineDisclosureMenu`) continua
+> pendente e não é o padrão a copiar.
 
 ---
 

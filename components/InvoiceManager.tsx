@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     FileText,
     Upload,
-    Trash2,
     Eye,
     Download,
     AlertCircle,
@@ -404,13 +404,7 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                                                     >
                                                         <Eye className="w-4 h-4" />
                                                     </a>
-                                                    <button
-                                                        onClick={() => handleDelete(invoice)}
-                                                        className="p-3 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-red-600 hover:border-red-100 shadow-sm transition-all active:scale-95"
-                                                        title="Excluir"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    <ActionIconButton kind="delete" onClick={() => handleDelete(invoice)} />
                                                 </div>
                                             )}
                                         </div>
@@ -472,12 +466,7 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                                             >
                                                 <Eye className="w-4 h-4" /> Visualizar
                                             </a>
-                                            <button
-                                                onClick={() => handleDelete(invoice)}
-                                                className="p-3 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-red-600 hover:border-red-100 shadow-sm transition-all"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            <ActionIconButton kind="delete" onClick={() => handleDelete(invoice)} />
                                         </div>
                                     </div>
                                 );

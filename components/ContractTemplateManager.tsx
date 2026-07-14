@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-    FileText, Plus, Edit2, Trash2, Eye, EyeOff,
+    FileText, Plus, Eye, EyeOff,
     ChevronLeft, Variable, Save,
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     contractTemplateService, ContractTemplate, TEMPLATE_VARIABLES, renderTemplate,
 } from '../services/contractTemplateService';
@@ -331,15 +332,9 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId, open, onClos
                                         <td className="px-4 py-3 text-table-body text-gray-400">v{t.version}</td>
                                     )}
                                     <td className="px-4 py-3">
-                                        <div className="flex gap-1 justify-end">
-                                            <button onClick={() => openEdit(t)}
-                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                                                <Edit2 size={14} />
-                                            </button>
-                                            <button onClick={() => handleDeactivate(t.id)}
-                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                                <Trash2 size={14} />
-                                            </button>
+                                        <div className="flex gap-1.5 justify-end">
+                                            <ActionIconButton kind="edit" size="sm" onClick={() => openEdit(t)} />
+                                            <ActionIconButton kind="delete" size="sm" title="Desativar" onClick={() => handleDeactivate(t.id)} />
                                         </div>
                                     </td>
                                 </tr>

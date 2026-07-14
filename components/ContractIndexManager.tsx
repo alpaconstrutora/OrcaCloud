@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { TrendingUp, Plus, Trash2, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingUp, Plus, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { contractIndexService, ContractIndexValue, IndexName } from '../services/contractIndexService';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } from './ui/TableUtils';
@@ -210,10 +211,7 @@ const ContractIndexManager: React.FC = () => {
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-3 py-2.5">
                                                 {v.organization_id && (
-                                                    <button onClick={() => handleRemove(v.id)}
-                                                        className="text-gray-300 hover:text-red-500 transition-colors">
-                                                        <Trash2 size={13} />
-                                                    </button>
+                                                    <ActionIconButton kind="delete" size="sm" onClick={() => handleRemove(v.id)} />
                                                 )}
                                             </td>
                                         )}

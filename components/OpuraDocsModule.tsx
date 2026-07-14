@@ -949,7 +949,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         }
         
         if (!isMatch) {
-          const uppercaseName = fileName.toUpperCase();
+          const uppercaseName = cleanFileName.toUpperCase();
           const uppercaseCode = selectedDisciplineCode.toUpperCase();
           isMatch = uppercaseName.includes(uppercaseCode);
         }
@@ -1005,6 +1005,80 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
+  const executeUpload = async (docTitle: string, fileToUpload: File) => {
+    setUploading(true);
+    // Validar tipo de arquivo
+    const allowedExtensions = ['pdf', 'docx', 'xlsx', 'dwg', 'jpg', 'png'];
+    const fileExt = fileToUpload.name.split('.').pop()?.toLowerCase() || '';
+    if (!allowedExtensions.includes(fileExt)) {
+      alert('Formato de arquivo não permitido. Use: PDF, DOCX, XLSX, DWG, JPG ou PNG.');
+      setUploading(false);
+      return;
+    }
+
+    // Validar tamanho (50MB)
+    const maxSize = 50 * 1024 * 1024;
+    if (fileToUpload.size > maxSize) {
+      alert('O arquivo excede o limite máximo permitido de 50MB.');
+      setUploading(false);
+      return;
+    }
+
+    try {
+      const tags = newDocTagsInput
+        .split(',')
+        .map(t => t.trim())
+        .filter(t => t.length > 0);
+
+      await documentService.uploadNewDocument(
+        {
+          organization_id: activeOrganizationId,
+          nome: docTitle || fileToUpload.name,
+          descricao: newDocDesc || undefined,
+          categoria: newDocCategory,
+          tipo_documento: newDocType,
+          status: 'ativo',
+          data_emissao: newDocEmissao || undefined,
+          data_validade: newDocValidade || undefined,
+          alerta_dias_antecedencia: newDocAlertaDias,
+          tags,
+          project_id: selectedProjectId !== 'all' ? selectedProjectId : (newDocProjectId || undefined),
+          company_id: newDocCompanyId || undefined,
+          contract_id: newDocContractId || undefined,
+          supplier_id: newDocSupplierId || undefined,
+          client_id: newDocClientId || undefined,
+          investor_id: newDocInvestorId || undefined,
+          folder_id: currentFolderId || undefined,
+        },
+        fileToUpload,
+        currentProfile?.email || 'sistema'
+      );
+
+      // Reset form
+      setNewDocName('');
+      setNewDocDesc('');
+      setNewDocType('');
+      setNewDocEmissao('');
+      setNewDocValidade('');
+      setNewDocAlertaDias(30);
+      setNewDocTagsInput('');
+      setNewDocFile(null);
+      setNewDocCompanyId('');
+      setNewDocProjectId('');
+      setNewDocContractId('');
+      setNewDocSupplierId('');
+      setNewDocClientId('');
+      setNewDocInvestorId('');
+      
+      setUploadModalOpen(false);
+      fetchDocs();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao submeter documento.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   // Submeter Upload de Novo Documento
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1057,76 +1131,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       }
     }
 
-    setUploading(true);
-    // Validar tipo de arquivo
-    const allowedExtensions = ['pdf', 'docx', 'xlsx', 'dwg', 'jpg', 'png'];
-    const fileExt = newDocFile.name.split('.').pop()?.toLowerCase() || '';
-    if (!allowedExtensions.includes(fileExt)) {
-      alert('Formato de arquivo não permitido. Use: PDF, DOCX, XLSX, DWG, JPG ou PNG.');
-      return;
-    }
-
-    // Validar tamanho (50MB)
-    const maxSize = 50 * 1024 * 1024;
-    if (newDocFile.size > maxSize) {
-      alert('O arquivo excede o limite máximo permitido de 50MB.');
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const tags = newDocTagsInput
-        .split(',')
-        .map(t => t.trim())
-        .filter(t => t.length > 0);
-
-      await documentService.uploadNewDocument(
-        {
-          organization_id: activeOrganizationId,
-          nome: newDocName,
-          descricao: newDocDesc || undefined,
-          categoria: newDocCategory,
-          tipo_documento: newDocType,
-          status: 'ativo',
-          data_emissao: newDocEmissao || undefined,
-          data_validade: newDocValidade || undefined,
-          alerta_dias_antecedencia: newDocAlertaDias,
-          tags,
-          project_id: selectedProjectId !== 'all' ? selectedProjectId : (newDocProjectId || undefined),
-          company_id: newDocCompanyId || undefined,
-          contract_id: newDocContractId || undefined,
-          supplier_id: newDocSupplierId || undefined,
-          client_id: newDocClientId || undefined,
-          investor_id: newDocInvestorId || undefined,
-          folder_id: currentFolderId || undefined,
-        },
-        newDocFile,
-        currentProfile?.email || 'sistema'
-      );
-
-      // Reset form
-      setNewDocName('');
-      setNewDocDesc('');
-      setNewDocType('');
-      setNewDocEmissao('');
-      setNewDocValidade('');
-      setNewDocAlertaDias(30);
-      setNewDocTagsInput('');
-      setNewDocFile(null);
-      setNewDocCompanyId('');
-      setNewDocProjectId('');
-      setNewDocContractId('');
-      setNewDocSupplierId('');
-      setNewDocClientId('');
-      setNewDocInvestorId('');
-      
-      setUploadModalOpen(false);
-      fetchDocs();
-    } catch (err: any) {
-      alert(err.message || 'Erro ao submeter documento.');
-    } finally {
-      setUploading(false);
-    }
+    await executeUpload(newDocName, newDocFile);
   };
 
   // Submeter modal de renomeação inteligente
@@ -1136,11 +1141,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     
     const fileExt = newDocFile.name.split('.').pop() || '';
     const newName = generateFileNameFromMask(renameTargetMask, renameTokens, fileExt);
+    const newDocNameFromMask = newName.split('.').slice(0, -1).join('.');
     
     // Cria um novo File herdando os dados e o tipo, mas com o nome correto
     const renamedFile = new File([newDocFile], newName, { type: newDocFile.type });
     setNewDocFile(renamedFile);
+    setNewDocName(newDocNameFromMask);
     setShowRenameModal(false);
+
+    // Faz o upload automaticamente após renomear!
+    await executeUpload(newDocNameFromMask, renamedFile);
   };
 
   // Submeter Upload de Nova Versão

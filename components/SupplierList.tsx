@@ -1,5 +1,6 @@
 import React from 'react';
-import { Search, Plus, Edit2, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, Table2, Loader2, AlertCircle, Building2, Users, Pencil, X, RefreshCw } from 'lucide-react';
+import { Search, Plus, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, Table2, Loader2, AlertCircle, Building2, Users, Pencil, X, RefreshCw } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { Supplier } from '../types';
 import { supplierService, SupplierNameMode } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
@@ -644,21 +645,9 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                     </div>
                                 </div>
 
-                                <div className="px-6 py-4 bg-gray-50/50 rounded-b-2xl border-t border-gray-100 flex justify-end gap-2">
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); setEditingSupplier(supplier); setIsModalOpen(true); }}
-                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all shadow-sm border border-transparent hover:border-blue-100"
-                                        title="Editar"
-                                    >
-                                        <Edit2 className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleDelete(supplier.id, supplier.name); }}
-                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-white rounded-xl transition-all shadow-sm border border-transparent hover:border-red-100"
-                                        title="Excluir"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                <div className="px-6 py-4 bg-gray-50/50 rounded-b-2xl border-t border-gray-100 flex justify-end gap-1.5">
+                                    <ActionIconButton kind="edit" onClick={(e) => { e.stopPropagation(); setEditingSupplier(supplier); setIsModalOpen(true); }} />
+                                    <ActionIconButton kind="delete" onClick={(e) => { e.stopPropagation(); handleDelete(supplier.id, supplier.name); }} />
                                 </div>
                             </div>
                         ))

@@ -26,19 +26,20 @@ export type ActionKind =
   | 'annotate';
 
 type Tone = 'neutral' | 'attention' | 'danger';
+type Size = 'md' | 'sm';
 
-const KIND_DEFAULTS: Record<ActionKind, { icon: React.ReactNode; title: string; tone: Tone }> = {
-  download:  { icon: <Download className="w-4 h-4" />,         title: 'Download',      tone: 'neutral' },
-  edit:      { icon: <Pencil className="w-4 h-4" />,            title: 'Editar',        tone: 'neutral' },
-  settings:  { icon: <Settings className="w-4 h-4" />,          title: 'Editar',        tone: 'neutral' },
-  history:   { icon: <History className="w-4 h-4" />,           title: 'Histórico',     tone: 'neutral' },
-  delete:    { icon: <Trash2 className="w-4 h-4" />,            title: 'Excluir',       tone: 'danger' },
-  view:      { icon: <Eye className="w-4 h-4" />,                title: 'Ver detalhes',  tone: 'neutral' },
-  share:     { icon: <Share2 className="w-4 h-4" />,             title: 'Compartilhar',  tone: 'attention' },
-  qrcode:    { icon: <QrCode className="w-4 h-4" />,             title: 'Etiqueta QR Code', tone: 'neutral' },
-  move:      { icon: <CornerDownRight className="w-4 h-4" />,   title: 'Mover',         tone: 'neutral' },
-  duplicate: { icon: <Copy className="w-4 h-4" />,               title: 'Duplicar',      tone: 'neutral' },
-  annotate:  { icon: <Pencil className="w-4 h-4" />,             title: 'Anotar',        tone: 'neutral' },
+const KIND_DEFAULTS: Record<ActionKind, { Icon: React.ComponentType<{ className?: string }>; title: string; tone: Tone }> = {
+  download:  { Icon: Download,         title: 'Download',      tone: 'neutral' },
+  edit:      { Icon: Pencil,           title: 'Editar',        tone: 'neutral' },
+  settings:  { Icon: Settings,         title: 'Editar',        tone: 'neutral' },
+  history:   { Icon: History,          title: 'Histórico',     tone: 'neutral' },
+  delete:    { Icon: Trash2,           title: 'Excluir',       tone: 'danger' },
+  view:      { Icon: Eye,              title: 'Ver detalhes',  tone: 'neutral' },
+  share:     { Icon: Share2,           title: 'Compartilhar',  tone: 'attention' },
+  qrcode:    { Icon: QrCode,           title: 'Etiqueta QR Code', tone: 'neutral' },
+  move:      { Icon: CornerDownRight,  title: 'Mover',         tone: 'neutral' },
+  duplicate: { Icon: Copy,             title: 'Duplicar',      tone: 'neutral' },
+  annotate:  { Icon: Pencil,           title: 'Anotar',        tone: 'neutral' },
 };
 
 const TONE_CLASSES: Record<Tone, string> = {
@@ -47,28 +48,38 @@ const TONE_CLASSES: Record<Tone, string> = {
   danger:    'border-red-100 text-red-500 hover:bg-red-50',
 };
 
-const BASE = 'p-1.5 bg-white border rounded-[6px] shadow-sm transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100';
+// `md` é o canônico (§9.2). `sm` existe só para células de tabela já
+// deliberadamente compactas (ex: BankReconciliation modo "compacto") —
+// não usar por padrão, só quando a linha já era menor que o normal.
+const SIZE_CLASSES: Record<Size, { button: string; icon: string }> = {
+  md: { button: 'p-1.5', icon: 'w-4 h-4' },
+  sm: { button: 'p-1', icon: 'w-3.5 h-3.5' },
+};
+
+const BASE = 'bg-white border rounded-[6px] shadow-sm transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100';
 
 export interface ActionIconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   kind: ActionKind;
   title?: string;
   icon?: React.ReactNode;
   tone?: Tone;
+  size?: Size;
 }
 
 const ActionIconButton = React.forwardRef<HTMLButtonElement, ActionIconButtonProps>(
-  ({ kind, title, icon, tone, className = '', ...props }, ref) => {
+  ({ kind, title, icon, tone, size = 'md', className = '', ...props }, ref) => {
     const defaults = KIND_DEFAULTS[kind];
     const resolvedTone = tone || defaults.tone;
+    const sizeClasses = SIZE_CLASSES[size];
     return (
       <button
         ref={ref}
         type="button"
         title={title ?? defaults.title}
-        className={`${BASE} ${TONE_CLASSES[resolvedTone]} ${className}`}
+        className={`${BASE} ${sizeClasses.button} ${TONE_CLASSES[resolvedTone]} ${className}`}
         {...props}
       >
-        {icon ?? defaults.icon}
+        {icon ?? <defaults.Icon className={sizeClasses.icon} />}
       </button>
     );
   }

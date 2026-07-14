@@ -1,9 +1,10 @@
 import React from 'react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     ArrowLeft, FileText, Calendar, Shield, DollarSign,
     Layers, Plus, History, CheckCircle2, AlertCircle,
     MoreHorizontal, ArrowUpRight, TrendingUp, BarChart3,
-    ArrowRight, Save, Trash2, Edit3, PlusCircle, Clock,
+    ArrowRight, Save, Edit3, PlusCircle, Clock,
     Camera, ExternalLink, HandCoins, CreditCard, X,
     Video, Image as ImageIcon, Send, FileDown, Zap,
     Package, Pencil, Settings, Search, Lock as LockIcon,
@@ -2119,9 +2120,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                 })()}
                                             </td>
                                             <td className="px-6 py-4">
-                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     {(item.budget_item_id === 'AVULSO' || !item.budget_item_id || item.budget_item_id === item.budget_item_id) && (
-                                                        <button
+                                                        <ActionIconButton
+                                                            kind="edit"
+                                                            tone="attention"
                                                             onClick={() => {
                                                                 // Find index among avulso items only
                                                                 const avulsoItems = items.filter(i => i.budget_item_id === 'AVULSO' || (!i.budget_item_id));
@@ -2134,20 +2137,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                                     });
                                                                 }
                                                             }}
-                                                            className={`p-2 rounded-lg transition-all shadow-sm ${item.budget_item_id === 'AVULSO' || !item.budget_item_id ? 'text-orange-400 hover:text-orange-600 hover:bg-orange-50' : 'text-gray-200 cursor-not-allowed opacity-50'}`}
                                                             title={item.budget_item_id === 'AVULSO' || !item.budget_item_id ? 'Editar Item Avulso' : 'Edição de item WBS disponível em breve'}
                                                             disabled={item.budget_item_id !== 'AVULSO' && !!item.budget_item_id}
-                                                        >
-                                                            <Pencil className="w-4 h-4" />
-                                                        </button>
+                                                        />
                                                     )}
-                                                    <button
-                                                        onClick={() => handleDeleteItem(item.id)}
-                                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-white rounded-lg transition-all shadow-sm"
-                                                        title="Remover Item"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    <ActionIconButton kind="delete" title="Remover Item" onClick={() => handleDeleteItem(item.id)} />
                                                 </div>
                                             </td>
                                         </tr>
@@ -2828,16 +2822,14 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                             <p className="text-base font-medium text-gray-900 tracking-tighter">R$ {bill.total_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                         </td>
                                         <td className="px-6 py-6 border-l border-gray-50 flex items-center gap-2">
-                                            <button
+                                            <ActionIconButton
+                                                kind="edit"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     setEditingUtilityBill(bill);
                                                     setIsUtilityBillModalOpen(true);
                                                 }}
-                                                className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-300 hover:text-blue-600 hover:bg-white transition-all shadow-sm group-hover:text-blue-600"
-                                            >
-                                                <Edit3 className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                            </button>
+                                            />
                                         </td>
                                     </tr>
                                 ))}
@@ -3453,9 +3445,9 @@ const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClos
                                 {editingIdx === i ? (
                                     <button onClick={handleEditSave} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"><CheckCircle2 className="w-3.5 h-3.5" /></button>
                                 ) : (
-                                    <button onClick={() => { setEditingIdx(i); setEditVal(unit); }} className="p-1.5 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"><Pencil className="w-3.5 h-3.5" /></button>
+                                    <ActionIconButton kind="edit" size="sm" onClick={() => { setEditingIdx(i); setEditVal(unit); }} />
                                 )}
-                                <button onClick={() => setUnits(prev => prev.filter((_, j) => j !== i))} className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                                <ActionIconButton kind="delete" size="sm" onClick={() => setUnits(prev => prev.filter((_, j) => j !== i))} />
                             </div>
                         ))}
                     </div>
@@ -3924,21 +3916,14 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
                                     >
                                         <ExternalLink className="w-4 h-4" />
                                     </a>
-                                    <button
-                                        onClick={() => startEdit(ver)}
-                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                                        title="Editar nome"
-                                    >
-                                        <Pencil className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(ver)}
+                                    <ActionIconButton kind="edit" title="Editar nome" onClick={() => startEdit(ver)} />
+                                    <ActionIconButton
+                                        kind="delete"
                                         disabled={emitted || busy}
-                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                                        icon={emitted ? <LockIcon className="w-4 h-4" /> : undefined}
                                         title={emitted ? 'Versão emitida não pode ser excluída' : 'Excluir versão'}
-                                    >
-                                        {emitted ? <LockIcon className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
-                                    </button>
+                                        onClick={() => handleDelete(ver)}
+                                    />
                                 </div>
                             )}
                         </div>

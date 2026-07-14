@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import {
-    Tag, Plus, Trash2, Edit3, Check, X, RefreshCw,
+    Tag, Plus, Edit3, Check, X, RefreshCw,
     Loader2, Search, AlertTriangle
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { STALE } from '../lib/queryClient';
@@ -273,22 +274,9 @@ const FinancialCategoriesManager: React.FC = () => {
                                     ) : (
                                         <>
                                             <span className="flex-1 text-sm font-medium text-slate-700">{cat.name}</span>
-                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => { setEditingId(cat.id); setEditingName(cat.name); }}
-                                                    className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
-                                                    title="Renomear"
-                                                >
-                                                    <Edit3 className="w-3.5 h-3.5 text-slate-400" />
-                                                </button>
-                                                <button
-                                                    onClick={() => { if (confirm(`Excluir "${cat.name}"?`)) removeMut.mutate(cat.id); }}
-                                                    disabled={removeMut.isPending}
-                                                    className="p-1.5 hover:bg-red-100 rounded-lg transition-colors"
-                                                    title="Excluir"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                                                </button>
+                                            <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <ActionIconButton kind="edit" size="sm" title="Renomear" icon={<Edit3 className="w-3.5 h-3.5" />} onClick={() => { setEditingId(cat.id); setEditingName(cat.name); }} />
+                                                <ActionIconButton kind="delete" size="sm" disabled={removeMut.isPending} onClick={() => { if (confirm(`Excluir "${cat.name}"?`)) removeMut.mutate(cat.id); }} />
                                             </div>
                                         </>
                                     )}

@@ -12,6 +12,14 @@
 #   3) confirm()/window.confirm() nativo (arg string), não useConfirm()    (§14)
 #   4) useState(...) para uma variável de busca, em vez de usePersistedState (§3)
 #
+# + 1 checagem de AVISO (não conta para o exit code — dívida de migração
+#   incremental, não bloqueio):
+#   5) botão-ícone hand-rolled com a assinatura antiga deprecada pelo §9.2
+#      (`p-2.5 ... border-slate-200 ... rounded-xl ... active:scale-95`) em
+#      vez de `<ActionIconButton>`. É aviso, não erro, porque a migração de
+#      ~156 arquivos é incremental por lote (PLANO_PADRONIZACAO_BOTOES_ACAO.md),
+#      não é pra travar edição não relacionada num arquivo ainda não migrado.
+#
 # Isso NÃO substitui a auditoria seção-por-seção do CHECKLIST DE AUDITORIA
 # COMPLETA (que cobre decisões de design, não só padrões de texto) — é só a
 # parte que dá pra travar sem julgamento humano.
@@ -88,6 +96,16 @@ check_file() {
     echo "  ❌ [§3] useState usado para campo de busca (deveria ser usePersistedState — filtro precisa sobreviver a navegação/reload):"
     echo "$search_hits" | sed 's/^/       /'
     violations=$((violations + 1))
+  fi
+
+  # 5) AVISO — botão-ícone hand-rolled com a assinatura antiga (§9.2, deprecada
+  #    em 2026-07-14). Não conta para o exit code: é dívida de migração
+  #    incremental, não bloqueio de PR.
+  local old_icon_button_hits
+  old_icon_button_hits=$(grep -nE 'p-2\.5[^"'"'"'`]*border-slate-200[^"'"'"'`]*rounded-xl|rounded-xl[^"'"'"'`]*border-slate-200[^"'"'"'`]*p-2\.5' "$file" || true)
+  if [ -n "$old_icon_button_hits" ]; then
+    echo "  ⚠️  [§9.2] botão-ícone com estilo antigo deprecado (migrar para <ActionIconButton> de ./ui/ActionIconButton — não conta como violação, é aviso de dívida):"
+    echo "$old_icon_button_hits" | sed 's/^/       /'
   fi
 }
 

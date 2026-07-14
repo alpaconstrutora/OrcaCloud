@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { 
-    Upload, Search, CheckCircle2, AlertCircle, 
+import {
+    Upload, Search, CheckCircle2, AlertCircle,
     ArrowRightLeft, FileText, Download, Trash2, Check,
     Plus, Calendar, DollarSign, Briefcase, RefreshCw,
     Zap, ShieldCheck, Settings2, Info, ArrowUpDown, X, Tag,
     LayoutGrid, List, Users, UserPlus, ExternalLink, Rows3, Pencil
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     BankTransaction,
     InternalTransaction,
@@ -2765,21 +2766,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         }}
                                     />
                                 </div>
-                                <div className="absolute top-0 right-0 p-4 flex gap-2">
-                                    <button
-                                        onClick={() => handleEditRule(rule)}
-                                        className="text-gray-300 hover:text-blue-500 transition-colors"
-                                        title="Editar Regra"
-                                    >
-                                        <Settings2 className="w-4 h-4" />
-                                    </button>
-                                    <button 
-                                        onClick={() => handleDeleteRule(rule.id)}
-                                        className="text-gray-300 hover:text-red-500 transition-colors"
-                                        title="Excluir Regra"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                <div className="absolute top-0 right-0 p-4 flex gap-1.5">
+                                    <ActionIconButton kind="edit" title="Editar Regra" icon={<Settings2 className="w-4 h-4" />} onClick={() => handleEditRule(rule)} />
+                                    <ActionIconButton kind="delete" title="Excluir Regra" onClick={() => handleDeleteRule(rule.id)} />
                                 </div>
                                 <div className="flex items-center gap-4 mb-4">
                                     <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
@@ -2837,28 +2826,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-1">
-                                    <button
-                                        onClick={() => handleEditRule(rule)}
-                                        className="p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
-                                        title="Editar"
-                                    >
-                                        <Settings2 className="w-4 h-4" />
-                                    </button>
-                                    <button 
-                                        onClick={() => handleDeleteRule(rule.id)}
-                                        className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                        title="Excluir"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                <div className="flex items-center gap-1.5">
+                                    <ActionIconButton kind="edit" icon={<Settings2 className="w-4 h-4" />} onClick={() => handleEditRule(rule)} />
+                                    <ActionIconButton kind="delete" onClick={() => handleDeleteRule(rule.id)} />
                                 </div>
                             </div>
                         )
                     ))
                 )}
             </div>
-            
+
             <div className="bg-blue-50/50 p-6 rounded-[2rem] border border-blue-100 flex items-start gap-4">
                 <Info className="w-5 h-5 text-blue-500 mt-1 shrink-0" />
                 <div className="space-y-1">
@@ -4541,13 +4518,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                             )}
                                                             {tableColumns.visibleColumns.includes('actions') && (
                                                                 <td className="px-6 py-2.5 text-right">
-                                                                    <button
-                                                                        onClick={() => handleDeleteBankTransactions([tx.id])}
-                                                                        className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95"
-                                                                        title="Excluir extrato"
-                                                                    >
-                                                                        <Trash2 className="w-4 h-4" />
-                                                                    </button>
+                                                                    <ActionIconButton kind="delete" title="Excluir extrato" onClick={() => handleDeleteBankTransactions([tx.id])} />
                                                                 </td>
                                                             )}
                                                         </tr>
@@ -4901,13 +4872,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                         ) : (
                                                                             <span className="text-sm font-normal text-gray-400">{tx.status}</span>
                                                                         )}
-                                                                        <button
-                                                                            onClick={() => handleDeleteBankTransactions([tx.id])}
-                                                                            className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                                                            title="Excluir extrato"
-                                                                        >
-                                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                                        </button>
+                                                                        <ActionIconButton kind="delete" size="sm" title="Excluir extrato" onClick={() => handleDeleteBankTransactions([tx.id])} />
                                                                     </div>
                                                                 </td>
                                                                 )}
@@ -5419,20 +5384,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                                 <div className="flex items-center justify-end gap-1">
                                                                     {tx.source_system === 'MANUAL' && (
                                                                         <>
-                                                                            <button
-                                                                                onClick={() => handleEditInternalTx(tx)}
-                                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                                                                title="Editar"
-                                                                            >
-                                                                                <Settings2 className="w-3.5 h-3.5" />
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => handleDeleteInternalTx(tx.id)}
-                                                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                                                title="Excluir"
-                                                                            >
-                                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                                            </button>
+                                                                            <ActionIconButton kind="edit" size="sm" icon={<Settings2 className="w-3.5 h-3.5" />} onClick={() => handleEditInternalTx(tx)} />
+                                                                            <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteInternalTx(tx.id)} />
                                                                         </>
                                                                     )}
                                                                     <button

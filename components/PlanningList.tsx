@@ -1,6 +1,7 @@
 import React from 'react';
 import { projectService } from '../services/projectService';
-import { FolderOpen, Calendar, Search, Loader2, Settings, FileSpreadsheet, Edit2, LayoutDashboard, Clock, AlertCircle, CheckCircle2, ChevronRight, Copy, Trash2 } from 'lucide-react';
+import { FolderOpen, Calendar, Search, Loader2, FileSpreadsheet, Edit2, LayoutDashboard, Clock, AlertCircle, CheckCircle2, ChevronRight } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { ProjectSchedule } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
@@ -417,27 +418,9 @@ const PlanningList: React.FC<PlanningListProps> = ({
                                                             <span className="text-xs font-black uppercase hidden lg:inline">Abrir Gantt</span>
                                                             <ChevronRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
                                                         </button>
-                                                        <button
-                                                            onClick={() => onDuplicateProject(project.id)}
-                                                            className="p-2.5 bg-white border border-amber-50 text-amber-600 hover:bg-amber-50 rounded-xl transition-all shadow-sm active:scale-95"
-                                                            title="Duplicar Planejamento"
-                                                        >
-                                                            <Copy className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => onEditProject(project.id)}
-                                                            className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
-                                                            title="Configurações"
-                                                        >
-                                                            <Settings className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => onDeleteProject(project)}
-                                                            className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95"
-                                                            title="Excluir Planejamento"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
+                                                        <ActionIconButton kind="duplicate" title="Duplicar Planejamento" onClick={() => onDuplicateProject(project.id)} />
+                                                        <ActionIconButton kind="settings" title="Configurações" onClick={() => onEditProject(project.id)} />
+                                                        <ActionIconButton kind="delete" title="Excluir Planejamento" onClick={() => onDeleteProject(project)} />
                                                     </div>
                                                 </td>
                                             )}
@@ -525,27 +508,9 @@ const PlanningList: React.FC<PlanningListProps> = ({
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onDuplicateProject(project.id); }}
-                                            className="p-2.5 bg-white border border-amber-50 text-amber-600 hover:bg-amber-50 rounded-xl transition-all shadow-sm active:scale-95"
-                                            title="Duplicar"
-                                        >
-                                            <Copy className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }}
-                                            className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
-                                            title="Configurações"
-                                        >
-                                            <Settings className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onDeleteProject(project); }}
-                                            className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95 ml-auto"
-                                            title="Excluir"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <ActionIconButton kind="duplicate" title="Duplicar" onClick={(e) => { e.stopPropagation(); onDuplicateProject(project.id); }} />
+                                        <ActionIconButton kind="settings" title="Configurações" onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }} />
+                                        <ActionIconButton kind="delete" className="ml-auto" onClick={(e) => { e.stopPropagation(); onDeleteProject(project); }} />
                                     </div>
                                 </div>
                             );

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, MoreVertical, Edit, Trash2, LayoutGrid, List, ChevronRight, ChevronDown, X, RotateCw, Layers } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
 import { Property, PropertyStatus, PropertyDeal, Client } from '../types';
 import { clientService } from '../services/clientService';
@@ -906,19 +907,9 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                                     const property = properties.find(p => p.id === deal.property_id);
                                     return (
                                         <div key={deal.id} className="bg-white p-10 rounded-[2.5rem] border border-gray-200 shadow-xl shadow-gray-200/20 relative group hover:border-blue-200 transition-colors">
-                                            <div className="absolute top-10 right-10 flex gap-2">
-                                                <button
-                                                    onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }}
-                                                    className="p-3 bg-gray-50 text-gray-400 hover:text-blue-600 rounded-2xl transition-colors"
-                                                >
-                                                    <Edit className="w-5 h-5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteDeal(deal.id)}
-                                                    className="p-3 bg-gray-50 text-gray-400 hover:text-red-500 rounded-2xl transition-colors"
-                                                >
-                                                    <Trash2 className="w-5 h-5" />
-                                                </button>
+                                            <div className="absolute top-10 right-10 flex gap-1.5">
+                                                <ActionIconButton kind="edit" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }} />
+                                                <ActionIconButton kind="delete" onClick={() => handleDeleteDeal(deal.id)} />
                                             </div>
                                             <div className="flex items-center gap-2 mb-6">
                                                 <span className={`px-5 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${deal.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
@@ -1067,9 +1058,9 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                                                         </span>
                                                     </td>
                                                     <td className="px-8 py-6 text-right">
-                                                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button onClick={(e) => { e.stopPropagation(); setEditingDeal(deal); setIsDealModalOpen(true); }} className="p-2 bg-gray-50 text-gray-400 hover:text-blue-600 rounded-xl transition-all"><Edit className="w-4 h-4" /></button>
-                                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteDeal(deal.id); }} className="p-2 bg-gray-50 text-gray-400 hover:text-red-500 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
+                                                        <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <ActionIconButton kind="edit" onClick={(e) => { e.stopPropagation(); setEditingDeal(deal); setIsDealModalOpen(true); }} />
+                                                            <ActionIconButton kind="delete" onClick={(e) => { e.stopPropagation(); handleDeleteDeal(deal.id); }} />
                                                         </div>
                                                     </td>
                                                 </tr>

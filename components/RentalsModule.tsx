@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
 import { Property, PropertyStatus, PropertyDeal, Client } from '../types';
 import { TowerMatrixConfig, GridCellConfig, TowerNumberingConfig } from '../types/imovib';
@@ -749,9 +750,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-2.5 text-right">
-                                                        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                                                            <button onClick={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit className="w-4 h-4" /></button>
-                                                            <button onClick={() => handleDeleteProperty(property.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                                        <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                            <ActionIconButton kind="edit" onClick={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }} />
+                                                            <ActionIconButton kind="delete" onClick={() => handleDeleteProperty(property.id)} />
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -921,19 +922,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     const property = properties.find(p => p.id === deal.property_id);
                                     return (
                                         <div key={deal.id} className="bg-white p-6 rounded-[10px] border border-gray-100 hover:border-blue-200 transition-colors relative group">
-                                            <div className="absolute top-6 right-6 flex gap-1" onClick={(e) => e.stopPropagation()}>
-                                                <button
-                                                    onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }}
-                                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteDeal(deal.id)}
-                                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                            <div className="absolute top-6 right-6 flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                <ActionIconButton kind="edit" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }} />
+                                                <ActionIconButton kind="delete" onClick={() => handleDeleteDeal(deal.id)} />
                                             </div>
                                             <div className="flex items-center gap-2 mb-4">
                                                 <span className={`text-sm font-normal ${deal.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-600'}`}>
@@ -1041,9 +1032,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-2.5 text-right">
-                                                        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                                                            <button onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit className="w-4 h-4" /></button>
-                                                            <button onClick={() => handleDeleteDeal(deal.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
+                                                        <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                            <ActionIconButton kind="edit" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }} />
+                                                            <ActionIconButton kind="delete" onClick={() => handleDeleteDeal(deal.id)} />
                                                         </div>
                                                     </td>
                                                 </tr>

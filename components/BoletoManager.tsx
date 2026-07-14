@@ -3,9 +3,10 @@ import {
     Plus, Search, FileText, Loader2, RefreshCw,
     Building2, Calendar, AlertTriangle, ChevronDown,
     Wallet, Clock, CheckCircle2, SlidersHorizontal, X,
-    Download, LayoutGrid, List, Upload, Pencil, AlertCircle,
+    Download, LayoutGrid, List, Upload, Pencil, AlertCircle, Trash2,
 } from 'lucide-react';
 import { boletoService } from '../services/boletoService';
+import { useConfirm } from './ui/confirm';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
@@ -284,6 +285,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [exporting, setExporting] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isLoteEditOpen, setIsLoteEditOpen] = useState(false);
+    const [excluindoLote, setExcluindoLote] = useState(false);
+    const confirm = useConfirm();
     const tableColumns = useTableColumns(BOLETO_COLUMNS, 'boletoManagerColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'boletoManagerFilters:advanced');
 
@@ -358,6 +361,41 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
 
     function clearSelection() {
         setSelectedIds(new Set());
+    }
+
+    async function handleExcluirLote() {
+        const selecionados = filtered.filter(b => selectedIds.has(b.id));
+        const rascunhos = selecionados.filter(b => b.status === 'rascunho');
+        const naoRascunhos = selecionados.length - rascunhos.length;
+        if (rascunhos.length === 0) {
+            notify('Apenas boletos em rascunho podem ser excluídos. Use cancelar para os demais.', 'error');
+            return;
+        }
+        const ok = await confirm({
+            title: `Excluir ${rascunhos.length} boleto${rascunhos.length !== 1 ? 's' : ''}?`,
+            message: naoRascunhos > 0
+                ? `Essa ação não pode ser desfeita. ${naoRascunhos} boleto${naoRascunhos !== 1 ? 's' : ''} selecionado${naoRascunhos !== 1 ? 's' : ''} não ${naoRascunhos !== 1 ? 'são rascunhos e serão ignorados' : 'é rascunho e será ignorado'} (use cancelar).`
+                : 'Excluir permanentemente os boletos selecionados? Essa ação não pode ser desfeita.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        setExcluindoLote(true);
+        try {
+            const resultados = await Promise.allSettled(
+                rascunhos.map(b => boletoService.excluirRascunho(b.id, effectiveOrgId ?? organizationId, userEmail))
+            );
+            const falhas = resultados.filter(r => r.status === 'rejected').length;
+            if (falhas > 0) {
+                notify(`${rascunhos.length - falhas} boleto(s) excluído(s), ${falhas} falharam.`, falhas === rascunhos.length ? 'error' : 'success');
+            } else {
+                notify(`${rascunhos.length} boleto${rascunhos.length !== 1 ? 's excluídos' : ' excluído'} com sucesso.`);
+            }
+            clearSelection();
+            await carregar(effectiveOrgId);
+        } finally {
+            setExcluindoLote(false);
+        }
     }
 
     async function carregar(orgId: string | undefined) {
@@ -850,6 +888,16 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     >
                         <Pencil className="w-3.5 h-3.5" />
                         Editar em Lote
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleExcluirLote}
+                        disabled={excluindoLote}
+                        className="text-red-700 border-none hover:bg-red-50"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Excluir em Lote
                     </Button>
                     <button
                         onClick={clearSelection}

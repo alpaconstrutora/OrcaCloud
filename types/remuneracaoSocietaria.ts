@@ -43,6 +43,12 @@ export interface ProlaborePayroll {
   approved_by_email?: string;
   approved_at?: string;
   created_by_email?: string;
+  // Total de pró-labore conferido/aprovado na Conciliação Bancária (Financeiro)
+  // e registrado aqui via botão "Lançar total em RH" — canal de volta
+  // Financeiro→RH, não duplica internal_transactions/invoices.
+  bank_reconciled_total?: number;
+  bank_reconciled_at?: string;
+  bank_reconciled_by_email?: string;
   created_at: string;
   updated_at: string;
 }

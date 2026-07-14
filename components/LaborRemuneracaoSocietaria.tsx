@@ -569,6 +569,12 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                 {PROLABORE_STATUS_LABELS[payroll.status]}
                             </span>
                         )}
+                        {payroll?.bank_reconciled_total != null && (
+                            <span className="text-xs text-blue-700 font-medium" title="Registrado via Financeiro > Conciliação Bancária > Pró-labore">
+                                Total conciliado no banco: {BRL(payroll.bank_reconciled_total)}
+                                {payroll.bank_reconciled_at ? ` (em ${new Date(payroll.bank_reconciled_at).toLocaleString('pt-BR')})` : ''}
+                            </span>
+                        )}
                         {periodLocked !== null && (
                             <button onClick={() => handleTogglePeriodLock(competenceMonth)} disabled={periodActing}
                                 title="Fecha/reabre o mês inteiro no Financeiro — afeta todos os lançamentos, não só a Remuneração Societária"

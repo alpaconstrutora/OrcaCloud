@@ -32,10 +32,11 @@ import DivergencesPanel from './DivergencesPanel';
 import FinancialClosePanel from './FinancialClosePanel';
 import AnomaliesPanel from './AnomaliesPanel';
 import SmartReconciliationCenter from './SmartReconciliationCenter';
+import ProlaboreReconciliationPanel from './ProlaboreReconciliationPanel';
 import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
 import BankStatementImportDrawer from './BankStatementImportDrawer';
 
-type ReconciliationView = 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'statement' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close';
+type ReconciliationView = 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'statement' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close' | 'prolabore';
 
 // Título/subtítulo de tela por aba — guia §20 (toda tela com título tem que TER um título).
 const VIEW_HEADERS: Record<ReconciliationView, { title: string; subtitle: string }> = {
@@ -49,6 +50,7 @@ const VIEW_HEADERS: Record<ReconciliationView, { title: string; subtitle: string
     rules: { title: 'Regras de Automação', subtitle: 'Critérios que conciliam lançamentos automaticamente.' },
     categories: { title: 'Categorias', subtitle: 'Categorias usadas para classificar lançamentos.' },
     close: { title: 'Fechamento Financeiro', subtitle: 'Feche o período após a conciliação estar completa.' },
+    prolabore: { title: 'Pró-labore', subtitle: 'Lançamentos categorizados como Pró-labore no extrato — aprove, feche o mês e envie o total ao RH.' },
 };
 
 interface BankReconciliationProps {
@@ -3472,6 +3474,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     >
                         Fechamento
                     </button>
+                    <button
+                        onClick={() => setActiveView('prolabore')}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'prolabore' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Pró-labore
+                    </button>
                 </div>
             </div>
 
@@ -3799,6 +3807,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 <AnomaliesPanel organizationId={organizationId} />
             ) : activeView === 'close' ? (
                 <FinancialClosePanel organizationId={organizationId} />
+            ) : activeView === 'prolabore' ? (
+                <ProlaboreReconciliationPanel organizationId={organizationId} />
             ) : activeView === 'rules' ? (
                 renderRules()
             ) : activeView === 'categories' ? (

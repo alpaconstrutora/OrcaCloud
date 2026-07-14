@@ -663,6 +663,36 @@ export const remuneracaoSocietariaService = {
         if (error) throw error;
     },
 
+    /**
+     * Canal de volta Financeiro→RH: registra na folha da competência o total
+     * de pró-labore conferido/aprovado na Conciliação Bancária. Não cria
+     * internal_transactions/invoices (esses já existem, vieram de
+     * sendPayrollToFinancial ou de lançamento manual no banco) — só grava o
+     * total e quem confirmou, fechando o loop de conferência sem duplicar
+     * lançamento financeiro.
+     */
+    async recordBankReconciledTotal(
+        organizationId: string,
+        companyId: string,
+        competenceMonth: string,
+        totalAmount: number,
+        confirmedByEmail: string,
+    ): Promise<ProlaborePayroll> {
+        const payroll = await this.getOrCreatePayroll(organizationId, companyId, competenceMonth);
+        const { data, error } = await supabase
+            .from('prolabore_payrolls')
+            .update({
+                bank_reconciled_total: totalAmount,
+                bank_reconciled_at: new Date().toISOString(),
+                bank_reconciled_by_email: confirmedByEmail,
+            })
+            .eq('id', payroll.id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as ProlaborePayroll;
+    },
+
     // ─── Sócios elegíveis (lê company_partners, não duplica) ────
 
     async listEligiblePartners(companyId: string): Promise<CompanyPartner[]> {

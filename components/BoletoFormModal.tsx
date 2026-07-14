@@ -13,6 +13,7 @@ import { projectService } from '../services/projectService';
 import { extractFromPdfFile } from '../utils/boletoParser';
 import { onlyDigits } from '../utils/febrabanRules';
 import { formatMoney } from './ui/Format';
+import { useConfirm } from './ui/confirm';
 import type { Boleto, BoletoExtractionResult, Supplier, CostCenter } from '../types';
 
 interface BoletoFormModalProps {
@@ -39,6 +40,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     const [uploading, setUploading] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const confirm = useConfirm();
     const [info, setInfo] = useState<string | null>(null);
 
     const [linhaManual, setLinhaManual] = useState('');
@@ -366,7 +368,13 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
 
     async function handleExcluirRascunho() {
         if (!boleto) return;
-        if (!window.confirm('Excluir este rascunho permanentemente?')) return;
+        const ok = await confirm({
+            title: 'Excluir rascunho?',
+            message: 'Excluir este rascunho permanentemente? Essa ação não pode ser desfeita.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
         setBusy(true);
         try {
             await boletoService.excluirRascunho(boleto.id, organizationId, userEmail);
@@ -695,8 +703,8 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     <>
                                         {boleto.sugestao_supplier_id && supplierId === boleto.sugestao_supplier_id && (
                                             <div className="flex items-center gap-2 mb-1.5">
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold uppercase tracking-widest">
-                                                    <CheckCircle2 className="w-3 h-3" /> Sugerido via CNPJ
+                                                <span className="inline-flex items-center gap-1 text-sm font-normal text-emerald-700">
+                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Sugerido via CNPJ
                                                 </span>
                                                 <button type="button" onClick={() => setSupplierId('')} className="text-xs text-gray-400 hover:text-gray-600 underline">limpar</button>
                                             </div>

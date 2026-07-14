@@ -567,15 +567,15 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
-                    {/* Seletor de organização */}
+                    {/* Seletor de organização — escala compacta §16 */}
                     {organizations.length > 0 && (
-                        <div className="relative flex items-center gap-2 bg-white border border-gray-200 rounded-[1.25rem] px-4 py-2.5 min-w-[220px]">
+                        <div className="relative flex items-center gap-2 bg-white border border-gray-200 rounded-[6px] h-9 px-3 min-w-[200px]">
                             <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
                             <select
                                 ref={orgSelectRef}
                                 value={selectedOrgId}
                                 onChange={(e) => handleOrgChange(e.target.value)}
-                                className="w-full bg-transparent text-form-input font-bold text-gray-700 outline-none cursor-pointer appearance-none pr-5"
+                                className="w-full bg-transparent text-sm font-medium text-gray-700 outline-none cursor-pointer appearance-none pr-5"
                             >
                                 <option value="ALL">Todas as Organizações</option>
                                 {organizations.map(org => (
@@ -585,50 +585,48 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                             <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-3" />
                         </div>
                     )}
+                    {/* Botões secundários — markup local em vez do componente Button
+                        compartilhado (guia §17/§16). Button.tsx BASE aplica
+                        `rounded-xl font-black uppercase tracking-widest` em toda
+                        variante, inclusive 'secondary' — herdado sem aparecer no diff
+                        desta tela. Corrigido localmente, sem tocar no componente
+                        compartilhado (mudaria toda tela que usa Button). */}
                     {filtered.length > 0 && (
                         <>
-                            <Button
-                                variant="secondary"
-                                size="lg"
+                            <button
                                 onClick={() => handleExport('excel')}
                                 disabled={exporting}
-                                className="text-emerald-700 border-emerald-200 hover:bg-emerald-50"
                                 title="Exportar lista filtrada para Excel"
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-emerald-700 rounded-[6px] hover:bg-emerald-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                             >
                                 {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                                 Excel
-                            </Button>
-                            <Button
-                                variant="secondary"
-                                size="lg"
+                            </button>
+                            <button
                                 onClick={() => handleExport('pdf')}
                                 disabled={exporting}
-                                className="text-red-600 border-red-200 hover:bg-red-50"
                                 title="Exportar lista filtrada para PDF"
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-red-600 rounded-[6px] hover:bg-red-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                             >
                                 {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                                 PDF
-                            </Button>
+                            </button>
                         </>
                     )}
-                    <Button
-                        variant="secondary"
-                        size="lg"
+                    <button
                         onClick={() => carregar(effectiveOrgId)}
-                        className="text-gray-700 border-gray-100 hover:bg-gray-50"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
                     >
                         <RefreshCw className="w-4 h-4" />
                         Atualizar
-                    </Button>
-                    <Button
-                        variant="secondary"
-                        size="lg"
+                    </button>
+                    <button
                         onClick={() => setIsLoteOpen(true)}
-                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-blue-600 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95"
                     >
                         <Upload className="w-4 h-4" />
                         Importar em Lote
-                    </Button>
+                    </button>
                     {/* Botão primário compacto — guia seção 17. Não usa o componente
                         Button compartilhado aqui porque a variante 'primary' dele aplica
                         font-black uppercase tracking-widest + shadow pesado (ver Button.tsx
@@ -679,13 +677,13 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             )}
 
-            {/* Filtros de status */}
+            {/* Filtros de status — escala compacta §16 */}
             <div className="flex flex-wrap gap-2">
                 {(['todos', ...Object.keys(STATUS_LABELS)] as const).map((s) => (
                     <button
                         key={s}
                         onClick={() => setFiltroStatus(s as BoletoStatus | 'todos')}
-                        className={`px-4 py-2 rounded-[1.25rem] text-button font-bold uppercase tracking-widest border transition-colors ${
+                        className={`h-9 px-4 rounded-[6px] text-[13px] font-bold uppercase tracking-widest border transition-colors ${
                             filtroStatus === s
                                 ? 'bg-gray-900 text-white border-gray-900'
                                 : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
@@ -697,25 +695,25 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 ))}
             </div>
 
-            {/* Busca + botão filtros + toggle view — padrão guia seção 5 */}
-            <div className="bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
-                {/* Search — padrão guia seção 5 */}
+            {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — escolhida
+                porque os KPIs acima já dão contexto, mesmo padrão de ClientList.tsx. */}
+            <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
-                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
                         placeholder="Buscar por nome do arquivo, beneficiário ou linha digitável..."
                         value={busca}
                         onChange={(e) => setBusca(e.target.value)}
-                        className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-transparent rounded-[1.5rem] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                 </div>
                 <button
                     onClick={() => setShowFiltros(v => !v)}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-2xl border font-bold text-form-input uppercase tracking-widest transition-colors ${
+                    className={`flex items-center gap-2 h-9 px-3.5 rounded-[6px] border font-medium text-[13px] transition-colors ${
                         showFiltros || temFiltroAtivo
                             ? 'bg-gray-900 text-white border-gray-900'
-                            : 'bg-white text-gray-700 border-gray-100 hover:bg-gray-50'
+                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                     }`}
                 >
                     <SlidersHorizontal className="w-4 h-4" />
@@ -724,9 +722,15 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         <span className="ml-0.5 w-2 h-2 rounded-full bg-blue-400 inline-block" />
                     )}
                 </button>
-                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-                {/* Agrupador ViewMode + ColumnConfig — padrão guia seção 5 */}
-                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                <div className="flex items-center h-9">
+                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                </div>
+
+                {/* Separador entre grupo "filtrar" e grupo "visualizar" — só na variante desaninhada (§5.1) */}
+                <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                {/* Agrupador ViewMode + ColumnConfig — escala compacta §16 */}
+                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                     {viewMode === 'list' && (
                         <>
                             <ColumnConfigButton
@@ -737,35 +741,35 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
                             />
-                            <div className="w-px bg-gray-200 mx-1 my-1"></div>
+                            <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                         </>
                     )}
                     <button
                         onClick={() => setViewMode('grid')}
                         title="Visualização em blocos"
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         <LayoutGrid className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
                         title="Visualização em lista"
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         <List className="w-4 h-4" />
                     </button>
                 </div>
             </div>
 
-            {/* Painel de filtros avançados */}
+            {/* Painel de filtros avançados — escala compacta §16 */}
             {showFiltros && (
-                <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-4">
+                <div className="bg-gray-50 border border-gray-200 rounded-[10px] p-4 space-y-4">
                     <div className="flex items-center justify-between">
                         <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Filtros avançados</span>
                         {temFiltroAtivo && (
-                            <Button variant="ghost" size="sm" onClick={limparFiltros} className="text-red-500 hover:text-red-700 normal-case font-bold">
+                            <button onClick={limparFiltros} className="flex items-center gap-1 text-xs font-bold text-red-500 hover:text-red-700 transition-colors">
                                 <X className="w-3 h-3" /> Limpar filtros
-                            </Button>
+                            </button>
                         )}
                     </div>
 
@@ -777,7 +781,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 type="date"
                                 value={vencDe}
                                 onChange={(e) => setVencDe(e.target.value)}
-                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm"
+                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm"
                             />
                         </div>
                         {/* Vencimento até */}
@@ -787,7 +791,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 type="date"
                                 value={vencAte}
                                 onChange={(e) => setVencAte(e.target.value)}
-                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm"
+                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm"
                             />
                         </div>
                         {/* Valor mínimo */}
@@ -800,7 +804,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 placeholder="0,00"
                                 value={valorMin}
                                 onChange={(e) => setValorMin(e.target.value)}
-                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm"
+                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm"
                             />
                         </div>
                         {/* Valor máximo */}
@@ -813,7 +817,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                 placeholder="—"
                                 value={valorMax}
                                 onChange={(e) => setValorMax(e.target.value)}
-                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm"
+                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm"
                             />
                         </div>
                     </div>
@@ -864,8 +868,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     <p className="mt-2 text-gray-500">Carregando boletos...</p>
                 </div>
             ) : filtered.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[2.5rem] shadow-sm border border-gray-100">
-                    {/* Empty State — padrão guia seção 12 */}
+                <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+                    {/* Empty State — padrão guia seção 12, escala compacta §16 */}
                     <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum boleto encontrado</h3>
                     <p className="text-sm text-gray-500">Tente ajustar seus filtros de busca.</p>
@@ -896,14 +900,16 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             ) : (
                 /* ── Vista em lista ── */
-                <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
                     {/* Cabeçalho fixo (guia §6.5) — lista pode crescer bastante (captura
                         contínua de boletos); overflow-auto cobre rolagem vertical E
                         horizontal (§15) no mesmo container. */}
                     <div className="overflow-auto max-h-[70vh]">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
-                            <tr className="sticky top-0 z-10 bg-gray-50">
+                        {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader
+                            força uppercase internamente por padrão; classes de estilo no <tr>. */}
+                        <thead>
+                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                     <input
                                         type="checkbox"
@@ -918,6 +924,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         label="Código"
                                         colKey="numero"
                                         sortable={true}
+                                        uppercase={false}
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
@@ -929,6 +936,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         label="Beneficiário"
                                         colKey="beneficiario"
                                         sortable={true}
+                                        uppercase={false}
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
@@ -940,6 +948,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         label="Obra"
                                         colKey="obra"
                                         sortable={true}
+                                        uppercase={false}
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
@@ -951,6 +960,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         label="Centro de Custo"
                                         colKey="centro_custo"
                                         sortable={true}
+                                        uppercase={false}
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
@@ -962,6 +972,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         label="Valor"
                                         colKey="valor"
                                         sortable={true}
+                                        uppercase={false}
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
@@ -973,6 +984,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         label="Vencimento"
                                         colKey="vencimento"
                                         sortable={true}
+                                        uppercase={false}
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
@@ -984,6 +996,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         label="Status"
                                         colKey="status"
                                         sortable={true}
+                                        uppercase={false}
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
@@ -995,6 +1008,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         label="Capturado em"
                                         colKey="capturado_em"
                                         sortable={true}
+                                        uppercase={false}
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
@@ -1006,6 +1020,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                         label="Capturado por"
                                         colKey="capturado_por"
                                         sortable={true}
+                                        uppercase={false}
                                         sortColumn={tableColumns.sortColumn}
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}

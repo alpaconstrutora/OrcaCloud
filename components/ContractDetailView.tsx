@@ -13,15 +13,22 @@ import {
     Contract, ContractItem, ContractAddendum,
     ContractMeasurement, ContractMeasurementItem, BudgetEntry, ProjectSettings, ContractTemplate,
     ContractUtilityBill, SinapiItem, CustomDatabase, SinapiType, MinutaVersion,
-    ContractGuarantee, ContractPenalty, ContractRetentionLedger, ContractRetentionRelease, GuaranteeKind, PenaltyKind
+    ContractGuarantee, ContractPenalty, ContractRetentionLedger, ContractRetentionRelease, GuaranteeKind, PenaltyKind,
+    ContractRiskAssessment, ContractLaborQuestionnaire, ContractPrecedentCondition, ContractDocumentRequirement,
+    DocumentRequirementPhase
 } from '../types';
 import { contractService } from '../services/contractService';
 import { contractIndexService, IndexName } from '../services/contractIndexService';
 import { contractGuaranteeService } from '../services/contractGuaranteeService';
 import { contractPenaltyService } from '../services/contractPenaltyService';
+import { contractRiskService } from '../services/contractRiskService';
+import { contractLaborQuestionnaireService, LABOR_ALERT_THRESHOLD } from '../services/contractLaborQuestionnaireService';
 import ContractGuaranteeModal from './ContractGuaranteeModal';
 import ContractPenaltyModal from './ContractPenaltyModal';
 import ContractRetentionReleaseModal from './ContractRetentionReleaseModal';
+import ContractRiskModal from './ContractRiskModal';
+import ContractLaborQuestionnaireModal from './ContractLaborQuestionnaireModal';
+import ContractDocumentRequirementModal from './ContractDocumentRequirementModal';
 
 const GUARANTEE_KIND_LABELS: Record<GuaranteeKind, string> = {
     RC_GERAL: 'RC Geral',
@@ -39,6 +46,12 @@ const PENALTY_KIND_LABELS: Record<PenaltyKind, string> = {
     COMPENSATORIA: 'Compensatória',
     SST: 'SST/Compliance',
     OUTRA: 'Outra',
+};
+
+const DOC_PHASE_LABELS: Record<DocumentRequirementPhase, string> = {
+    ANTES_INICIO: 'Antes do Início',
+    MENSAL: 'Mensal',
+    ENCERRAMENTO: 'Encerramento',
 };
 import { contractTemplateService, ContractTemplate as DBContractTemplate, renderTemplate, buildVariableMap } from '../services/contractTemplateService';
 import { documentTemplateService, DocumentTemplate } from '../services/documentTemplateService';
@@ -140,6 +153,16 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [penaltyModal, setPenaltyModal] = React.useState(false);
     const [releaseModal, setReleaseModal] = React.useState(false);
     const [fase5Busy, setFase5Busy] = React.useState(false);
+
+    // Fase 6 — Governança da Contratação (PLANO_MODULO_CONTRATOS_GAPS.md)
+    const [riskAssessment, setRiskAssessment] = React.useState<ContractRiskAssessment | null>(null);
+    const [laborQuestionnaire, setLaborQuestionnaire] = React.useState<ContractLaborQuestionnaire | null>(null);
+    const [precedentConditions, setPrecedentConditions] = React.useState<ContractPrecedentCondition[]>([]);
+    const [documentRequirements, setDocumentRequirements] = React.useState<ContractDocumentRequirement[]>([]);
+    const [riskModal, setRiskModal] = React.useState(false);
+    const [laborModal, setLaborModal] = React.useState(false);
+    const [docReqModal, setDocReqModal] = React.useState<{ open: boolean; editing: ContractDocumentRequirement | null }>({ open: false, editing: null });
+    const [fase6Busy, setFase6Busy] = React.useState(false);
 
     const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setNotification({ message, type });
@@ -259,7 +282,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const loadContractData = async () => {
         try {
             setLoading(true);
-            const [c, i, a, m, u, g, pen, ledger, releases] = await Promise.all([
+            const [c, i, a, m, u, g, pen, ledger, releases, risk, labor, precedent, docReqs] = await Promise.all([
                 contractService.getContractById(contractId),
                 contractService.listContractItems(contractId),
                 contractService.listAddendums(contractId),
@@ -268,7 +291,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 contractGuaranteeService.list(contractId),
                 contractPenaltyService.list(contractId),
                 contractService.getRetentionLedger(contractId),
-                contractService.listRetentionReleases(contractId)
+                contractService.listRetentionReleases(contractId),
+                contractRiskService.get(contractId),
+                contractLaborQuestionnaireService.get(contractId),
+                contractService.listPrecedentConditions(contractId),
+                contractService.listDocumentRequirements(contractId)
             ]);
             setContract(c);
             setItems(i);
@@ -279,6 +306,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             setPenalties(pen);
             setRetentionLedger(ledger);
             setRetentionReleases(releases);
+            setRiskAssessment(risk);
+            setLaborQuestionnaire(labor);
+            setPrecedentConditions(precedent);
+            setDocumentRequirements(docReqs);
 
             if (c) {
                 setLoadingFinancialEntries(true);
@@ -1287,6 +1318,101 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 ))}
                             </div>
                         </div>
+
+                        {/* Pré-mobilização & Ordem de Início (Fase 6.3 — Cl.4, Manual §11) */}
+                        {contract && (
+                            <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-xs font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                        <ClipboardList className="w-4 h-4 text-blue-600" /> Pré-mobilização
+                                    </h3>
+                                    {contract.start_order_issued_at ? (
+                                        <span className="text-xs text-emerald-600">
+                                            Ordem emitida em {new Date(contract.start_order_issued_at + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                        </span>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            disabled={fase6Busy || precedentConditions.some(p => p.required && !p.satisfied)}
+                                            onClick={async () => {
+                                                setFase6Busy(true);
+                                                try {
+                                                    await contractService.issueStartOrder(contract.id, contract.responsible_email || contract.internal_responsible || 'N/D');
+                                                    await loadContractData();
+                                                    notify('Ordem de Início emitida.', 'success');
+                                                } catch (err: unknown) {
+                                                    notify(err instanceof Error ? err.message : 'Erro ao emitir Ordem de Início.', 'error');
+                                                } finally {
+                                                    setFase6Busy(false);
+                                                }
+                                            }}
+                                            className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:text-gray-300 disabled:cursor-not-allowed"
+                                        >
+                                            Emitir Ordem de Início
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="space-y-1.5">
+                                    {precedentConditions.map(cond => (
+                                        <button
+                                            key={cond.id}
+                                            type="button"
+                                            disabled={fase6Busy || !!contract.start_order_issued_at}
+                                            onClick={async () => {
+                                                setFase6Busy(true);
+                                                try { await contractService.togglePrecedentCondition(cond.id, !cond.satisfied); await loadContractData(); }
+                                                finally { setFase6Busy(false); }
+                                            }}
+                                            className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors disabled:cursor-not-allowed"
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <CheckCircle2 className={`w-4 h-4 ${cond.satisfied ? 'text-emerald-500' : 'text-gray-300'}`} />
+                                                <span className="text-sm text-gray-700">{cond.item}</span>
+                                            </span>
+                                            <span className="text-xs text-gray-400">{cond.responsible}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Matriz Documental (Fase 6.4 — Anexo V, Manual §14) */}
+                        {contract && (
+                            <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-xs font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                        <FileText className="w-4 h-4 text-blue-600" /> Matriz Documental
+                                    </h3>
+                                    <button type="button" onClick={() => setDocReqModal({ open: true, editing: null })} className="text-xs font-medium text-blue-600 hover:text-blue-800">
+                                        + Adicionar
+                                    </button>
+                                </div>
+                                {documentRequirements.length === 0 ? (
+                                    <p className="text-xs text-gray-400">Nenhum documento condicionante cadastrado (Anexo V).</p>
+                                ) : (
+                                    <div className="space-y-1.5">
+                                        {documentRequirements.map(doc => {
+                                            const today = new Date().toISOString().split('T')[0];
+                                            const expired = doc.phase === 'MENSAL' && (!doc.last_valid_until || doc.last_valid_until < today);
+                                            return (
+                                                <button
+                                                    key={doc.id}
+                                                    type="button"
+                                                    onClick={() => setDocReqModal({ open: true, editing: doc })}
+                                                    className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors"
+                                                >
+                                                    <span className="text-sm text-gray-700">{doc.document}</span>
+                                                    <span className="flex items-center gap-3">
+                                                        <span className="text-xs text-gray-400">{DOC_PHASE_LABELS[doc.phase]}</span>
+                                                        <span className={`text-sm font-normal ${expired ? 'text-red-600' : 'text-emerald-600'}`}>{expired ? 'Vencido' : 'Em dia'}</span>
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     <div className="space-y-3">
@@ -1532,6 +1658,52 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                             </button>
                                         );
                                     })
+                                )}
+                            </div>
+                        )}
+
+                        {/* Classificação de Risco (Fase 6.1 — Manual §3) */}
+                        {contract && (
+                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                                <div className="flex items-center justify-between px-2">
+                                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                        <AlertCircle className="w-3.5 h-3.5" /> Classificação de Risco
+                                    </h4>
+                                    <button type="button" onClick={() => setRiskModal(true)} className="text-xs font-medium text-blue-600 hover:text-blue-800">
+                                        {riskAssessment ? 'Reavaliar' : 'Avaliar'}
+                                    </button>
+                                </div>
+                                {riskAssessment ? (
+                                    <button type="button" onClick={() => setRiskModal(true)} className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-colors flex items-center justify-between">
+                                        <span className="text-xs text-gray-500">Pontuação {riskAssessment.score}</span>
+                                        <span className={`text-sm font-normal ${riskAssessment.level === 'R3' ? 'text-red-600' : riskAssessment.level === 'R2' ? 'text-amber-600' : 'text-emerald-600'}`}>{riskAssessment.level}</span>
+                                    </button>
+                                ) : (
+                                    <p className="text-xs text-gray-400 px-2 py-1">Ainda não avaliado (Manual §3).</p>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Questionário de Risco Trabalhista (Fase 6.2 — Manual §8, Anexo H) — só para Mão de Obra */}
+                        {contract && contract.nature === 'Mão de Obra' && (
+                            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                                <div className="flex items-center justify-between px-2">
+                                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                        <Users className="w-3.5 h-3.5" /> Risco Trabalhista
+                                    </h4>
+                                    <button type="button" onClick={() => setLaborModal(true)} className="text-xs font-medium text-blue-600 hover:text-blue-800">
+                                        {laborQuestionnaire ? 'Revisar' : 'Responder'}
+                                    </button>
+                                </div>
+                                {laborQuestionnaire ? (
+                                    <button type="button" onClick={() => setLaborModal(true)} className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-colors flex items-center justify-between">
+                                        <span className="text-xs text-gray-500">Alertas</span>
+                                        <span className={`text-sm font-normal ${laborQuestionnaire.alert_count >= LABOR_ALERT_THRESHOLD ? 'text-red-600' : 'text-emerald-600'}`}>
+                                            {laborQuestionnaire.alert_count}{laborQuestionnaire.alert_count >= LABOR_ALERT_THRESHOLD && !laborQuestionnaire.legal_opinion_url ? ' — exige parecer' : ''}
+                                        </span>
+                                    </button>
+                                ) : (
+                                    <p className="text-xs text-gray-400 px-2 py-1">Questionário obrigatório para mão de obra (Manual §8).</p>
                                 )}
                             </div>
                         )}
@@ -2324,24 +2496,42 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                             </td>
                                                             <td className="px-5 py-3 text-right text-sm font-medium text-gray-900">R$ {fmt(p.amount)}</td>
                                                             <td className="px-5 py-3 text-right">
-                                                                {p.status === 'NOTIFICADA' && (
-                                                                    <div className="flex items-center justify-end gap-2">
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    {p.status === 'NOTIFICADA' && (
+                                                                        <>
+                                                                            <button
+                                                                                onClick={async () => { setFase5Busy(true); try { await contractPenaltyService.cure(p.id); await loadContractData(); } finally { setFase5Busy(false); } }}
+                                                                                disabled={fase5Busy}
+                                                                                className="text-xs font-medium text-emerald-600 hover:text-emerald-800 disabled:opacity-50"
+                                                                            >
+                                                                                Aceitar Cura
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={async () => { setFase5Busy(true); try { await contractPenaltyService.apply(p.id); await loadContractData(); } finally { setFase5Busy(false); } }}
+                                                                                disabled={fase5Busy}
+                                                                                className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+                                                                            >
+                                                                                Aplicar
+                                                                            </button>
+                                                                        </>
+                                                                    )}
+                                                                    {(p.status === 'NOTIFICADA' || p.status === 'CANCELADA') && (
                                                                         <button
-                                                                            onClick={async () => { setFase5Busy(true); try { await contractPenaltyService.cure(p.id); await loadContractData(); } finally { setFase5Busy(false); } }}
+                                                                            onClick={() => askConfirm(
+                                                                                `Excluir a penalidade "${PENALTY_KIND_LABELS[p.kind]}" de R$ ${fmt(p.amount)}? Esta ação não pode ser desfeita.`,
+                                                                                async () => {
+                                                                                    setFase5Busy(true);
+                                                                                    try { await contractPenaltyService.remove(p.id); await loadContractData(); }
+                                                                                    finally { setFase5Busy(false); }
+                                                                                }
+                                                                            )}
                                                                             disabled={fase5Busy}
-                                                                            className="text-xs font-medium text-emerald-600 hover:text-emerald-800 disabled:opacity-50"
+                                                                            className="text-xs font-medium text-gray-400 hover:text-red-600 disabled:opacity-50"
                                                                         >
-                                                                            Aceitar Cura
+                                                                            Excluir
                                                                         </button>
-                                                                        <button
-                                                                            onClick={async () => { setFase5Busy(true); try { await contractPenaltyService.apply(p.id); await loadContractData(); } finally { setFase5Busy(false); } }}
-                                                                            disabled={fase5Busy}
-                                                                            className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
-                                                                        >
-                                                                            Aplicar
-                                                                        </button>
-                                                                    </div>
-                                                                )}
+                                                                    )}
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     );
@@ -2529,6 +2719,36 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     contract={contract}
                     ledger={retentionLedger}
                     onSuccess={loadContractData}
+                />
+            )}
+
+            {contract && (
+                <ContractRiskModal
+                    isOpen={riskModal}
+                    onClose={() => setRiskModal(false)}
+                    contract={contract}
+                    onSuccess={loadContractData}
+                    initialData={riskAssessment}
+                />
+            )}
+
+            {contract && (
+                <ContractLaborQuestionnaireModal
+                    isOpen={laborModal}
+                    onClose={() => setLaborModal(false)}
+                    contract={contract}
+                    onSuccess={loadContractData}
+                    initialData={laborQuestionnaire}
+                />
+            )}
+
+            {contract && (
+                <ContractDocumentRequirementModal
+                    isOpen={docReqModal.open}
+                    onClose={() => setDocReqModal({ open: false, editing: null })}
+                    contract={contract}
+                    onSuccess={loadContractData}
+                    initialData={docReqModal.editing}
                 />
             )}
 

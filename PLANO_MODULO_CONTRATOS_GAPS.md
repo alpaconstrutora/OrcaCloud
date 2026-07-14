@@ -37,16 +37,20 @@
 
 # ROADMAP — 4 fases
 
-| Fase | Nome | Lacunas cobertas | Valor | Dependência |
+| Fase | Nome | Lacunas cobertas | Valor | Status |
 |---|---|---|---|---|
-| **5** | Blindagem Jurídico-Financeira | Seguros, Garantias, Retenção faseada, Penalidades, Limite de responsabilidade, CNO | 🔴 Alto (risco legal) | Nenhuma — adições puras |
-| **6** | Governança da Contratação | Risco R1/R2/R3, Questionário trabalhista, Ordem de Início, Pré-mobilização, Matriz documental/condicionantes, Subcontratação | 🟠 Alto (compliance) | Reusa Governança/Aprovação |
-| **7** | Ciclo de Vida & Encerramento | Recebimento provisório/definitivo, Dossiê, ART/RRT, Avaliação de desempenho | 🟡 Médio | Fase 5 (retenção) |
-| **8** | Detalhamento Técnico & SST | Matriz de fornecimento/interfaces, SST condicionante, Biblioteca de cláusulas, Fiscal parametrizado | 🟢 Médio/baixo | Fases 5–7 |
+| **5** | Blindagem Jurídico-Financeira | Seguros, Garantias, Retenção faseada, Penalidades, Limite de responsabilidade, CNO | 🔴 Alto (risco legal) | ✅ **IMPLEMENTADA** (migrations `20270130000010-13`) |
+| **6** | Governança da Contratação | Risco R1/R2/R3, Questionário trabalhista, Ordem de Início, Pré-mobilização, Matriz documental/condicionantes | 🟠 Alto (compliance) | ✅ **IMPLEMENTADA** (migrations `20270201000010-13`) |
+| **7** | Ciclo de Vida & Encerramento | Recebimento provisório/definitivo, Dossiê, ART/RRT, Avaliação de desempenho | 🟡 Médio | Não iniciada |
+| **8** | Detalhamento Técnico & SST | Matriz de fornecimento/interfaces, SST condicionante, Biblioteca de cláusulas, Fiscal parametrizado | 🟢 Médio/baixo | Não iniciada |
+
+> Subcontratação (Cl.7, CP-03) ficou fora do escopo da Fase 6 — só o campo
+> `subcontracting_rule` foi criado (migration `20270201000012`); regra de
+> aplicação/validação ainda não tem UI.
 
 ---
 
-## FASE 5 — Blindagem Jurídico-Financeira
+## FASE 5 — Blindagem Jurídico-Financeira ✅ IMPLEMENTADA
 
 **Objetivo:** fechar as lacunas de maior risco legal (seguros, garantias, multas,
 limite de responsabilidade) e a liberação de retenção por fase. Tudo são adições
@@ -159,10 +163,17 @@ alter table contracts
 
 ---
 
-## FASE 6 — Governança da Contratação
+## FASE 6 — Governança da Contratação ✅ IMPLEMENTADA
 
 **Objetivo:** trazer o fluxo do Manual (§3, §4, §8, §11, §14) para dentro do
 sistema como **gates** que condicionam a mobilização. Reusa Governança e Aprovação.
+
+> Implementada e testada (jul/2026). Migrations reais: `20270201000010_fase6_contract_risk_assessments.sql`,
+> `20270201000011_fase6_labor_risk_questionnaire.sql`, `20270201000012_fase6_mobilization.sql`,
+> `20270201000013_fase6_document_requirements.sql` (os nomes de arquivo abaixo são do rascunho original
+> e não refletem os nomes finais). UI: `ContractRiskModal`, `ContractLaborQuestionnaireModal`,
+> `ContractDocumentRequirementModal` + 4 cards no `ContractDetailView` (Classificação de Risco,
+> Risco Trabalhista, Pré-mobilização, Matriz Documental).
 
 ### 6.1 — Classificação de Risco R1/R2/R3 (Manual §3)
 

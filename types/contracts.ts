@@ -119,6 +119,10 @@ export interface Contract {
     obra_registration?: string;
     manager_name?: string;
     inspector_name?: string;
+    // Fase 6 — Ordem de Início e subcontratação (Cl.4, CP-03)
+    start_order_issued_at?: string;
+    start_order_authorized_by?: string;
+    subcontracting_rule?: SubcontractingRule;
     created_at?: string;
 }
 
@@ -285,4 +289,94 @@ export interface ContractRetentionLedger {
     total_released: number;
     balance: number;
     retention_cap?: number;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Fase 6 — Governança da Contratação
+// PLANO_MODULO_CONTRATOS_GAPS.md
+// ─────────────────────────────────────────────────────────────
+
+export type ContractRiskLevel = 'R1' | 'R2' | 'R3';
+
+export interface ContractRiskAssessment {
+    id: string;
+    organization_id: string;
+    contract_id: string;
+    factor_canteiro: 0 | 1 | 2;
+    factor_equipe: 0 | 1 | 2;
+    factor_sst: 0 | 1 | 2;
+    factor_valor: 0 | 1 | 2;
+    factor_tecnica: 0 | 1 | 2;
+    factor_dados: 0 | 1 | 2;
+    factor_continuidade: 0 | 1 | 2;
+    factor_pf: 0 | 1 | 2;
+    score: number;
+    level: ContractRiskLevel;
+    assessed_by?: string;
+    assessed_at?: string;
+    notes?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface ContractLaborQuestionnaire {
+    id: string;
+    organization_id: string;
+    contract_id: string;
+    q_horario: boolean;
+    q_ordens: boolean;
+    q_pessoalidade: boolean;
+    q_salario_fixo: boolean;
+    q_permanente: boolean;
+    q_exclusividade: boolean;
+    q_cargo_email: boolean;
+    q_ferias: boolean;
+    alert_count: number;
+    legal_opinion_url?: string;
+    answered_by?: string;
+    answered_at?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export type SubcontractingRule = 'PROIBIDA' | 'AUTORIZACAO_PREVIA' | 'LISTA';
+
+export interface ContractPrecedentCondition {
+    id: string;
+    organization_id: string;
+    contract_id: string;
+    item: string;
+    responsible?: string;
+    required: boolean;
+    satisfied: boolean;
+    satisfied_at?: string;
+    evidence_url?: string;
+    notes?: string;
+    sort_order: number;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export type DocumentRequirementPhase = 'ANTES_INICIO' | 'MENSAL' | 'ENCERRAMENTO';
+
+export interface ContractDocumentRequirement {
+    id: string;
+    organization_id: string;
+    contract_id: string;
+    document: string;
+    phase: DocumentRequirementPhase;
+    applicable: boolean;
+    last_valid_until?: string;
+    document_url?: string;
+    blocks_payment: boolean;
+    notes?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface ContractDocumentGateItem {
+    document: string;
+    phase: DocumentRequirementPhase;
+    last_valid_until?: string;
+    is_expired: boolean;
 }

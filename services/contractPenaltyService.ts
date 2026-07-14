@@ -84,4 +84,17 @@ export const contractPenaltyService = {
         if (error) throw error;
         return data;
     },
+
+    /**
+     * Exclui um registro de penalidade. Restrito a NOTIFICADA/CANCELADA —
+     * uma penalidade APLICADA preserva a trilha de auditoria (Manual §5.4).
+     */
+    remove: async (id: string): Promise<void> => {
+        const { error } = await supabase
+            .from('contract_penalties')
+            .delete()
+            .eq('id', id)
+            .in('status', ['NOTIFICADA', 'CANCELADA']);
+        if (error) throw error;
+    },
 };

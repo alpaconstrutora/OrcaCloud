@@ -12,7 +12,11 @@ import {
     ContractMeasurementItem,
     ContractUtilityBill,
     ContractRetentionLedger,
-    ContractRetentionRelease
+    ContractRetentionRelease,
+    ContractPrecedentCondition,
+    ContractDocumentRequirement,
+    ContractDocumentGateItem,
+    DocumentRequirementPhase
 } from '../types';
 
 // Resolve supplier name from DB (returns fallback string on error)
@@ -748,7 +752,7 @@ export const contractService = {
     getContractById: async (id: string): Promise<Contract | null> => {
         const { data, error } = await supabase
             .from('contracts')
-            .select('id, organization_id, project_id, budget_id, budget_snapshot, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, billing_mode, release_requirements, minuta_versions, created_at')
+            .select('id, organization_id, project_id, budget_id, budget_snapshot, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, billing_mode, release_requirements, minuta_versions, retention_cap, retention_release_provisional, retention_release_definitive, retention_definitive_days, liability_cap, penalty_daily_rate, penalty_moratoria_cap, penalty_material_rate, cno, obra_registration, manager_name, inspector_name, start_order_issued_at, start_order_authorized_by, subcontracting_rule, created_at')
             .eq('id', id)
             .maybeSingle();
 
@@ -1818,5 +1822,117 @@ export const contractService = {
             .single();
         if (error) throw error;
         return data;
+    },
+
+    // ─────────────────────────────────────────────────────────
+    // Fase 6.3 — Pré-mobilização & Ordem de Início (Cl.4, Manual §11)
+    // PLANO_MODULO_CONTRATOS_GAPS.md
+    // ─────────────────────────────────────────────────────────
+
+    listPrecedentConditions: async (contractId: string): Promise<ContractPrecedentCondition[]> => {
+        const { data, error } = await supabase
+            .from('contract_precedent_conditions')
+            .select('*')
+            .eq('contract_id', contractId)
+            .order('sort_order', { ascending: true });
+        if (error) throw error;
+        return data ?? [];
+    },
+
+    togglePrecedentCondition: async (id: string, satisfied: boolean): Promise<ContractPrecedentCondition> => {
+        const { data, error } = await supabase
+            .from('contract_precedent_conditions')
+            .update({ satisfied, satisfied_at: satisfied ? new Date().toISOString() : null })
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) throw error;
+        return data;
+    },
+
+    /**
+     * Emite a Ordem de Início — só permite se todas as condições precedentes
+     * obrigatórias estiverem satisfeitas (Manual §11) e, para contratação de
+     * mão de obra/PF, se o questionário trabalhista não estiver com 2+
+     * alertas sem parecer jurídico anexado (Manual §8).
+     */
+    issueStartOrder: async (contractId: string, authorizedBy: string): Promise<Contract> => {
+        const { data: conditions, error: condErr } = await supabase
+            .from('contract_precedent_conditions')
+            .select('item, required, satisfied')
+            .eq('contract_id', contractId);
+        if (condErr) throw condErr;
+        const pending = (conditions ?? []).filter(c => c.required && !c.satisfied);
+        if (pending.length > 0) {
+            throw new Error(`Condições precedentes pendentes: ${pending.map(c => c.item).join(', ')}.`);
+        }
+
+        const { data: contract, error: contractErr } = await supabase
+            .from('contracts')
+            .select('nature')
+            .eq('id', contractId)
+            .single();
+        if (contractErr) throw contractErr;
+
+        if (contract.nature === 'Mão de Obra') {
+            const { data: questionnaire } = await supabase
+                .from('contract_labor_questionnaires')
+                .select('alert_count, legal_opinion_url')
+                .eq('contract_id', contractId)
+                .maybeSingle();
+            if (questionnaire && questionnaire.alert_count >= 2 && !questionnaire.legal_opinion_url) {
+                throw new Error('Questionário de Risco Trabalhista com 2+ alertas exige parecer jurídico anexado antes da Ordem de Início (Manual §8).');
+            }
+        }
+
+        const { data, error } = await supabase
+            .from('contracts')
+            .update({
+                start_order_issued_at: new Date().toISOString().split('T')[0],
+                start_order_authorized_by: authorizedBy,
+                status: 'Ativo',
+            })
+            .eq('id', contractId)
+            .select()
+            .single();
+        if (error) throw error;
+        return data as Contract;
+    },
+
+    // ─────────────────────────────────────────────────────────
+    // Fase 6.4 — Matriz Documental & Condicionantes (Anexo V, Manual §14)
+    // PLANO_MODULO_CONTRATOS_GAPS.md
+    // ─────────────────────────────────────────────────────────
+
+    listDocumentRequirements: async (contractId: string): Promise<ContractDocumentRequirement[]> => {
+        const { data, error } = await supabase
+            .from('contract_document_requirements')
+            .select('*')
+            .eq('contract_id', contractId)
+            .order('phase', { ascending: true });
+        if (error) throw error;
+        return data ?? [];
+    },
+
+    saveDocumentRequirement: async (payload: Partial<ContractDocumentRequirement> & { organization_id: string; contract_id: string; document: string; phase: DocumentRequirementPhase }): Promise<ContractDocumentRequirement> => {
+        const { id, ...rest } = payload;
+        const query = id
+            ? supabase.from('contract_document_requirements').update(rest).eq('id', id)
+            : supabase.from('contract_document_requirements').insert(rest);
+        const { data, error } = await query.select().single();
+        if (error) throw error;
+        return data;
+    },
+
+    removeDocumentRequirement: async (id: string): Promise<void> => {
+        const { error } = await supabase.from('contract_document_requirements').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    /** Documentos MENSAL vencidos que bloqueiam a próxima medição (gate de pagamento) */
+    getDocumentGate: async (contractId: string): Promise<ContractDocumentGateItem[]> => {
+        const { data, error } = await supabase.rpc('fn_contract_document_gate', { p_contract_id: contractId });
+        if (error) throw error;
+        return data ?? [];
     },
 };

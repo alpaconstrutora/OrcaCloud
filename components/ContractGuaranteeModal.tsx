@@ -1,7 +1,8 @@
 import React from 'react';
-import { Save, Loader2 } from 'lucide-react';
+import { Save, Loader2, Trash2 } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
 import { Contract, ContractGuarantee, GuaranteeKind, GuaranteeStatus } from '../types';
 import { contractGuaranteeService } from '../services/contractGuaranteeService';
 
@@ -75,6 +76,29 @@ const ContractGuaranteeModal: React.FC<ContractGuaranteeModalProps> = ({ isOpen,
             setError(err instanceof Error ? err.message : 'Erro ao salvar garantia.');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const confirm = useConfirm();
+    const [deleting, setDeleting] = React.useState(false);
+    const handleDelete = async () => {
+        if (!initialData) return;
+        const ok = await confirm({
+            title: 'Excluir seguro/garantia?',
+            message: `${KIND_LABELS[initialData.kind]} — ${initialData.insurer || 'sem seguradora'}. Esta ação não pode ser desfeita.`,
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        setDeleting(true);
+        try {
+            await contractGuaranteeService.remove(initialData.id);
+            onSuccess();
+            onClose();
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Erro ao excluir garantia.');
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -152,8 +176,14 @@ const ContractGuaranteeModal: React.FC<ContractGuaranteeModalProps> = ({ isOpen,
                 </div>
             </SheetPanel>
             <SheetFooter>
+                {initialData && (
+                    <Button variant="ghost" onClick={handleDelete} disabled={deleting || saving} className="mr-auto text-red-600 hover:bg-red-50 hover:text-red-700">
+                        {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        Excluir
+                    </Button>
+                )}
                 <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-                <Button variant="primary" onClick={handleSave} disabled={saving}>
+                <Button variant="primary" onClick={handleSave} disabled={saving || deleting}>
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     {initialData ? 'Salvar' : 'Cadastrar'}
                 </Button>

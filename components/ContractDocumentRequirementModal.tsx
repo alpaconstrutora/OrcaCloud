@@ -25,6 +25,8 @@ const ContractDocumentRequirementModal: React.FC<ContractDocumentRequirementModa
     const [phase, setPhase] = React.useState<DocumentRequirementPhase>(initialData?.phase || 'MENSAL');
     const [lastValidUntil, setLastValidUntil] = React.useState(initialData?.last_valid_until || '');
     const [blocksPayment, setBlocksPayment] = React.useState(initialData?.blocks_payment ?? true);
+    const [isSstCritical, setIsSstCritical] = React.useState(initialData?.is_sst_critical ?? false);
+    const [communicationDeadlineHours, setCommunicationDeadlineHours] = React.useState<string>(initialData?.communication_deadline_hours?.toString() || '');
     const [saving, setSaving] = React.useState(false);
     const [deleting, setDeleting] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
@@ -36,6 +38,8 @@ const ContractDocumentRequirementModal: React.FC<ContractDocumentRequirementModa
         setPhase(initialData?.phase || 'MENSAL');
         setLastValidUntil(initialData?.last_valid_until || '');
         setBlocksPayment(initialData?.blocks_payment ?? true);
+        setIsSstCritical(initialData?.is_sst_critical ?? false);
+        setCommunicationDeadlineHours(initialData?.communication_deadline_hours?.toString() || '');
         setError(null);
     }, [isOpen, initialData]);
 
@@ -52,6 +56,8 @@ const ContractDocumentRequirementModal: React.FC<ContractDocumentRequirementModa
                 phase,
                 last_valid_until: lastValidUntil || undefined,
                 blocks_payment: blocksPayment,
+                is_sst_critical: isSstCritical,
+                communication_deadline_hours: communicationDeadlineHours ? parseInt(communicationDeadlineHours, 10) : undefined,
             });
             onSuccess();
             onClose();
@@ -111,6 +117,17 @@ const ContractDocumentRequirementModal: React.FC<ContractDocumentRequirementModa
                     <input type="checkbox" checked={blocksPayment} onChange={e => setBlocksPayment(e.target.checked)} className="w-4 h-4" />
                     <span className="text-sm text-gray-700">Bloqueia pagamento quando vencido</span>
                 </label>
+                <label className="flex items-center gap-3 p-3 bg-amber-50 rounded-2xl cursor-pointer">
+                    <input type="checkbox" checked={isSstCritical} onChange={e => setIsSstCritical(e.target.checked)} className="w-4 h-4" />
+                    <span className="text-sm text-gray-700">Documento crítico de SST (Anexo VI, Manual §16)</span>
+                </label>
+                {isSstCritical && (
+                    <div className="space-y-2">
+                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Prazo de Comunicação (horas)</label>
+                        <input type="number" min="0" placeholder="Ex: 24" value={communicationDeadlineHours} onChange={e => setCommunicationDeadlineHours(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                    </div>
+                )}
             </SheetPanel>
             <SheetFooter>
                 {initialData && (

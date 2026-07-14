@@ -123,6 +123,8 @@ export interface Contract {
     start_order_issued_at?: string;
     start_order_authorized_by?: string;
     subcontracting_rule?: SubcontractingRule;
+    // Fase 8 — Fiscal parametrizado por documento (Cl.17.2)
+    fiscal_classification?: string;
     created_at?: string;
 }
 
@@ -369,6 +371,8 @@ export interface ContractDocumentRequirement {
     last_valid_until?: string;
     document_url?: string;
     blocks_payment: boolean;
+    is_sst_critical?: boolean;
+    communication_deadline_hours?: number;
     notes?: string;
     created_at?: string;
     updated_at?: string;
@@ -462,4 +466,39 @@ export interface SupplierPerformance {
     average_weighted: number | null;
     has_critical: boolean;
     should_block: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Fase 8 — Detalhamento Técnico & SST
+// PLANO_MODULO_CONTRATOS_GAPS.md
+// ─────────────────────────────────────────────────────────────
+
+export interface ContractSupplyMatrixItem {
+    id: string;
+    organization_id: string;
+    contract_id: string;
+    item: string;
+    supplies?: string;
+    transports?: string;
+    stores?: string;
+    installs?: string;
+    admissible_loss?: string;
+    notes?: string;
+    sort_order: number;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface ContractInterface {
+    id: string;
+    organization_id: string;
+    contract_id: string;
+    interface_event: string;
+    primary_responsible?: string;
+    support?: string;
+    deadline_trigger?: string;
+    evidence?: string;
+    sort_order: number;
+    created_at?: string;
+    updated_at?: string;
 }

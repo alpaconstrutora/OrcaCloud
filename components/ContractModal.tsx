@@ -1334,6 +1334,16 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         </select>
                                     </div>
                                 </div>
+                                <div className="space-y-2">
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Classificação Fiscal (Opcional)</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Enquadramento indicado ao módulo Fiscal (ex: cessão de mão de obra)"
+                                        value={formData.fiscal_classification || ''}
+                                        onChange={(e) => setFormData({ ...formData, fiscal_classification: e.target.value })}
+                                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
                             </div>
                         </div>
 

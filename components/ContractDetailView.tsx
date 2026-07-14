@@ -16,7 +16,7 @@ import {
     ContractGuarantee, ContractPenalty, ContractRetentionLedger, ContractRetentionRelease, GuaranteeKind, PenaltyKind,
     ContractRiskAssessment, ContractLaborQuestionnaire, ContractPrecedentCondition, ContractDocumentRequirement,
     DocumentRequirementPhase, ContractAcceptance, ContractTechnicalResponsibility, ContractEvaluation,
-    AcceptanceKind, ArtType
+    AcceptanceKind, ArtType, ContractSupplyMatrixItem, ContractInterface
 } from '../types';
 import { contractService } from '../services/contractService';
 import { contractIndexService, IndexName } from '../services/contractIndexService';
@@ -27,6 +27,7 @@ import { contractLaborQuestionnaireService, LABOR_ALERT_THRESHOLD } from '../ser
 import { contractAcceptanceService } from '../services/contractAcceptanceService';
 import { contractTechnicalResponsibilityService } from '../services/contractTechnicalResponsibilityService';
 import { contractEvaluationService } from '../services/contractEvaluationService';
+import { contractSupplyMatrixService } from '../services/contractSupplyMatrixService';
 import ContractGuaranteeModal from './ContractGuaranteeModal';
 import ContractPenaltyModal from './ContractPenaltyModal';
 import ContractRetentionReleaseModal from './ContractRetentionReleaseModal';
@@ -36,6 +37,8 @@ import ContractDocumentRequirementModal from './ContractDocumentRequirementModal
 import ContractAcceptanceModal from './ContractAcceptanceModal';
 import ContractTechnicalResponsibilityModal from './ContractTechnicalResponsibilityModal';
 import ContractEvaluationModal from './ContractEvaluationModal';
+import ContractSupplyMatrixModal from './ContractSupplyMatrixModal';
+import ContractInterfaceModal from './ContractInterfaceModal';
 
 const GUARANTEE_KIND_LABELS: Record<GuaranteeKind, string> = {
     RC_GERAL: 'RC Geral',
@@ -179,6 +182,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [technicalModal, setTechnicalModal] = React.useState<{ open: boolean; editing: ContractTechnicalResponsibility | null }>({ open: false, editing: null });
     const [evaluationModal, setEvaluationModal] = React.useState(false);
 
+    // Fase 8 — Detalhamento Técnico & SST (PLANO_MODULO_CONTRATOS_GAPS.md)
+    const [supplyMatrixItems, setSupplyMatrixItems] = React.useState<ContractSupplyMatrixItem[]>([]);
+    const [contractInterfaces, setContractInterfaces] = React.useState<ContractInterface[]>([]);
+    const [supplyMatrixModal, setSupplyMatrixModal] = React.useState<{ open: boolean; editing: ContractSupplyMatrixItem | null }>({ open: false, editing: null });
+    const [interfaceModal, setInterfaceModal] = React.useState<{ open: boolean; editing: ContractInterface | null }>({ open: false, editing: null });
+
     const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 4500);
@@ -297,7 +306,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const loadContractData = async () => {
         try {
             setLoading(true);
-            const [c, i, a, m, u, g, pen, ledger, releases, risk, labor, precedent, docReqs, acc, tech, evals] = await Promise.all([
+            const [c, i, a, m, u, g, pen, ledger, releases, risk, labor, precedent, docReqs, acc, tech, evals, supplyItems, ifaces] = await Promise.all([
                 contractService.getContractById(contractId),
                 contractService.listContractItems(contractId),
                 contractService.listAddendums(contractId),
@@ -313,7 +322,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 contractService.listDocumentRequirements(contractId),
                 contractAcceptanceService.list(contractId),
                 contractTechnicalResponsibilityService.list(contractId),
-                contractEvaluationService.list(contractId)
+                contractEvaluationService.list(contractId),
+                contractSupplyMatrixService.listItems(contractId),
+                contractSupplyMatrixService.listInterfaces(contractId)
             ]);
             setContract(c);
             setItems(i);
@@ -331,6 +342,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             setAcceptances(acc);
             setTechnicalResponsibilities(tech);
             setEvaluations(evals);
+            setSupplyMatrixItems(supplyItems);
+            setContractInterfaces(ifaces);
 
             if (c) {
                 setLoadingFinancialEntries(true);
@@ -1422,7 +1435,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                     onClick={() => setDocReqModal({ open: true, editing: doc })}
                                                     className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors"
                                                 >
-                                                    <span className="text-sm text-gray-700">{doc.document}</span>
+                                                    <span className="text-sm text-gray-700 flex items-center gap-2">
+                                                        {doc.document}
+                                                        {doc.is_sst_critical && <span className="text-xs text-amber-600">SST</span>}
+                                                    </span>
                                                     <span className="flex items-center gap-3">
                                                         <span className="text-xs text-gray-400">{DOC_PHASE_LABELS[doc.phase]}</span>
                                                         <span className={`text-sm font-normal ${expired ? 'text-red-600' : 'text-emerald-600'}`}>{expired ? 'Vencido' : 'Em dia'}</span>
@@ -2140,6 +2156,75 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             </table>
                         </div>
                     </div>
+
+                    {/* Matriz de Fornecimento (Fase 8.1 — Anexo II, Cl.11) */}
+                    {contract && (
+                        <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-xs font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                    <Package className="w-4 h-4 text-blue-600" /> Matriz de Fornecimento
+                                </h3>
+                                <button type="button" onClick={() => setSupplyMatrixModal({ open: true, editing: null })} className="text-xs font-medium text-blue-600 hover:text-blue-800">
+                                    + Adicionar
+                                </button>
+                            </div>
+                            {supplyMatrixItems.length === 0 ? (
+                                <p className="text-xs text-gray-400">Nenhum item cadastrado (Anexo II).</p>
+                            ) : (
+                                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead className="bg-gray-50 border-b border-gray-100">
+                                            <tr>
+                                                <th className="px-4 py-2.5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Item</th>
+                                                <th className="px-4 py-2.5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Fornece</th>
+                                                <th className="px-4 py-2.5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Transporta</th>
+                                                <th className="px-4 py-2.5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Guarda</th>
+                                                <th className="px-4 py-2.5 text-table-header font-medium text-gray-400 uppercase tracking-widest">Instala</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-50">
+                                            {supplyMatrixItems.map(row => (
+                                                <tr key={row.id} className="hover:bg-blue-50/20 cursor-pointer transition-all" onClick={() => setSupplyMatrixModal({ open: true, editing: row })}>
+                                                    <td className="px-4 py-2.5 text-sm text-gray-700">{row.item}</td>
+                                                    <td className="px-4 py-2.5 text-sm text-gray-500">{row.supplies || '—'}</td>
+                                                    <td className="px-4 py-2.5 text-sm text-gray-500">{row.transports || '—'}</td>
+                                                    <td className="px-4 py-2.5 text-sm text-gray-500">{row.stores || '—'}</td>
+                                                    <td className="px-4 py-2.5 text-sm text-gray-500">{row.installs || '—'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Matriz de Interfaces (Fase 8.1 — Anexo I) */}
+                    {contract && (
+                        <div className="bg-white p-5 rounded-[32px] border border-gray-100 shadow-sm space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-xs font-medium text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                    <ArrowUpRight className="w-4 h-4 text-blue-600" /> Matriz de Interfaces
+                                </h3>
+                                <button type="button" onClick={() => setInterfaceModal({ open: true, editing: null })} className="text-xs font-medium text-blue-600 hover:text-blue-800">
+                                    + Adicionar
+                                </button>
+                            </div>
+                            {contractInterfaces.length === 0 ? (
+                                <p className="text-xs text-gray-400">Nenhuma interface cadastrada (Anexo I).</p>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    {contractInterfaces.map(row => (
+                                        <button key={row.id} type="button" onClick={() => setInterfaceModal({ open: true, editing: row })}
+                                            className="w-full text-left flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">
+                                            <span className="text-sm text-gray-700">{row.interface_event}</span>
+                                            <span className="text-xs text-gray-400">{row.primary_responsible || '—'}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -2904,6 +2989,26 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     contract={contract}
                     supplierId={contract.supplier_id}
                     onSuccess={loadContractData}
+                />
+            )}
+
+            {contract && (
+                <ContractSupplyMatrixModal
+                    isOpen={supplyMatrixModal.open}
+                    onClose={() => setSupplyMatrixModal({ open: false, editing: null })}
+                    contract={contract}
+                    onSuccess={loadContractData}
+                    initialData={supplyMatrixModal.editing}
+                />
+            )}
+
+            {contract && (
+                <ContractInterfaceModal
+                    isOpen={interfaceModal.open}
+                    onClose={() => setInterfaceModal({ open: false, editing: null })}
+                    contract={contract}
+                    onSuccess={loadContractData}
+                    initialData={interfaceModal.editing}
                 />
             )}
 

@@ -42,7 +42,7 @@
 | **5** | Blindagem Jurídico-Financeira | Seguros, Garantias, Retenção faseada, Penalidades, Limite de responsabilidade, CNO | 🔴 Alto (risco legal) | ✅ **IMPLEMENTADA** (migrations `20270130000010-13`) |
 | **6** | Governança da Contratação | Risco R1/R2/R3, Questionário trabalhista, Ordem de Início, Pré-mobilização, Matriz documental/condicionantes | 🟠 Alto (compliance) | ✅ **IMPLEMENTADA** (migrations `20270201000010-13`) |
 | **7** | Ciclo de Vida & Encerramento | Recebimento provisório/definitivo, Dossiê, ART/RRT, Avaliação de desempenho | 🟡 Médio | ✅ **IMPLEMENTADA** (migrations `20270202000010-12`) |
-| **8** | Detalhamento Técnico & SST | Matriz de fornecimento/interfaces, SST condicionante, Biblioteca de cláusulas, Fiscal parametrizado | 🟢 Médio/baixo | Não iniciada |
+| **8** | Detalhamento Técnico & SST | Matriz de fornecimento/interfaces, SST condicionante, Biblioteca de cláusulas, Fiscal parametrizado | 🟢 Médio/baixo | ✅ **IMPLEMENTADA** (migrations `20270203000010-11`) |
 
 > Fase 7 não incluiu geração de dossiê consolidado (as-built/manuais/ART/garantias/medições
 > num pacote único) — ficou só o registro dos termos e das ARTs individualmente.
@@ -367,10 +367,17 @@ create table contract_evaluations (
 
 ---
 
-## FASE 8 — Detalhamento Técnico & SST
+## FASE 8 — Detalhamento Técnico & SST ✅ IMPLEMENTADA
 
 **Objetivo:** granularidade técnica (matriz de fornecimento/interfaces), SST como
 condicionante e a biblioteca de cláusulas para o Template. Menor risco, mais volume.
+
+> Implementada e testada (jul/2026). Migrations reais: `20270203000010_fase8_supply_matrix.sql`
+> (contract_supply_matrix + contract_interfaces) e `20270203000011_fase8_sst_and_fiscal.sql`
+> (is_sst_critical/communication_deadline_hours em contract_document_requirements +
+> fiscal_classification em contracts). 8.3 (biblioteca de cláusulas) ficou reduzida a um
+> enriquecimento do `buildVariableMap()` com campos das Fases 5-7 (limite de responsabilidade,
+> multa moratória, garantia, CNO) — não criou um editor de biblioteca de cláusulas dedicado.
 
 ### 8.1 — Matriz de Fornecimento & Interfaces (Anexos I/II, Cl.11)
 

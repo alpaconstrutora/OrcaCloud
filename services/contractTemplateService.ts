@@ -32,6 +32,11 @@ export const TEMPLATE_VARIABLES: { key: string; label: string }[] = [
     { key: 'RETENCAO_PCT',    label: 'Retenção (%)' },
     { key: 'CENTRO_CUSTO',    label: 'Centro de custo' },
     { key: 'DATA_HOJE',       label: 'Data de hoje' },
+    // Fase 8.3 — enriquecimento com campos das Fases 5-7 (seguros/penalidades/RT)
+    { key: 'LIMITE_RESPONSABILIDADE', label: 'Limite de responsabilidade (R$)' },
+    { key: 'MULTA_MORATORIA_TAXA',    label: 'Multa moratória (% ao dia)' },
+    { key: 'GARANTIA_MESES',          label: 'Garantia contratual (meses)' },
+    { key: 'CNO',                     label: 'CNO / matrícula da obra' },
 ];
 
 /** Substitui variáveis {{CHAVE}} pelo valor correspondente do contrato */
@@ -44,6 +49,7 @@ export function buildVariableMap(contract: {
     number: string; title: string; start_date: string; end_date?: string;
     original_value: number; contract_type?: string; nature?: string;
     reajuste_index?: string; retention_rate: number;
+    liability_cap?: number; penalty_daily_rate?: number; warranty_months?: number; cno?: string;
 }, supplierName?: string, projectName?: string): Record<string, string> {
     const fmt = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR');
@@ -66,6 +72,10 @@ export function buildVariableMap(contract: {
         RETENCAO_PCT:    contract.retention_rate.toString(),
         CENTRO_CUSTO:    '',
         DATA_HOJE:       new Date().toLocaleDateString('pt-BR'),
+        LIMITE_RESPONSABILIDADE: contract.liability_cap != null ? fmt(contract.liability_cap) : '',
+        MULTA_MORATORIA_TAXA:    contract.penalty_daily_rate != null ? `${contract.penalty_daily_rate}%` : '',
+        GARANTIA_MESES:          contract.warranty_months != null ? contract.warranty_months.toString() : '',
+        CNO:                     contract.cno ?? '',
     };
 }
 

@@ -2603,7 +2603,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   >
                     <option value="">Selecione uma organização...</option>
                     {companies.map(c => (
-                      <option key={c.id} value={c.id}>{c.nome}</option>
+                      <option key={c.id} value={c.id}>{c.nome_fantasia || c.razao_social}</option>
                     ))}
                   </select>
                 </div>

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Building2, Check, ChevronDown, ChevronUp,
     Clock, ExternalLink, FileText, Landmark, Loader2, RefreshCw,
-    Search, TrendingDown, X, DollarSign, AlertTriangle,
+    Search, X, DollarSign, AlertTriangle,
 } from 'lucide-react';
 import { invoiceService } from '../services/invoiceService';
 import { Invoice } from '../types/financial';
@@ -227,6 +227,18 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
             return next;
         });
     }
+    // Seleção de intervalo com Shift+clique (ui_ux_standard_guide.md §10.1)
+    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
+    function handleRowCheck(id: string, index: number, shiftKey: boolean) {
+        if (shiftKey && lastCheckedIndex !== null) {
+            const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
+            const rangeIds = filtered.slice(start, end + 1).filter(isSelectable).map(inv => inv.id);
+            setSelectedIds(prev => new Set([...prev, ...rangeIds]));
+        } else {
+            toggleRow(id);
+            setLastCheckedIndex(index);
+        }
+    }
     function toggleAllVisible() {
         setSelectedIds(prev => {
             if (allVisibleSelected) {
@@ -298,55 +310,15 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     }, [invoices]);
 
     return (
-        <div className="h-full flex flex-col bg-gray-50">
-            {/* Header */}
-            <div className="bg-white border-b border-gray-200 px-6 py-4">
-                <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-red-600 flex items-center justify-center">
-                            <TrendingDown className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-lg font-bold text-gray-900">Contas a Pagar</h1>
-                            <p className="text-xs text-gray-500">Invoices e boletos aprovados</p>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        {/* Org selector */}
-                        {organizations && organizations.length > 1 && (
-                            <div className="relative flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm">
-                                <Building2 className="w-3.5 h-3.5 text-gray-400" />
-                                <select
-                                    value={selectedOrgId}
-                                    onChange={e => handleOrgChange(e.target.value)}
-                                    className="bg-transparent outline-none text-gray-700 font-medium pr-5 cursor-pointer"
-                                >
-                                    <option value="ALL">Todas as Organizações</option>
-                                    {organizations.map(o => (
-                                        <option key={o.id} value={o.id}>{o.name}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2" />
-                            </div>
-                        )}
-
-                        <button
-                            onClick={() => carregar(effectiveOrgId)}
-                            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500"
-                            title="Recarregar"
-                        >
-                            <RefreshCw className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
+        <div className="space-y-6">
+            {/* Cabeçalho de tela — ui_ux_standard_guide.md §20 */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Contas a Pagar</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Invoices e boletos aprovados para pagamento.</p>
             </div>
 
-            <div className="flex-1 overflow-auto">
-                <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
-
-                    {/* KPI Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <KpiCard
                             label="A Pagar"
                             value={formatMoney(summary.aPagar)}
@@ -381,16 +353,17 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                         />
                     </div>
 
-                    {/* Barra de busca e filtros */}
-                    <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-                        <div className="flex gap-3">
-                            <div className="flex-1 relative">
+                    {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — escolhida porque
+                        já há KPI cards acima dando contexto, mesmo critério de ClientList.tsx. */}
+                    <div className="flex flex-col gap-2.5">
+                        <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                            <div className="flex-1 relative w-full">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}
                                     placeholder="Buscar fornecedor, arquivo, observação..."
-                                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-red-400"
+                                    className="w-full h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none transition-all"
                                 />
                                 {search && (
                                     <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -399,13 +372,13 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 )}
                             </div>
 
-                            {/* Status pills */}
-                            <div className="flex gap-1.5">
+                            {/* Status pills — filtro rápido, não ordenação (§6.4) */}
+                            <div className="flex items-center h-9 gap-1.5">
                                 {(['all', 'pending', 'approved', 'overdue', 'paid'] as StatusFilter[]).map(s => (
                                     <button
                                         key={s}
                                         onClick={() => setStatusFilter(s)}
-                                        className={`px-3 py-1.5 rounded-lg text-form-input font-semibold transition-colors ${statusFilter === s ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                        className={`h-9 px-3 rounded-[6px] text-xs font-semibold transition-all whitespace-nowrap ${statusFilter === s ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                                     >
                                         {s === 'all' ? 'Todos' : s === 'overdue' ? 'Atrasado' : STATUS_PT[s]}
                                     </button>
@@ -414,89 +387,101 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
 
                             <button
                                 onClick={() => setShowFilters(v => !v)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-button font-semibold text-gray-600 hover:bg-gray-50"
+                                className="h-9 flex items-center gap-1.5 px-3 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-50 transition-all whitespace-nowrap"
                             >
                                 {showFilters ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                                Filtros
+                                Vencimento
                             </button>
-                            <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-                            <ColumnConfigButton
-                                columns={CONTAS_COLUMNS}
-                                visibleColumns={tableColumns.visibleColumns}
-                                showColumnConfig={tableColumns.showColumnConfig}
-                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                                onToggleColumn={tableColumns.toggleColumn}
-                                onReset={tableColumns.resetColumns}
-                            />
+
+                            <div className="flex items-center h-9">
+                                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                            </div>
+
+                            {/* Org selector — só quando há mais de uma organização */}
+                            {organizations && organizations.length > 1 && (
+                                <div className="relative flex items-center h-9">
+                                    <Building2 className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                    <select
+                                        value={selectedOrgId}
+                                        onChange={e => handleOrgChange(e.target.value)}
+                                        className="h-9 pl-9 pr-7 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 cursor-pointer transition-all appearance-none"
+                                    >
+                                        <option value="ALL">Todas as Organizações</option>
+                                        {organizations.map(o => (
+                                            <option key={o.id} value={o.id}>{o.name}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2" />
+                                </div>
+                            )}
+
+                            <button
+                                onClick={() => carregar(effectiveOrgId)}
+                                className="h-9 w-9 flex items-center justify-center bg-red-50 text-red-600 rounded-[6px] hover:bg-red-600 hover:text-white transition-all active:scale-95 shrink-0"
+                                title="Recarregar"
+                            >
+                                <RefreshCw className="w-4 h-4" />
+                            </button>
+
+                            {/* Separador entre grupo "filtrar" e grupo "visualizar" (§5.1) */}
+                            <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                            {/* Sem toggle grid/lista nesta tela — só ColumnConfigButton (ver §5, nota) */}
+                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                <ColumnConfigButton
+                                    columns={CONTAS_COLUMNS}
+                                    visibleColumns={tableColumns.visibleColumns}
+                                    showColumnConfig={tableColumns.showColumnConfig}
+                                    onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                    onToggleColumn={tableColumns.toggleColumn}
+                                    onReset={tableColumns.resetColumns}
+                                />
+                            </div>
                         </div>
 
                         {showFilters && (
-                            <div className="flex gap-3 pt-2 border-t border-gray-100">
-                                <div className="flex items-center gap-2 text-xs text-gray-500">
-                                    <span>Vencimento:</span>
-                                    <input type="date" value={vencDe} onChange={e => setVencDe(e.target.value)}
-                                        className="border border-gray-200 rounded-lg px-2 py-1 text-form-input outline-none focus:border-red-400" />
-                                    <span>até</span>
-                                    <input type="date" value={vencAte} onChange={e => setVencAte(e.target.value)}
-                                        className="border border-gray-200 rounded-lg px-2 py-1 text-form-input outline-none focus:border-red-400" />
-                                    {(vencDe || vencAte) && (
-                                        <button onClick={() => { setVencDe(''); setVencAte(''); }} className="text-red-500 hover:text-red-700">
-                                            <X className="w-3.5 h-3.5" />
-                                        </button>
-                                    )}
-                                </div>
+                            <div className="flex items-center gap-2 h-9 text-sm text-gray-500">
+                                <span>Vencimento:</span>
+                                <input type="date" value={vencDe} onChange={e => setVencDe(e.target.value)}
+                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all" />
+                                <span>até</span>
+                                <input type="date" value={vencAte} onChange={e => setVencAte(e.target.value)}
+                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all" />
+                                {(vencDe || vencAte) && (
+                                    <button onClick={() => { setVencDe(''); setVencAte(''); }} className="text-red-500 hover:text-red-700">
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
 
-                    {/* Barra de ação em massa (F3) */}
-                    {selectedVisible.length > 0 && (
-                        <div className="flex items-center gap-4 bg-red-600 text-white rounded-xl px-4 py-3 shadow-sm">
-                            <span className="text-sm font-semibold">
-                                {selectedVisible.length} selecionada{selectedVisible.length !== 1 ? 's' : ''}
-                                <span className="ml-2 font-normal text-red-100">{formatMoney(selectedTotal)}</span>
-                            </span>
-                            <div className="flex-1" />
-                            <button
-                                onClick={handleBulkPago}
-                                disabled={bulkLoading}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-red-700 text-sm font-semibold hover:bg-red-50 disabled:opacity-60 transition-colors"
-                            >
-                                {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                                Marcar como pago
-                            </button>
-                            <button
-                                onClick={clearSelection}
-                                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium text-red-100 hover:text-white hover:bg-red-500 transition-colors"
-                            >
-                                <X className="w-3.5 h-3.5" /> Limpar
-                            </button>
-                        </div>
-                    )}
-
                     {/* Tabela */}
-                    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                         {loading ? (
-                            <div className="flex items-center justify-center py-16 gap-2 text-gray-400">
-                                <Loader2 className="w-5 h-5 animate-spin" />
-                                <span className="text-sm">Carregando...</span>
+                            <div className="text-center py-12">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+                                <p className="mt-2 text-gray-500 text-sm">Carregando...</p>
                             </div>
                         ) : error ? (
-                            <div className="flex items-center justify-center py-16 gap-2 text-red-500">
+                            <div className="flex items-center justify-center py-12 gap-2 text-red-500">
                                 <AlertCircle className="w-5 h-5" />
                                 <span className="text-sm">{error}</span>
                             </div>
                         ) : filtered.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                                <FileText className="w-10 h-10 mb-3 opacity-30" />
-                                <p className="text-sm font-medium">Nenhuma conta encontrada</p>
-                                <p className="text-xs mt-1">Aprove um boleto para ele aparecer aqui</p>
+                            <div className="text-center py-12 text-gray-400">
+                                <FileText className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma conta encontrada</h3>
+                                <p className="text-sm text-gray-500">Aprove um boleto para ele aparecer aqui.</p>
                             </div>
                         ) : (
-                            <table className="w-full text-sm">
+                            <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left border-collapse">
+                                {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader
+                                    força uppercase internamente por padrão. */}
                                 <thead>
-                                    <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                                        <th className="w-10 px-4 py-3 text-center">
+                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <th className="w-10 px-4 py-2 text-center">
                                             <input
                                                 type="checkbox"
                                                 className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer disabled:opacity-40"
@@ -511,10 +496,11 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 label="Fornecedor / Documento"
                                                 colKey="supplier"
                                                 sortable={true}
+                                                uppercase={false}
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-left px-4 py-3"
+                                                className="text-left px-4 py-2"
                                             />
                                         )}
                                         {tableColumns.visibleColumns.includes('origem') && (
@@ -522,10 +508,11 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 label="Origem"
                                                 colKey="origem"
                                                 sortable={true}
+                                                uppercase={false}
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-left px-4 py-3"
+                                                className="text-left px-4 py-2"
                                             />
                                         )}
                                         {tableColumns.visibleColumns.includes('valor') && (
@@ -533,10 +520,11 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 label="Valor"
                                                 colKey="valor"
                                                 sortable={true}
+                                                uppercase={false}
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-right px-4 py-3"
+                                                className="text-right px-4 py-2"
                                             />
                                         )}
                                         {tableColumns.visibleColumns.includes('vencimento') && (
@@ -544,10 +532,11 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 label="Vencimento"
                                                 colKey="vencimento"
                                                 sortable={true}
+                                                uppercase={false}
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-center px-4 py-3"
+                                                className="text-center px-4 py-2"
                                             />
                                         )}
                                         {tableColumns.visibleColumns.includes('status') && (
@@ -555,53 +544,55 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 label="Status"
                                                 colKey="status"
                                                 sortable={true}
+                                                uppercase={false}
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-center px-4 py-3"
+                                                className="text-center px-4 py-2"
                                             />
                                         )}
-                                        <th className="text-right px-4 py-3">Ações</th>
+                                        <th className="text-right px-4 py-2 text-table-header font-semibold text-gray-500">Ações</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {filtered.map(inv => {
+                                <tbody className="divide-y divide-gray-200">
+                                    {filtered.map((inv, idx) => {
                                         const dueDate = inv.dueDate ? new Date(inv.dueDate + 'T00:00:00') : null;
                                         const overdue = isOverdue(inv);
                                         const fromBoleto = (inv.notes ?? '').includes('[boleto:');
 
                                         return (
-                                            <tr key={inv.id} className={`hover:bg-gray-50 transition-colors ${selectedIds.has(inv.id) ? 'bg-red-50/60' : overdue ? 'bg-red-50/30' : ''}`}>
-                                                <td className="w-10 px-4 py-3 text-center">
+                                            <tr key={inv.id} className={`hover:bg-blue-50/50 transition-colors ${selectedIds.has(inv.id) ? 'bg-blue-50/60' : overdue ? 'bg-red-50/30' : ''}`}>
+                                                <td className="w-10 px-4 py-2.5 text-center">
                                                     {isSelectable(inv) ? (
                                                         <input
                                                             type="checkbox"
                                                             className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
                                                             checked={selectedIds.has(inv.id)}
-                                                            onChange={() => toggleRow(inv.id)}
+                                                            title="Dica: segure Shift e clique para selecionar um intervalo"
+                                                            onChange={(e) => handleRowCheck(inv.id, idx, (e.nativeEvent as MouseEvent).shiftKey)}
                                                         />
                                                     ) : null}
                                                 </td>
                                                 {tableColumns.visibleColumns.includes('supplier') && (
-                                                    <td className="px-4 py-3">
+                                                    <td className="px-4 py-2.5">
                                                         <p className="text-sm font-normal text-gray-900 truncate max-w-xs">{inv.supplierName ?? '—'}</p>
                                                         <p className="text-xs text-gray-400 truncate max-w-xs">{inv.fileName}</p>
                                                     </td>
                                                 )}
                                                 {tableColumns.visibleColumns.includes('origem') && (
-                                                    <td className="px-4 py-3">
+                                                    <td className="px-4 py-2.5">
                                                         <span className={`text-sm font-normal ${fromBoleto ? 'text-indigo-700' : 'text-gray-500'}`}>
                                                             {fromBoleto ? 'Boleto' : 'Manual'}
                                                         </span>
                                                     </td>
                                                 )}
                                                 {tableColumns.visibleColumns.includes('valor') && (
-                                                    <td className="px-4 py-3 text-right text-sm font-medium text-gray-900">
+                                                    <td className="px-4 py-2.5 text-right text-sm font-medium text-gray-800">
                                                         <Money value={inv.amount} />
                                                     </td>
                                                 )}
                                                 {tableColumns.visibleColumns.includes('vencimento') && (
-                                                    <td className={`px-4 py-3 text-center text-sm font-normal ${overdue ? 'text-red-600' : 'text-gray-600'}`}>
+                                                    <td className={`px-4 py-2.5 text-center text-sm font-normal ${overdue ? 'text-red-600' : 'text-gray-600'}`}>
                                                         {formatDateBR(inv.dueDate)}
                                                         {overdue && dueDate && (
                                                             <div className="text-xs text-red-500">
@@ -611,22 +602,22 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                     </td>
                                                 )}
                                                 {tableColumns.visibleColumns.includes('status') && (
-                                                    <td className="px-4 py-3 text-center">
+                                                    <td className="px-4 py-2.5 text-center">
                                                         <StatusBadge inv={inv} />
                                                     </td>
                                                 )}
-                                                <td className="px-4 py-3">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        {/* Ver documento */}
+                                                <td className="px-4 py-2.5">
+                                                    <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                                                        {/* Ver documento — botão-ícone padrão §9.2 */}
                                                         {inv.filePath && (
                                                             <a
                                                                 href={invoiceService.getInvoiceUrl(inv.filePath)}
                                                                 target="_blank"
                                                                 rel="noreferrer"
-                                                                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                                                                className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
                                                                 title="Ver documento"
                                                             >
-                                                                <ExternalLink className="w-3.5 h-3.5" />
+                                                                <ExternalLink className="w-4 h-4" />
                                                             </a>
                                                         )}
 
@@ -634,10 +625,10 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                         {!['paid', 'rejected'].includes(inv.status) && fromBoleto && inv.supplierOrganizationId && (
                                                             <button
                                                                 onClick={() => setPagandoAsaas(inv)}
-                                                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-button font-semibold border border-emerald-200 transition-colors"
+                                                                className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all shadow-sm text-sm font-semibold active:scale-95"
                                                                 title="Pagar via Asaas"
                                                             >
-                                                                <Landmark className="w-3 h-3" />
+                                                                <Landmark className="w-4 h-4" />
                                                                 Pagar via Asaas
                                                             </button>
                                                         )}
@@ -647,20 +638,20 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                             <button
                                                                 onClick={() => handleMarcarPago(inv)}
                                                                 disabled={marcandoPago === inv.id}
-                                                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-50 hover:bg-green-100 text-green-700 text-button font-semibold border border-green-200 disabled:opacity-50 transition-colors"
+                                                                className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-green-200 text-green-700 hover:bg-green-50 rounded-xl transition-all shadow-sm text-sm font-semibold disabled:opacity-50 active:scale-95"
                                                                 title="Marcar como pago"
                                                             >
                                                                 {marcandoPago === inv.id ? (
-                                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                                    <Loader2 className="w-4 h-4 animate-spin" />
                                                                 ) : (
-                                                                    <Check className="w-3 h-3" />
+                                                                    <Check className="w-4 h-4" />
                                                                 )}
                                                                 Pago
                                                             </button>
                                                         )}
                                                         {inv.status === 'paid' && (
-                                                            <span className="flex items-center gap-1 text-xs text-green-600 font-semibold">
-                                                                <Check className="w-3 h-3" /> Quitado
+                                                            <span className="flex items-center gap-1 text-sm font-normal text-green-700">
+                                                                <Check className="w-4 h-4" /> Quitado
                                                             </span>
                                                         )}
                                                     </div>
@@ -671,21 +662,44 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 </tbody>
                                 <tfoot>
                                     <tr className="bg-gray-50 border-t border-gray-200">
-                                        <td colSpan={3} className="px-4 py-2 text-table-body text-gray-500">
+                                        <td colSpan={3} className="px-4 py-2 text-sm text-gray-500">
                                             {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
                                         </td>
                                         <td className="px-4 py-2 text-right text-sm font-medium text-gray-900">
                                             {formatMoney(filtered.filter(i => !['paid', 'rejected'].includes(i.status)).reduce((s, i) => s + (i.amount ?? 0), 0))}
                                         </td>
-                                        <td colSpan={3} className="px-4 py-2 text-table-body text-gray-400 text-right">total a pagar (filtrado)</td>
+                                        <td colSpan={3} className="px-4 py-2 text-sm text-gray-400 text-right">total a pagar (filtrado)</td>
                                     </tr>
                                 </tfoot>
                             </table>
+                            </div>
                         )}
                     </div>
 
+            {/* Barra de ações em lote — fixa no rodapé, paleta azul (ui_ux_standard_guide.md §10) */}
+            {selectedVisible.length > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                    <span className="flex-1 text-sm font-bold whitespace-nowrap">
+                        {selectedVisible.length} selecionada{selectedVisible.length !== 1 ? 's' : ''}
+                        <span className="ml-2 font-normal opacity-75">· {formatMoney(selectedTotal)}</span>
+                    </span>
+                    <button
+                        onClick={handleBulkPago}
+                        disabled={bulkLoading}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-white text-blue-700 rounded-xl text-sm font-semibold hover:bg-blue-50 disabled:opacity-60 transition-colors"
+                    >
+                        {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        Marcar como pago
+                    </button>
+                    <button
+                        onClick={clearSelection}
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-blue-400 transition-colors"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                        Desmarcar
+                    </button>
                 </div>
-            </div>
+            )}
 
             {pagandoAsaas && (() => {
                 const boletoId = extractBoletoId(pagandoAsaas.notes);

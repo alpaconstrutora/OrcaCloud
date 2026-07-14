@@ -73,3 +73,41 @@ export function extractTokenFromFileName(
 
   return result[targetIndex + 1] || null;
 }
+
+/**
+ * Reconstrói o nome do arquivo injetando os tokens fornecidos dentro da máscara.
+ * @param mask A máscara de nomenclatura (ex: "[OBRA]-[DISCIPLINA]")
+ * @param tokens Objeto chave-valor com os tokens e valores digitados
+ * @param originalExtension Extensão original (ex: "pdf", "docx")
+ */
+export function generateFileNameFromMask(mask: string, tokens: Record<string, string>, originalExtension: string): string {
+  let finalName = mask;
+  const knownTokens = ['[OBRA]', '[DISCIPLINA]', '[NUMERO]', '[REVISAO]'];
+  
+  knownTokens.forEach(t => {
+    const rawVal = tokens[t];
+    if (rawVal !== undefined) {
+      // Regex que acha o token, com ou sem a formatação de tamanho, ex: [OBRA] ou [OBRA{3}]
+      const tokenName = t.replace(/[\[\]]/g, ''); // "OBRA"
+      const regex = new RegExp(`\\[${tokenName}(?:\\{[0-9,]+\\})?\\]`, 'gi');
+      finalName = finalName.replace(regex, rawVal);
+    }
+  });
+
+  return `${finalName}.${originalExtension}`;
+}
+
+/**
+ * Retorna uma lista limpa dos tokens contidos na máscara.
+ * @param mask A máscara de nomenclatura
+ * @returns Array de tokens, ex: ["[OBRA]", "[DISCIPLINA]"]
+ */
+export function extractMaskTokens(mask: string): string[] {
+  const tokens: string[] = [];
+  const regexTokens = /\[(OBRA|DISCIPLINA|NUMERO|REVISAO)(?:\{[0-9,]+\})?\]/gi;
+  let match;
+  while ((match = regexTokens.exec(mask)) !== null) {
+    tokens.push(`[${match[1].toUpperCase()}]`);
+  }
+  return tokens;
+}

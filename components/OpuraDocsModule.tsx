@@ -1,4 +1,5 @@
 import React from 'react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
   FolderOpen,
   Upload,
@@ -25,7 +26,6 @@ import {
   Shield,
   Loader2,
   FolderPlus,
-  QrCode,
   CornerDownRight,
   Clock,
   ThumbsUp,
@@ -46,7 +46,7 @@ import {
 } from '../services/documentService';
 import { partnerService } from '../services/partnerService';
 import { DocumentMarkupViewer } from './ui/DocumentMarkupViewer';
-import { validateFileNameAgainstMask, extractTokenFromFileName } from '../utils/dmsUtils';
+import { validateFileNameAgainstMask, extractTokenFromFileName, generateFileNameFromMask, extractMaskTokens } from '../utils/dmsUtils';
 import {
   OpuraDocument,
   OpuraDocumentVersion,
@@ -191,7 +191,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [newDocAlertaDias, setNewDocAlertaDias] = React.useState(30);
   const [newDocTagsInput, setNewDocTagsInput] = React.useState('');
   const [newDocFile, setNewDocFile] = React.useState<File | null>(null);
-  const [uploading, setUploading] = React.useState(false);
+  const [uploadProgress, setUploadProgress] = React.useState<number>(0);
+  
+  // Estados para Smart Rename Modal
+  const [showRenameModal, setShowRenameModal] = React.useState(false);
+  const [renameTokens, setRenameTokens] = React.useState<Record<string, string>>({});
+  const [renameTargetMask, setRenameTargetMask] = React.useState('');
   
   // Controle de vinculação opcional a outras tabelas
   const [newDocCompanyId, setNewDocCompanyId] = React.useState('');
@@ -1019,7 +1024,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       const targetFolder = folders.find(f => f.id === currentFolderId);
       if (targetFolder?.naming_mask) {
         if (!validateFileNameAgainstMask(newDocFile.name, targetFolder.naming_mask)) {
-          alert(`O nome do arquivo físico ("${newDocFile.name}") não atende ao padrão exigido nesta pasta:\n"${targetFolder.naming_mask}"\n\nPor favor, renomeie o arquivo de acordo com a máscara.`);
+          setRenameTargetMask(targetFolder.naming_mask);
+          setRenameTokens({});
+          setShowRenameModal(true);
           return;
         }
 
@@ -1103,10 +1110,24 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       setUploadModalOpen(false);
       fetchDocs();
     } catch (err: any) {
-      alert(err.message || 'Erro ao realizar upload do documento.');
+      alert(err.message || 'Erro ao submeter documento.');
     } finally {
       setUploading(false);
     }
+  };
+
+  // Submeter modal de renomeação inteligente
+  const handleRenameSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDocFile || !renameTargetMask) return;
+    
+    const fileExt = newDocFile.name.split('.').pop() || '';
+    const newName = generateFileNameFromMask(renameTargetMask, renameTokens, fileExt);
+    
+    // Cria um novo File herdando os dados e o tipo, mas com o nome correto
+    const renamedFile = new File([newDocFile], newName, { type: newDocFile.type });
+    setNewDocFile(renamedFile);
+    setShowRenameModal(false);
   };
 
   // Submeter Upload de Nova Versão
@@ -1983,34 +2004,22 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                               <td className="px-6 py-2.5 text-right whitespace-nowrap">
                                 <div className="flex items-center justify-end gap-1.5">
                                   {doc.active_version && (
-                                    <button onClick={() => handleDownload(doc.active_version!.storage_path, doc.nome, doc.id)} title="Download" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] shadow-sm transition-all active:scale-95">
-                                      <Download className="w-4 h-4" />
-                                    </button>
+                                    <ActionIconButton kind="download" onClick={() => handleDownload(doc.active_version!.storage_path, doc.nome, doc.id)} />
                                   )}
                                   {!doc.is_integrated && (
                                     <>
                                       {isOrgAdmin && (
-                                        <button onClick={() => { setMovingDocId(doc.id); setTargetFolderId(doc.folder_id || null); setMoveModalOpen(true); }} title="Mover" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] shadow-sm transition-all active:scale-95">
-                                          <CornerDownRight className="w-4 h-4" />
-                                        </button>
+                                        <ActionIconButton kind="move" onClick={() => { setMovingDocId(doc.id); setTargetFolderId(doc.folder_id || null); setMoveModalOpen(true); }} />
                                       )}
-                                      <button onClick={() => setSelectedDocForQrCode(doc)} title="Etiqueta QR Code" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] shadow-sm transition-all active:scale-95">
-                                        <QrCode className="w-4 h-4" />
-                                      </button>
+                                      <ActionIconButton kind="qrcode" onClick={() => setSelectedDocForQrCode(doc)} />
                                       {doc.active_version && (doc.active_version.mime_type === 'application/pdf' || doc.nome.toLowerCase().endsWith('.pdf')) && (
-                                        <button onClick={() => setSelectedDocForMarkup(doc)} title="Anotar" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] shadow-sm transition-all active:scale-95">
-                                          <Pencil className="w-4 h-4" />
-                                        </button>
+                                        <ActionIconButton kind="annotate" onClick={() => setSelectedDocForMarkup(doc)} />
                                       )}
-                                      <button onClick={() => handleStartEditDoc(doc)} title="Editar" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] shadow-sm transition-all active:scale-95">
-                                        <Settings className="w-4 h-4" />
-                                      </button>
+                                      <ActionIconButton kind="settings" onClick={() => handleStartEditDoc(doc)} />
                                       {isOrgAdmin && (
-                                        <button onClick={() => openShareModal(doc.id)} title="Compartilhar" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-orange-600 hover:border-orange-200 rounded-[6px] shadow-sm transition-all active:scale-95">
-                                          <Share2 className="w-4 h-4" />
-                                        </button>
+                                        <ActionIconButton kind="share" onClick={() => openShareModal(doc.id)} />
                                       )}
-                                      <button onClick={async (e) => {
+                                      <ActionIconButton kind="history" onClick={async (e) => {
                                         const btn = e.currentTarget; btn.style.pointerEvents = 'none'; btn.style.opacity = '0.7';
                                         try {
                                           const fullDoc = await documentService.getDocumentById(doc.id);
@@ -2019,13 +2028,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                         } finally {
                                           btn.style.pointerEvents = 'auto'; btn.style.opacity = '1';
                                         }
-                                      }} title="Histórico" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] shadow-sm transition-all active:scale-95">
-                                        <History className="w-4 h-4" />
-                                      </button>
+                                      }} />
                                       {isOrgAdmin && (
-                                        <button onClick={() => handleDeleteDoc(doc.id)} title="Excluir" className="p-1.5 bg-white border border-red-100 text-red-500 hover:bg-red-50 rounded-[6px] shadow-sm transition-all active:scale-95">
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <ActionIconButton kind="delete" onClick={() => handleDeleteDoc(doc.id)} />
                                       )}
                                     </>
                                   )}
@@ -3395,6 +3400,67 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 Concluir
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Modal de Renomeação Inteligente (Smart Rename) */}
+      {showRenameModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md border border-slate-100 overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 text-blue-600 rounded-xl">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider leading-tight">Fora do Padrão</h3>
+                  <p className="text-[11px] text-slate-500 font-bold mt-0.5 max-w-[260px] leading-tight">O arquivo enviado não atende ao padrão da pasta. Preencha os campos abaixo para corrigir.</p>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleRenameSubmit} className="p-6 space-y-6">
+              <div className="space-y-4">
+                {extractMaskTokens(renameTargetMask).map((token) => (
+                  <div key={token} className="space-y-1.5">
+                    <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">
+                      {token.replace(/[\[\]]/g, '')}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder={`Valor para ${token.replace(/[\[\]]/g, '')}`}
+                      value={renameTokens[token] || ''}
+                      onChange={(e) => setRenameTokens(prev => ({ ...prev, [token]: e.target.value.toUpperCase() }))}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Como ficará o arquivo</span>
+                <div className="font-mono text-xs text-blue-600 font-bold break-all bg-white p-2 rounded border border-blue-100">
+                  {generateFileNameFromMask(renameTargetMask, renameTokens, newDocFile?.name.split('.').pop() || '')}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRenameModal(false)}
+                  className="px-5 py-2.5 border border-slate-200 text-slate-500 font-black text-button uppercase tracking-widest rounded-xl hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-button uppercase tracking-widest rounded-xl shadow-md transition-all active:scale-95"
+                >
+                  Aplicar Correção
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

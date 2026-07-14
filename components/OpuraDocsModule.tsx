@@ -46,7 +46,7 @@ import {
 } from '../services/documentService';
 import { partnerService } from '../services/partnerService';
 import { DocumentMarkupViewer } from './ui/DocumentMarkupViewer';
-import { validateFileNameAgainstMask, extractTokenFromFileName, generateFileNameFromMask, extractMaskTokens } from '../utils/dmsUtils';
+import { validateFileNameAgainstMask, extractTokenFromFileName, generateFileNameFromMask, extractMaskTokens, getNextSequentialNumber, getInitialRevision } from '../utils/dmsUtils';
 import {
   OpuraDocument,
   OpuraDocumentVersion,
@@ -1025,8 +1025,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       const targetFolder = folders.find(f => f.id === currentFolderId);
       if (targetFolder?.naming_mask) {
         if (!validateFileNameAgainstMask(newDocFile.name, targetFolder.naming_mask)) {
+          // Calcula pré-preenchimentos inteligentes
+          const uploadProjId = selectedProjectId !== 'all' ? selectedProjectId : newDocProjectId;
+          const uploadProj = projects?.find(p => p.id === uploadProjId);
+          const docsInFolder = filteredDocuments.filter(d => d.folder_id === currentFolderId);
+          
           setRenameTargetMask(targetFolder.naming_mask);
-          setRenameTokens({});
+          setRenameTokens({
+            '[OBRA]': uploadProj?.code || '',
+            '[NUMERO]': getNextSequentialNumber(docsInFolder, targetFolder.naming_mask),
+            '[REVISAO]': getInitialRevision(targetFolder.naming_mask)
+          });
           setShowRenameModal(true);
           return;
         }
@@ -3422,21 +3431,65 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
             <form onSubmit={handleRenameSubmit} className="p-6 space-y-6">
               <div className="space-y-4">
-                {extractMaskTokens(renameTargetMask).map((token) => (
-                  <div key={token} className="space-y-1.5">
-                    <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">
-                      {token.replace(/[\[\]]/g, '')}
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder={`Valor para ${token.replace(/[\[\]]/g, '')}`}
-                      value={renameTokens[token] || ''}
-                      onChange={(e) => setRenameTokens(prev => ({ ...prev, [token]: e.target.value.toUpperCase() }))}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
-                    />
-                  </div>
-                ))}
+                {extractMaskTokens(renameTargetMask).map((token) => {
+                  const cleanToken = token.replace(/[\[\]]/g, '');
+                  if (cleanToken === 'OBRA') {
+                    return (
+                      <div key={token} className="space-y-1.5">
+                        <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">OBRA</label>
+                        <select
+                          required
+                          value={renameTokens[token] || ''}
+                          onChange={(e) => setRenameTokens(prev => ({ ...prev, [token]: e.target.value }))}
+                          className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                        >
+                          <option value="">Selecione uma Obra</option>
+                          {projects?.map(p => (
+                            <option key={p.id} value={p.code || p.id}>{p.code || p.id} - {p.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
+                  if (cleanToken === 'DISCIPLINA') {
+                    const renameTargetFolder = folders.find(f => f.id === currentFolderId);
+                    const allowedDiscs = renameTargetFolder?.disciplines?.length ?
+                      disciplines.filter(d => renameTargetFolder.disciplines!.includes(d.code)) : disciplines;
+                    
+                    return (
+                      <div key={token} className="space-y-1.5">
+                        <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">DISCIPLINA</label>
+                        <select
+                          required
+                          value={renameTokens[token] || ''}
+                          onChange={(e) => setRenameTokens(prev => ({ ...prev, [token]: e.target.value }))}
+                          className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                        >
+                          <option value="">Selecione uma Disciplina</option>
+                          {allowedDiscs.map(d => (
+                            <option key={d.id} value={d.code}>{d.code} - {d.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={token} className="space-y-1.5">
+                      <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">
+                        {cleanToken}
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder={`Valor para ${cleanToken}`}
+                        value={renameTokens[token] || ''}
+                        onChange={(e) => setRenameTokens(prev => ({ ...prev, [token]: e.target.value.toUpperCase() }))}
+                        className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                      />
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">

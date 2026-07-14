@@ -111,3 +111,40 @@ export function extractMaskTokens(mask: string): string[] {
   }
   return tokens;
 }
+
+/**
+ * Analisa os documentos existentes na pasta, extrai o NUMERO, e retorna o próximo formatado.
+ */
+export function getNextSequentialNumber(
+  docsInFolder: { nome: string }[],
+  mask: string
+): string {
+  if (!mask) return '';
+  // Descobre o tamanho esperado para o [NUMERO]
+  const sizeMatch = /\[NUMERO(?:\{(\d+)\})?\]/i.exec(mask);
+  const padLength = sizeMatch && sizeMatch[1] ? parseInt(sizeMatch[1], 10) : 3;
+
+  let maxNum = 0;
+  for (const doc of docsInFolder) {
+    const numStr = extractTokenFromFileName(doc.nome, mask, '[NUMERO]');
+    if (numStr) {
+      const num = parseInt(numStr, 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
+  }
+
+  const nextNum = maxNum + 1;
+  return nextNum.toString().padStart(padLength, '0');
+}
+
+/**
+ * Retorna a REVISAO formatada para inicio (ex: 00).
+ */
+export function getInitialRevision(mask: string): string {
+  if (!mask) return '';
+  const sizeMatch = /\[REVISAO(?:\{(\d+)\})?\]/i.exec(mask);
+  const padLength = sizeMatch && sizeMatch[1] ? parseInt(sizeMatch[1], 10) : 2;
+  return '0'.padStart(padLength, '0');
+}

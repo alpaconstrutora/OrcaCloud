@@ -1534,10 +1534,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 <FolderOpen className="w-4 h-4" />
                 <span>Todos os documentos</span>
               </button>
-
-                    )}
-                </div>
-              )}
+              <div className="space-y-1.5 pt-2">
+                {folders
+                  .filter(f => !f.parent_id)
+                  .map(folder =>
+                    renderFolderTreeItem(folder, null, 0)
+                  )}
+              </div>
             </div>
           </div>
 

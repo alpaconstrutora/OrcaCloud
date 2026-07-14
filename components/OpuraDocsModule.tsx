@@ -1006,6 +1006,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   };
 
   const executeUpload = async (docTitle: string, fileToUpload: File) => {
+    if (!activeOrganizationId) return;
+    
     setUploading(true);
     // Validar tipo de arquivo
     const allowedExtensions = ['pdf', 'docx', 'xlsx', 'dwg', 'jpg', 'png'];

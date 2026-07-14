@@ -935,11 +935,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     if (selectedDisciplineCode) {
       result = result.filter(doc => {
         const docFolder = folders.find(f => f.id === doc.folder_id);
-        const fileName = doc.active_version?.storage_path.split('/').pop() || doc.nome;
+        let cleanFileName = doc.active_version?.storage_path.split('/').pop() || doc.nome;
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i.test(cleanFileName)) {
+          cleanFileName = cleanFileName.substring(37);
+        }
         
         let isMatch = false;
         if (docFolder?.naming_mask) {
-          const extracted = extractTokenFromFileName(fileName, docFolder.naming_mask, '[DISCIPLINA]');
+          const extracted = extractTokenFromFileName(cleanFileName, docFolder.naming_mask, '[DISCIPLINA]');
           if (extracted) {
             isMatch = extracted.toUpperCase() === selectedDisciplineCode.toUpperCase();
           }
@@ -1970,12 +1973,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
                             {dynamicColumns.map((col, idx) => {
                               let val = '-';
-                              const fileName = doc.active_version?.storage_path.split('/').pop() || doc.nome;
-                              if (col.toUpperCase().includes('OBRA')) val = extractTokenFromFileName(fileName, activeFolder!.naming_mask!, '[OBRA]') || '-';
-                              else if (col.toUpperCase().includes('DISCIPLINA')) val = extractTokenFromFileName(fileName, activeFolder!.naming_mask!, '[DISCIPLINA]') || '-';
-                              else if (col.toUpperCase().includes('NUMERO')) val = extractTokenFromFileName(fileName, activeFolder!.naming_mask!, '[NUMERO]') || '-';
+                              let cleanFileName = doc.active_version?.storage_path.split('/').pop() || doc.nome;
+                              // Remove prefixo UUID gerado pelo Supabase Storage (36 chars + '_')
+                              if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i.test(cleanFileName)) {
+                                cleanFileName = cleanFileName.substring(37);
+                              }
+                              if (col.toUpperCase().includes('OBRA')) val = extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[OBRA]') || '-';
+                              else if (col.toUpperCase().includes('DISCIPLINA')) val = extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[DISCIPLINA]') || '-';
+                              else if (col.toUpperCase().includes('NUMERO')) val = extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[NUMERO]') || '-';
                               else if (col.toUpperCase().includes('REVISAO')) {
-                                const rawRev = extractTokenFromFileName(fileName, activeFolder!.naming_mask!, '[REVISAO]');
+                                const rawRev = extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[REVISAO]');
                                 val = rawRev || '-';
                               }
                               return (

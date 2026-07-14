@@ -4,8 +4,9 @@ import { supabase } from '../lib/supabase';
 import { OfficesEspecificacao } from '../types';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import ActionIconButton from './ui/ActionIconButton';
 import {
-  Sparkles, ArrowLeft, Folder, FileText, Share2, Plus, Trash2,
+  Sparkles, ArrowLeft, Folder, FileText, Share2, Plus,
   CheckSquare, Layers, Image as ImageIcon, HardHat, Calendar,
   CheckCircle2, ExternalLink, DollarSign, AlertTriangle, TrendingUp, Filter
 } from 'lucide-react';
@@ -497,9 +498,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                         </div>
                       </div>
                     </div>
-                    <button onClick={() => handleDeleteCronogramaItem(item.id)} className="p-1.5 text-slate-300 hover:text-rose-400 rounded opacity-0 group-hover:opacity-100 transition-all">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <ActionIconButton kind="delete" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleDeleteCronogramaItem(item.id)} />
                   </div>
                 ))}
               </div>
@@ -561,9 +560,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                         <button onClick={() => handleToggleFinanceiroStatus(item.id, item.status)} className={`text-[8.5px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border transition-all ${FIN_STYLE[item.status]}`}>
                           {item.status}
                         </button>
-                        <button onClick={() => handleDeleteFinanceiroItem(item.id)} className="p-1 text-slate-300 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-all">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <ActionIconButton kind="delete" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleDeleteFinanceiroItem(item.id)} />
                       </div>
                     </div>
                   ))}
@@ -677,9 +674,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                       <a href={a.url} target="_blank" rel="noreferrer" className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-all">
                         <ExternalLink className="w-4 h-4" />
                       </a>
-                      <button onClick={() => handleDeleteArquivo(a.id)} className="p-2 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-400 transition-all">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <ActionIconButton kind="delete" onClick={() => handleDeleteArquivo(a.id)} />
                     </div>
                   </div>
                 ))}
@@ -714,9 +709,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                       <span className="text-[8.5px] font-black uppercase text-[#D47A55] tracking-widest">
                         {new Date(r.data).toLocaleDateString('pt-BR')} · {r.responsavel}
                       </span>
-                      <button onClick={() => handleDeleteRDO(r.id)} className="p-1 text-slate-300 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-all">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <ActionIconButton kind="delete" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleDeleteRDO(r.id)} />
                     </div>
                     <p className="text-xs text-slate-600 leading-relaxed">{r.descricao}</p>
                   </div>

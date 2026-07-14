@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Target, Plus, Edit2, Trash2, Save, X,
+    Target, Plus, Save, X,
     AlertCircle, Loader2, TrendingUp,
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { CompanyTarget, CompanyTargetUpsert } from '../types';
 import { companyService } from '../services/companyService';
 import Button from './ui/Button';
@@ -201,15 +202,9 @@ const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
                                         <p className="text-xs font-black uppercase tracking-widest text-gray-400">Metas</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-1">
-                                    <button onClick={() => openEdit(t)}
-                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                                        <Edit2 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button onClick={() => handleDelete(t.id, t.ano)}
-                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                <div className="flex items-center gap-1.5">
+                                    <ActionIconButton kind="edit" size="sm" onClick={() => openEdit(t)} />
+                                    <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(t.id, t.ano)} />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">

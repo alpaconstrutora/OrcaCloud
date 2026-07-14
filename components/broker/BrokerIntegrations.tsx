@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import {
     Link2, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Settings,
     Zap, Database, FileSignature, CreditCard, Plug, Plus, X, Check,
-    Loader2, Trash2, Eye, EyeOff
+    Loader2, Eye, EyeOff
 } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { BrokerIntegration } from '../../types';
 import { supabase } from '../../lib/supabase';
@@ -346,10 +347,7 @@ const BrokerIntegrations: React.FC<BrokerIntegrationsProps> = ({ organizationId 
                                             </button>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <button onClick={() => { if (confirm('Excluir webhook?')) removeMut.mutate(wh.id); }}
-                                                className="p-1.5 hover:bg-red-100 rounded-lg transition-colors">
-                                                <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                                            </button>
+                                            <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir webhook?')) removeMut.mutate(wh.id); }} />
                                         </td>
                                     </tr>
                                 ))}

@@ -2,7 +2,8 @@ import React from 'react';
 import { officesService } from '../services/officesService';
 import { supabase } from '../lib/supabase';
 import { OfficesTimesheet } from '../types';
-import { Clock, Trash2, Plus, Calendar, Briefcase, TrendingUp } from 'lucide-react';
+import { Clock, Plus, Calendar, Briefcase, TrendingUp } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 
 interface OfficesTimeTrackingProps {
   userId: string;
@@ -237,12 +238,7 @@ const OfficesTimeTracking: React.FC<OfficesTimeTrackingProps> = ({ userId }) => 
                       <span className="font-black text-[#D47A55] text-sm">{entry.horas}h</span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <button
-                        onClick={() => handleDeleteEntry(entry.id)}
-                        className="p-1.5 text-slate-300 hover:text-rose-400 rounded-lg hover:bg-rose-50 transition-all opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <ActionIconButton kind="delete" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleDeleteEntry(entry.id)} />
                     </td>
                   </tr>
                 ))}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Landmark, Plus, Edit2, Trash2, Save, X,
+    Landmark, Plus, Save, X,
     AlertCircle, Loader2, Star,
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     CompanyBankAccount, CompanyBankAccountInsert,
     TipoConta, TipoPix,
@@ -369,15 +370,9 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
                                 </div>
                             )}
 
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                                <button onClick={() => openEdit(a)}
-                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button onClick={() => handleDelete(a.id)}
-                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <ActionIconButton kind="edit" size="sm" onClick={() => openEdit(a)} />
+                                <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(a.id)} />
                             </div>
                         </div>
                     ))}

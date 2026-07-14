@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { FileImage, Video, Eye, Download, ExternalLink, Search, BookOpen, Map, Camera, Play, FileText, Table2, Plus, Edit, Trash2 } from 'lucide-react';
+import { FileImage, Video, Eye, Download, ExternalLink, Search, BookOpen, Map, Camera, Play, FileText, Table2, Plus } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import type { BrokerMaterial } from '../../types';
 
 interface BrokerMaterialsProps {
@@ -196,13 +197,9 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                                             <Eye className="w-3.5 h-3.5" />
                                             <span className="text-xs font-bold">{mat.views_count} views</span>
                                         </div>
-                                        <div className="flex gap-1">
-                                            <button onClick={() => { setEditingMaterial(mat); setIsMaterialModalOpen(true); }} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer text-gray-400 hover:text-indigo-600" title="Editar">
-                                                <Edit className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button onClick={() => handleDeleteMaterial(mat.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors cursor-pointer text-gray-400 hover:text-red-500" title="Excluir">
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                        <div className="flex gap-1.5">
+                                            <ActionIconButton kind="edit" size="sm" onClick={() => { setEditingMaterial(mat); setIsMaterialModalOpen(true); }} />
+                                            <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteMaterial(mat.id)} />
                                         </div>
                                     </div>
                                 </div>
@@ -256,8 +253,8 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
                                         <td className="p-4">
                                             <div className="flex gap-1">
                                                 <button onClick={() => handleMaterialClick(mat)} className="p-1.5 hover:bg-emerald-50 rounded-lg transition-colors" title="Visualizar"><ExternalLink className="w-4 h-4 text-emerald-500" /></button>
-                                                <button onClick={() => { setEditingMaterial(mat); setIsMaterialModalOpen(true); }} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-indigo-600" title="Editar"><Edit className="w-4 h-4" /></button>
-                                                <button onClick={() => handleDeleteMaterial(mat.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors text-gray-400 hover:text-red-500" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                                                <ActionIconButton kind="edit" onClick={() => { setEditingMaterial(mat); setIsMaterialModalOpen(true); }} />
+                                                <ActionIconButton kind="delete" onClick={() => handleDeleteMaterial(mat.id)} />
                                             </div>
                                         </td>
                                     </tr>

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    ChevronRight, ChevronDown, Plus, Edit2, Trash2,
+    ChevronRight, ChevronDown, Plus,
     Save, X, AlertCircle, Loader2, Layers, Sparkles,
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     CompanyDepartment, CompanyDepartmentInsert,
     DEPT_COLORS,
@@ -164,14 +165,8 @@ const DeptNode: React.FC<NodeProps> = ({
                         className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                         <Plus className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => onEdit(node)} title="Editar"
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                        <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => onDelete(node)} title="Excluir"
-                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <ActionIconButton kind="edit" size="sm" onClick={() => onEdit(node)} />
+                    <ActionIconButton kind="delete" size="sm" onClick={() => onDelete(node)} />
                 </div>
             </div>
 

@@ -1,9 +1,10 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
-    FileText, Plus, Edit2, Trash2, Save, X,
-    AlertCircle, Loader2, Upload, Download,
+    FileText, Plus, Save, X,
+    AlertCircle, Loader2, Upload,
     CalendarX, CalendarClock, CalendarCheck, Shield,
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     CompanyDocument, CompanyDocumentInsert,
     TipoDocumento, TIPO_DOCUMENTO_LABELS,
@@ -352,22 +353,12 @@ const CompanyDocumentsTab: React.FC<Props> = ({ companyId }) => {
                                                 {d.observacoes && <span className="text-xs text-gray-400 italic">{d.observacoes}</span>}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-1 flex-shrink-0">
+                                        <div className="flex items-center gap-1.5 flex-shrink-0">
                                             {d.arquivo_url && (
-                                                <button onClick={() => handleDownload(d.arquivo_url!)}
-                                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                    title="Baixar arquivo">
-                                                    <Download className="w-3.5 h-3.5" />
-                                                </button>
+                                                <ActionIconButton kind="download" size="sm" title="Baixar arquivo" onClick={() => handleDownload(d.arquivo_url!)} />
                                             )}
-                                            <button onClick={() => openEdit(d)}
-                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                                                <Edit2 className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button onClick={() => handleDelete(d.id, d.tipo)}
-                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                            <ActionIconButton kind="edit" size="sm" onClick={() => openEdit(d)} />
+                                            <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(d.id, d.tipo)} />
                                         </div>
                                     </div>
                                 ))}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Users, Plus, Edit2, Trash2, Save, X,
+    Users, Plus, Save, X,
     AlertCircle, Loader2, Crown, PenLine,
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     Company, CompanyPartner, CompanyPartnerInsert,
 } from '../types';
@@ -315,15 +316,9 @@ const CompanyPartnersTab: React.FC<Props> = ({ companyId, companies }) => {
                                 </p>
                             </div>
 
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                                <button onClick={() => openEdit(p)}
-                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button onClick={() => handleDelete(p.id, p.nome)}
-                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <ActionIconButton kind="edit" size="sm" onClick={() => openEdit(p)} />
+                                <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(p.id, p.nome)} />
                             </div>
                         </div>
                     ))}

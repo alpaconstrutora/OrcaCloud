@@ -965,7 +965,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     return result;
   }, [documents, searchQuery, filterStatus, selectedTags, selectedDisciplineCode, folders]);
 
-  // Coletar tags únicas dos documentos carregados para filtragem rápida
+  const activeFolder = React.useMemo(() => folders.find(f => f.id === currentFolderId), [folders, currentFolderId]);
+  
+  const dynamicColumns = React.useMemo(() => {
+    if (!activeFolder?.naming_mask) return [];
+    return activeFolder.naming_mask.split(/[-_]+/).filter(Boolean);
+  }, [activeFolder?.naming_mask]);  // Coletar tags únicas dos documentos carregados para filtragem rápida
   const allUniqueTags = React.useMemo(() => {
     if (!documents || !Array.isArray(documents)) return [];
     const tagsSet = new Set<string>();
@@ -1860,6 +1865,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       {tableColumns.visibleColumns.includes('nome') && (
                         <SortableHeader colKey="nome" label="Documento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                       )}
+                      
+                      {dynamicColumns.map((col, idx) => (
+                        <th key={`dyn-head-${idx}`} className="px-6 py-2 border-r border-gray-100 text-left text-table-header font-semibold text-gray-500 whitespace-nowrap">
+                          {col}
+                        </th>
+                      ))}
+                      
                       {tableColumns.visibleColumns.includes('tipo_documento') && (
                         <SortableHeader colKey="tipo_documento" label="Tipo / Categoria" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                       )}
@@ -1883,7 +1895,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <tbody className="divide-y divide-gray-200">
                     {filteredDocuments.length === 0 ? (
                       <tr>
-                        <td colSpan={tableColumns.visibleColumns.length} className="px-6 py-20 text-center">
+                        <td colSpan={tableColumns.visibleColumns.length + dynamicColumns.length} className="px-6 py-20 text-center">
                           {folders.filter(f => (f.parent_id || null) === (currentFolderId || null)).length === 0 ? (
                             <div className="flex flex-col items-center justify-center space-y-4">
                               <div className="p-4 bg-slate-50 text-slate-400 rounded-full">
@@ -1924,6 +1936,24 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                 </div>
                               </td>
                             )}
+
+                            {dynamicColumns.map((col, idx) => {
+                              let val = '-';
+                              const fileName = doc.active_version?.storage_path.split('/').pop() || doc.nome;
+                              if (col.toUpperCase().includes('OBRA')) val = extractTokenFromFileName(fileName, activeFolder!.naming_mask!, '[OBRA]') || '-';
+                              else if (col.toUpperCase().includes('DISCIPLINA')) val = extractTokenFromFileName(fileName, activeFolder!.naming_mask!, '[DISCIPLINA]') || '-';
+                              else if (col.toUpperCase().includes('NUMERO')) val = extractTokenFromFileName(fileName, activeFolder!.naming_mask!, '[NUMERO]') || '-';
+                              else if (col.toUpperCase().includes('REVISAO')) {
+                                const rawRev = extractTokenFromFileName(fileName, activeFolder!.naming_mask!, '[REVISAO]');
+                                val = rawRev || '-';
+                              }
+                              return (
+                                <td key={`dyn-body-${doc.id}-${idx}`} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-bold text-gray-700 whitespace-nowrap bg-slate-50/30">
+                                  {val}
+                                </td>
+                              );
+                            })}
+
                             {tableColumns.visibleColumns.includes('tipo_documento') && (
                               <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                 {doc.tipo_documento}

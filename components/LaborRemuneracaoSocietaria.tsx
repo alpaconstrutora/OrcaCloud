@@ -359,9 +359,15 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
         setCalculating(true);
         try {
             const settingsList = await remuneracaoSocietariaService.listCompensationSettings(companyId);
-            const active = settingsList.filter(s => s.has_prolabore && s.prolabore_amount && s.prolabore_amount > 0);
+            // "Valor mensal" só é obrigatório quando a competência ainda não tem total
+            // conciliado no banco — com bank_reconciled_total, o serviço usa esse valor
+            // real como base, mesmo que o valor mensal esteja zerado/não preenchido.
+            const hasBankBase = payroll?.bank_reconciled_total != null;
+            const active = settingsList.filter(s => s.has_prolabore && (hasBankBase || (s.prolabore_amount && s.prolabore_amount > 0)));
             if (active.length === 0) {
-                setCalcInfo('Nenhum sócio está configurado para receber pró-labore. Vá na aba "Sócios", clique em Configurar e marque "Recebe pró-labore" com um valor mensal.');
+                setCalcInfo(hasBankBase
+                    ? 'Nenhum sócio está marcado como "Recebe pró-labore". Vá na aba "Sócios", clique em Configurar e marque a opção.'
+                    : 'Nenhum sócio está configurado para receber pró-labore. Vá na aba "Sócios", clique em Configurar e marque "Recebe pró-labore" com um valor mensal.');
                 setCalculating(false);
                 return;
             }

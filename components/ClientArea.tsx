@@ -70,7 +70,7 @@ import { storageService } from '../services/storageService';
 import { PurchaseOrder } from '../types';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import { useConfirm } from './ui/confirm';
-import { Download, Edit2, Trash2 } from 'lucide-react';
+import { Edit2, Trash2 } from 'lucide-react';
 
 const ActionIconButton = ({ kind, icon, onClick, className = '' }: { kind: 'download' | 'edit' | 'delete' | 'settings', icon?: React.ReactNode, onClick: (e: any) => void, className?: string }) => {
     let defaultIcon = null;

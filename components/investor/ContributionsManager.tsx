@@ -1,7 +1,8 @@
 import React from 'react';
-import { X, Plus, Trash2, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { X, Plus, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '../../utils/financialMath';
 import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
 import {
     investorContributionsService,
     InvestorContribution,
@@ -201,12 +202,7 @@ const ContributionsManager: React.FC<Props> = ({ organizationId, projectId, proj
                                             <div className="flex items-center justify-center">{statusIcon(item.status)}</div>
                                         </td>
                                         <td className="px-6 py-3 text-right">
-                                            <button
-                                                onClick={() => handleDelete(item.id!)}
-                                                className="p-1.5 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            <ActionIconButton kind="delete" className="opacity-0 group-hover:opacity-100" onClick={() => handleDelete(item.id!)} />
                                         </td>
                                     </tr>
                                 ))}

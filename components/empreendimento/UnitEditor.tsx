@@ -1,9 +1,10 @@
 // components/empreendimento/UnitEditor.tsx
 import React from 'react';
 import {
-  Plus, Trash2, Loader2, Layers, Edit, Copy, X, Check, Zap,
+  Plus, Loader2, Layers, X, Check, Zap,
   ChevronDown, ChevronUp, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import {
   EmpreendimentoTower, EmpreendimentoUnit, FloorTipo, EmpreendimentoUnitInsert,
@@ -600,9 +601,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                               </td>
                               <td className="py-3 px-4 text-center">
                                 <div className="flex items-center justify-center gap-1">
-                                  <button onClick={() => startEdit(u)} className="p-1.5 hover:bg-blue-50 text-blue-500 rounded-lg" title="Editar"><Edit className="w-3.5 h-3.5" /></button>
-                                  <button onClick={() => handleDuplicate(u)} className="p-1.5 hover:bg-violet-50 text-violet-500 rounded-lg" title="Duplicar"><Copy className="w-3.5 h-3.5" /></button>
-                                  <button onClick={() => handleDelete(u)} className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
+                                  <ActionIconButton kind="edit" size="sm" onClick={() => startEdit(u)} />
+                                  <ActionIconButton kind="duplicate" size="sm" onClick={() => handleDuplicate(u)} />
+                                  <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(u)} />
                                 </div>
                               </td>
                             </>

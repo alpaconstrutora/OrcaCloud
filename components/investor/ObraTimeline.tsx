@@ -1,7 +1,8 @@
 import React from 'react';
-import { Clock, Plus, Trash2, Check } from 'lucide-react';
+import { Clock, Plus, Check } from 'lucide-react';
 import { projectMilestonesService, ProjectMilestone, MilestoneStatus } from '../../services/projectMilestonesService';
 import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
 
 interface Props {
     projectId?: string;
@@ -117,13 +118,7 @@ const ObraTimeline: React.FC<Props> = ({ projectId, organizationId, isAdmin }) =
                                         >
                                             <Check className="w-4 h-4" />
                                         </button>
-                                        <button
-                                            onClick={() => handleDelete(m.id!)}
-                                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                            title="Remover"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <ActionIconButton kind="delete" title="Remover" onClick={() => handleDelete(m.id!)} />
                                     </div>
                                 )}
                             </div>

@@ -1,9 +1,10 @@
 import React from 'react';
-import { Building2, Plus, Trash2, Users, ChevronDown, ChevronUp, DollarSign, AlertCircle } from 'lucide-react';
+import { Building2, Plus, Users, ChevronDown, ChevronUp, DollarSign, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '../../utils/financialMath';
 import { speService, SpeEntity, SpePartner } from '../../services/speService';
 import { investorService, Investor } from '../../services/investorService';
 import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
 
 interface Props {
     organizationId: string;
@@ -203,10 +204,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                                             <Users className="w-3.5 h-3.5" /> {pts.length || '—'} sócios
                                         </span>
                                         {isAdmin && (
-                                            <button onClick={e => { e.stopPropagation(); handleRemoveEntity(entity.id!); }}
-                                                className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg transition-colors">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            <ActionIconButton kind="delete" onClick={e => { e.stopPropagation(); handleRemoveEntity(entity.id!); }} />
                                         )}
                                         {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                                     </div>

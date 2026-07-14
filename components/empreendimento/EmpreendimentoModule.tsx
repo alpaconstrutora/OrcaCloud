@@ -1,7 +1,8 @@
 // components/empreendimento/EmpreendimentoModule.tsx
 import React from 'react';
-import { Plus, Loader2, Building2, Search, ArrowRight, Trash2 } from 'lucide-react';
+import { Plus, Loader2, Building2, Search, ArrowRight } from 'lucide-react';
 import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { Empreendimento, EmpreendimentoStatus } from '../../types';
 import EmpreendimentoForm from './EmpreendimentoForm';
@@ -186,7 +187,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={(e) => handleDelete(e, item)} className="p-1.5 hover:bg-rose-50 text-rose-400 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <ActionIconButton kind="delete" size="sm" onClick={(e) => handleDelete(e, item)} />
                   <span className="flex items-center gap-1.5 text-blue-500 font-bold text-xs uppercase tracking-wider">
                     Abrir <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                   </span>

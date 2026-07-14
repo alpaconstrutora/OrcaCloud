@@ -1,8 +1,9 @@
 // components/empreendimento/TowerEditor.tsx
 import React from 'react';
-import { Plus, Trash2, Loader2, Building, Link2, HardHat, ChevronRight, Edit, Check, X, BarChart2 } from 'lucide-react';
+import { Plus, Loader2, Building, Link2, HardHat, ChevronRight, Check, X, BarChart2 } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
 import { useStore } from '../../store/useStore';
 import { EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoUnit } from '../../types';
 import UnitEditor from './UnitEditor';
@@ -257,14 +258,8 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
                           </button>
                         </>
                       )}
-                      <button
-                        onClick={() => startEdit(tower)}
-                        className="p-1.5 hover:bg-blue-50 text-blue-500 rounded-lg"
-                        title="Editar torre"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleDelete(tower)} className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                      <ActionIconButton kind="edit" title="Editar torre" onClick={() => startEdit(tower)} />
+                      <ActionIconButton kind="delete" onClick={() => handleDelete(tower)} />
                     </div>
                   )}
                 </div>

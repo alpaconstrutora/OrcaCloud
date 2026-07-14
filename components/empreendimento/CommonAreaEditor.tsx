@@ -1,8 +1,9 @@
 // components/empreendimento/CommonAreaEditor.tsx
 import React from 'react';
-import { Plus, Trash2, Loader2, Trees } from 'lucide-react';
+import { Plus, Loader2, Trees } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
 import {
   EmpreendimentoCommonArea, CommonAreaCategory, EmpreendimentoCommonAreaInsert,
 } from '../../types';
@@ -112,7 +113,7 @@ export const CommonAreaEditor: React.FC<Props> = ({ empreendimentoId }) => {
                 </p>
                 {a.description && <p className="text-xs text-gray-500 mt-1">{a.description}</p>}
               </div>
-              <button onClick={() => handleDelete(a)} className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+              <ActionIconButton kind="delete" onClick={() => handleDelete(a)} />
             </div>
           ))}
         </div>

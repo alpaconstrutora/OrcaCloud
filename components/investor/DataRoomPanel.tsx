@@ -1,8 +1,9 @@
 import React from 'react';
 import {
-    Upload, Trash2, Download, FolderOpen, Loader2,
+    Upload, FolderOpen, Loader2,
     AlertCircle, FileText, X, CheckCircle2,
 } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import {
     opportunityDocumentsService,
     OpportunityDocument, DocumentCategory,
@@ -326,30 +327,22 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
                                         </div>
 
                                         {/* Ações */}
-                                        <div className="flex items-center gap-1 flex-shrink-0">
-                                            <button
-                                                onClick={() => handleDownload(doc)}
+                                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                                            <ActionIconButton
+                                                kind="download"
                                                 disabled={downloading === doc.id}
-                                                title="Download"
-                                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-100 rounded-xl transition-colors disabled:opacity-50"
-                                            >
-                                                {downloading === doc.id
-                                                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                                                    : <Download className="w-4 h-4" />
-                                                }
-                                            </button>
+                                                icon={downloading === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+                                                onClick={() => handleDownload(doc)}
+                                            />
                                             {isAdmin && (
-                                                <button
-                                                    onClick={() => handleDelete(doc)}
-                                                    disabled={deleting === doc.id}
+                                                <ActionIconButton
+                                                    kind="delete"
                                                     title="Remover"
-                                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-100 rounded-xl transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
-                                                >
-                                                    {deleting === doc.id
-                                                        ? <Loader2 className="w-4 h-4 animate-spin" />
-                                                        : <Trash2 className="w-4 h-4" />
-                                                    }
-                                                </button>
+                                                    disabled={deleting === doc.id}
+                                                    className="opacity-0 group-hover:opacity-100"
+                                                    icon={deleting === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+                                                    onClick={() => handleDelete(doc)}
+                                                />
                                             )}
                                         </div>
                                     </div>

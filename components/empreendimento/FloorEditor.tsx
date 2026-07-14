@@ -3,9 +3,10 @@
 // Cada linha = um "tipo de andar" com nome, tipo, nº inicial, repetições e un./pav.
 // O botão "Gerar Unidades" expande os templates nos andares reais via generateUnitsFromFloors.
 import React from 'react';
-import { Plus, Trash2, Loader2, Layers, Zap, Edit, Check, X } from 'lucide-react';
+import { Plus, Loader2, Layers, Zap, Check, X } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
 import { EmpreendimentoTower, EmpreendimentoFloor, EmpreendimentoFloorInsert, FloorTipo } from '../../types';
 
 interface Props {
@@ -278,8 +279,8 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
                         <td className="py-2.5 px-4 text-gray-500 text-xs font-mono">{rangeStr}</td>
                         <td className="py-2.5 px-4 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => startEdit(f)} className="p-1.5 hover:bg-blue-50 text-blue-500 rounded-lg" title="Editar"><Edit className="w-3.5 h-3.5" /></button>
-                            <button onClick={() => handleDelete(f)} className="p-1.5 hover:bg-rose-50 text-rose-500 rounded-lg" title="Excluir"><Trash2 className="w-3.5 h-3.5" /></button>
+                            <ActionIconButton kind="edit" size="sm" onClick={() => startEdit(f)} />
+                            <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(f)} />
                           </div>
                         </td>
                       </>

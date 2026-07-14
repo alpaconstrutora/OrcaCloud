@@ -11,8 +11,13 @@ import {
   OpuraCnoDeductionUpdate,
   OpuraCnoComplianceScore,
   OpuraCnoComplianceScoreInsert,
-  OpuraCnoComplianceScoreUpdate
+  OpuraCnoComplianceScoreUpdate,
+  OpuraCnoDctfweb,
+  OpuraCnoDctfwebInsert
 } from '../types';
+
+const DCTFWEB_COLUMNS =
+  'id, organization_id, cno_registration_id, declaration_number, transmission_date, principal_amount, fine_amount, interest_amount, total_amount, status, created_at, updated_at';
 
 export const cnoService = {
   // ==========================================
@@ -605,5 +610,51 @@ export const cnoService = {
     });
 
     return result;
+  },
+
+  // ==========================================
+  // 5. DCTFWeb / DARF (opura_cno_dctfweb)
+  // ==========================================
+
+  async listDctfweb(cnoRegistrationId: string): Promise<OpuraCnoDctfweb[]> {
+    const { data, error } = await supabase
+      .from('opura_cno_dctfweb')
+      .select(DCTFWEB_COLUMNS)
+      .eq('cno_registration_id', cnoRegistrationId)
+      .order('transmission_date', { ascending: false, nullsFirst: false });
+
+    if (error) {
+      console.error('[CnoService] Erro ao listar DCTFWeb:', error);
+      throw new Error(`Erro ao listar DCTFWeb: ${error.message}`);
+    }
+
+    return (data as OpuraCnoDctfweb[]) || [];
+  },
+
+  async addDctfweb(declaration: OpuraCnoDctfwebInsert): Promise<OpuraCnoDctfweb> {
+    const { data, error } = await supabase
+      .from('opura_cno_dctfweb')
+      .insert(declaration)
+      .select(DCTFWEB_COLUMNS)
+      .single();
+
+    if (error) {
+      console.error('[CnoService] Erro ao adicionar DCTFWeb:', error);
+      throw new Error(`Erro ao adicionar DCTFWeb: ${error.message}`);
+    }
+
+    return data as OpuraCnoDctfweb;
+  },
+
+  async deleteDctfweb(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_cno_dctfweb')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('[CnoService] Erro ao deletar DCTFWeb:', error);
+      throw new Error(`Erro ao deletar DCTFWeb: ${error.message}`);
+    }
   }
 };

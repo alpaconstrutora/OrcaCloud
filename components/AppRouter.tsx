@@ -106,7 +106,6 @@ const PartnerPortal         = React.lazy(() => import('./partner/PartnerPortal')
 const PartnerWorkspaceManager = React.lazy(() => import('./partner/PartnerWorkspaceManager').then(m => ({ default: m.PartnerWorkspaceManager })));
 const PlantaAiDashboard     = React.lazy(() => import('./planta_ai/PlantaAiDashboard'));
 const DataTablePrototype    = React.lazy(() => import('./DataTablePrototype'));
-const SocialSecurityManager = React.lazy(() => import('./SocialSecurity/SocialSecurityManager'));
 
 
 
@@ -417,16 +416,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           />
         </React.Suspense>
       );
-
-    case 'social-security':
-      return (
-        <React.Suspense fallback={<Spinner />}>
-          <SocialSecurityManager
-            obraId={projectId || ''}
-          />
-        </React.Suspense>
-      );
-
 
     case 'opura-governance':
       return (

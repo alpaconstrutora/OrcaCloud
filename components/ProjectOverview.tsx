@@ -346,7 +346,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                             icon={CheckCircle2}
                             color="bg-indigo-600"
                             description="Gestão de CNO, INSS da Obra e regularização SERO."
-                            view="social-security"
+                            view="opura-cno"
                         />
                     </div>
                 </div>

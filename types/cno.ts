@@ -93,3 +93,25 @@ export interface OpuraCnoComplianceScore {
 
 export type OpuraCnoComplianceScoreInsert = Omit<OpuraCnoComplianceScore, 'id'>;
 export type OpuraCnoComplianceScoreUpdate = Partial<Omit<OpuraCnoComplianceScore, 'id' | 'organization_id' | 'project_id'>>;
+
+export interface OpuraCnoDctfweb {
+  id: string;
+  organization_id: string;
+  cno_registration_id: string;
+  declaration_number: string | null;
+  transmission_date: string | null;
+  principal_amount: number;
+  fine_amount: number;
+  interest_amount: number;
+  total_amount: number;
+  status: 'transmitida' | 'retificada' | 'paga' | 'cancelada';
+  created_at: string;
+  updated_at: string;
+}
+
+export type OpuraCnoDctfwebInsert = Omit<Partial<OpuraCnoDctfweb>, 'id' | 'created_at' | 'updated_at'> & {
+  organization_id: string;
+  cno_registration_id: string;
+};
+
+export type OpuraCnoDctfwebUpdate = Partial<Omit<OpuraCnoDctfweb, 'id' | 'organization_id' | 'cno_registration_id' | 'created_at' | 'updated_at'>>;

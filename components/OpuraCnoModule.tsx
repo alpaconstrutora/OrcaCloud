@@ -14,17 +14,20 @@ import {
   Download, 
   FileText, 
   Zap, 
-  Plus, 
+  Plus,
   RefreshCw,
-  FolderOpen
+  FolderOpen,
+  Trash2
 } from 'lucide-react';
 import { cnoService } from '../services/cnoService';
 import { useStore } from '../store/useStore';
-import { 
-  OpuraCnoRegistration, 
-  OpuraCnoSimulation, 
-  OpuraCnoDeduction, 
-  OpuraCnoComplianceScore 
+import { useConfirm } from './ui/confirm';
+import {
+  OpuraCnoRegistration,
+  OpuraCnoSimulation,
+  OpuraCnoDeduction,
+  OpuraCnoComplianceScore,
+  OpuraCnoDctfweb
 } from '../types';
 
 interface OpuraCnoModuleProps {
@@ -39,7 +42,8 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
   onChangeView
 }) => {
   const { projects } = useStore();
-  const [activeTab, setActiveTab] = React.useState<'dashboard' | 'cadastro' | 'simulador' | 'deducoes' | 'dossie'>('dashboard');
+  const confirm = useConfirm();
+  const [activeTab, setActiveTab] = React.useState<'dashboard' | 'cadastro' | 'simulador' | 'deducoes' | 'dctfweb' | 'dossie'>('dashboard');
   const [selectedProjectId, setSelectedProjectId] = React.useState<string | null>(initialProjectId);
   const [loading, setLoading] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState(false);
@@ -49,6 +53,16 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
   const [simulations, setSimulations] = React.useState<OpuraCnoSimulation[]>([]);
   const [deductions, setDeductions] = React.useState<OpuraCnoDeduction[]>([]);
   const [score, setScore] = React.useState<OpuraCnoComplianceScore | null>(null);
+  const [dctfwebList, setDctfwebList] = React.useState<OpuraCnoDctfweb[]>([]);
+
+  // Estado do formulário de DCTFWeb / DARF
+  const [dctfForm, setDctfForm] = React.useState({
+    declaration_number: '',
+    transmission_date: '',
+    principal_amount: '',
+    fine_amount: '',
+    interest_amount: ''
+  });
 
   // Estados do formulário de cadastro
   const [cnoForm, setCnoForm] = React.useState({
@@ -108,6 +122,12 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
           responsavel_tipo: reg.responsavel_tipo || 'construtor',
           art_rrt: reg.art_rrt || ''
         });
+
+        // Declarações DCTFWeb dependem de um CNO cadastrado
+        const dctf = await cnoService.listDctfweb(reg.id);
+        setDctfwebList(dctf);
+      } else {
+        setDctfwebList([]);
       }
 
       const sims = await cnoService.listSimulations(projId);
@@ -259,6 +279,61 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
     }
   };
 
+  // Adicionar declaração DCTFWeb / DARF
+  const handleAddDctfweb = async () => {
+    if (!registration?.id || !activeOrganizationId) {
+      alert('Cadastre o CNO antes de registrar uma DCTFWeb.');
+      return;
+    }
+    if (!dctfForm.declaration_number || !dctfForm.principal_amount) {
+      alert('Informe o número do recibo e o valor principal.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const principal = Number(dctfForm.principal_amount) || 0;
+      const fine = Number(dctfForm.fine_amount) || 0;
+      const interest = Number(dctfForm.interest_amount) || 0;
+
+      const created = await cnoService.addDctfweb({
+        organization_id: activeOrganizationId,
+        cno_registration_id: registration.id,
+        declaration_number: dctfForm.declaration_number,
+        transmission_date: dctfForm.transmission_date || null,
+        principal_amount: principal,
+        fine_amount: fine,
+        interest_amount: interest,
+        total_amount: principal + fine + interest,
+        status: 'transmitida'
+      });
+
+      setDctfwebList(prev => [created, ...prev]);
+      setDctfForm({ declaration_number: '', transmission_date: '', principal_amount: '', fine_amount: '', interest_amount: '' });
+    } catch (err) {
+      console.error('[OpuraCnoModule] Erro ao adicionar DCTFWeb:', err);
+      alert('Erro ao registrar DCTFWeb.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteDctfweb = async (id: string) => {
+    const ok = await confirm({
+      title: 'Remover declaração?',
+      message: 'Esta declaração DCTFWeb será removida permanentemente.',
+      variant: 'danger',
+      confirmLabel: 'Remover'
+    });
+    if (!ok) return;
+    try {
+      await cnoService.deleteDctfweb(id);
+      setDctfwebList(prev => prev.filter(d => d.id !== id));
+    } catch (err) {
+      console.error('[OpuraCnoModule] Erro ao remover DCTFWeb:', err);
+      alert('Erro ao remover declaração.');
+    }
+  };
+
   // Seção de Seleção de Obras
   if (!selectedProjectId) {
     return (
@@ -310,8 +385,8 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
           <h1 className="text-2xl font-black text-gray-900 tracking-tight mt-1.5 flex items-center gap-2">
             ÒPURA CNO & Previdência
             {score && (
-              <span className={`text-xs px-2.5 py-1 rounded-full text-white font-black uppercase tracking-wider
-                ${score.status_color === 'verde' ? 'bg-emerald-500' : score.status_color === 'amarelo' ? 'bg-amber-500' : 'bg-red-500'}`}>
+              <span className={`text-sm font-semibold
+                ${score.status_color === 'verde' ? 'text-emerald-600' : score.status_color === 'amarelo' ? 'text-amber-600' : 'text-red-600'}`}>
                 Score {score.score}
               </span>
             )}
@@ -328,16 +403,16 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 gap-6 overflow-x-auto">
-        {(['dashboard', 'cadastro', 'simulador', 'deducoes', 'dossie'] as const).map(tab => (
+        {(['dashboard', 'cadastro', 'simulador', 'deducoes', 'dctfweb', 'dossie'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`pb-3 font-black text-button uppercase tracking-widest transition-colors border-b-2
-              ${activeTab === tab 
-                ? 'border-indigo-600 text-indigo-600' 
+            className={`pb-3 font-black text-button uppercase tracking-widest transition-colors border-b-2 whitespace-nowrap
+              ${activeTab === tab
+                ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-gray-400 hover:text-gray-600'}`}
           >
-            {tab === 'deducoes' ? 'Deduções (Scanner)' : tab === 'dossie' ? 'Dossiê Digital' : tab}
+            {tab === 'deducoes' ? 'Deduções (Scanner)' : tab === 'dctfweb' ? 'DCTFWeb / DARF' : tab === 'dossie' ? 'Dossiê Digital' : tab}
           </button>
         ))}
       </div>
@@ -799,19 +874,20 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     <tbody>
                       {deductions.map(ded => (
                         <tr key={ded.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                          <td className="py-3.5 px-4 font-bold text-gray-800">
+                          <td className="py-3.5 px-4 text-sm font-normal text-gray-800">
                             {ded.source_type === 'nfe' ? '🧾 NF-e de Compra' : '🛠️ Medição'}
                           </td>
-                          <td className="py-3.5 px-4 text-gray-500">{ded.description}</td>
-                          <td className="py-3.5 px-4 font-bold text-gray-700">R$ {ded.valor_base.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                          <td className="py-3.5 px-4 font-bold text-indigo-600">R$ {ded.valor_abatimento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-3.5 px-4 text-sm font-normal text-gray-500">{ded.description}</td>
+                          <td className="py-3.5 px-4 text-sm font-medium text-gray-700">R$ {ded.valor_base.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-3.5 px-4 text-sm font-medium text-indigo-600">R$ {ded.valor_abatimento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                           <td className="py-3.5 px-4">
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider
-                              ${ded.status_validacao === 'aproveitado' ? 'bg-emerald-500 text-white' : ded.status_validacao === 'rejeitado' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'}`}>
+                            <span className={`text-sm font-normal ${
+                              ded.status_validacao === 'aproveitado' ? 'text-emerald-600' : ded.status_validacao === 'rejeitado' ? 'text-red-600' : 'text-amber-600'
+                            }`}>
                               {ded.status_validacao}
                             </span>
                           </td>
-                          <td className="py-3.5 px-4 text-gray-400 font-semibold">{ded.revisao_ia_feedback || 'Sem revisões.'}</td>
+                          <td className="py-3.5 px-4 text-sm font-normal text-gray-400">{ded.revisao_ia_feedback || 'Sem revisões.'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -826,7 +902,148 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
             </div>
           )}
 
-          {/* 5. ABA DOSSIÊ DIGITAL */}
+          {/* 5. ABA DCTFWeb / DARF */}
+          {activeTab === 'dctfweb' && (
+            !registration?.id ? (
+              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center py-20 gap-3 text-center">
+                <FileText className="w-12 h-12 text-gray-300" />
+                <p className="text-sm font-semibold text-gray-400">Cadastre o CNO na aba "cadastro" antes de registrar as guias DCTFWeb / DARF.</p>
+              </div>
+            ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Formulário de Registro */}
+              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                <div>
+                  <h3 className="font-bold text-gray-800 text-lg">Controle de DCTFWeb & DARF</h3>
+                  <p className="text-gray-400 text-xs">Registre as guias transmitidas e os DARFs pagos referentes à aferição da obra.</p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Nº do Recibo / Declaração</label>
+                    <input
+                      value={dctfForm.declaration_number}
+                      onChange={(e) => setDctfForm(prev => ({ ...prev, declaration_number: e.target.value }))}
+                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      placeholder="Ex: 1234567890"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Data de Transmissão</label>
+                    <input
+                      type="date"
+                      value={dctfForm.transmission_date}
+                      onChange={(e) => setDctfForm(prev => ({ ...prev, transmission_date: e.target.value }))}
+                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Valor Principal</label>
+                      <input
+                        type="number"
+                        value={dctfForm.principal_amount}
+                        onChange={(e) => setDctfForm(prev => ({ ...prev, principal_amount: e.target.value }))}
+                        className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                        placeholder="0,00"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Multa (R$)</label>
+                      <input
+                        type="number"
+                        value={dctfForm.fine_amount}
+                        onChange={(e) => setDctfForm(prev => ({ ...prev, fine_amount: e.target.value }))}
+                        className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                        placeholder="0,00"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Juros (R$)</label>
+                    <input
+                      type="number"
+                      value={dctfForm.interest_amount}
+                      onChange={(e) => setDctfForm(prev => ({ ...prev, interest_amount: e.target.value }))}
+                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      placeholder="0,00"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleAddDctfweb}
+                  disabled={actionLoading}
+                  className="w-full py-3 bg-indigo-600 text-white hover:bg-indigo-700 rounded-2xl font-black text-button uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/20"
+                >
+                  {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Registrar DCTFWeb
+                </button>
+              </div>
+
+              {/* Lista de Declarações */}
+              <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+                <div>
+                  <h3 className="font-bold text-gray-800 text-lg">Declarações Transmitidas</h3>
+                  <p className="text-gray-400 text-xs">Guias DCTFWeb e DARFs vinculados a esta obra.</p>
+                </div>
+
+                {dctfwebList.length > 0 ? (
+                  <div className="space-y-3">
+                    {dctfwebList.map(dec => (
+                      <div key={dec.id} className="p-4 border border-gray-100 rounded-2xl flex items-start justify-between gap-4 hover:border-indigo-100 transition-colors group">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-bold text-gray-800">Recibo: {dec.declaration_number || '—'}</span>
+                            <span className={`text-xs font-medium ${
+                              dec.status === 'paga' ? 'text-emerald-600' : dec.status === 'cancelada' ? 'text-red-600' : dec.status === 'retificada' ? 'text-amber-600' : 'text-indigo-600'
+                            }`}>
+                              {dec.status}
+                            </span>
+                          </div>
+                          {dec.transmission_date && (
+                            <p className="text-gray-400 text-xs mb-3">Transmitida em: {dec.transmission_date.split('-').reverse().join('/')}</p>
+                          )}
+                          <div className="grid grid-cols-3 gap-4 text-xs">
+                            <div>
+                              <span className="block text-gray-400">Principal</span>
+                              <span className="font-medium text-gray-700">R$ {dec.principal_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div>
+                              <span className="block text-gray-400">Multa / Juros</span>
+                              <span className="font-medium text-gray-700">R$ {(dec.fine_amount + dec.interest_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div>
+                              <span className="block text-gray-400">Total DARF</span>
+                              <span className="font-bold text-indigo-900">R$ {dec.total_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteDctfweb(dec.id)}
+                          className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
+                          title="Remover declaração"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                    <FileText className="w-12 h-12 text-gray-300" />
+                    <p className="text-sm font-semibold text-gray-400">Nenhuma declaração DCTFWeb registrada.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            )
+          )}
+
+          {/* 6. ABA DOSSIÊ DIGITAL */}
           {activeTab === 'dossie' && (
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
               <div>

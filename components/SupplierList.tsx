@@ -1,7 +1,7 @@
 import React from 'react';
 import { Search, Plus, Edit2, Trash2, Truck, Mail, Phone, Tag, LayoutDashboard, Table2, Loader2, AlertCircle, Building2, Users, Pencil, X, RefreshCw } from 'lucide-react';
 import { Supplier } from '../types';
-import { supplierService, getSupplierDisplayName, SupplierNameMode } from '../services/supplierService';
+import { supplierService, SupplierNameMode } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
 import { SupplierModal } from './SupplierModal';
 import { ColumnConfigButton, SortableHeader, usePersistedState, ColumnConfig, useTableColumns, useResizableColumns } from './ui/TableUtils';
@@ -498,7 +498,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                             )}
                                             {tableColumns.visibleColumns.includes('name') && (
                                                 <td className="px-6 py-2.5">
-                                                    <p className="text-sm font-normal text-gray-700 group-hover:text-blue-700 transition-colors truncate" title={supplier.name}>{getSupplierDisplayName(supplier, nameMode)}</p>
+                                                    {/* Sempre razão social aqui — a coluna "Apelido" ao lado já cobre a exibição curta; o toggle abaixo só controla a preferência nas outras telas. */}
+                                                    <p className="text-sm font-normal text-gray-700 group-hover:text-blue-700 transition-colors truncate">{supplier.name}</p>
                                                 </td>
                                             )}
                                             {tableColumns.visibleColumns.includes('nickname') && (
@@ -599,8 +600,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                         </div>
                                         <span className="text-sm font-normal text-gray-600">{supplier.category}</span>
                                     </div>
-                                    <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-700 transition-colors mb-1 line-clamp-1" title={supplier.name}>
-                                        {getSupplierDisplayName(supplier, nameMode)}
+                                    <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-700 transition-colors mb-1 line-clamp-1">
+                                        {supplier.name}
                                     </h3>
                                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-6">
                                         {supplier.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}
@@ -641,7 +642,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                         <Edit2 className="w-4 h-4" />
                                     </button>
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); handleDelete(supplier.id, getSupplierDisplayName(supplier, nameMode)); }}
+                                        onClick={(e) => { e.stopPropagation(); handleDelete(supplier.id, supplier.name); }}
                                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-white rounded-xl transition-all shadow-sm border border-transparent hover:border-red-100"
                                         title="Excluir"
                                     >

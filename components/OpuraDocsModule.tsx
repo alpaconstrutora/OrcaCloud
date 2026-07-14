@@ -892,21 +892,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
-  // Obter o caminho atual para desenhar o Breadcrumb
-  const getBreadcrumbs = React.useCallback(() => {
-    const crumbs: OpuraFolder[] = [];
-    let currentId = currentFolderId;
-    while (currentId) {
-      const folder = folders.find((f) => f.id === currentId);
-      if (folder) {
-        crumbs.unshift(folder);
-        currentId = folder.parent_id || null;
-      } else {
-        break;
-      }
-    }
-    return crumbs;
-  }, [folders, currentFolderId]);
+
 
   // Filtrar projetos/obras (classification === 'OBRA')
   const obras = React.useMemo(() => {
@@ -1731,30 +1717,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             </div>
           )}
 
-          {/* Breadcrumb da Onda 1 */}
-          <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400 font-bold py-1">
-            <button
-              onClick={() => setCurrentFolderId(null)}
-              className="hover:text-blue-600 transition-colors"
-            >
-              📁 Raiz
-            </button>
-            {getBreadcrumbs().map((crumb, idx) => (
-              <React.Fragment key={crumb.id}>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
-                <button
-                  onClick={() => setCurrentFolderId(crumb.id)}
-                  className={
-                    idx === getBreadcrumbs().length - 1
-                      ? 'text-slate-700 pointer-events-none'
-                      : 'hover:text-blue-600 transition-colors'
-                  }
-                >
-                  {crumb.name}
-                </button>
-              </React.Fragment>
-            ))}
-          </div>
+
         </div>
 
         {/* Listagem */}
@@ -1883,53 +1846,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           </div>
         ) : (
           <div>
-            {/* Grid de Subpastas Virtuais (Onda 1) */}
-            {folders.filter(f => (f.parent_id || null) === (currentFolderId || null)).length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 p-6 border-b border-slate-100 bg-slate-50/10">
-                {folders
-                  .filter(f => (f.parent_id || null) === (currentFolderId || null))
-                  .map((folder) => (
-                    <div
-                      key={folder.id}
-                      onDoubleClick={() => setCurrentFolderId(folder.id)}
-                      className="flex items-center justify-between p-3.5 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-blue-400 hover:shadow transition-all group cursor-pointer select-none"
-                      >
-                      <div
-                        onClick={() => setCurrentFolderId(folder.id)}
-                        className="flex items-center gap-2.5 min-w-0 flex-grow"
-                      >
-                        <FolderOpen className="w-5 h-5 text-blue-500 fill-blue-50/20 group-hover:scale-110 transition-transform flex-shrink-0" />
-                        <span className="text-sm font-bold text-slate-700 truncate">{folder.name}</span>
-                      </div>
-                      {isOrgAdmin && (
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleStartEditFolder(folder);
-                            }}
-                            className="p-1 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-slate-50 transition-all"
-                            title="Configurar Pasta"
-                          >
-                            <Settings className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteFolder(folder.id);
-                            }}
-                            className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-50 transition-all"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-              </div>
-            )}
+
 
             {/* Lista de Documentos */}
             <div className="bg-white overflow-hidden">

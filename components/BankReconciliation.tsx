@@ -15,7 +15,8 @@ import {
 } from '../types';
 import { bankReconciliationService } from '../services/bankReconciliationService';
 import { clientService } from '../services/clientService';
-import { supplierService } from '../services/supplierService';
+import { supplierService, getSupplierDisplayName } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 import { supabase } from '../lib/supabase';
 import { financialSyncService } from '../services/financialSyncService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
@@ -423,6 +424,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [rules, setRules] = useState<ReconciliationRule[]>([]);
     const [masterSuppliers, setMasterSuppliers] = useState<string[]>([]);
     const [supplierNameById, setSupplierNameById] = useState<Record<string, string>>({});
+    // Rótulo de exibição (apelido/razão social) por nome cadastral — nome (masterSuppliers)
+    // continua sendo a CHAVE de matching usada pelas regras de conciliação; só o label muda.
+    const [supplierDisplayByName, setSupplierDisplayByName] = useState<Record<string, string>>({});
     const [masterClients, setMasterClients] = useState<string[]>([]);
     const [clientNameById, setClientNameById] = useState<Record<string, string>>({});
     const [masterEmployees, setMasterEmployees] = useState<string[]>([]);
@@ -796,8 +800,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         [masterCostCenters]
     );
     const credorOptions = useMemo<LazyOption[]>(
-        () => uniqueCredores.map(n => ({ value: n, label: n })),
-        [uniqueCredores]
+        () => uniqueCredores.map(n => ({ value: n, label: supplierDisplayByName[n] || n })),
+        [uniqueCredores, supplierDisplayByName]
     );
     const clienteOptions = useMemo<LazyOption[]>(
         () => [...new Set([...uniqueClients, ...uniqueBankClients])].sort().map(n => ({ value: n, label: n })),
@@ -1004,7 +1008,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         try {
             const { data, error } = await supabase
                 .from('suppliers')
-                .select('id, name')
+                .select('id, name, nickname')
                 .or(`organization_id.eq.${orgId},organization_id.is.null`)
                 .order('name', { ascending: true })
                 .limit(10000);
@@ -1013,6 +1017,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             if (data) {
                 setMasterSuppliers(data.map(s => s.name));
                 setSupplierNameById(Object.fromEntries(data.map(s => [s.id, s.name])));
+                const mode = appSettingsService.get().supplierNameDisplay;
+                setSupplierDisplayByName(Object.fromEntries(
+                    data.map(s => [s.name, getSupplierDisplayName(s, mode)])
+                ));
             }
         } catch (error) {
             console.error('Error loading master suppliers:', error);

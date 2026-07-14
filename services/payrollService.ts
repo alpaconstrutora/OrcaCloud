@@ -1198,7 +1198,7 @@ export const payrollService = {
             }));
             const { error } = await supabase
                 .from('internal_transactions')
-                .upsert(enrichedTxs, { onConflict: 'organization_id,reference_id' });
+                .upsert(enrichedTxs, { onConflict: 'organization_id,reference_id,entry_type' });
             if (error) {
                 console.error('[PAYROLL-SYNC] Erro no upsert de internal_transactions:', error);
                 errors.push(`Erro interno_transactions: ${error.message}`);
@@ -1513,7 +1513,7 @@ export const payrollService = {
         if (internalTxs.length > 0) {
             const { error } = await supabase
                 .from('internal_transactions')
-                .upsert(internalTxs, { onConflict: 'organization_id,reference_id' });
+                .upsert(internalTxs, { onConflict: 'organization_id,reference_id,entry_type' });
             if (error) console.error('[EMP-SYNC] Erro no upsert centralizado:', error);
         }
 

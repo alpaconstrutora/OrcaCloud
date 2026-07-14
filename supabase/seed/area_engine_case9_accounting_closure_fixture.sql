@@ -1,11 +1,17 @@
-﻿-- ============================================================
+-- ============================================================
 -- Fixture Caso 9 - Fechamento contabil dos Quadros e fracoes
 -- Motor Areas NBR 12721 MVP
 -- Esperado: coeficientes/facoes somam 1 e totais QII x IV-B fecham
 -- ============================================================
 
 BEGIN;
-
+DO $
+BEGIN
+    IF current_setting('app.allow_area_engine_fixture', true) IS DISTINCT FROM 'on' THEN
+        RAISE EXCEPTION 'Fixture de QA bloqueado. Execute SET app.allow_area_engine_fixture = ''on'' apenas em banco de teste antes de rodar este arquivo.'
+            USING ERRCODE = 'P0001';
+    END IF;
+END $;
 DELETE FROM public.area_version_blocks
 WHERE id IN (
     '44444444-4444-4444-4444-444444444491',

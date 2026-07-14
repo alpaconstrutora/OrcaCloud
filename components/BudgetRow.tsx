@@ -2,7 +2,7 @@ import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
-import { Layers, Box, Loader2, ChevronDown, ChevronRight, Maximize2, Star, Copy, Database, Trash2, Pencil, ArrowUp, ArrowDown } from 'lucide-react';
+import { Layers, Box, Loader2, ChevronDown, ChevronRight, Maximize2, Star, Copy, Database, Trash2, Pencil, ArrowUp, ArrowDown, ClipboardList } from 'lucide-react';
 import { BudgetEntry, SinapiItem, SinapiType, CompositionComponent } from '../types';
 
 interface BudgetRowProps {
@@ -22,6 +22,7 @@ interface BudgetRowProps {
     viewMode?: 'inline' | 'modal';
     onOpenModal?: (item: BudgetEntry) => void;
     onDuplicateItem: (e: React.MouseEvent, id: string) => void;
+    onOpenDetails?: (item: BudgetEntry) => void;
     isFavorite?: boolean;
     onToggleFavorite?: (e: React.MouseEvent, code: string) => void;
     showNatureBreakdown?: boolean;
@@ -77,6 +78,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     viewMode = 'modal',
     onOpenModal,
     onDuplicateItem,
+    onOpenDetails,
     isFavorite,
     onToggleFavorite,
     showNatureBreakdown,
@@ -102,6 +104,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     const [isSavingCustom, setIsSavingCustom] = React.useState(false);
     const hasComposition = item.sinapiItem?.composition && item.sinapiItem.composition.length > 0;
     const canOpenCPU = item.sinapiItem?.type === SinapiType.COMPOSITION || hasComposition;
+    const hasCalculationMemory = !!(item.calculationMemory?.formula?.trim() || item.calculationMemory?.justification?.trim() || item.calculationMemory?.result !== undefined);
 
     const handleToggleCPU = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -260,11 +263,39 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                             </div>
                         )}
                         <button
-                            onClick={(e) => onDuplicateItem(e, item.id)}
-                            className="text-gray-400 hover:text-blue-600 p-1 hover:bg-blue-50 rounded transition-all"
-                            title="Duplicar Item"
+
+                            type="button"
+
+                            onClick={(e) => {
+
+                                e.stopPropagation();
+
+                                onOpenDetails?.(item);
+
+                            }}
+
+                            className={`p-1 rounded transition-all ${hasCalculationMemory ? 'text-emerald-600 hover:bg-emerald-50' : 'text-amber-500 hover:bg-amber-50'}`}
+
+                            title={hasCalculationMemory ? "Editar memória de cálculo" : "Item sem memória de cálculo"}
+
                         >
+
+                            <ClipboardList className="w-3.5 h-3.5" />
+
+                        </button>
+
+                        <button
+
+                            onClick={(e) => onDuplicateItem(e, item.id)}
+
+                            className="text-gray-400 hover:text-blue-600 p-1 hover:bg-blue-50 rounded transition-all"
+
+                            title="Duplicar Item"
+
+                        >
+
                             <Copy className="w-3.5 h-3.5" />
+
                         </button>
                         <button
                             type="button"

@@ -1,7 +1,7 @@
-import React from 'react';
+﻿import React from 'react';
 import { BudgetEntry, ProjectSettings, SinapiItem, WBSPhase, SinapiType, BudgetVersion, WBSGroup, CustomDatabase, CompositionComponent } from '../types';
 import { sinapiService, SinapiReference, resolveReferenceDate } from '../services/sinapiService'; // Importação do Serviço
-import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench } from 'lucide-react';
+import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench, ClipboardList } from 'lucide-react';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { parametricService } from '../services/parametricService';
 import { BudgetRow } from './BudgetRow';
@@ -31,6 +31,35 @@ interface AddingTarget {
   group: string;
   phase: string;
   subPhase: string;
+}
+
+interface BudgetControlRow {
+  id: string;
+  code: string;
+  description: string;
+  unit: string;
+  budgeted: number;
+  contracted: number;
+  measured: number;
+  approved: number;
+  paid: number;
+  balance: number;
+  deviation: number;
+  alerts: string[];
+}
+
+type TechnicalDashboardFilter = 'ALL' | 'NO_MEMORY' | 'NO_PRECISION' | 'PENDING_APPROVAL' | 'INACTIVE' | 'FINANCIAL';
+
+interface TechnicalIssueRow {
+  item: BudgetEntry;
+  code: string;
+  description: string;
+  precisionClass: string;
+  status: string;
+  responsible: string;
+  issues: string[];
+  issueCodes: TechnicalDashboardFilter[];
+  financialAlerts: string[];
 }
 
 const splitName = (fullName: string | null | undefined) => {
@@ -117,12 +146,20 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [itemToSave, setItemToSave] = React.useState<SinapiItem | null>(null);
   const [isSaveDbModalOpen, setIsSaveDbModalOpen] = React.useState(false);
   const [selectedCPUItem, setSelectedCPUItem] = React.useState<BudgetEntry | null>(null);
+  const [selectedDetailsItem, setSelectedDetailsItem] = React.useState<BudgetEntry | null>(null);
+  const [isBudgetControlOpen, setIsBudgetControlOpen] = React.useState(false);
+  const [isLoadingBudgetControl, setIsLoadingBudgetControl] = React.useState(false);
+  const [budgetControlRows, setBudgetControlRows] = React.useState<BudgetControlRow[]>([]);
+  const [budgetControlError, setBudgetControlError] = React.useState<string | null>(null);
+  const [isTechnicalDashboardOpen, setIsTechnicalDashboardOpen] = React.useState(false);
+  const [technicalDashboardFilter, setTechnicalDashboardFilter] = React.useState<TechnicalDashboardFilter>('ALL');
   const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isVersionModalOpen, setIsVersionModalOpen] = React.useState(false);
   const [versionDescription, setVersionDescription] = React.useState('');
   const [showHistory, setShowHistory] = React.useState(false);
   const [editingVersionId, setEditingVersionId] = React.useState<string | null>(null);
   const [editingVersionDescription, setEditingVersionDescription] = React.useState('');
+  const [compareVersion, setCompareVersion] = React.useState<BudgetVersion | null>(null);
   const [isCreatingItem, setIsCreatingItem] = React.useState(false);
   const [showOnlyFavorites, setShowOnlyFavorites] = React.useState(false);
   const [isParametricModalOpen, setIsParametricModalOpen] = React.useState(false);
@@ -172,6 +209,233 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const handleCloseCPU = () => {
     setSelectedCPUItem(null);
     setHasCPUChanges(false);
+  };
+
+  const hasCalculationMemory = (item: BudgetEntry) => !!(
+    item.calculationMemory?.formula?.trim() ||
+    item.calculationMemory?.justification?.trim() ||
+    item.calculationMemory?.result !== undefined
+  );
+
+  const handleOpenDetails = (item: BudgetEntry) => {
+    setSelectedDetailsItem(JSON.parse(JSON.stringify(item)));
+  };
+
+  const handleSaveDetails = () => {
+    if (!selectedDetailsItem) return;
+    const updated = budget.map(item => item.id === selectedDetailsItem.id ? selectedDetailsItem : item);
+    onUpdateBudget(updated);
+    setSelectedDetailsItem(null);
+    setNotification({ message: 'Memória técnica do item salva com sucesso!', type: 'success' });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const buildTechnicalIssueRows = React.useCallback((): TechnicalIssueRow[] => {
+    const controlByItem = new Map(budgetControlRows.map(row => [row.id, row]));
+
+    return budget.map(item => {
+      const issues: string[] = [];
+      const issueCodes: TechnicalDashboardFilter[] = [];
+      const controlRow = controlByItem.get(item.id);
+      const financialAlerts = controlRow?.alerts || [];
+
+      if (!hasCalculationMemory(item)) {
+        issues.push('Sem memória de cálculo');
+        issueCodes.push('NO_MEMORY');
+      }
+      if (!item.precisionClass) {
+        issues.push('Sem classe de precisão');
+        issueCodes.push('NO_PRECISION');
+      }
+      const itemStatus = String(item.status || '');
+      if (itemStatus.includes('revis') || itemStatus.includes('aprova') || (item.calculationMemory && !item.calculationMemory.approved)) {
+        issues.push('Aguardando aprovação');
+        issueCodes.push('PENDING_APPROVAL');
+      }
+      if (itemStatus.includes('Cancelado') || itemStatus.includes('Substitu')) {
+        issues.push(itemStatus || 'Inativo');
+        issueCodes.push('INACTIVE');
+      }
+      if (financialAlerts.length > 0 || (controlRow && controlRow.balance < 0)) {
+        issues.push('Divergência orçado x realizado');
+        issueCodes.push('FINANCIAL');
+      }
+
+      return {
+        item,
+        code: item.sinapiItem?.code || '---',
+        description: item.sinapiItem?.description || 'Sem descrição',
+        precisionClass: item.precisionClass || '-',
+        status: item.status || 'Rascunho',
+        responsible: item.responsible || '-',
+        issues,
+        issueCodes,
+        financialAlerts,
+      };
+    }).filter(row => row.issues.length > 0);
+  }, [budget, budgetControlRows]);
+
+  const handleOpenTechnicalItem = (item: BudgetEntry) => {
+    setIsTechnicalDashboardOpen(false);
+    handleOpenDetails(item);
+  };
+
+  const handleOpenBudgetControl = async () => {
+    const activeProjectId = projectId || (settings as ProjectSettings & { id?: string }).id;
+    setBudgetControlError(null);
+    setIsBudgetControlOpen(true);
+
+    if (!activeProjectId) {
+      setBudgetControlRows([]);
+      setBudgetControlError('Salve ou carregue o orçamento antes de cruzar contratos e medições.');
+      return;
+    }
+
+    setIsLoadingBudgetControl(true);
+    try {
+      const [{ supabase }, { contractService }] = await Promise.all([
+        import('../lib/supabase'),
+        import('../services/contractService'),
+      ]);
+
+      const { data: contracts, error: contractsError } = await supabase
+        .from('contracts')
+        .select('id')
+        .or(`project_id.eq.${activeProjectId},budget_id.eq.${activeProjectId}`);
+
+      if (contractsError) throw contractsError;
+
+      const contractIds = (contracts || []).map((contract: { id: string }) => contract.id);
+      const contractedByBudgetItem = new Map<string, number>();
+
+      if (contractIds.length > 0) {
+        const { data: contractItems, error: itemsError } = await supabase
+          .from('contract_items')
+          .select('budget_item_id, total_price')
+          .in('contract_id', contractIds)
+          .not('budget_item_id', 'is', null);
+
+        if (itemsError) throw itemsError;
+
+        (contractItems || []).forEach((item: { budget_item_id: string | null; total_price: number | null }) => {
+          if (!item.budget_item_id) return;
+          contractedByBudgetItem.set(
+            item.budget_item_id,
+            (contractedByBudgetItem.get(item.budget_item_id) || 0) + Number(item.total_price || 0),
+          );
+        });
+      }
+
+      const measurementRollup = await contractService.getMeasurementRollupByBudgetItem(activeProjectId).catch(() => ({} as Record<string, { measured: number; approved: number; paid: number }>));
+
+      const rows = budget.map(item => {
+        const budgeted = calculateEntryTotal(item, settings.bdi || 0);
+        const contracted = contractedByBudgetItem.get(item.id) || 0;
+        const rollup = measurementRollup[item.id] || { measured: 0, approved: 0, paid: 0 };
+        const measured = Number(rollup.measured || 0);
+        const approved = Number(rollup.approved || 0);
+        const paid = Number(rollup.paid || 0);
+        const committed = Math.max(contracted, measured, paid);
+        const deviation = committed - budgeted;
+        const alerts: string[] = [];
+
+        if (contracted === 0) alerts.push('Sem contrato');
+        if (contracted > budgeted && budgeted > 0) alerts.push('Contratado acima do orçamento');
+        if (measured > contracted && contracted > 0) alerts.push('Medido acima do contratado');
+        if (paid > budgeted && budgeted > 0) alerts.push('Pago acima do orçamento');
+
+        return {
+          id: item.id,
+          code: item.sinapiItem?.code || '---',
+          description: item.sinapiItem?.description || 'Sem descrição',
+          unit: item.sinapiItem?.unit || '',
+          budgeted,
+          contracted,
+          measured,
+          approved,
+          paid,
+          balance: budgeted - committed,
+          deviation,
+          alerts,
+        };
+      });
+
+      setBudgetControlRows(rows);
+    } catch (error) {
+      console.error('[BudgetEditor] Falha ao carregar controle orçado x realizado:', error);
+      setBudgetControlRows([]);
+      setBudgetControlError('Não foi possível carregar contratos e medições vinculados a este orçamento.');
+    } finally {
+      setIsLoadingBudgetControl(false);
+    }
+  };
+
+  const calculateEntryTotal = (entry: BudgetEntry, fallbackBdi: number) => {
+    const price = entry.sinapiItem?.price || 0;
+    return entry.quantity * price * (1 + (entry.bdi ?? fallbackBdi) / 100);
+  };
+
+  const buildVersionDiff = (version: BudgetVersion) => {
+    const baseBudget = version.budget || [];
+    const currentBudget = budget || [];
+    const baseBdi = typeof version.settings?.bdi === 'number' ? version.settings.bdi : settings.bdi;
+    const currentBdi = settings.bdi || 0;
+    const baseMap = new Map(baseBudget.map(item => [item.id, item]));
+    const currentMap = new Map(currentBudget.map(item => [item.id, item]));
+    const ids = Array.from(new Set([...baseMap.keys(), ...currentMap.keys()]));
+
+    const rows = ids.map(id => {
+      const before = baseMap.get(id);
+      const after = currentMap.get(id);
+      const beforeTotal = before ? calculateEntryTotal(before, baseBdi) : 0;
+      const afterTotal = after ? calculateEntryTotal(after, currentBdi) : 0;
+      const fields: string[] = [];
+
+      if (!before && after) fields.push('item adicionado');
+      if (before && !after) fields.push('item removido');
+      if (before && after) {
+        if (before.quantity !== after.quantity) fields.push('quantidade');
+        if ((before.sinapiItem?.price || 0) !== (after.sinapiItem?.price || 0)) fields.push('pre�o');
+        if ((before.bdi ?? baseBdi) !== (after.bdi ?? currentBdi)) fields.push('BDI');
+        if ((before.sinapiItem?.code || '') !== (after.sinapiItem?.code || '')) fields.push('c�digo');
+        if ((before.sinapiItem?.description || '') !== (after.sinapiItem?.description || '')) fields.push('descri��o');
+        if ((before.precisionClass || '') !== (after.precisionClass || '')) fields.push('classe de precis�o');
+        if ((before.status || '') !== (after.status || '')) fields.push('status');
+        if ((before.discipline || '') !== (after.discipline || '')) fields.push('disciplina');
+        if ((before.responsible || '') !== (after.responsible || '')) fields.push('respons�vel');
+        if ((before.calculationMemory?.formula || '') !== (after.calculationMemory?.formula || '')) fields.push('mem�ria de c�lculo');
+        if ((before.calculationMemory?.result ?? '') !== (after.calculationMemory?.result ?? '')) fields.push('resultado da mem�ria');
+        if ((before.calculationMemory?.justification || '') !== (after.calculationMemory?.justification || '')) fields.push('justificativa');
+      }
+
+      const status = !before ? 'Adicionado' : !after ? 'Removido' : fields.length > 0 ? 'Alterado' : 'Igual';
+      const item = after || before;
+      return {
+        id,
+        status,
+        fields,
+        code: item?.sinapiItem?.code || '---',
+        description: item?.sinapiItem?.description || 'Sem descri��o',
+        beforeQty: before?.quantity ?? 0,
+        afterQty: after?.quantity ?? 0,
+        beforeTotal,
+        afterTotal,
+        delta: afterTotal - beforeTotal,
+      };
+    }).filter(row => row.status !== 'Igual');
+
+    const baseTotal = baseBudget.reduce((sum, item) => sum + calculateEntryTotal(item, baseBdi), 0);
+    const currentTotal = currentBudget.reduce((sum, item) => sum + calculateEntryTotal(item, currentBdi), 0);
+
+    return {
+      rows,
+      baseTotal,
+      currentTotal,
+      deltaTotal: currentTotal - baseTotal,
+      added: rows.filter(row => row.status === 'Adicionado').length,
+      removed: rows.filter(row => row.status === 'Removido').length,
+      changed: rows.filter(row => row.status === 'Alterado').length,
+    };
   };
   const handleCreateItem = async () => {
     if (!newItem.description || !newItem.unit) {
@@ -1406,6 +1670,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
   // --- Calculations ---
   const totalDirectCost = budget.reduce((acc, item) => acc + (item.quantity * (item.sinapiItem?.price || 0)), 0);
+  const itemsWithoutCalculationMemory = budget.filter(item => !hasCalculationMemory(item)).length;
+  const itemsWithoutPrecisionClass = budget.filter(item => !item.precisionClass).length;
   const totalWithBDI = budget.reduce((acc, item) => acc + (item.quantity * (item.sinapiItem?.price || 0) * (1 + (item.bdi ?? settings.bdi) / 100)), 0);
 
   const calculateSubPhaseTotal = (groupName: string, phaseName: string, subPhaseName: string) => {
@@ -1600,6 +1866,26 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           </div>
         </div>
       )}
+      {(itemsWithoutCalculationMemory > 0 || itemsWithoutPrecisionClass > 0) && (
+        <div className="mx-0 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-100 p-2 rounded-full text-blue-600">
+                <ClipboardList className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-blue-900 font-bold text-sm">Mem�ria t�cnica pendente</p>
+                <p className="text-blue-700 text-xs">
+                  {itemsWithoutCalculationMemory} item(s) sem mem�ria de c�lculo e {itemsWithoutPrecisionClass} item(s) sem classe de precis�o.
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-bold text-blue-700 bg-white border border-blue-100 rounded-full px-3 py-1 whitespace-nowrap">
+              Clique no �cone de prancheta em cada item
+            </span>
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-2">
         <div>
           <h1 className="text-2xl font-black text-gray-900 tracking-tight">Orçamento Analítico</h1>
@@ -1770,6 +2056,18 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <LayoutDashboard className="w-4 h-4 text-blue-500" /> Curva ABC
                     </button>
                   )}
+                  <button
+                    onClick={() => { handleOpenBudgetControl(); setToolsMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2 transition-colors"
+                  >
+                    <AlertTriangle className="w-4 h-4 text-amber-500" /> Controle orçado x realizado
+                  </button>
+                  <button
+                    onClick={() => { setIsTechnicalDashboardOpen(true); setToolsMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-2 transition-colors"
+                  >
+                    <ClipboardList className="w-4 h-4 text-rose-500" /> Painel de pendências técnicas
+                  </button>
 
                   <div className="border-t border-gray-100 my-1"></div>
                   <p className="px-4 pt-1 pb-1.5 text-xs font-black text-gray-400 uppercase tracking-wider">Importar / Exportar</p>
@@ -1913,6 +2211,13 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                           </button>
                         )}
                         <button
+                          onClick={() => setCompareVersion(v)}
+                          className="flex-none px-2.5 py-1.5 border border-slate-200 text-slate-600 bg-white rounded text-button font-bold hover:bg-slate-700 hover:text-white hover:border-slate-700 transition-colors"
+                          title="Comparar esta vers�o com o or�amento atual"
+                        >
+                          Comparar
+                        </button>
+                        <button
                           onClick={() => handleLoadVersion(v)}
                           className={`flex-1 py-1.5 border rounded text-form-input font-bold transition-colors ${isActive ? 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-600 hover:text-white hover:border-amber-600' : 'bg-white border-blue-200 text-blue-600 hover:bg-blue-600 hover:text-white'}`}
                         >
@@ -1928,7 +2233,307 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         )
       }
 
-      <div className="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+      {
+        compareVersion && (() => {
+          const diff = buildVersionDiff(compareVersion);
+          const fmtMoney = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+          return (
+            <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+                <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-start bg-gray-50/50">
+                  <div>
+                    <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
+                      <History className="w-5 h-5 text-blue-600" />
+                      Comparativo de vers�o
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Vers�o {compareVersion.item} � {compareVersion.description} contra o or�amento atual
+                    </p>
+                  </div>
+                  <button onClick={() => setCompareVersion(null)} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors" title="Fechar">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-6 border-b border-gray-100 grid grid-cols-1 md:grid-cols-5 gap-3 bg-white">
+                  {[
+                    ['Base', fmtMoney(diff.baseTotal), 'text-gray-700'],
+                    ['Atual', fmtMoney(diff.currentTotal), 'text-blue-700'],
+                    ['Varia��o', fmtMoney(diff.deltaTotal), diff.deltaTotal >= 0 ? 'text-red-600' : 'text-emerald-700'],
+                    ['Alterados', String(diff.changed), 'text-amber-700'],
+                    ['Adic./Rem.', `${diff.added} / ${diff.removed}`, 'text-slate-700'],
+                  ].map(([label, value, color]) => (
+                    <div key={label} className="border border-gray-100 rounded-lg p-3 bg-gray-50/50">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</p>
+                      <p className={`text-lg font-black mt-1 ${color}`}>{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex-1 overflow-auto">
+                  {diff.rows.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
+                      Nenhuma diferen�a encontrada entre esta vers�o e o or�amento atual.
+                    </div>
+                  ) : (
+                    <table className="w-full text-left text-sm">
+                      <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
+                        <tr>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Status</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">C�digo</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Descri��o</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Qtd. base</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Qtd. atual</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Total base</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Total atual</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Varia��o</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Campos</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {diff.rows.map(row => (
+                          <tr key={row.id} className="hover:bg-blue-50/30">
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${row.status === 'Adicionado' ? 'bg-emerald-50 text-emerald-700' : row.status === 'Removido' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+                                {row.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 font-mono text-xs text-gray-600">{row.code}</td>
+                            <td className="px-4 py-3 text-gray-700 max-w-md">
+                              <div className="line-clamp-2" title={row.description}>{row.description}</div>
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-gray-500">{row.beforeQty.toLocaleString('pt-BR')}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-gray-900 font-bold">{row.afterQty.toLocaleString('pt-BR')}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-gray-500">{fmtMoney(row.beforeTotal)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-gray-900 font-bold">{fmtMoney(row.afterTotal)}</td>
+                            <td className={`px-4 py-3 text-right tabular-nums font-black ${row.delta >= 0 ? 'text-red-600' : 'text-emerald-700'}`}>{fmtMoney(row.delta)}</td>
+                            <td className="px-4 py-3 text-xs text-gray-500 max-w-xs">{row.fields.join(', ')}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()
+      }
+      
+      
+      {
+        isTechnicalDashboardOpen && (() => {
+          const issueRows = buildTechnicalIssueRows();
+          const filteredRows = technicalDashboardFilter === 'ALL'
+            ? issueRows
+            : issueRows.filter(row => row.issueCodes.includes(technicalDashboardFilter));
+          const countBy = (filter: TechnicalDashboardFilter) => issueRows.filter(row => row.issueCodes.includes(filter)).length;
+          const filters: Array<{ id: TechnicalDashboardFilter; label: string; value: number; tone: string }> = [
+            { id: 'ALL', label: 'Todas', value: issueRows.length, tone: 'text-gray-800' },
+            { id: 'NO_MEMORY', label: 'Sem memória', value: countBy('NO_MEMORY'), tone: 'text-amber-700' },
+            { id: 'NO_PRECISION', label: 'Sem classe', value: countBy('NO_PRECISION'), tone: 'text-orange-700' },
+            { id: 'PENDING_APPROVAL', label: 'Aprovação', value: countBy('PENDING_APPROVAL'), tone: 'text-blue-700' },
+            { id: 'INACTIVE', label: 'Inativos', value: countBy('INACTIVE'), tone: 'text-slate-700' },
+            { id: 'FINANCIAL', label: 'Divergências', value: countBy('FINANCIAL'), tone: 'text-red-700' },
+          ];
+
+          return (
+            <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+                <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-start bg-gray-50/50">
+                  <div>
+                    <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
+                      <ClipboardList className="w-5 h-5 text-rose-600" />
+                      Painel de pendências técnicas
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">Triagem dos itens sem memória, sem classe, aguardando aprovação ou com divergência financeira carregada.</p>
+                  </div>
+                  <button onClick={() => setIsTechnicalDashboardOpen(false)} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors" title="Fechar">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-6 border-b border-gray-100 grid grid-cols-2 md:grid-cols-6 gap-3 bg-white">
+                  {filters.map(filter => (
+                    <button
+                      key={filter.id}
+                      onClick={() => setTechnicalDashboardFilter(filter.id)}
+                      className={`text-left border rounded-lg p-3 transition-all ${technicalDashboardFilter === filter.id ? 'border-rose-300 bg-rose-50 shadow-sm' : 'border-gray-100 bg-gray-50/50 hover:bg-gray-50'}`}
+                    >
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{filter.label}</p>
+                      <p className={`text-lg font-black mt-1 ${filter.tone}`}>{filter.value}</p>
+                    </button>
+                  ))}
+                </div>
+
+                {budgetControlRows.length === 0 && (
+                  <div className="mx-6 mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 flex items-center justify-between gap-3">
+                    <span>As divergências financeiras aparecem depois de carregar o controle orçado x realizado.</span>
+                    <button onClick={() => { setIsTechnicalDashboardOpen(false); handleOpenBudgetControl(); }} className="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs font-bold hover:bg-blue-700">Carregar controle</button>
+                  </div>
+                )}
+
+                <div className="flex-1 overflow-auto">
+                  {filteredRows.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
+                      Nenhuma pendência encontrada para o filtro selecionado.
+                    </div>
+                  ) : (
+                    <table className="w-full text-left text-sm">
+                      <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
+                        <tr>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Código</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Descrição</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Classe</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Status</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Responsável</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Pendências</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {filteredRows.map(row => (
+                          <tr key={row.item.id} className="hover:bg-rose-50/30">
+                            <td className="px-4 py-3 font-mono text-xs text-gray-600">{row.code}</td>
+                            <td className="px-4 py-3 text-gray-700 max-w-md"><div className="line-clamp-2" title={row.description}>{row.description}</div></td>
+                            <td className="px-4 py-3 font-bold text-gray-700">{row.precisionClass}</td>
+                            <td className="px-4 py-3 text-gray-600">{row.status}</td>
+                            <td className="px-4 py-3 text-gray-600">{row.responsible}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-1">
+                                {row.issues.map(issue => (
+                                  <span key={issue} className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">{issue}</span>
+                                ))}
+                                {row.financialAlerts.map(alert => (
+                                  <span key={alert} className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-100">{alert}</span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button onClick={() => handleOpenTechnicalItem(row.item)} className="px-3 py-1.5 rounded-md bg-gray-900 text-white text-xs font-bold hover:bg-gray-800">Abrir</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()
+      }
+      {
+        isBudgetControlOpen && (() => {
+          const fmtMoney = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+          const totals = budgetControlRows.reduce((acc, row) => ({
+            budgeted: acc.budgeted + row.budgeted,
+            contracted: acc.contracted + row.contracted,
+            measured: acc.measured + row.measured,
+            approved: acc.approved + row.approved,
+            paid: acc.paid + row.paid,
+            deviation: acc.deviation + row.deviation,
+          }), { budgeted: 0, contracted: 0, measured: 0, approved: 0, paid: 0, deviation: 0 });
+          const alertedRows = budgetControlRows.filter(row => row.alerts.length > 0).length;
+
+          return (
+            <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+                <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-start bg-gray-50/50">
+                  <div>
+                    <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-amber-600" />
+                      Controle orçado x realizado
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">Cruzamento do orçamento atual com contratos, medições aprovadas e pagamentos vinculados.</p>
+                  </div>
+                  <button onClick={() => setIsBudgetControlOpen(false)} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors" title="Fechar">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-6 border-b border-gray-100 grid grid-cols-1 md:grid-cols-6 gap-3 bg-white">
+                  {[
+                    ['Orçado', fmtMoney(totals.budgeted), 'text-gray-800'],
+                    ['Contratado', fmtMoney(totals.contracted), 'text-blue-700'],
+                    ['Medido', fmtMoney(totals.measured), 'text-indigo-700'],
+                    ['Aprovado', fmtMoney(totals.approved), 'text-emerald-700'],
+                    ['Pago', fmtMoney(totals.paid), 'text-slate-700'],
+                    ['Alertas', String(alertedRows), alertedRows > 0 ? 'text-amber-700' : 'text-emerald-700'],
+                  ].map(([label, value, color]) => (
+                    <div key={label} className="border border-gray-100 rounded-lg p-3 bg-gray-50/50">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{label}</p>
+                      <p className={`text-lg font-black mt-1 ${color}`}>{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {budgetControlError && (
+                  <div className="mx-6 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                    {budgetControlError}
+                  </div>
+                )}
+
+                <div className="flex-1 overflow-auto">
+                  {isLoadingBudgetControl ? (
+                    <div className="h-full flex items-center justify-center text-gray-500 text-sm gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Carregando contratos e medições...
+                    </div>
+                  ) : budgetControlRows.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-gray-400 text-sm italic">
+                      Nenhum item disponível para conferência.
+                    </div>
+                  ) : (
+                    <table className="w-full text-left text-sm">
+                      <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
+                        <tr>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Código</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Descrição</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Orçado</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Contratado</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Medido</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Aprovado</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Pago</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase text-right">Saldo</th>
+                          <th className="px-4 py-3 text-xs font-black text-gray-400 uppercase">Alertas</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {budgetControlRows.map(row => (
+                          <tr key={row.id} className="hover:bg-amber-50/30">
+                            <td className="px-4 py-3 font-mono text-xs text-gray-600">{row.code}</td>
+                            <td className="px-4 py-3 text-gray-700 max-w-md">
+                              <div className="line-clamp-2" title={row.description}>{row.description}</div>
+                              {row.unit && <div className="text-xs text-gray-400 mt-0.5">Unid.: {row.unit}</div>}
+                            </td>
+                            <td className="px-4 py-3 text-right tabular-nums text-gray-700 font-bold">{fmtMoney(row.budgeted)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-blue-700 font-bold">{fmtMoney(row.contracted)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-indigo-700 font-bold">{fmtMoney(row.measured)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-emerald-700 font-bold">{fmtMoney(row.approved)}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-slate-700 font-bold">{fmtMoney(row.paid)}</td>
+                            <td className={`px-4 py-3 text-right tabular-nums font-black ${row.balance < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{fmtMoney(row.balance)}</td>
+                            <td className="px-4 py-3">
+                              {row.alerts.length === 0 ? (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">OK</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  {row.alerts.map(alert => (
+                                    <span key={alert} className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">{alert}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()
+      }      <div className="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col">
         <div className="flex flex-col">
           <div className={`grid ${showNatureBreakdown ? 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr_2.4fr]' : 'grid-cols-[0.8fr_0.6fr_0.8fr_7fr_0.6fr_0.6fr_1fr_1fr_0.6fr_1fr_1.2fr]'} gap-2 px-4 pt-2`}>
             {showNatureBreakdown && (
@@ -2159,6 +2764,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                                         viewMode={settings.cpuViewMode}
                                         onOpenModal={handleOpenCPU}
                                         onDuplicateItem={handleDuplicateItem}
+                                        onOpenDetails={handleOpenDetails}
                                         isFavorite={item.sinapiItem ? favorites.includes(item.sinapiItem.code) : false}
                                         onToggleFavorite={onToggleFavorite}
                                         showNatureBreakdown={showNatureBreakdown}
@@ -2691,6 +3297,161 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <button onClick={() => setIsVersionModalOpen(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors">Cancelar</button>
                     <button onClick={handleSaveVersion} className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium shadow-sm transition-all active:scale-95">Salvar Versão</button>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+      {/* Modal de mem�ria t�cnica do item */}
+      {
+        selectedDetailsItem && (
+          <div className="fixed inset-0 z-[75] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-start bg-gray-50/50">
+                <div className="flex items-start gap-3">
+                  <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-sm">
+                    <ClipboardList className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-extrabold text-gray-900">Mem�ria t�cnica do item</h3>
+                    <p className="text-xs text-gray-500 font-mono mt-1">{selectedDetailsItem.sinapiItem?.code || '---'} � {selectedDetailsItem.sinapiItem?.description || 'Sem descri��o'}</p>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedDetailsItem(null)} className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors" title="Fechar">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Classe de precis�o</label>
+                    <select
+                      value={selectedDetailsItem.precisionClass || ''}
+                      onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, precisionClass: e.target.value ? e.target.value as BudgetEntry['precisionClass'] : undefined } : prev)}
+                      className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                    >
+                      <option value="">N�o definida</option>
+                      <option value="A">A - Projeto executivo</option>
+                      <option value="B">B - Projeto b�sico</option>
+                      <option value="C">C - Anteprojeto</option>
+                      <option value="D">D - Estudo preliminar</option>
+                      <option value="E">E - Estimativa param�trica</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Status do item</label>
+                    <select
+                      value={selectedDetailsItem.status || 'Rascunho'}
+                      onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, status: e.target.value as BudgetEntry['status'] } : prev)}
+                      className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                    >
+                      {['Rascunho', 'Em revis�o', 'Aguardando aprova��o', 'Aprovado', 'Congelado', 'Substitu�do', 'Cancelado'].map(status => <option key={status} value={status}>{status}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Disciplina</label>
+                    <input
+                      value={selectedDetailsItem.discipline || ''}
+                      onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, discipline: e.target.value } : prev)}
+                      className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="Ex: Estrutura"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Respons�vel</label>
+                    <input
+                      value={selectedDetailsItem.responsible || ''}
+                      onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, responsible: e.target.value } : prev)}
+                      className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="Nome ou equipe"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {[
+                    ['block', 'Bloco'],
+                    ['tower', 'Torre'],
+                    ['floor', 'Pavimento'],
+                    ['room', 'Ambiente']
+                  ].map(([key, label]) => (
+                    <div key={key}>
+                      <label className="block text-xs font-bold text-gray-400 uppercase mb-1">{label}</label>
+                      <input
+                        value={(selectedDetailsItem.location as any)?.[key] || ''}
+                        onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, location: { ...(prev.location || {}), [key]: e.target.value } } : prev)}
+                        className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">F�rmula / mem�ria de c�lculo</label>
+                    <textarea
+                      rows={4}
+                      value={selectedDetailsItem.calculationMemory?.formula || ''}
+                      onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, calculationMemory: { ...(prev.calculationMemory || {}), formula: e.target.value } } : prev)}
+                      className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none font-mono"
+                      placeholder="Ex: (comprimento x altura) - v�os"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Resultado calculado</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={selectedDetailsItem.calculationMemory?.result ?? ''}
+                      onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, calculationMemory: { ...(prev.calculationMemory || {}), result: e.target.value === '' ? undefined : Number(e.target.value) } } : prev)}
+                      className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      placeholder="Quantidade audit�vel"
+                    />
+                    <label className="mt-4 flex items-center gap-2 text-sm font-bold text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={!!selectedDetailsItem.calculationMemory?.approved}
+                        onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, calculationMemory: { ...(prev.calculationMemory || {}), approved: e.target.checked, approvedAt: e.target.checked ? new Date().toISOString() : undefined } } : prev)}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      Quantidade aprovada
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Justificativa / premissas</label>
+                  <textarea
+                    rows={4}
+                    value={selectedDetailsItem.calculationMemory?.justification || ''}
+                    onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, calculationMemory: { ...(prev.calculationMemory || {}), justification: e.target.value } } : prev)}
+                    className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                    placeholder="Explique origem da quantidade, documentos usados, premissas, exclus�es ou baixa precis�o."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Observa��es internas</label>
+                  <textarea
+                    rows={3}
+                    value={selectedDetailsItem.notes || ''}
+                    onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, notes: e.target.value } : prev)}
+                    className="w-full rounded-lg border border-gray-200 p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
+                <div className="text-xs text-gray-500">
+                  A quantidade principal do item continua em {selectedDetailsItem.quantity.toLocaleString('pt-BR')} {selectedDetailsItem.sinapiItem?.unit || ''}; o resultado calculado serve para auditoria e confer�ncia.
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setSelectedDetailsItem(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-white font-medium transition-colors">Cancelar</button>
+                  <button onClick={handleSaveDetails} className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-sm transition-all flex items-center gap-2">
+                    <Save className="w-4 h-4" /> Salvar mem�ria
+                  </button>
                 </div>
               </div>
             </div>

@@ -11,7 +11,14 @@
 -- supabase/migrations/20261231000004_area_engine_draft_validation_constraints.sql
 -- supabase/migrations/20261231000005_area_engine_lifecycle_functions.sql
 --
--- 2) Rode os fixtures abaixo, um por vez, nesta ordem:
+-- 2) Fixtures sao SOMENTE para banco de QA/teste.
+--    Antes de cada fixture, habilite explicitamente a sessao:
+--
+--    SET app.allow_area_engine_fixture = 'on';
+--
+--    Sem essa flag, os fixtures param antes de criar dados.
+--
+-- 3) Rode os fixtures abaixo, um por vez, nesta ordem:
 --
 -- supabase/seed/area_engine_case1_fixture.sql
 -- supabase/seed/area_engine_case2_varanda_fixture.sql

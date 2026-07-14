@@ -610,6 +610,7 @@ export const documentService = {
         nome: docData.nome,
         criado_por: uploadedByEmail || 'sistema',
         descricao: docData.descricao,
+        autor: docData.autor || null,
         categoria: docData.categoria,
         tipo_documento: docData.tipo_documento,
         status: docData.status || 'ativo',

@@ -15,6 +15,7 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
+import { useConfirm } from './ui/confirm';
 
 // ─── helpers ────────────────────────────────────────────────
 
@@ -232,49 +233,6 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                         Salvar
                     </button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ─── BaixaModal ──────────────────────────────────────────────
-
-interface BaixaModalProps {
-    receivable: Receivable;
-    onConfirm: () => void;
-    onClose: () => void;
-    saving: boolean;
-}
-function BaixaModal({ receivable, onConfirm, onClose, saving }: BaixaModalProps) {
-    return (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
-                <div className="p-6">
-                    <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center mb-4">
-                        <Check className="w-6 h-6 text-green-600" />
-                    </div>
-                    <h2 className="text-base font-black text-gray-900 mb-1">Confirmar Recebimento</h2>
-                    <p className="text-sm text-gray-500 mb-4">
-                        Marcar <span className="font-bold text-gray-800">{receivable.description ?? '(sem descrição)'}</span> como <span className="font-bold text-green-700">RECEBIDO</span>?
-                    </p>
-                    <div className="bg-gray-50 rounded-xl p-3 mb-5 flex justify-between items-center">
-                        <span className="text-xs text-gray-500">Valor</span>
-                        <span className="font-black text-gray-900">{fmt(receivable.amount)}</span>
-                    </div>
-                    <div className="flex gap-3">
-                        <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors">
-                            Cancelar
-                        </button>
-                        <button
-                            onClick={onConfirm}
-                            disabled={saving}
-                            className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl text-sm font-black transition-colors flex items-center justify-center gap-2"
-                        >
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                            Confirmar
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>
@@ -660,9 +618,8 @@ export default function ContasReceberManager({ organizationId, organizations, on
         setTimeout(() => setNotification(null), 4500);
     };
 
+    const confirm = useConfirm();
     const [showNovo, setShowNovo]         = useState(false);
-    const [baixando, setBaixando]         = useState<Receivable | null>(null);
-    const [savingBaixa, setSavingBaixa]   = useState(false);
     const [changingStatus, setChangingStatus] = useState<string | null>(null);
     const [charges, setCharges]           = useState<Record<string, ClientCharge>>({});
     const [emitindo, setEmitindo]         = useState<Receivable | null>(null);
@@ -701,18 +658,28 @@ export default function ContasReceberManager({ organizationId, organizations, on
         if (id !== 'ALL') onOrgChange?.(id);
     }
 
-    async function handleBaixa() {
-        if (!baixando) return;
-        setSavingBaixa(true);
+    async function handleBaixa(receivable: Receivable) {
+        const ok = await confirm({
+            title: 'Confirmar Recebimento',
+            message: (
+                <>
+                    Marcar <b>{receivable.description ?? '(sem descrição)'}</b> como <b className="text-green-700">RECEBIDO</b>?
+                    <div className="bg-gray-50 rounded-xl p-3 mt-3 flex justify-between items-center">
+                        <span className="text-xs text-gray-500">Valor</span>
+                        <span className="font-bold text-gray-900">{fmt(receivable.amount)}</span>
+                    </div>
+                </>
+            ),
+            variant: 'default',
+            confirmLabel: 'Confirmar',
+        });
+        if (!ok) return;
         try {
-            await receivableService.updateStatus(baixando.id, 'RECEBIDO');
-            setBaixando(null);
+            await receivableService.updateStatus(receivable.id, 'RECEBIDO');
             await load();
             notify('Recebível baixado com sucesso.');
         } catch (e) {
             notify('Erro: ' + (e instanceof Error ? e.message : 'Falha ao baixar'), 'error');
-        } finally {
-            setSavingBaixa(false);
         }
     }
 
@@ -754,6 +721,10 @@ export default function ContasReceberManager({ organizationId, organizations, on
     /** Mesmo critério do botão "Baixar" por linha: só não-RECEBIDO pode ser baixado. */
     const isSelectable = (r: Receivable) => r.effective_status !== 'RECEBIDO';
     const selectableVisible = useMemo(() => sorted.filter(isSelectable), [sorted]);
+    const selectableIndexById = useMemo(
+        () => new Map(selectableVisible.map((r, i) => [r.id, i])),
+        [selectableVisible],
+    );
     const selectedVisible = useMemo(
         () => selectableVisible.filter(r => selectedIds.has(r.id)),
         [selectableVisible, selectedIds],
@@ -767,6 +738,20 @@ export default function ContasReceberManager({ organizationId, organizations, on
             next.has(id) ? next.delete(id) : next.add(id);
             return next;
         });
+    }
+
+    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
+
+    /** F4 (§10.1) — Shift+clique seleciona o intervalo entre a última linha marcada e a atual. */
+    function handleRowCheck(id: string, index: number, shiftKey: boolean) {
+        if (shiftKey && lastCheckedIndex !== null) {
+            const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
+            const rangeIds = selectableVisible.slice(start, end + 1).map(r => r.id);
+            setSelectedIds(prev => new Set([...prev, ...rangeIds]));
+        } else {
+            toggleRow(id);
+            setLastCheckedIndex(index);
+        }
     }
     function toggleAllVisible() {
         setSelectedIds(prev => {
@@ -856,13 +841,13 @@ export default function ContasReceberManager({ organizationId, organizations, on
                         )}
                         <button
                             onClick={() => setShowNovo(true)}
-                            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-black rounded-xl transition-colors"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-green-600 hover:bg-green-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
                         >
-                            <Plus className="w-4 h-4" /> Novo
+                            <Plus className="w-[15px] h-[15px]" /> Novo
                         </button>
                         <button
                             onClick={load}
-                            className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                            className="h-9 w-9 flex items-center justify-center hover:bg-gray-100 rounded-[6px] transition-colors"
                             title="Atualizar"
                         >
                             <RefreshCw className="w-4 h-4 text-gray-500" />
@@ -944,7 +929,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
                             <button
                                 key={s}
                                 onClick={() => setStatusFilter(s)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all ${
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider whitespace-nowrap transition-all ${
                                     statusFilter === s
                                         ? 'bg-blue-600 text-white'
                                         : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -962,14 +947,17 @@ export default function ContasReceberManager({ organizationId, organizations, on
                         <Filter className="w-3.5 h-3.5" /> Filtros
                     </button>
                     <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-                    <ColumnConfigButton
-                        columns={RECEBER_COLUMNS.filter(c => c.key !== 'actions')}
-                        visibleColumns={tableColumns.visibleColumns}
-                        showColumnConfig={tableColumns.showColumnConfig}
-                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                        onToggleColumn={tableColumns.toggleColumn}
-                        onReset={tableColumns.resetColumns}
-                    />
+                    {/* Agrupador ColumnConfig — sem viewMode nesta tela (não há grid/lista) */}
+                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                        <ColumnConfigButton
+                            columns={RECEBER_COLUMNS.filter(c => c.key !== 'actions')}
+                            visibleColumns={tableColumns.visibleColumns}
+                            showColumnConfig={tableColumns.showColumnConfig}
+                            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                            onToggleColumn={tableColumns.toggleColumn}
+                            onReset={tableColumns.resetColumns}
+                        />
+                    </div>
                 </div>
 
                 {showFilters && (
@@ -994,27 +982,27 @@ export default function ContasReceberManager({ organizationId, organizations, on
                 )}
             </div>
 
-            {/* Barra de ação em massa (F3) */}
+            {/* Barra de ação em massa (F3) — §10: fixa no rodapé, fora do fluxo normal da lista */}
             {selectedVisible.length > 0 && (
-                <div className="flex items-center gap-4 bg-green-600 text-white px-6 py-3 flex-shrink-0">
-                    <span className="text-sm font-semibold">
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-green-600 text-white rounded-2xl shadow-lg shadow-green-900/20">
+                    <span className="flex-1 text-sm font-bold whitespace-nowrap">
                         {selectedVisible.length} selecionado{selectedVisible.length !== 1 ? 's' : ''}
-                        <span className="ml-2 font-normal text-green-100">{fmt(selectedTotal)}</span>
+                        <span className="ml-2 font-normal opacity-75">· {fmt(selectedTotal)}</span>
                     </span>
-                    <div className="flex-1" />
                     <button
                         onClick={handleBulkBaixa}
                         disabled={bulkLoading}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-green-700 text-sm font-semibold hover:bg-green-50 disabled:opacity-60 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-2 bg-white text-green-700 rounded-xl text-sm font-semibold hover:bg-green-50 disabled:opacity-60 transition-colors"
                     >
                         {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                         Baixar (Recebido)
                     </button>
                     <button
                         onClick={clearSelection}
-                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm font-medium text-green-100 hover:text-white hover:bg-green-500 transition-colors"
+                        className="flex items-center gap-2 px-3 py-2 bg-green-500 rounded-xl font-bold text-sm hover:bg-green-400 transition-colors"
                     >
-                        <X className="w-3.5 h-3.5" /> Limpar
+                        <X className="w-3.5 h-3.5" />
+                        Desmarcar
                     </button>
                 </div>
             )}
@@ -1094,9 +1082,10 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                             {isSelectable(r) ? (
                                                 <input
                                                     type="checkbox"
+                                                    title="Dica: segure Shift e clique para selecionar um intervalo"
                                                     className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
                                                     checked={selectedIds.has(r.id)}
-                                                    onChange={() => toggleRow(r.id)}
+                                                    onChange={e => handleRowCheck(r.id, selectableIndexById.get(r.id) ?? 0, (e.nativeEvent as MouseEvent).shiftKey)}
                                                 />
                                             ) : null}
                                         </td>
@@ -1135,28 +1124,28 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                             <div className="flex items-center gap-2">
                                                 {!isRecebido && (
                                                     <button
-                                                        onClick={() => setBaixando(r)}
-                                                        className="px-2.5 py-1 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
+                                                        onClick={() => handleBaixa(r)}
+                                                        className="text-green-700 hover:text-green-800 text-sm font-medium p-1.5 hover:bg-green-50 rounded-lg transition-all flex items-center gap-1"
                                                     >
-                                                        <Check className="w-3 h-3" /> Baixar
+                                                        <Check className="w-3.5 h-3.5" /> Baixar
                                                     </button>
                                                 )}
                                                 {!isRecebido && (
                                                     charges[r.id] ? (
                                                         <button
                                                             onClick={() => setEmitindo(r)}
-                                                            className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
+                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1"
                                                             title="Ver cobrança emitida"
                                                         >
-                                                            <FileText className="w-3 h-3" /> Cobrança
+                                                            <FileText className="w-3.5 h-3.5" /> Cobrança
                                                         </button>
                                                     ) : (
                                                         <button
                                                             onClick={() => setEmitindo(r)}
-                                                            className="px-2.5 py-1 bg-violet-50 hover:bg-violet-100 text-violet-700 text-xs font-black uppercase tracking-widest rounded-lg transition-colors flex items-center gap-1"
+                                                            className="text-violet-700 hover:text-violet-800 text-sm font-medium p-1.5 hover:bg-violet-50 rounded-lg transition-all flex items-center gap-1"
                                                             title="Emitir boleto/PIX via Asaas"
                                                         >
-                                                            <FileText className="w-3 h-3" /> Emitir
+                                                            <FileText className="w-3.5 h-3.5" /> Emitir
                                                         </button>
                                                     )
                                                 )}
@@ -1198,14 +1187,6 @@ export default function ContasReceberManager({ organizationId, organizations, on
                     organizationId={effectiveOrgId}
                     onSave={() => { setShowNovo(false); load(); }}
                     onClose={() => setShowNovo(false)}
-                />
-            )}
-            {baixando && (
-                <BaixaModal
-                    receivable={baixando}
-                    onConfirm={handleBaixa}
-                    onClose={() => setBaixando(null)}
-                    saving={savingBaixa}
                 />
             )}
             {emitindo && (

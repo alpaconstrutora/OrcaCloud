@@ -1,4 +1,4 @@
-import { jsPDF } from 'jspdf';
+﻿import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 // @ts-ignore
@@ -22,6 +22,57 @@ function makePdfRow(cells: string[], rowType?: PdfRowType): PdfRow {
     const row = cells as PdfRow;
     row.rowType = rowType;
     return row;
+}
+function hasBudgetCalculationMemory(item: BudgetEntry): boolean {
+    return !!(
+        item.calculationMemory?.formula?.trim() ||
+        item.calculationMemory?.justification?.trim() ||
+        item.calculationMemory?.result !== undefined
+    );
+}
+
+function formatBudgetLocation(item: BudgetEntry): string {
+    const location = item.location;
+    if (!location) return '';
+    return [
+        location.block ? `Bloco ${location.block}` : '',
+        location.tower ? `Torre ${location.tower}` : '',
+        location.floor ? `Pav. ${location.floor}` : '',
+        location.room ? `Amb. ${location.room}` : '',
+    ].filter(Boolean).join(' / ');
+}
+
+function formatBudgetAttachments(item: BudgetEntry): string {
+    return (item.attachments || []).map(attachment => attachment.name).filter(Boolean).join('; ');
+}
+
+function formatBudgetTechnicalAlerts(item: BudgetEntry): string {
+    const alerts: string[] = [];
+    if (!item.precisionClass) alerts.push('Sem classe de precisão');
+    if (!hasBudgetCalculationMemory(item)) alerts.push('Sem memória de cálculo');
+    if (item.status && ['Cancelado', 'Substituído'].includes(item.status)) alerts.push(item.status);
+    return alerts.join('; ');
+}
+
+function buildBudgetTechnicalExcelFields(item: BudgetEntry): Record<string, string | number> {
+    const memory = item.calculationMemory;
+    return {
+        'Classe de Precisão': item.precisionClass || '',
+        'Status Técnico': item.status || '',
+        'Disciplina': item.discipline || '',
+        'Responsável': item.responsible || '',
+        'Localização': formatBudgetLocation(item),
+        'Memória de Cálculo': hasBudgetCalculationMemory(item) ? 'Sim' : 'Não',
+        'Fórmula': memory?.formula || '',
+        'Resultado da Memória': memory?.result ?? '',
+        'Justificativa Técnica': memory?.justification || '',
+        'Memória Aprovada': memory?.approved ? 'Sim' : 'Não',
+        'Aprovado Por': memory?.approvedBy || '',
+        'Aprovado Em': memory?.approvedAt ? new Date(memory.approvedAt).toLocaleDateString('pt-BR') : '',
+        'Anexos Técnicos': formatBudgetAttachments(item),
+        'Observações Técnicas': item.notes || '',
+        'Alertas Técnicos': formatBudgetTechnicalAlerts(item),
+    };
 }
 
 // Typed rows for generateFinancialPDF / generateFinancialExcel
@@ -472,7 +523,7 @@ export const exportService = {
         currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 8;
 
         // 3. Build Table Structure
-        const head = [['Item', 'Base', 'Código', 'Descrição', 'Unid', 'Qtd', 'Unitário', 'Total']];
+        const head = [['Item', 'Base', 'Código', 'Descrição', 'Unid', 'Qtd', 'Unitário', 'Total', 'Classe', 'Memória']];
         const rawRows: PdfRow[] = [];
 
         if (type === 'INPUTS') {
@@ -485,7 +536,9 @@ export const exportService = {
                     item.sinapiItem?.unit || '-',
                     item.quantity.toLocaleString('pt-BR'),
                     new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(item.sinapiItem?.price || 0),
-                    new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(item.quantity * (item.sinapiItem?.price || 0))
+                    new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(item.quantity * (item.sinapiItem?.price || 0)),
+                    item.precisionClass || '-',
+                    hasBudgetCalculationMemory(item) ? 'Sim' : 'Pendente'
                 ], 'ITEM'));
             });
         } else {
@@ -494,21 +547,21 @@ export const exportService = {
                 const groupItems = budget.filter(b => b.group === group.name);
                 const gTotal = calculateItemsTotal(groupItems);
 
-                rawRows.push(makePdfRow([gCode, '', '', cleanLabel(group.name).toUpperCase(), '', '', '', fmtMoney(gTotal)], 'GROUP'));
+                rawRows.push(makePdfRow([gCode, '', '', cleanLabel(group.name).toUpperCase(), '', '', '', fmtMoney(gTotal), '', ''], 'GROUP'));
 
                 (group.phases || []).forEach((phase, pIndex) => {
                     const pCode = `${gCode}.${String(pIndex + 1).padStart(2, '0')}`;
                     const phaseItems = budget.filter(b => b.group === group.name && b.phase === phase.name);
                     const pTotal = calculateItemsTotal(phaseItems);
 
-                    rawRows.push(makePdfRow([pCode, '', '', cleanLabel(phase.name).toUpperCase(), '', '', '', fmtMoney(pTotal)], 'PHASE'));
+                    rawRows.push(makePdfRow([pCode, '', '', cleanLabel(phase.name).toUpperCase(), '', '', '', fmtMoney(pTotal), '', ''], 'PHASE'));
 
                     (phase.subPhases || []).forEach((subPhase, spIndex) => {
                         const spCode = `${pCode}.${String(spIndex + 1).padStart(2, '0')}`;
                         const items = budget.filter(b => b.group === group.name && b.phase === phase.name && b.subPhase === subPhase);
                         const spTotal = calculateItemsTotal(items);
 
-                        rawRows.push(makePdfRow([spCode, '', '', cleanLabel(subPhase).toUpperCase(), '', '', '', fmtMoney(spTotal)], 'SUBPHASE'));
+                        rawRows.push(makePdfRow([spCode, '', '', cleanLabel(subPhase).toUpperCase(), '', '', '', fmtMoney(spTotal), '', ''], 'SUBPHASE'));
 
                         items.forEach((item, iIdx) => {
                             const itemBdi = item.bdi ?? (settings.bdi || 0);
@@ -523,7 +576,9 @@ export const exportService = {
                                 item.sinapiItem?.unit || '-',
                                 item.quantity.toLocaleString('pt-BR'),
                                 new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(basePrice),
-                                new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(finalTotal)
+                                new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(finalTotal),
+                                item.precisionClass || '-',
+                                hasBudgetCalculationMemory(item) ? 'Sim' : 'Pendente'
                             ], 'ITEM'));
                         });
                     });
@@ -545,8 +600,10 @@ export const exportService = {
                 3: { cellWidth: 'auto' },
                 4: { cellWidth: 8, halign: 'center' },
                 5: { cellWidth: 12, halign: 'center' },
-                6: { cellWidth: 18, halign: 'right' },
-                7: { cellWidth: 22, halign: 'right', fontStyle: 'bold' }
+                6: { cellWidth: 16, halign: 'right' },
+                7: { cellWidth: 18, halign: 'right', fontStyle: 'bold' },
+                8: { cellWidth: 10, halign: 'center' },
+                9: { cellWidth: 14, halign: 'center' }
             },
             didParseCell: (data) => {
                 const rowType = (data.row.raw as PdfRow).rowType;
@@ -601,7 +658,8 @@ export const exportService = {
                     'Unidade': item.sinapiItem?.unit || '',
                     'Quantidade': item.quantity,
                     'Preço Unitário (R$)': item.sinapiItem?.price || 0,
-                    'Total (R$)': item.quantity * (item.sinapiItem?.price || 0)
+                    'Total (R$)': item.quantity * (item.sinapiItem?.price || 0),
+                    ...buildBudgetTechnicalExcelFields(item)
                 });
             });
         } else {
@@ -649,7 +707,8 @@ export const exportService = {
                                 'Unidade': item.sinapiItem?.unit || '',
                                 'Quantidade': item.quantity,
                                 'Preço Unitário (R$)': basePrice,
-                                'Total (R$)': finalTotal
+                                'Total (R$)': finalTotal,
+                                ...buildBudgetTechnicalExcelFields(item)
                             });
                         });
                     });
@@ -661,7 +720,9 @@ export const exportService = {
         
         // Basic column width formatting
         const wscols = [
-            { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 60 }, { wch: 8 }, { wch: 12 }, { wch: 15 }, { wch: 15 }
+            { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 60 }, { wch: 8 }, { wch: 12 }, { wch: 15 }, { wch: 15 },
+            { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 22 }, { wch: 28 }, { wch: 18 }, { wch: 28 }, { wch: 18 },
+            { wch: 45 }, { wch: 18 }, { wch: 22 }, { wch: 14 }, { wch: 35 }, { wch: 40 }, { wch: 35 }
         ];
         ws['!cols'] = wscols;
 

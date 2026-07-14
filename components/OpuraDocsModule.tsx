@@ -66,6 +66,7 @@ import { useStore } from '../store/useStore';
 
 const COLUMNS: ColumnConfig[] = [
   { key: 'nome', label: 'Documento', sortable: true },
+  { key: 'autor', label: 'Autor', sortable: true },
   { key: 'tipo_documento', label: 'Tipo / Categoria', sortable: true },
   { key: 'project_id', label: 'Obra Vinculada', sortable: true },
   { key: 'data_emissao', label: 'Emissão', sortable: true },
@@ -116,6 +117,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [editDocName, setEditDocName] = React.useState('');
   const [editDocTokens, setEditDocTokens] = React.useState<Record<string, string>>({});
   const [editDocDesc, setEditDocDesc] = React.useState('');
+  const [editDocAutor, setEditDocAutor] = React.useState('');
   const [editDocEmissao, setEditDocEmissao] = React.useState('');
   const [editDocValidade, setEditDocValidade] = React.useState('');
   const [editDocAlertaDias, setEditDocAlertaDias] = React.useState(30);
@@ -206,6 +208,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Form State para Upload
   const [newDocName, setNewDocName] = React.useState('');
   const [newDocDesc, setNewDocDesc] = React.useState('');
+  const [newDocAutor, setNewDocAutor] = React.useState('');
   const [newDocType, setNewDocType] = React.useState('');
   const [newDocCategory, setNewDocCategory] = React.useState<OpuraDocumentCategoria>('engenharia');
   const [newDocEmissao, setNewDocEmissao] = React.useState('');
@@ -1094,6 +1097,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           organization_id: activeOrganizationId || '',
           nome: docTitle || fileToUpload.name,
           descricao: newDocDesc || undefined,
+            autor: newDocAutor || undefined,
           categoria: newDocCategory,
           tipo_documento: newDocType,
           status: 'ativo',
@@ -1274,6 +1278,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
 
     setEditDocDesc(doc.descricao || '');
+    setEditDocAutor(doc.autor || '');
     setEditDocEmissao(doc.data_emissao ? doc.data_emissao.split('T')[0] : '');
     setEditDocValidade(doc.data_validade ? doc.data_validade.split('T')[0] : '');
     setEditDocAlertaDias(doc.alerta_dias_antecedencia || 30);
@@ -1331,6 +1336,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       await documentService.updateDocument(editingDoc.id, {
         nome: finalDocName,
         descricao: editDocDesc || undefined,
+          autor: editDocAutor || undefined,
         data_emissao: editDocEmissao || undefined,
         data_validade: editDocValidade || undefined,
         alerta_dias_antecedencia: editDocAlertaDias,
@@ -2012,6 +2018,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         </th>
                       ))}
                       
+                      {tableColumns.visibleColumns.includes('autor') && (
+                        <SortableHeader colKey="autor" label="Autor" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                      )}
                       {tableColumns.visibleColumns.includes('tipo_documento') && (
                         <SortableHeader colKey="tipo_documento" label="Tipo / Categoria" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                       )}
@@ -2098,7 +2107,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                               );
                             })}
 
-                            {tableColumns.visibleColumns.includes('tipo_documento') && (
+                            {tableColumns.visibleColumns.includes('autor') && (
+                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                  {doc.autor || '-'}
+                                </td>
+                              )}
+                              {tableColumns.visibleColumns.includes('tipo_documento') && (
                               <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                 {doc.tipo_documento}
                               </td>
@@ -2270,6 +2284,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25 resize-none"
                 />
               </div>
+                
+                <div className="space-y-1.5 mt-4">
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Autor do Projeto</label>
+                  <input
+                    type="text"
+                    placeholder="Nome do autor ou responsável..."
+                    value={newDocAutor}
+                    onChange={(e) => setNewDocAutor(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  />
+                </div>
 
               {/* Emissão, Validade e Dias Alerta */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -3105,7 +3130,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {extractMaskTokens(docFolder.naming_mask).map(token => {
                             const cleanToken = token.replace(/[\[\]]/g, '');
-                            if (cleanToken === 'OBRA') {
+                              const baseToken = cleanToken.split('{')[0];
+                              const lengthMatch = cleanToken.match(/\{([0-9,]+)\}/);
+                              const tokenLength = lengthMatch ? parseInt(lengthMatch[1].split(',')[0], 10) : undefined;
+                            if (baseToken === 'OBRA') {
                               return (
                                 <div key={token} className="space-y-1.5">
                                   <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">OBRA</label>
@@ -3123,7 +3151,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                 </div>
                               );
                             }
-                            if (cleanToken === 'DISCIPLINA') {
+                            if (baseToken === 'DISCIPLINA') {
                               const allowedDiscs = docFolder.disciplines?.length ? disciplines.filter(d => docFolder.disciplines!.includes(d.code)) : disciplines;
                               return (
                                 <div key={token} className="space-y-1.5">
@@ -3144,8 +3172,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             }
                             return (
                               <div key={token} className="space-y-1.5">
-                                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">{cleanToken}</label>
-                                <input
+                                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">{baseToken}</label>
+                                <input maxLength={tokenLength || undefined}
                                   type="text"
                                   required
                                   placeholder={`Valor para ${cleanToken}`}
@@ -3195,6 +3223,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 resize-none"
                 />
               </div>
+                
+                <div className="space-y-1.5 mt-4">
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Autor do Projeto</label>
+                  <input
+                    type="text"
+                    value={editDocAutor}
+                    onChange={(e) => setEditDocAutor(e.target.value)}
+                    placeholder="Nome do autor ou responsável..."
+                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                  />
+                </div>
 
               {/* Datas e Alertas em Grid */}
               {/* Datas e Alertas em Grid */}
@@ -3807,7 +3846,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               <div className="space-y-4">
                 {extractMaskTokens(renameTargetMask).map((token) => {
                   const cleanToken = token.replace(/[\[\]]/g, '');
-                  if (cleanToken === 'OBRA') {
+                              const baseToken = cleanToken.split('{')[0];
+                              const lengthMatch = cleanToken.match(/\{([0-9,]+)\}/);
+                              const tokenLength = lengthMatch ? parseInt(lengthMatch[1].split(',')[0], 10) : undefined;
+                  if (baseToken === 'OBRA') {
                     return (
                       <div key={token} className="space-y-1.5">
                         <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">OBRA</label>
@@ -3825,7 +3867,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       </div>
                     );
                   }
-                  if (cleanToken === 'DISCIPLINA') {
+                  if (baseToken === 'DISCIPLINA') {
                     const renameTargetFolder = folders.find(f => f.id === currentFolderId);
                     const allowedDiscs = renameTargetFolder?.disciplines?.length ?
                       disciplines.filter(d => renameTargetFolder.disciplines!.includes(d.code)) : disciplines;
@@ -3851,9 +3893,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   return (
                     <div key={token} className="space-y-1.5">
                       <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">
-                        {cleanToken}
-                      </label>
-                      <input
+                        {baseToken}
+                        </label>
+                      <input maxLength={tokenLength || undefined}
                         type="text"
                         required
                         placeholder={`Valor para ${cleanToken}`}

@@ -1,5 +1,6 @@
-import { supabase } from '../lib/supabase';
+﻿import { supabase } from '../lib/supabase';
 import { ProjectSettings, BudgetEntry } from '../types';
+import { cloneBudgetForPersistence, cloneSettingsForPersistence } from '../utils/budgetPersistence';
 
 export interface ProjectData {
     id?: string;
@@ -17,10 +18,12 @@ export const projectService = {
     // para permitir "edição" simples do mesmo projeto
     async saveProject(data: ProjectData) {
         const { id, ...rest } = data;
+        const settingsForSave = cloneSettingsForPersistence(rest.settings);
+        const budgetForSave = cloneBudgetForPersistence(rest.budget);
 
         // VALIDAÇÃO DE NOME DUPLICADO (Sensível à Classificação)
-        const orgId = rest.settings?.organizationId;
-        const classification = rest.settings?.classification;
+        const orgId = settingsForSave?.organizationId;
+        const classification = settingsForSave?.classification;
 
         if (orgId && rest.name !== 'Gestão Comercial') {
             const { data: existing } = await supabase
@@ -47,10 +50,10 @@ export const projectService = {
             }
         }
 
-        const tipoObra = rest.settings?.tipoObra ?? null;
-        const regimeObra = rest.settings?.regimeObra ?? null;
-        const empresaId = rest.empresa_id ?? rest.settings?.empresaId ?? null;
-        const investorId = rest.investor_id ?? rest.settings?.investorId ?? null;
+        const tipoObra = settingsForSave?.tipoObra ?? null;
+        const regimeObra = settingsForSave?.regimeObra ?? null;
+        const empresaId = rest.empresa_id ?? settingsForSave?.empresaId ?? null;
+        const investorId = rest.investor_id ?? settingsForSave?.investorId ?? null;
 
         // Se tivermos um ID, tentamos atualizar
         if (id) {
@@ -58,10 +61,10 @@ export const projectService = {
                 .from('projects')
                 .update({
                     name: rest.name,
-                    settings: rest.settings,
-                    budget: rest.budget,
+                    settings: settingsForSave,
+                    budget: budgetForSave,
                     updated_at: new Date(),
-                    ...(rest.settings?.code !== undefined ? { code: rest.settings.code || null } : {}),
+                    ...(settingsForSave?.code !== undefined ? { code: settingsForSave.code || null } : {}),
                     ...(tipoObra !== null ? { tipo_obra: tipoObra } : {}),
                     ...(regimeObra !== null ? { regime_obra: regimeObra } : {}),
                     ...(empresaId ? { empresa_id: empresaId } : {}),
@@ -76,7 +79,7 @@ export const projectService = {
         }
         // Senão, criamos um novo
         else {
-            let codeToUse = rest.settings?.code ?? null;
+            let codeToUse = settingsForSave?.code ?? null;
 
             // Auto-generate sequential code for OBRA projects if not provided
             if (!codeToUse && classification === 'OBRA' && orgId) {
@@ -106,15 +109,15 @@ export const projectService = {
             }
 
             const settingsWithCode = codeToUse
-                ? { ...rest.settings, code: codeToUse }
-                : rest.settings;
+                ? { ...settingsForSave, code: codeToUse }
+                : settingsForSave;
 
             const { data: created, error } = await supabase
                 .from('projects')
                 .insert({
                     name: rest.name,
                     settings: settingsWithCode,
-                    budget: rest.budget,
+                    budget: budgetForSave,
                     code: codeToUse,
                     ...(tipoObra ? { tipo_obra: tipoObra } : {}),
                     ...(regimeObra ? { regime_obra: regimeObra } : {}),
@@ -137,7 +140,12 @@ export const projectService = {
             .maybeSingle();
 
         if (error) throw error;
-        return data;
+        if (!data) return data;
+        return {
+            ...data,
+            settings: cloneSettingsForPersistence(data.settings as ProjectSettings),
+            budget: cloneBudgetForPersistence(data.budget as BudgetEntry[]),
+        };
     },
 
     async listProjects(

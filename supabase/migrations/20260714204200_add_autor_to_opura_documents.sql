@@ -1,0 +1,1 @@
+ALTER TABLE public.opura_documents ADD COLUMN IF NOT EXISTS autor TEXT;

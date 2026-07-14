@@ -1,11 +1,17 @@
-﻿-- ============================================================
+-- ============================================================
 -- Fixture Caso 8 - Determinismo e idempotencia do calculo
 -- Motor Areas NBR 12721 MVP
 -- Esperado: mesmo payload_hash em dois calculos e sem duplicar resultados
 -- ============================================================
 
 BEGIN;
-
+DO $
+BEGIN
+    IF current_setting('app.allow_area_engine_fixture', true) IS DISTINCT FROM 'on' THEN
+        RAISE EXCEPTION 'Fixture de QA bloqueado. Execute SET app.allow_area_engine_fixture = ''on'' apenas em banco de teste antes de rodar este arquivo.'
+            USING ERRCODE = 'P0001';
+    END IF;
+END $;
 DELETE FROM public.area_version_blocks
 WHERE id = '44444444-4444-4444-4444-444444444448';
 

@@ -7,6 +7,7 @@ export interface OpuraDocument {
   organization_id: string;
   nome: string;
   descricao?: string;
+  autor?: string;
   categoria: OpuraDocumentCategoria;
   tipo_documento: string;
   status: OpuraDocumentStatus;

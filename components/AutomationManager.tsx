@@ -3,8 +3,9 @@ import {
     PieChart, Pie, Cell, ResponsiveContainer,
     AreaChart, Area, XAxis, YAxis, Tooltip
 } from 'recharts';
+import ActionIconButton from './ui/ActionIconButton';
 import {
-    Zap, Clock, CheckCircle2, AlertCircle, Trash2,
+    Zap, Clock, CheckCircle2, AlertCircle,
     Plus, Shield, CreditCard, ArrowUpRight,
     Search, Filter, History, Settings, TrendingUp, Wallet,
     Loader2, Save, LayoutGrid, List, ChevronDown, ChevronUp
@@ -589,15 +590,13 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                             </div>
                                         </div>
                                     </div>
-                                    <button
+                                    <ActionIconButton
+                                        kind="delete"
                                         onClick={() => {
                                             const newTemplates = (financialInfo.contractTemplates || []).filter(t => t.id !== template.id);
                                             handleSaveGlobal('contractTemplates', newTemplates);
                                         }}
-                                        className="p-2 text-gray-300 hover:text-red-500 transition-colors"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                    />
                                 </div>
                             ))}
                             {(!financialInfo.contractTemplates || financialInfo.contractTemplates.length === 0) && (
@@ -741,15 +740,13 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <button
+                                                <ActionIconButton
+                                                    kind="delete"
                                                     onClick={() => {
                                                         const newRules = (financialInfo.billingRules || []).filter(r => r.id !== rule.id);
                                                         handleSaveGlobal('billingRules', newRules);
                                                     }}
-                                                    className="p-2 text-gray-300 hover:text-red-500 transition-colors"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                />
                                             </div>
                                         ) : (
                                             <div key={rule.id} className="flex flex-col gap-2 p-4 bg-gray-50 rounded-2xl border border-transparent hover:border-gray-100 transition-all">
@@ -816,15 +813,13 @@ const AutomationManager: React.FC<AutomationManagerProps> = ({ settings, onUpdat
                                                         </div>
                                                     </div>
 
-                                                    <button
+                                                    <ActionIconButton
+                                                        kind="delete"
                                                         onClick={() => {
                                                             const newRules = (financialInfo.billingRules || []).filter(r => r.id !== rule.id);
                                                             handleSaveGlobal('billingRules', newRules);
                                                         }}
-                                                        className="p-2 text-gray-300 hover:text-red-500 transition-colors"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    />
                                                 </div>
                                                 
                                                 <div className="flex items-center gap-4 pl-12">

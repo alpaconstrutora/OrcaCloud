@@ -35,6 +35,8 @@ describe('area engine SQL fixtures', () => {
 
     expect(sql).toMatch(/^--[\s\S]*?\nBEGIN;/);
     expect(sql).toMatch(/COMMIT;$/);
+    expect(sql).toContain("current_setting('app.allow_area_engine_fixture', true)");
+    expect(sql).toContain('Fixture de QA bloqueado');
     expect(sql).toContain('public.calculate_area_version(');
     expect(sql).toContain('DELETE FROM public.organizations');
   });

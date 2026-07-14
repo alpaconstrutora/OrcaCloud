@@ -1,10 +1,16 @@
-﻿-- ============================================================
+-- ============================================================
 -- Fixture Caso 3 - Unidade com vaga acessoria vinculada
 -- Motor Areas NBR 12721 MVP
 -- ============================================================
 
 BEGIN;
-
+DO $
+BEGIN
+    IF current_setting('app.allow_area_engine_fixture', true) IS DISTINCT FROM 'on' THEN
+        RAISE EXCEPTION 'Fixture de QA bloqueado. Execute SET app.allow_area_engine_fixture = ''on'' apenas em banco de teste antes de rodar este arquivo.'
+            USING ERRCODE = 'P0001';
+    END IF;
+END $;
 DELETE FROM public.organizations
 WHERE id = '13131313-1313-1313-1313-131313131313';
 

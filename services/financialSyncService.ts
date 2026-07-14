@@ -82,7 +82,7 @@ export const financialSyncService = {
 
             const { error } = await supabase
                 .from('internal_transactions')
-                .upsert(enrichedTxs, { onConflict: 'organization_id,reference_id' });
+                .upsert(enrichedTxs, { onConflict: 'organization_id,reference_id,entry_type' });
 
             if (error) {
                 console.error('[FINANCIAL-SYNC] Error during upsert:', error);

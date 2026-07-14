@@ -59,6 +59,33 @@ export interface BudgetEntry {
     group: string;
     bdi?: number;
     isFavorite?: boolean;
+    costCenterId?: string;
+    discipline?: string;
+    location?: {
+        block?: string;
+        tower?: string;
+        floor?: string;
+        room?: string;
+    };
+    responsible?: string;
+    status?: 'Rascunho' | 'Em revisão' | 'Aguardando aprovação' | 'Aprovado' | 'Congelado' | 'Substituído' | 'Cancelado';
+    notes?: string;
+    attachments?: {
+        name: string;
+        url?: string;
+        type?: string;
+        uploadedAt?: string;
+    }[];
+    precisionClass?: 'A' | 'B' | 'C' | 'D' | 'E';
+    calculationMemory?: {
+        formula?: string;
+        variables?: Record<string, number | string>;
+        result?: number;
+        justification?: string;
+        approved?: boolean;
+        approvedBy?: string;
+        approvedAt?: string;
+    };
 }
 
 export interface WBSPhase {

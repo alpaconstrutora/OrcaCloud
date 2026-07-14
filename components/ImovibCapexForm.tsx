@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ImovibStudy, ImovibCapexItem, ImovibCapexItemInsert, ImovibRegulatoryZone } from '../types';
 import { imovibService } from '../services/imovibService';
-import { Calculator, ChevronRight, Activity, Leaf, Trash2, Plus, LayoutList, Zap } from 'lucide-react';
+import { Calculator, ChevronRight, Activity, Leaf, Plus, LayoutList, Zap } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { useImovibMath } from '../hooks/useImovibMath';
 
 const parseRegVal = (v: string | undefined): number | null => {
@@ -582,13 +583,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                 </div>
                                                             </td>
                                                             <td className="px-6 py-3 text-right">
-                                                                <button
-                                                                    onClick={() => handleDeleteItem(item.id)}
-                                                                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                                                    title="Excluir item"
-                                                                >
-                                                                    <Trash2 className="w-4 h-4" />
-                                                                </button>
+                                                                <ActionIconButton kind="delete" className="opacity-0 group-hover:opacity-100" title="Excluir item" onClick={() => handleDeleteItem(item.id)} />
                                                             </td>
                                                         </tr>
                                                     ))}

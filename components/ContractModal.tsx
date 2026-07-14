@@ -14,7 +14,8 @@ import { laborService } from '../services/laborService';
 import { contractTypeService } from '../services/contractTypeService';
 import { sanitizeFileName } from '../utils/storageUtils';
 import ContractScopeManager from './ContractScopeManager';
-import { Upload, Trash2, ExternalLink } from 'lucide-react';
+import { Upload, ExternalLink } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 
@@ -685,14 +686,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 >
                                                     <ExternalLink className="w-4 h-4" />
                                                 </a>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setFormData({ ...formData, signed_contract_url: undefined })}
-                                                    className="p-2 bg-white text-red-500 rounded-lg border border-red-50 hover:bg-red-500 hover:text-white transition-all shadow-sm"
-                                                    title="Remover Documento"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                <ActionIconButton kind="delete" title="Remover Documento" onClick={() => setFormData({ ...formData, signed_contract_url: undefined })} />
                                             </div>
                                         </div>
                                     ) : (

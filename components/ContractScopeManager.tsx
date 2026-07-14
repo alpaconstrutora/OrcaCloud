@@ -1,11 +1,12 @@
 import React from 'react';
 import {
-    X, Plus, Edit3, Copy, Trash2, Save, ClipboardList,
+    X, Plus, Save, ClipboardList,
     Loader2, ChevronDown, ChevronRight, CheckSquare,
     Square, BookOpen, ListChecks, Tag
 } from 'lucide-react';
 import { contractScopeService, ContractScopeTemplate } from '../services/contractScopeService';
 import Button from './ui/Button';
+import ActionIconButton from './ui/ActionIconButton';
 
 /* ─── Catálogo predefinido ─── */
 interface ScopeGroup { id: string; label: string; items: string[]; }
@@ -512,19 +513,15 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                                             <p className="text-xs text-gray-400 mt-1 line-clamp-3 whitespace-pre-line">{s.content}</p>
                                         </div>
                                         {mode === 'manage' && (
-                                            <div className="flex items-center gap-1 shrink-0">
-                                                <button onClick={e => { e.stopPropagation(); startEdit(s); }}
-                                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Editar">
-                                                    <Edit3 className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button onClick={e => { e.stopPropagation(); handleDuplicate(s.id); }}
-                                                    className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" title="Duplicar">
-                                                    <Copy className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button onClick={e => { e.stopPropagation(); handleDelete(s.id); }} disabled={deletingId === s.id}
-                                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50" title="Excluir">
-                                                    {deletingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                                                </button>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <ActionIconButton kind="edit" onClick={e => { e.stopPropagation(); startEdit(s); }} />
+                                                <ActionIconButton kind="duplicate" onClick={e => { e.stopPropagation(); handleDuplicate(s.id); }} />
+                                                <ActionIconButton
+                                                    kind="delete"
+                                                    disabled={deletingId === s.id}
+                                                    icon={deletingId === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
+                                                    onClick={e => { e.stopPropagation(); handleDelete(s.id); }}
+                                                />
                                             </div>
                                         )}
                                         {mode === 'pick' && (

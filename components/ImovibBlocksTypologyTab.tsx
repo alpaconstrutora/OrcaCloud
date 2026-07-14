@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Building, Loader2, MapPin, Plus, Save, Trash2, Users } from 'lucide-react';
+import { Building, Loader2, MapPin, Plus, Save, Users } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { ImovibBlock, ImovibRegulatoryZone, ImovibStudy, ImovibUnit } from '../types';
 import { imovibService } from '../services/imovibService';
 
@@ -272,13 +273,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                                     />
                                 </div>
                                 <div className="flex items-center bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
-                                    <button
-                                        onClick={() => handleDeleteBlock(block.id)}
-                                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors shrink-0"
-                                        title="Excluir Bloco"
-                                    >
-                                        <Trash2 className="w-5 h-5" />
-                                    </button>
+                                    <ActionIconButton kind="delete" className="shrink-0" title="Excluir Bloco" onClick={() => handleDeleteBlock(block.id)} />
                                 </div>
                             </div>
 
@@ -390,12 +385,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                                                         />
                                                     </td>
                                                     <td className="px-6 py-3">
-                                                        <button
-                                                            onClick={() => handleDeleteUnit(unit.id)}
-                                                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors w-full flex justify-center opacity-0 group-hover:opacity-100"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
+                                                        <ActionIconButton kind="delete" className="w-full flex justify-center opacity-0 group-hover:opacity-100" onClick={() => handleDeleteUnit(unit.id)} />
                                                     </td>
                                                 </tr>
                                             );

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ImovibRegulatoryZone, ImovibRegulatoryZoneUpdate } from '../types';
 import { imovibService } from '../services/imovibService';
-import { Plus, Trash2, Loader2, Map } from 'lucide-react';
+import { Plus, Loader2, Map } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 
 interface Props {
     studyId: string;
@@ -162,13 +163,7 @@ const ImovibRegulatoryMapTab: React.FC<Props> = ({ studyId }) => {
                                         </td>
                                     ))}
                                     <td className="px-4 py-2.5 text-right">
-                                        <button
-                                            onClick={() => handleDelete(zone.id)}
-                                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                            title="Excluir zona"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <ActionIconButton kind="delete" className="opacity-0 group-hover:opacity-100" title="Excluir zona" onClick={() => handleDelete(zone.id)} />
                                     </td>
                                 </tr>
                             ))}

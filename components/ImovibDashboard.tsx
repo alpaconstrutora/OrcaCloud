@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Building2, TrendingUp, BarChart, Calendar, ChevronRight, Trash2, AlertCircle } from 'lucide-react';
+import { Plus, Search, Building2, TrendingUp, BarChart, Calendar, ChevronRight, AlertCircle } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { usePersistedState } from './ui/TableUtils';
@@ -153,13 +154,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                                         <span className="text-xs font-bold">{new Date(study.created_at).toLocaleDateString()}</span>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        <button
-                                            onClick={(e) => handleDeleteStudy(e, study.id, study.name)}
-                                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                            title="Excluir Estudo"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <ActionIconButton kind="delete" title="Excluir Estudo" onClick={(e) => handleDeleteStudy(e, study.id, study.name)} />
                                         <div className="flex items-center gap-1 text-indigo-600 font-bold text-xs uppercase tracking-widest group-hover:gap-2 transition-all">
                                             Ver Dados
                                             <ChevronRight className="w-4 h-4" />

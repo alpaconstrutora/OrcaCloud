@@ -129,6 +129,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [currentFolderId, setCurrentFolderId] = React.useState<string | null>(null);
   const [createFolderModalOpen, setCreateFolderModalOpen] = React.useState(false);
   const [newFolderName, setNewFolderName] = React.useState('');
+  const [createFolderOrgId, setCreateFolderOrgId] = React.useState('');
   const [creatingFolder, setCreatingFolder] = React.useState(false);
   const [movingDocId, setMovingDocId] = React.useState<string | null>(null);
   const [moveModalOpen, setMoveModalOpen] = React.useState(false);
@@ -444,7 +445,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Função para criar uma pasta virtual
   const handleCreateFolderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOrganizationId) {
+    const targetOrgId = activeOrganizationId || createFolderOrgId;
+    if (!targetOrgId) {
       alert('Sessão expirada ou organização não selecionada.');
       return;
     }
@@ -453,7 +455,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     try {
       const projFilter = selectedProjectId === 'all' ? undefined : selectedProjectId;
       await documentService.createFolder({
-        organization_id: activeOrganizationId,
+        organization_id: targetOrgId,
         project_id: projFilter,
         name: newFolderName.trim(),
         parent_id: currentFolderId || undefined,
@@ -1923,7 +1925,6 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                               handleDeleteFolder(folder.id);
                             }}
                             className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-slate-50 transition-all"
-                            title="Excluir Pasta"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -2591,6 +2592,22 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             </div>
 
             <form onSubmit={handleCreateFolderSubmit} className="p-6 space-y-4">
+              {!activeOrganizationId && (
+                <div className="space-y-1.5">
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Organização</label>
+                  <select
+                    value={createFolderOrgId}
+                    onChange={(e) => setCreateFolderOrgId(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  >
+                    <option value="">Selecione uma organização...</option>
+                    {companies.map(c => (
+                      <option key={c.id} value={c.id}>{c.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Nome da Pasta</label>
                 <input

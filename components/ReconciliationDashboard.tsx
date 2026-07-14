@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Landmark, ShieldCheck, AlertTriangle, BookOpen, RefreshCw,
-    Pencil, Check, X, Tag, Receipt, Scale, Building2, HardHat,
+    Check, X, Tag, Receipt, Scale, Building2, HardHat,
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { reconciliationDashboardService } from '../services/reconciliationDashboardService';
 import { useToast } from '../hooks/useToast';
 import type {
@@ -297,13 +298,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <button
-                                                    onClick={() => startEdit(acc)}
-                                                    className="p-1.5 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50"
-                                                    title="Editar saldo inicial"
-                                                >
-                                                    <Pencil className="w-4 h-4" />
-                                                </button>
+                                                <ActionIconButton kind="edit" title="Editar saldo inicial" onClick={() => startEdit(acc)} />
                                             )}
                                         </td>
                                     </tr>

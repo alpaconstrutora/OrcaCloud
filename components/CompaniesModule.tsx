@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    Building2, Plus, Trash2, Star, ChevronDown, ChevronUp,
+    Building2, Plus, Star, ChevronDown, ChevronUp,
     Save, X, AlertCircle, Loader2, Settings2, BarChart3,
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     Company, CompanyInsert,
     CompanyTipo, CompanyStatus, RegimeTributario,
@@ -615,10 +616,7 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                                         Gerenciar
                                     </button>
                                     {!c.is_headquarters && (
-                                        <button onClick={() => handleDelete(c.id, c.razao_social)}
-                                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <ActionIconButton kind="delete" onClick={() => handleDelete(c.id, c.razao_social)} />
                                     )}
                                     <button onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}
                                         className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">

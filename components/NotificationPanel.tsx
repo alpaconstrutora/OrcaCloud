@@ -1,5 +1,6 @@
 import React from 'react';
-import { Bell, X, Check, ExternalLink, Trash2, Clock } from 'lucide-react';
+import { Bell, X, Check, ExternalLink, Clock } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { notificationService, Notification } from '../services/notificationService';
 
 interface NotificationPanelProps {
@@ -188,13 +189,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ email, onClose, o
                                                 <Check className="w-3.5 h-3.5" />
                                             </button>
                                         )}
-                                        <button
-                                            onClick={() => handleDelete(n.id)}
-                                            className="p-1.5 bg-white border border-gray-100 text-red-600 rounded-lg hover:bg-red-50 shadow-sm transition-all active:scale-95"
-                                            title="Excluir"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                        <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(n.id)} />
                                     </div>
                                 </div>
                             </div>

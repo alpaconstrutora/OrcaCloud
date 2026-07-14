@@ -5,6 +5,7 @@ import {
     CheckCircle, XCircle, Info, Building2, Package, DollarSign,
     ClipboardList, Settings, BarChart3, ChevronDown, X, Users
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { notificationService, Notification } from '../services/notificationService';
 import { notificationLogService, NotificationLogEntry } from '../services/notificationLogService';
 
@@ -640,13 +641,7 @@ function AlertsTab({
                                         <Check className="w-3.5 h-3.5" />
                                     </button>
                                 )}
-                                <button
-                                    onClick={() => onDelete(n.id)}
-                                    className="p-1.5 bg-white border border-gray-100 text-red-500 rounded-lg hover:bg-red-50 shadow-sm transition-all"
-                                    title="Excluir"
-                                >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                <ActionIconButton kind="delete" size="sm" onClick={() => onDelete(n.id)} />
                             </div>
                         </div>
                     ))}

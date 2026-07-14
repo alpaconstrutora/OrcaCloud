@@ -1,5 +1,6 @@
 import React from 'react';
-import { CreditCard, CheckCircle2, Clock, AlertCircle, CalendarDays, Download } from 'lucide-react';
+import { CreditCard, CheckCircle2, Clock, AlertCircle, CalendarDays } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { formatCurrency } from '../utils/financialMath';
 import { investorContributionsService, InvestorContribution } from '../services/investorContributionsService';
 
@@ -145,13 +146,7 @@ const PaymentsPanel: React.FC<PaymentsPanelProps> = ({ organizationId, investorI
                                     </td>
                                     <td className="px-8 py-5 text-right">
                                         {item.receipt_url ? (
-                                            <button
-                                                onClick={() => window.open(item.receipt_url, '_blank')}
-                                                className="p-2 text-gray-400 hover:text-blue-600 transition-all"
-                                                title="Baixar comprovante"
-                                            >
-                                                <Download className="w-4 h-4" />
-                                            </button>
+                                            <ActionIconButton kind="download" title="Baixar comprovante" onClick={() => window.open(item.receipt_url, '_blank')} />
                                         ) : (
                                             <span className="text-xs text-gray-300">—</span>
                                         )}

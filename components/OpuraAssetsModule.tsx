@@ -1,6 +1,7 @@
 // components/OpuraAssetsModule.tsx
 
 import React from 'react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
   Package,
   Wrench,
@@ -1424,13 +1425,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                     <ExternalLink className="w-3.5 h-3.5" />
                                   </a>
                                 )}
-                                <button
-                                  onClick={() => handleDeleteDocument(doc.id)}
-                                  className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
-                                  title="Remover documento"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                <ActionIconButton kind="delete" size="sm" title="Remover documento" onClick={() => handleDeleteDocument(doc.id)} />
                               </div>
                             </div>
                           );
@@ -1741,13 +1736,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                         </button>
                                       </>
                                     )}
-                                    <button
-                                      onClick={() => handleDeleteMaintenance(m.id)}
-                                      className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all"
-                                      title="Excluir do histórico"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
+                                    <ActionIconButton kind="delete" title="Excluir do histórico" onClick={() => handleDeleteMaintenance(m.id)} />
                                   </div>
                                 </td>
                               </tr>

@@ -1,23 +1,23 @@
 import React from 'react';
-import { 
-  Building2, 
-  ShieldAlert, 
-  Calculator, 
-  Search, 
-  CheckCircle2, 
-  AlertCircle, 
-  ArrowRight, 
-  TrendingUp, 
-  Percent, 
-  DollarSign, 
-  Loader2, 
-  Download, 
-  FileText, 
-  Zap, 
+import ActionIconButton from './ui/ActionIconButton';
+import {
+  Building2,
+  ShieldAlert,
+  Calculator,
+  Search,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
+  TrendingUp,
+  Percent,
+  DollarSign,
+  Loader2,
+  Download,
+  FileText,
+  Zap,
   Plus,
   RefreshCw,
-  FolderOpen,
-  Trash2
+  FolderOpen
 } from 'lucide-react';
 import { cnoService } from '../services/cnoService';
 import { useStore } from '../store/useStore';
@@ -1022,13 +1022,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                             </div>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleDeleteDctfweb(dec.id)}
-                          className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
-                          title="Remover declaração"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <ActionIconButton kind="delete" className="opacity-0 group-hover:opacity-100" title="Remover declaração" onClick={() => handleDeleteDctfweb(dec.id)} />
                       </div>
                     ))}
                   </div>

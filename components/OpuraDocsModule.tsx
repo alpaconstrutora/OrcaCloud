@@ -34,7 +34,11 @@ import {
   Eye,
   Filter,
   Share2,
+  Table2,
+  LayoutDashboard,
+  RefreshCw,
 } from 'lucide-react';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import {
   documentService,
   OpuraDmsDiscipline,
@@ -56,6 +60,16 @@ import {
   PartnerWorkspace,
 } from '../types';
 import { useStore } from '../store/useStore';
+
+const COLUMNS: ColumnConfig[] = [
+  { key: 'nome', label: 'Documento', sortable: true },
+  { key: 'tipo_documento', label: 'Tipo / Categoria', sortable: true },
+  { key: 'project_id', label: 'Obra Vinculada', sortable: true },
+  { key: 'data_emissao', label: 'Emissão', sortable: true },
+  { key: 'data_validade', label: 'Validade', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'actions', label: 'Ações', sortable: false },
+];
 
 interface OpuraDocsModuleProps {
   activeOrganizationId: string | null;
@@ -87,7 +101,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [activeTab, setActiveTab] = React.useState<OpuraDocumentCategoria>('engenharia');
   const [documents, setDocuments] = React.useState<OpuraDocument[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchQuery, setSearchQuery] = usePersistedState<string>('opuraDocs:search', '');
+  const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('opuraDocs:viewMode', 'list');
+  const tableColumns = useTableColumns(COLUMNS, 'opuraDocsColumns');
   const [uploadModalOpen, setUploadModalOpen] = React.useState(false);
   const [selectedDocForVersions, setSelectedDocForVersions] = React.useState<OpuraDocument | null>(null);
   const [selectedDocForQrCode, setSelectedDocForQrCode] = React.useState<OpuraDocument | null>(null);
@@ -1584,35 +1600,57 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           </div>
 
           {/* PAINEL CENTRAL DIREITO: Documentos */}
-          <div className="lg:col-span-3 bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-        {/* Barra de Busca e Breadcrumb */}
-        <div className="p-4 border-b border-slate-100 bg-slate-50/20 space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="relative flex-grow">
+          <div className="lg:col-span-3 bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+        {/* Barra de Busca e Toolbar (Variante desaninhada) */}
+        <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+          <div className="flex flex-col md:flex-row gap-2.5 items-center">
+            <div className="flex-1 relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
                 placeholder="Buscar documento por nome, tipo, tag ou código..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-sm font-medium text-slate-700 shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
               />
-              <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
             </div>
             
             <button
+              onClick={() => {
+                // Refresh data se necessário
+              }}
+              className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+
+            <button
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              className={`flex items-center gap-2 px-5 py-3 border rounded-2xl font-black text-button uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${
+              className={`h-9 flex items-center gap-2 px-3 border rounded-[6px] text-sm font-semibold transition-all active:scale-95 whitespace-nowrap ${
                 showAdvancedFilters
-                  ? 'bg-blue-600 border-blue-600 text-white shadow-md'
-                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
               }`}
             >
               <Filter className="w-4 h-4" />
               <span>Filtros</span>
               {(filterStatus !== 'all' || selectedTags.length > 0) && (
-                <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping" />
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-ping" />
               )}
             </button>
+
+            <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+              <ColumnConfigButton
+                columns={COLUMNS.filter(c => c.key !== 'actions')}
+                visibleColumns={tableColumns.visibleColumns}
+                showColumnConfig={tableColumns.showColumnConfig}
+                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                onToggleColumn={tableColumns.toggleColumn}
+                onReset={tableColumns.resetColumns}
+              />
+            </div>
           </div>
 
           {/* Painel de Filtros Avançados */}
@@ -1911,181 +1949,139 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 Nenhum arquivo avulso nesta pasta. Navegue pelas subpastas acima.
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
-                {filteredDocuments.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="flex flex-col md:flex-row md:items-center justify-between p-6 gap-4 hover:bg-slate-50/40 transition-colors"
-                  >
-                    {/* Metadados Básicos */}
-                    <div className="flex items-start gap-4 min-w-0">
-                      <div className="flex-shrink-0 mt-1">
-                        {doc.active_version
-                          ? renderFileIcon(doc.active_version.mime_type, doc.active_version.storage_path)
-                          : <FileText className="w-8 h-8 text-gray-300" />}
-                      </div>
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h4 className="font-bold text-slate-800 leading-snug">{doc.nome}</h4>
-                          <span className="px-2 py-0.5 text-xs font-black uppercase tracking-wider bg-slate-100 text-slate-600 rounded">
-                            {doc.tipo_documento}
-                          </span>
-                          {getValidadeBadge(doc.data_validade)}
-                          {!doc.is_integrated && getApprovalBadge(doc.approval_status)}
-                        </div>
-                        {doc.descricao && (
-                          <p className="text-slate-500 text-sm max-w-2xl truncate">{doc.descricao}</p>
+              <div className="bg-white overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                      <tr>
+                        {tableColumns.visibleColumns.includes('nome') && (
+                          <SortableHeader colKey="nome" label="Documento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                         )}
-                        
-                        {/* Tags */}
-                        {doc.tags && doc.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 pt-1">
-                            {doc.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-50 text-slate-500 rounded text-xs font-semibold border border-slate-100"
-                              >
-                                <Tag className="w-3 h-3" />
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
+                        {tableColumns.visibleColumns.includes('tipo_documento') && (
+                          <SortableHeader colKey="tipo_documento" label="Tipo / Categoria" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
                         )}
+                        {tableColumns.visibleColumns.includes('project_id') && (
+                          <SortableHeader colKey="project_id" label="Obra Vinculada" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        {tableColumns.visibleColumns.includes('data_emissao') && (
+                          <SortableHeader colKey="data_emissao" label="Emissão" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        {tableColumns.visibleColumns.includes('data_validade') && (
+                          <SortableHeader colKey="data_validade" label="Validade" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        {tableColumns.visibleColumns.includes('status') && (
+                          <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                        )}
+                        {tableColumns.visibleColumns.includes('actions') && (
+                          <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500 whitespace-nowrap">Ações</th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredDocuments.map((doc) => {
+                        // Determinar o status textual para o badge conforme o novo padrão
+                        const statusColor = doc.status === 'vencido' ? 'text-red-600' : doc.status === 'alerta' ? 'text-amber-600' : 'text-green-600';
+                        const statusLabel = doc.status === 'vencido' ? 'Vencido' : doc.status === 'alerta' ? 'Em Alerta' : 'Ativo';
 
-                        {/* Vínculo de Obras / Contrato */}
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400 pt-1 font-semibold">
-                          {doc.project_id && (
-                            <span className="flex items-center gap-1">
-                              <Building2 className="w-3.5 h-3.5" />
-                              Obra: {projects.find(p => p.id === doc.project_id)?.name || 'Vínculo Externo'}
-                            </span>
-                          )}
-                          {doc.data_emissao && (
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3.5 h-3.5" />
-                              Emissão: {new Date(doc.data_emissao).toLocaleDateString()}
-                            </span>
-                          )}
-                          {doc.active_version && (
-                            <span className="text-slate-400">
-                              {formatSize(doc.active_version.tamanho)} • V{doc.active_version.version_number}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Ações (Download, Versões, Movimentação, Exclusão) */}
-                    <div className="flex items-center gap-2 self-end md:self-auto flex-shrink-0">
-                      {doc.active_version && (
-                        <button
-                          onClick={() => handleDownload(doc.active_version!.storage_path, doc.nome, doc.id)}
-                          title="Download do arquivo atual"
-                          className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      )}
-
-                      {/* Ações permitidas apenas para arquivos físicos cadastrados localmente (não integrados) */}
-                      {!doc.is_integrated && (
-                        <>
-                          {isOrgAdmin && (
-                            <button
-                              onClick={() => {
-                                setMovingDocId(doc.id);
-                                setTargetFolderId(doc.folder_id || null);
-                                setMoveModalOpen(true);
-                              }}
-                              title="Mover para outra pasta"
-                              className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
-                            >
-                              <CornerDownRight className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setSelectedDocForQrCode(doc)}
-                            title="Gerar etiqueta QR Code de canteiro"
-                            className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
-                          >
-                            <QrCode className="w-4 h-4" />
-                          </button>
-                          {doc.active_version && (doc.active_version.mime_type === 'application/pdf' || doc.nome.toLowerCase().endsWith('.pdf')) && (
-                            <button
-                              onClick={() => setSelectedDocForMarkup(doc)}
-                              title="Fazer anotações gráficas no PDF (Revisar)"
-                              className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleStartEditDoc(doc)}
-                            title="Editar metadados do documento"
-                            className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
-                          >
-                            <Settings className="w-4 h-4" />
-                          </button>
-                          {isOrgAdmin && (
-                            <button
-                              onClick={() => openShareModal(doc.id)}
-                              title="Compartilhar com Parceiro"
-                              className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-orange-600 hover:border-orange-100 rounded-xl transition-all shadow-sm active:scale-95"
-                            >
-                              <Share2 className="w-4 h-4" />
-                            </button>
-                          )}
-                          <button
-                            onClick={async (e) => {
-                              const btn = e.currentTarget;
-                              btn.style.pointerEvents = 'none';
-                              btn.style.opacity = '0.7';
-                              try {
-                                const fullDoc = await documentService.getDocumentById(doc.id);
-                                if (!fullDoc) {
-                                  alert('Documento não encontrado.');
-                                  return;
-                                }
-                                setSelectedDocForVersions(fullDoc);
-                                loadApprovalsForDoc(fullDoc.id);
-                                loadAuditLogsForDoc(fullDoc.id);
-                                // Registrar visualização (Onda 4)
-                                if (activeOrganizationId && currentProfile?.email) {
-                                  documentService.logDocumentAction(
-                                    activeOrganizationId,
-                                    fullDoc.id,
-                                    currentProfile.email,
-                                    'visualizado'
-                                  ).catch(err => console.error('[OpuraDocsModule] Erro ao registrar log de visualização:', err));
-                                }
-                              } catch (err) {
-                                console.error('[OpuraDocsModule] Erro ao carregar histórico:', err);
-                                alert('Erro ao carregar o histórico do documento.');
-                              } finally {
-                                btn.style.pointerEvents = 'auto';
-                                btn.style.opacity = '1';
-                              }
-                            }}
-                            title="Histórico de versões"
-                            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm text-button font-bold active:scale-95"
-                          >
-                            <History className="w-4 h-4" />
-                            Histórico
-                          </button>
-                          {isOrgAdmin && (
-                            <button
-                              onClick={() => handleDeleteDoc(doc.id)}
-                              title="Excluir documento"
-                              className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                        return (
+                          <tr key={doc.id} className="hover:bg-blue-50/50 transition-colors group">
+                            {tableColumns.visibleColumns.includes('nome') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 min-w-[200px]">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex-shrink-0">
+                                    {doc.active_version ? renderFileIcon(doc.active_version.mime_type, doc.active_version.storage_path) : <FileText className="w-5 h-5 text-gray-400" />}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="font-medium text-gray-900 block truncate">{doc.nome}</span>
+                                    {doc.descricao && <span className="text-xs text-gray-400 block truncate mt-0.5">{doc.descricao}</span>}
+                                  </div>
+                                </div>
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('tipo_documento') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                {doc.tipo_documento}
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('project_id') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                {doc.project_id ? (projects.find(p => p.id === doc.project_id)?.name || 'Vínculo Externo') : '-'}
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('data_emissao') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                {doc.data_emissao ? new Date(doc.data_emissao).toLocaleDateString() : '-'}
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('data_validade') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                {doc.data_validade ? new Date(doc.data_validade).toLocaleDateString() : '-'}
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('status') && (
+                              <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal">
+                                <span className={statusColor}>{statusLabel}</span>
+                              </td>
+                            )}
+                            {tableColumns.visibleColumns.includes('actions') && (
+                              <td className="px-6 py-2.5 text-right whitespace-nowrap">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {doc.active_version && (
+                                    <button onClick={() => handleDownload(doc.active_version!.storage_path, doc.nome, doc.id)} title="Download" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] shadow-sm transition-all active:scale-95">
+                                      <Download className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                  {!doc.is_integrated && (
+                                    <>
+                                      {isOrgAdmin && (
+                                        <button onClick={() => { setMovingDocId(doc.id); setTargetFolderId(doc.folder_id || null); setMoveModalOpen(true); }} title="Mover" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] shadow-sm transition-all active:scale-95">
+                                          <CornerDownRight className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                      <button onClick={() => setSelectedDocForQrCode(doc)} title="Etiqueta QR Code" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] shadow-sm transition-all active:scale-95">
+                                        <QrCode className="w-4 h-4" />
+                                      </button>
+                                      {doc.active_version && (doc.active_version.mime_type === 'application/pdf' || doc.nome.toLowerCase().endsWith('.pdf')) && (
+                                        <button onClick={() => setSelectedDocForMarkup(doc)} title="Anotar" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] shadow-sm transition-all active:scale-95">
+                                          <Pencil className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                      <button onClick={() => handleStartEditDoc(doc)} title="Editar" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] shadow-sm transition-all active:scale-95">
+                                        <Settings className="w-4 h-4" />
+                                      </button>
+                                      {isOrgAdmin && (
+                                        <button onClick={() => openShareModal(doc.id)} title="Compartilhar" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-orange-600 hover:border-orange-200 rounded-[6px] shadow-sm transition-all active:scale-95">
+                                          <Share2 className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                      <button onClick={async (e) => {
+                                        const btn = e.currentTarget; btn.style.pointerEvents = 'none'; btn.style.opacity = '0.7';
+                                        try {
+                                          const fullDoc = await documentService.getDocumentById(doc.id);
+                                          if (!fullDoc) return;
+                                          setSelectedDocForVersions(fullDoc); loadApprovalsForDoc(fullDoc.id); loadAuditLogsForDoc(fullDoc.id);
+                                        } finally {
+                                          btn.style.pointerEvents = 'auto'; btn.style.opacity = '1';
+                                        }
+                                      }} title="Histórico" className="p-1.5 bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] shadow-sm transition-all active:scale-95">
+                                        <History className="w-4 h-4" />
+                                      </button>
+                                      {isOrgAdmin && (
+                                        <button onClick={() => handleDeleteDoc(doc.id)} title="Excluir" className="p-1.5 bg-white border border-red-100 text-red-500 hover:bg-red-50 rounded-[6px] shadow-sm transition-all active:scale-95">
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>

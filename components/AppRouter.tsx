@@ -13,7 +13,7 @@ interface CurrentProfile {
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
 
 // Views — lazy (carregadas apenas quando acessadas)
-const BudgetActualPage      = React.lazy(() => import('./fpa/BudgetActualPage'));
+const FpaModule             = React.lazy(() => import('./fpa/FpaModule'));
 const Dashboard             = React.lazy(() => import('./Dashboard'));
 const ProjectList           = React.lazy(() => import('./ProjectList'));
 const ProjectOverview       = React.lazy(() => import('./ProjectOverview'));
@@ -370,28 +370,12 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     );
   }
 
-const BudgetActualPage = React.lazy(() => import('./fpa/BudgetActualPage'));
-const CashflowProjectionPage = React.lazy(() => import('./fpa/CashflowProjectionPage'));
-const BudgetScenarioPage = React.lazy(() => import('./fpa/BudgetScenarioPage'));
-
   // ── Roteamento principal ─────────────────────────────────────────────────────
   switch (activeView) {
-    case 'fpa-budget-scenarios':
+    case 'fpa-module':
       return (
         <React.Suspense fallback={<Spinner />}>
-          <BudgetScenarioPage organizationId={activeOrganizationId || undefined} projectId={projectId || undefined} />
-        </React.Suspense>
-      );
-    case 'fpa-cashflow-projection':
-      return (
-        <React.Suspense fallback={<Spinner />}>
-          <CashflowProjectionPage organizationId={activeOrganizationId || undefined} />
-        </React.Suspense>
-      );
-    case 'fpa-budget-actual':
-      return (
-        <React.Suspense fallback={<Spinner />}>
-          <BudgetActualPage organizationId={activeOrganizationId || undefined} projectId={projectId || undefined} />
+          <FpaModule organizationId={activeOrganizationId || undefined} projectId={projectId || undefined} />
         </React.Suspense>
       );
     case 'partner-workspaces-admin':

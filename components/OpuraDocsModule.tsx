@@ -1034,7 +1034,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
       await documentService.uploadNewDocument(
         {
-          organization_id: activeOrganizationId,
+          organization_id: activeOrganizationId || '',
           nome: docTitle || fileToUpload.name,
           descricao: newDocDesc || undefined,
           categoria: newDocCategory,
@@ -3010,38 +3010,43 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </div>
 
               {/* Datas e Alertas em Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Data de Emissão</label>
-                  <input
-                    type="date"
-                    value={editDocEmissao}
-                    onChange={(e) => setEditDocEmissao(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
-                  />
-                </div>
+              {/* Datas e Alertas em Grid */}
+                <div className={`grid ${editingDoc.categoria === 'engenharia' ? 'grid-cols-1 sm:grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'} gap-4`}>
+                  <div className="space-y-1.5">
+                    <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Data de Emissão</label>
+                    <input
+                      type="date"
+                      value={editDocEmissao}
+                      onChange={(e) => setEditDocEmissao(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    />
+                  </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Data de Vencimento</label>
-                  <input
-                    type="date"
-                    value={editDocValidade}
-                    onChange={(e) => setEditDocValidade(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
-                  />
-                </div>
+                  {editingDoc.categoria !== 'engenharia' && (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Data de Vencimento</label>
+                        <input
+                          type="date"
+                          value={editDocValidade}
+                          onChange={(e) => setEditDocValidade(e.target.value)}
+                          className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                        />
+                      </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Alerta de Vencimento (Dias)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={editDocAlertaDias}
-                    onChange={(e) => setEditDocAlertaDias(parseInt(e.target.value, 10) || 0)}
-                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
-                  />
+                      <div className="space-y-1.5">
+                        <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Alerta de Vencimento (Dias)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={editDocAlertaDias}
+                          onChange={(e) => setEditDocAlertaDias(parseInt(e.target.value, 10) || 0)}
+                          className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
-              </div>
 
               {/* Tags */}
               <div className="space-y-1.5">

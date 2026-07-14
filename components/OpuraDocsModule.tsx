@@ -2020,7 +2020,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                       {isOrgAdmin && (
                                         <ActionIconButton kind="share" onClick={() => openShareModal(doc.id)} />
                                       )}
-                                      <ActionIconButton kind="history" onClick={async (e) => {
+                                      <ActionIconButton kind="history" onClick={async (e: React.MouseEvent<HTMLButtonElement>) => {
                                         const btn = e.currentTarget; btn.style.pointerEvents = 'none'; btn.style.opacity = '0.7';
                                         try {
                                           const fullDoc = await documentService.getDocumentById(doc.id);

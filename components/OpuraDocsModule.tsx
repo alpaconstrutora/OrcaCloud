@@ -1194,6 +1194,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     const newName = generateFileNameFromMask(renameTargetMask, renameTokens, fileExt);
     const newDocNameFromMask = newName.split('.').slice(0, -1).join('.');
     
+    if (!validateFileNameAgainstMask(newName, renameTargetMask)) {
+      alert(`O nome gerado ("${newDocNameFromMask}") não atende ao padrão exigido nesta pasta:\n"${renameTargetMask}"\n\nVerifique se preencheu a quantidade correta de dígitos para as tags configuradas (ex: 3 caracteres).`);
+      return;
+    }
+
     // Cria um novo File herdando os dados e o tipo, mas com o nome correto
     const renamedFile = new File([newDocFile], newName, { type: newDocFile.type });
     setNewDocFile(renamedFile);
@@ -1282,9 +1287,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       const targetFolder = folders.find(f => f.id === editingDoc.folder_id);
       if (targetFolder?.naming_mask) {
         const ext = editingDoc.active_version?.storage_path.split('.').pop() || 'pdf';
-        const dummyFileName = `${editDocName}.${ext}`;
+        const dummyFileName = `${finalDocName}.${ext}`;
         if (!validateFileNameAgainstMask(dummyFileName, targetFolder.naming_mask)) {
-          alert(`O nome do documento ("${editDocName}") não atende ao padrão exigido nesta pasta:\n"${targetFolder.naming_mask}"\n\nPor favor, renomeie de acordo com a máscara.`);
+          alert(`O nome gerado ("${finalDocName}") não atende ao padrão exigido nesta pasta:\n"${targetFolder.naming_mask}"\n\nPor favor, verifique se a quantidade de letras ou dígitos informada está correta.`);
           return;
         }
 
@@ -1309,7 +1314,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         .filter(t => t.length > 0);
 
       await documentService.updateDocument(editingDoc.id, {
-        nome: editDocName,
+        nome: finalDocName,
         descricao: editDocDesc || undefined,
         data_emissao: editDocEmissao || undefined,
         data_validade: editDocValidade || undefined,
@@ -1324,7 +1329,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           editingDoc.id,
           currentProfile.email,
           'status_alterado',
-          `Metadados atualizados: nome="${editDocName}"`
+          `Metadados atualizados: nome="${finalDocName}"`
         ).catch(err => console.error('[OpuraDocsModule] Erro ao registrar log de alteração:', err));
       }
 

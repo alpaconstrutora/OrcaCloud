@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import ActionIconButton from '../ui/ActionIconButton';
 import {
   Building2,
   Users,
   FolderOpen,
   ClipboardList,
   Plus,
-  Trash2,
   Check,
   X,
   ExternalLink,
@@ -837,9 +837,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                             </button>
                           </td>
                           <td className="px-5 py-4 text-right">
-                            <Button variant="ghost" size="icon" onClick={() => handleDeleteUser(user.id)} title="Excluir Usuário">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <ActionIconButton kind="delete" title="Excluir Usuário" onClick={() => handleDeleteUser(user.id)} />
                           </td>
                         </tr>
                       ))}

@@ -1,5 +1,6 @@
 import React from 'react';
-import { FileText, ArrowUpRight, Download, Plus, X, LayoutDashboard, Table2 } from 'lucide-react';
+import { FileText, ArrowUpRight, Plus, X, LayoutDashboard, Table2 } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import { InvestorReport, ReportCategory, REPORT_CATEGORY_LABELS } from '../../services/investorPortalService';
 
 const CATEGORIES = Object.entries(REPORT_CATEGORY_LABELS) as [ReportCategory, string][];
@@ -159,12 +160,7 @@ const ReportsTab: React.FC<Props> = ({
                                 )}
                                 <span className="text-xs text-gray-400 font-bold uppercase tracking-widest block mt-1">{doc.report_date}</span>
                             </div>
-                            <button
-                                className="mt-4 p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"
-                                onClick={() => doc.url && window.open(doc.url, '_blank')}
-                            >
-                                <Download className="w-4 h-4" />
-                            </button>
+                            <ActionIconButton kind="download" className="mt-4" onClick={() => doc.url && window.open(doc.url, '_blank')} />
                         </div>
                     ))}
                 </div>

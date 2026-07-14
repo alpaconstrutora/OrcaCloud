@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
-  Plus, Trash2, Loader2, AlertCircle, ChevronDown, ChevronRight,
-  Edit2, Check, X, GripVertical, ClipboardList, Copy, Download, Upload, FileSpreadsheet,
+  Plus, Loader2, AlertCircle, ChevronDown, ChevronRight,
+  Check, X, GripVertical, ClipboardList, Upload, FileSpreadsheet,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import Button from './ui/Button'
+import ActionIconButton from './ui/ActionIconButton'
 
 interface Template {
   id: string
@@ -94,19 +95,9 @@ const ItemRow: React.FC<{
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-          <button
-            onClick={() => { setDraft(item); setEditing(true) }}
-            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-          >
-            <Edit2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => onDelete(item.id)}
-            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <ActionIconButton kind="edit" size="sm" onClick={() => { setDraft(item); setEditing(true) }} />
+          <ActionIconButton kind="delete" size="sm" onClick={() => onDelete(item.id)} />
         </div>
       </div>
     )
@@ -314,27 +305,9 @@ const TemplateCard: React.FC<{
           {template.item_count !== undefined && (
             <span className="text-xs text-slate-400">{template.item_count} itens</span>
           )}
-          <button
-            onClick={e => { e.stopPropagation(); setEditingName(true); setDraftName(template.name); setDraftServiceType(template.service_type ?? '') }}
-            title="Renomear"
-            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-          >
-            <Edit2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={e => { e.stopPropagation(); onDuplicate(template.id) }}
-            title="Duplicar"
-            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={e => { e.stopPropagation(); onExport(template.id) }}
-            title="Exportar JSON"
-            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
+          <ActionIconButton kind="edit" size="sm" title="Renomear" onClick={e => { e.stopPropagation(); setEditingName(true); setDraftName(template.name); setDraftServiceType(template.service_type ?? '') }} />
+          <ActionIconButton kind="duplicate" size="sm" onClick={e => { e.stopPropagation(); onDuplicate(template.id) }} />
+          <ActionIconButton kind="download" size="sm" title="Exportar JSON" onClick={e => { e.stopPropagation(); onExport(template.id) }} />
           <label className="relative inline-flex items-center cursor-pointer" title={template.active ? 'Ativo' : 'Inativo'}>
             <input
               type="checkbox"
@@ -346,12 +319,7 @@ const TemplateCard: React.FC<{
               <div className={`w-3.5 h-3.5 bg-white rounded-full shadow transition-transform mt-0.5 ${template.active ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </div>
           </label>
-          <button
-            onClick={() => onDelete(template.id)}
-            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          <ActionIconButton kind="delete" size="sm" onClick={() => onDelete(template.id)} />
         </div>
       </div>
 

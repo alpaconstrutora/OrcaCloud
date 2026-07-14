@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ArrowLeft, Edit2, MapPin, Phone, Mail, Calendar, ClipboardList, Calculator, FileText, CheckCircle, Clock, ExternalLink, CheckSquare, Square, Plus, HardHat, Link2, Copy, Check } from 'lucide-react';
+import { ArrowLeft, MapPin, Phone, Mail, Calendar, ClipboardList, Calculator, FileText, CheckCircle, Clock, ExternalLink, CheckSquare, Square, Plus, HardHat, Link2, Copy, Check } from 'lucide-react';
 import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
 import ServicesWonModal from './ServicesWonModal';
@@ -343,9 +344,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
             {opp.work_type && <span className="text-xs text-gray-400">{opp.work_type}</span>}
           </div>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setIsEditing(true)}>
-          <Edit2 size={18} />
-        </Button>
+        <ActionIconButton kind="edit" onClick={() => setIsEditing(true)} />
       </div>
 
       {/* Actions */}

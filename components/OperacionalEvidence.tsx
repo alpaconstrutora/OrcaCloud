@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Upload, Image, FileText, Trash2, Loader2, AlertCircle, ExternalLink } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import Button from './ui/Button'
+import ActionIconButton from './ui/ActionIconButton'
 
 interface EvidenceFile {
   id: string
@@ -242,10 +243,7 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
                     className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                     <ExternalLink className="w-4 h-4" />
                   </a>
-                  <button onClick={() => handleDelete(f)}
-                    className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition-colors">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <ActionIconButton kind="delete" onClick={() => handleDelete(f)} />
                 </div>
               </div>
             ))}

@@ -41,6 +41,10 @@ function isApproved(row: ProlaboreRow): boolean {
     return row.source === 'internal' ? row.approval_status === 'APROVADO' : !!row.prolabore_approved_at;
 }
 
+function rowKey(row: ProlaboreRow): string {
+    return `${row.source}:${row.id}`;
+}
+
 interface ProlaboreReconciliationPanelProps {
     organizationId: string;
 }
@@ -96,6 +100,8 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
     const [periodActing, setPeriodActing] = useState(false);
     const [sendingToRh, setSendingToRh] = useState(false);
     const [reconciledInfo, setReconciledInfo] = useState<{ total: number; at: string; by: string } | null>(null);
+    const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+    const [bulkApproving, setBulkApproving] = useState(false);
 
     const tableColumns = useTableColumns(COLUMNS, 'prolaboreReconciliationColumns');
 
@@ -191,25 +197,29 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
         });
     }, [rows, tableColumns.sortColumn, tableColumns.sortDirection]);
 
+    /** Aprova um único lançamento sem toast/reload — reusado pela aprovação individual e em lote. */
+    const approveOne = async (row: ProlaboreRow, approvedBy: string): Promise<void> => {
+        if (row.source === 'internal') {
+            const cfg = await financialApprovalService.resolveRequiredLevels(organizationId, row.amount);
+            const labels = { level1_label: cfg?.level1_label || 'Financeiro', level2_label: cfg?.level2_label };
+            if (!row.approval_status || row.approval_status === 'RASCUNHO') {
+                await financialApprovalService.submitForApproval(row.id);
+            }
+            await financialApprovalService.approve(row.id, 1, approvedBy, labels);
+        } else {
+            const { error } = await supabase
+                .from('bank_transactions')
+                .update({ prolabore_approved_at: new Date().toISOString(), prolabore_approved_by: approvedBy })
+                .eq('id', row.id);
+            if (error) throw error;
+        }
+    };
+
     const handleApprove = async (row: ProlaboreRow) => {
         setActingId(row.id);
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            const approvedBy = user?.email || 'sistema';
-            if (row.source === 'internal') {
-                const cfg = await financialApprovalService.resolveRequiredLevels(organizationId, row.amount);
-                const labels = { level1_label: cfg?.level1_label || 'Financeiro', level2_label: cfg?.level2_label };
-                if (!row.approval_status || row.approval_status === 'RASCUNHO') {
-                    await financialApprovalService.submitForApproval(row.id);
-                }
-                await financialApprovalService.approve(row.id, 1, approvedBy, labels);
-            } else {
-                const { error } = await supabase
-                    .from('bank_transactions')
-                    .update({ prolabore_approved_at: new Date().toISOString(), prolabore_approved_by: approvedBy })
-                    .eq('id', row.id);
-                if (error) throw error;
-            }
+            await approveOne(row, user?.email || 'sistema');
             showToast('Lançamento aprovado.');
             await loadTransactions();
         } catch (e) {
@@ -248,6 +258,59 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
             showToast(e instanceof Error ? e.message : 'Erro ao desfazer aprovação', 'error');
         } finally {
             setActingId(null);
+        }
+    };
+
+    // Só lançamentos ainda não aprovados fazem sentido na seleção em lote.
+    const selectableRows = useMemo(() => sortedRows.filter(r => !isApproved(r)), [sortedRows]);
+    const selectedRows = useMemo(() => selectableRows.filter(r => selectedKeys.has(rowKey(r))), [selectableRows, selectedKeys]);
+    const allVisibleSelected = selectableRows.length > 0 && selectableRows.every(r => selectedKeys.has(rowKey(r)));
+
+    const toggleRowSelection = (row: ProlaboreRow) => {
+        setSelectedKeys(prev => {
+            const next = new Set(prev);
+            const key = rowKey(row);
+            if (next.has(key)) next.delete(key); else next.add(key);
+            return next;
+        });
+    };
+
+    const toggleAllVisible = () => {
+        setSelectedKeys(prev => {
+            if (allVisibleSelected) {
+                const next = new Set(prev);
+                selectableRows.forEach(r => next.delete(rowKey(r)));
+                return next;
+            }
+            const next = new Set(prev);
+            selectableRows.forEach(r => next.add(rowKey(r)));
+            return next;
+        });
+    };
+
+    const handleBulkApprove = async () => {
+        if (selectedRows.length === 0) return;
+        if (!await confirm({
+            title: `Aprovar ${selectedRows.length} lançamento${selectedRows.length !== 1 ? 's' : ''}?`,
+            message: `Total selecionado: ${formatMoney(selectedRows.reduce((s, r) => s + r.amount, 0))}`,
+            confirmLabel: 'Aprovar selecionados',
+        })) return;
+        setBulkApproving(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            const approvedBy = user?.email || 'sistema';
+            const results = await Promise.allSettled(selectedRows.map(row => approveOne(row, approvedBy)));
+            const failed = results.filter(r => r.status === 'rejected').length;
+            const succeeded = results.length - failed;
+            showToast(
+                failed === 0 ? `${succeeded} lançamento${succeeded !== 1 ? 's' : ''} aprovado${succeeded !== 1 ? 's' : ''}.`
+                    : `${succeeded} aprovado(s), ${failed} falharam.`,
+                failed === 0 ? 'success' : 'error',
+            );
+            setSelectedKeys(new Set());
+            await loadTransactions();
+        } finally {
+            setBulkApproving(false);
         }
     };
 
@@ -363,6 +426,15 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                 <table className="w-full text-left border-collapse">
                     <thead>
                         <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                            <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                <input
+                                    type="checkbox"
+                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                    checked={allVisibleSelected}
+                                    disabled={selectableRows.length === 0}
+                                    onChange={toggleAllVisible}
+                                />
+                            </th>
                             {tableColumns.visibleColumns.includes('description') && (
                                 <SortableHeader colKey="description" label="Descrição" uppercase={false}
                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
@@ -400,11 +472,11 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {loading ? (
-                            <tr><td colSpan={7} className="text-center py-12 text-gray-400">
+                            <tr><td colSpan={tableColumns.visibleColumns.length + 1} className="text-center py-12 text-gray-400">
                                 <Loader2 className="w-6 h-6 animate-spin mx-auto" />
                             </td></tr>
                         ) : sortedRows.length === 0 ? (
-                            <tr><td colSpan={7} className="text-center py-12">
+                            <tr><td colSpan={tableColumns.visibleColumns.length + 1} className="text-center py-12">
                                 <div className="flex flex-col items-center gap-2 text-gray-400">
                                     <Wallet className="w-8 h-8 opacity-30" />
                                     <p className="text-sm font-medium">Nenhum lançamento de pró-labore nesta competência.</p>
@@ -419,7 +491,16 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                                 ? (APPROVAL_COLORS[row.approval_status || 'RASCUNHO'] || 'text-gray-500')
                                 : (approved ? 'text-emerald-700' : 'text-amber-700');
                             return (
-                                <tr key={`${row.source}:${row.id}`} className="hover:bg-blue-50/50 transition-colors">
+                                <tr key={rowKey(row)} className={`hover:bg-blue-50/50 transition-colors ${selectedKeys.has(rowKey(row)) ? 'bg-blue-50/60' : ''}`}>
+                                    <td className="px-4 py-2.5 border-r border-gray-100 text-center">
+                                        <input
+                                            type="checkbox"
+                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                            checked={selectedKeys.has(rowKey(row))}
+                                            disabled={approved}
+                                            onChange={() => toggleRowSelection(row)}
+                                        />
+                                    </td>
                                     {tableColumns.visibleColumns.includes('description') && (
                                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{row.description || '—'}</td>
                                     )}
@@ -482,6 +563,25 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                     </tbody>
                 </table>
             </div>
+
+            {/* Barra de ações em lote — guia §10, fixa no rodapé, fora do fluxo normal */}
+            {selectedRows.length > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                    <span className="flex-1 text-sm font-bold whitespace-nowrap">
+                        {selectedRows.length} selecionado{selectedRows.length !== 1 ? 's' : ''}
+                        <span className="ml-2 font-normal opacity-75">· {formatMoney(selectedRows.reduce((s, r) => s + r.amount, 0))}</span>
+                    </span>
+                    <button onClick={() => setSelectedKeys(new Set())} disabled={bulkApproving}
+                        className="px-3 py-2 rounded-xl text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 transition-all disabled:opacity-50">
+                        Limpar
+                    </button>
+                    <button onClick={handleBulkApprove} disabled={bulkApproving}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold bg-white text-blue-700 hover:bg-blue-50 transition-all active:scale-95 disabled:opacity-50">
+                        {bulkApproving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        Aprovar selecionados
+                    </button>
+                </div>
+            )}
 
             {localToast && (
                 <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${

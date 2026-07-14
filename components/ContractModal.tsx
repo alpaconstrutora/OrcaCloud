@@ -4,7 +4,8 @@ import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefc
 import HierarchicalSelect from './HierarchicalSelect';
 import { Contract, ContractInstallment, Supplier, CostCenter, ChartOfAccount, ContractStatus, ContractType, ContractNature, ContractTypeRecord } from '../types';
 import { PaymentAccount } from '../types/financial';
-import { supplierService } from '../services/supplierService';
+import { supplierService, getSupplierDisplayName } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 import { clientService as crmClientService } from '../services/clientService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
@@ -630,7 +631,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             >
                                                 <option value="">Selecione um fornecedor</option>
                                                 {suppliers.map(s => (
-                                                    <option key={s.id} value={s.id}>{s.name} ({s.document || 'Sem doc'})</option>
+                                                    <option key={s.id} value={s.id}>{getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)} ({s.document || 'Sem doc'})</option>
                                                 ))}
                                             </select>
                                         </div>

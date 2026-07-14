@@ -8,7 +8,8 @@ import {
 import { boletoService } from '../services/boletoService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
-import { supplierService } from '../services/supplierService';
+import { supplierService, getSupplierDisplayName } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 import type { Boleto, BoletoStatus, BoletoFilters, Organization, CostCenter } from '../types';
 import BoletoFormModal, { formatBRL } from './BoletoFormModal';
 import BoletoLoteModal from './BoletoLoteModal';
@@ -371,7 +372,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 boletoService.list(orgId, filters),
                 financialRegistryService.listCostCenters(orgId).catch(() => [] as CostCenter[]),
                 projectService.listProjects(undefined, orgId ?? organizationId).catch(() => [] as { id: string; name: string }[]),
-                supplierService.listSuppliers(orgId).catch(() => [] as { id: string; name: string }[]),
+                supplierService.listSuppliers(orgId).catch(() => [] as { id: string; name: string; nickname?: string | null }[]),
             ]);
 
             setBoletos(list);
@@ -380,7 +381,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             setSupplierMap(Object.fromEntries((sups || []).map((s) => [s.id, s.name])));
             setCcList((ccs || []).map(c => ({ id: c.id, name: c.name })));
             setProjectList((projs || []).filter(p => p.name !== 'Gestão Comercial').map(p => ({ id: p.id, name: p.name })));
-            setSupplierList((sups || []).map(s => ({ id: s.id, name: s.name })));
+            setSupplierList((sups || []).map(s => ({ id: s.id, name: getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay) })));
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             setError(error.message || 'Falha ao carregar boletos');

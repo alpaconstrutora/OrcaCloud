@@ -72,6 +72,8 @@ import BankReconciliation from './BankReconciliation';
 import BoletoManager from './BoletoManager';
 import ContasPagarManager from './ContasPagarManager';
 import { financialSyncService } from '../services/financialSyncService';
+import { getSupplierDisplayName } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 
@@ -502,10 +504,11 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     useEffect(() => {
         const orgId = organizationId || settings.organizationId;
         if (!orgId) return;
-        supabase.from('suppliers').select('id, name')
+        supabase.from('suppliers').select('id, name, nickname')
             .or(`organization_id.eq.${orgId},organization_id.is.null`)
             .order('name')
-            .then(({ data }) => setSuppliersList((data || []) as { id: string; name: string }[]));
+            .then(({ data }) => setSuppliersList(((data || []) as { id: string; name: string; nickname?: string | null }[])
+                .map(s => ({ id: s.id, name: getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay) }))));
     }, [organizationId, settings.organizationId]);
 
     const [incomeGroupBy, setIncomeGroupBy] = useState<'none' | 'client' | 'property' | 'deal' | 'type'>('none');

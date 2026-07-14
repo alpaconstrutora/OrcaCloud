@@ -11,6 +11,8 @@ import {
 } from '../services/opuraAnalyticsService';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../hooks/useToast';
+import { getSupplierDisplayName } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import { KpiCard } from './ui/KpiCard';
 import { usePersistedState } from './ui/TableUtils';
@@ -25,7 +27,7 @@ function fPct(v: number | null): string {
     return `${v.toFixed(1)}%`;
 }
 
-interface SupplierLite { id: string; name: string; document: string | null; }
+interface SupplierLite { id: string; name: string; document: string | null; nickname?: string | null; }
 
 // ── Componente ──────────────────────────────────────────────────────────────────
 interface CentralFornecedorProps {
@@ -55,7 +57,7 @@ const CentralFornecedor: React.FC<CentralFornecedorProps> = ({ organizationId })
             // Fornecedores legados têm organization_id = NULL (globais) — incluí-los.
             // Sem organização selecionada ("Todas"), não filtra — a RLS já
             // restringe às organizações do usuário.
-            let query = supabase.from('suppliers').select('id, name, document').order('name');
+            let query = supabase.from('suppliers').select('id, name, document, nickname').order('name');
             if (organizationId) query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
             const { data, error } = await query;
             if (error) { showToast(`Erro ao carregar fornecedores: ${error.message}`, 'error'); return; }
@@ -135,7 +137,7 @@ const CentralFornecedor: React.FC<CentralFornecedorProps> = ({ organizationId })
                 <select value={supplierId} onChange={e => setSupplierId(e.target.value)}
                     className="h-9 border border-gray-200 rounded-[6px] px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 max-w-[280px] w-full md:w-auto">
                     {suppliers.length === 0 && <option value="">Nenhum fornecedor</option>}
-                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {suppliers.map(s => <option key={s.id} value={s.id}>{getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)}</option>)}
                 </select>
                 <div className="flex items-center gap-2">
                     <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
@@ -245,7 +247,7 @@ const CentralFornecedor: React.FC<CentralFornecedorProps> = ({ organizationId })
             <Sheet open={drill !== null} onClose={() => setDrill(null)} size="2xl">
                 <SheetHeader onClose={() => setDrill(null)}>
                     <SheetTitle>{drill?.label ?? 'Extrato'}</SheetTitle>
-                    <SheetDescription>{selected?.name} · {entries[0]?.total_count ?? entries.length} lançamento(s)</SheetDescription>
+                    <SheetDescription>{selected ? getSupplierDisplayName(selected, appSettingsService.get().supplierNameDisplay) : ''} · {entries[0]?.total_count ?? entries.length} lançamento(s)</SheetDescription>
                 </SheetHeader>
                 <SheetPanel>
                     {entriesLoading ? (

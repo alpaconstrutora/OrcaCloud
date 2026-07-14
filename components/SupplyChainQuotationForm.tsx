@@ -3,7 +3,8 @@ import { ArrowLeft, Plus, Trash2, Save, Building2, Calendar, FileText, Package, 
 import { QuotationRequest, ProjectSettings, Supplier, QuotationRequestItem, SinapiType, SinapiCategory, BudgetEntry } from '../types';
 import { quotationService } from '../services/quotationService';
 import { projectService } from '../services/projectService';
-import { supplierService } from '../services/supplierService';
+import { supplierService, getSupplierDisplayName } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 import { sinapiService } from '../services/sinapiService';
 import MaterialSelectionModal from './MaterialSelectionModal';
 
@@ -897,7 +898,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                 }`}
                                         >
                                             <div className="flex items-center justify-between mb-1">
-                                                <span className="text-xs font-black text-gray-900 truncate">{sup.name}</span>
+                                                <span className="text-xs font-black text-gray-900 truncate">{getSupplierDisplayName(sup, appSettingsService.get().supplierNameDisplay)}</span>
                                                 {formData.invitedSupplierIds.includes(sup.id) && (
                                                     <div className="w-2 h-2 bg-blue-500 rounded-full" />
                                                 )}

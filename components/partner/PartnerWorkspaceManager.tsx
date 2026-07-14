@@ -27,7 +27,8 @@ import Button from '../ui/Button';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
 import { partnerPortalTokenService, PartnerPortalToken } from '../../services/partnerPortalTokenService';
-import { supplierService } from '../../services/supplierService';
+import { supplierService, getSupplierDisplayName } from '../../services/supplierService';
+import { appSettingsService } from '../../services/appSettingsService';
 import { organizationService } from '../../services/organizationService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
@@ -1259,7 +1260,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   <option value="">Selecione um prestador...</option>
                   {suppliers.map(s => (
                     <option key={s.id} value={s.id}>
-                      {s.name}{!organizationId ? ` — ${s.organization_name || 'Todas as Organizações'}` : ''}
+                      {getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)}{!organizationId ? ` — ${s.organization_name || 'Todas as Organizações'}` : ''}
                     </option>
                   ))}
                 </select>

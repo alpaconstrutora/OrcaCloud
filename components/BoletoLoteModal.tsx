@@ -5,7 +5,8 @@ import {
 } from 'lucide-react';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
 import { boletoService } from '../services/boletoService';
-import { supplierService } from '../services/supplierService';
+import { supplierService, getSupplierDisplayName } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
 import type { Boleto, BoletoExtractionResult, CostCenter } from '../types';
@@ -63,7 +64,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
     const processingRef = useRef(false);
 
     // Campos comuns
-    const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
+    const [suppliers, setSuppliers] = useState<{ id: string; name: string; nickname?: string | null }[]>([]);
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
     const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
     const [supplierId, setSupplierId] = useState('');
@@ -75,7 +76,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
     useEffect(() => {
         const orgArg = organizationId || undefined;
         Promise.all([
-            supplierService.listSuppliers(orgArg).catch(() => [] as { id: string; name: string }[]),
+            supplierService.listSuppliers(orgArg).catch(() => [] as { id: string; name: string; nickname?: string | null }[]),
             financialRegistryService.listCostCenters(orgArg).catch(() => [] as CostCenter[]),
             projectService.listProjects().catch(() => [] as { id: string; name: string }[]),
         ]).then(([sups, ccs, projs]) => {
@@ -343,7 +344,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
                                 >
                                     <option value="">— Sem fornecedor —</option>
                                     {suppliers.map(s => (
-                                        <option key={s.id} value={s.id}>{s.name}</option>
+                                        <option key={s.id} value={s.id}>{getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)}</option>
                                     ))}
                                 </select>
                             </div>

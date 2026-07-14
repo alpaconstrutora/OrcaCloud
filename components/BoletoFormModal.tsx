@@ -6,7 +6,8 @@ import {
 } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
 import { boletoService } from '../services/boletoService';
-import { supplierService } from '../services/supplierService';
+import { supplierService, getSupplierDisplayName } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
 import { extractFromPdfFile } from '../utils/boletoParser';
@@ -709,7 +710,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                 <option value="">Selecione um fornecedor</option>
                                                 {suppliers.map(s => (
                                                     <option key={s.id} value={s.id}>
-                                                        {s.name}{s.document ? ` — ${s.document}` : ''}
+                                                        {getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)}{s.document ? ` — ${s.document}` : ''}
                                                     </option>
                                                 ))}
                                             </select>

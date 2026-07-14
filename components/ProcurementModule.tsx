@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import { procurementService, computeRiskItems, computeMonthlyBreakdown, simulateScenario } from '../services/procurementService';
 import { projectService, ProjectData } from '../services/projectService';
-import { supplierService } from '../services/supplierService';
+import { supplierService, getSupplierDisplayName } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 import {
     ProcurementPlanItem,
     ProcurementKPIs,
@@ -259,7 +260,7 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
     // load suppliers
     useEffect(() => {
         supplierService.listSuppliers(activeOrganizationId ?? undefined).then(list =>
-            setSuppliers((list ?? []).map(s => ({ id: s.id, name: s.name })))
+            setSuppliers((list ?? []).map(s => ({ id: s.id, name: getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay) })))
         );
     }, [activeOrganizationId]);
 

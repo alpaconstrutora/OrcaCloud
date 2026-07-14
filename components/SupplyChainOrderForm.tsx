@@ -3,7 +3,8 @@ import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckC
 import HierarchicalSelect from './HierarchicalSelect';
 import Button from './ui/Button';
 import { projectService, ProjectData } from '../services/projectService';
-import { supplierService } from '../services/supplierService';
+import { supplierService, getSupplierDisplayName } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 import { orderService } from '../services/orderService';
 import { sinapiService } from '../services/sinapiService';
 import { organizationService } from '../services/organizationService';
@@ -600,7 +601,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         >
                                             <option value="">Selecione um fornecedor...</option>
                                             {suppliers.map(s => (
-                                                <option key={s.id} value={s.id}>{s.name}</option>
+                                                <option key={s.id} value={s.id}>{getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay)}</option>
                                             ))}
                                         </select>
                                     </div>

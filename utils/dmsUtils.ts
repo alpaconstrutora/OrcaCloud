@@ -24,7 +24,7 @@ export function validateFileNameAgainstMask(fileName: string, mask: string): boo
   const regex = new RegExp(`^${pattern}$`, 'i');
   
   // Extrair apenas o nome do arquivo, removendo a extensão (.pdf, .dwg, etc.)
-  const fileNameWithoutExt = fileName.split('.').slice(0, -1).join('.');
+  const fileNameWithoutExt = fileName.includes('.') ? fileName.split('.').slice(0, -1).join('.') : fileName;
   
   return regex.test(fileNameWithoutExt);
 }
@@ -66,7 +66,7 @@ export function extractTokenFromFileName(
     .replace(/\\\[REVISAO\\\]/gi, '([A-Z0-9]+)');
 
   const regex = new RegExp(`^${pattern}$`, 'i');
-  const fileNameWithoutExt = fileName.split('.').slice(0, -1).join('.');
+  const fileNameWithoutExt = fileName.includes('.') ? fileName.split('.').slice(0, -1).join('.') : fileName;
   const result = regex.exec(fileNameWithoutExt);
 
   if (!result) return null;

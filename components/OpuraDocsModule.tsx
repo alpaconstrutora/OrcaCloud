@@ -119,7 +119,6 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [newPatName, setNewPatName] = React.useState('');
   const [newPatMask, setNewPatMask] = React.useState('');
   const [selectedFolderDisciplines, setSelectedFolderDisciplines] = React.useState<string[]>([]);
-  const [leftSidebarTab, setLeftSidebarTab] = React.useState<'disciplines' | 'folders'>('disciplines');
   const [leftSearchQuery, setLeftSearchQuery] = React.useState('');
   const [selectedDisciplineCode, setSelectedDisciplineCode] = React.useState<string | null>(null);
   const [expandedNodes, setExpandedNodes] = React.useState<string[]>([]);
@@ -661,35 +660,27 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     return `hsl(${h}, 65%, 45%)`;
   };
 
-  // Retorna as pastas que aceitam uma disciplina e devem ser nós raiz daquela disciplina na árvore
-  const getFoldersForDiscipline = (discCode: string) => {
-    return folders.filter((folder) => {
-      const accepts = (folder.disciplines || []).some(
-        d => d.toUpperCase() === discCode.toUpperCase()
-      );
-      if (!accepts) return false;
-
-      if (!folder.parent_id) return true;
-
-      const parent = folders.find(f => f.id === folder.parent_id);
-      const parentAccepts = parent && (parent.disciplines || []).some(
-        d => d.toUpperCase() === discCode.toUpperCase()
-      );
-      return !parentAccepts;
-    });
-  };
 
   // Renderizador recursivo para nós de pastas na árvore
   const renderFolderTreeItem = (folder: OpuraFolder, discCode: string | null, depth: number) => {
     const isExpanded = expandedNodes.includes(folder.id);
-    const isSelected = currentFolderId === folder.id && (discCode === null || selectedDisciplineCode === discCode);
     const subfolders = folders.filter(f => f.parent_id === folder.id);
+    
+    // As disciplinas associadas à pasta
+    const folderDisciplines = disciplines.filter(d => folder.disciplines?.includes(d.code));
+    
+    const hasChildren = subfolders.length > 0 || folderDisciplines.length > 0;
+
+    // isSelected foca apenas na pasta se nenhuma disciplina estiver selecionada
+    const isFolderSelected = currentFolderId === folder.id && selectedDisciplineCode === null;
 
     // Validação contra o filtro de pesquisa do painel esquerdo
     if (leftSearchQuery.trim()) {
       const q = leftSearchQuery.toLowerCase();
       const matchThis = folder.name.toLowerCase().includes(q);
-      const matchChildren = subfolders.some(sf => sf.name.toLowerCase().includes(q));
+      const matchChildren = 
+        subfolders.some(sf => sf.name.toLowerCase().includes(q)) || 
+        folderDisciplines.some(fd => fd.name.toLowerCase().includes(q));
       if (!matchThis && !matchChildren) return null;
     }
 
@@ -697,7 +688,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       <div key={folder.id} className="space-y-1">
         <div
           className={`flex items-center justify-between p-1 rounded-lg transition-all group ${
-            isSelected
+            isFolderSelected
               ? 'bg-blue-50 text-blue-700 font-extrabold border border-blue-100/50'
               : 'hover:bg-slate-50 border border-transparent'
           }`}
@@ -706,11 +697,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           <div
             onClick={() => {
               setCurrentFolderId(folder.id);
-              if (discCode) {
-                setSelectedDisciplineCode(discCode);
-              } else {
-                setSelectedDisciplineCode(null);
-              }
+              setSelectedDisciplineCode(null);
             }}
             className="flex items-center gap-1.5 min-w-0 flex-grow cursor-pointer"
           >
@@ -718,7 +705,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <span className="text-xs truncate">{folder.name}</span>
           </div>
 
-          {subfolders.length > 0 && (
+          {hasChildren && (
             <button
               onClick={() => toggleNode(folder.id)}
               className="p-0.5 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100 transition-colors"
@@ -732,11 +719,38 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           )}
         </div>
 
-        {isExpanded && subfolders.length > 0 && (
+        {isExpanded && hasChildren && (
           <div className="space-y-1">
             {subfolders.map(sub =>
               renderFolderTreeItem(sub, discCode, depth + 1)
             )}
+            
+            {folderDisciplines.map(disc => {
+              const isDiscSelected = currentFolderId === folder.id && selectedDisciplineCode === disc.code;
+              return (
+                <div
+                  key={`${folder.id}-${disc.code}`}
+                  className={`flex items-center p-1 rounded-lg transition-all group cursor-pointer ${
+                    isDiscSelected
+                      ? 'bg-blue-50 text-blue-700 font-extrabold border border-blue-100/50'
+                      : 'hover:bg-slate-50 border border-transparent'
+                  }`}
+                  style={{ paddingLeft: `${(depth + 1) * 4 + 4 + 16}px` }}
+                  onClick={() => {
+                    setCurrentFolderId(folder.id);
+                    setSelectedDisciplineCode(disc.code);
+                  }}
+                >
+                  <span
+                    className="w-5 h-4 flex items-center justify-center text-[8px] font-black uppercase rounded text-white shadow-sm shrink-0 mr-2"
+                    style={{ backgroundColor: getDisciplineColor(disc.code) }}
+                  >
+                    {disc.code.slice(0, 3)}
+                  </span>
+                  <span className="text-xs truncate">{disc.name}</span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1474,39 +1488,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
           {/* PAINEL LATERAL ESQUERDO: Árvore de Disciplinas/Pastas */}
           <div className="lg:col-span-1 bg-white rounded-3xl border border-slate-100 shadow-sm p-5 space-y-4 min-h-[600px] flex flex-col">
-            {/* Abas do Painel Esquerdo */}
-            <div className="flex border-b border-slate-100 pb-px gap-2">
-              <button
-                type="button"
-                onClick={() => { setLeftSidebarTab('disciplines'); setLeftSearchQuery(''); }}
-                className={`flex-grow pb-2.5 font-black text-[10px] uppercase tracking-wider border-b-2 transition-all text-center ${
-                  leftSidebarTab === 'disciplines'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                Disciplinas
-              </button>
-              <button
-                type="button"
-                onClick={() => { setLeftSidebarTab('folders'); setLeftSearchQuery(''); }}
-                className={`flex-grow pb-2.5 font-black text-[10px] uppercase tracking-wider border-b-2 transition-all text-center ${
-                  leftSidebarTab === 'folders'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                Locais
-              </button>
-
-              {/* Atalho de Gestão de Disciplinas */}
+            {/* Header com Atalho de Gestão de Disciplinas */}
+            <div className="flex border-b border-slate-100 pb-2 px-2 items-center justify-between">
+              <span className="font-black text-[10px] uppercase tracking-wider text-slate-400">Pastas e Disciplinas</span>
               <button
                 type="button"
                 onClick={() => {
                   setSettingsTab('disciplines');
                   setShowSettingsModal(true);
                 }}
-                className="pb-2.5 px-1.5 text-slate-400 hover:text-blue-600 transition-colors"
+                className="text-slate-400 hover:text-blue-600 transition-colors"
                 title="Gerenciar Disciplinas"
               >
                 <Settings className="w-4 h-4" />
@@ -1517,7 +1508,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="relative">
               <input
                 type="text"
-                placeholder={leftSidebarTab === 'disciplines' ? "Pesquisar disciplina..." : "Pesquisar pasta..."}
+                placeholder="Pesquisar pasta ou disciplina..."
                 value={leftSearchQuery}
                 onChange={(e) => setLeftSearchQuery(e.target.value)}
                 className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
@@ -1544,81 +1535,6 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 <span>Todos os documentos</span>
               </button>
 
-              {leftSidebarTab === 'disciplines' ? (
-                // ABA 1: DISCIPLINAS
-                <div className="space-y-1.5 pt-2">
-                  {disciplines
-                    .filter(disc => 
-                      !leftSearchQuery.trim() || 
-                      disc.code.toLowerCase().includes(leftSearchQuery.toLowerCase()) || 
-                      disc.name.toLowerCase().includes(leftSearchQuery.toLowerCase())
-                    )
-                    .map((disc) => {
-                      const isExpanded = expandedNodes.includes(disc.code);
-                      const isSelected = selectedDisciplineCode === disc.code && !currentFolderId;
-                      const folderList = getFoldersForDiscipline(disc.code);
-
-                      return (
-                        <div key={disc.id} className="space-y-1">
-                          {/* Linha da Disciplina */}
-                          <div
-                            className={`w-full flex items-center justify-between p-1.5 rounded-xl transition-all group ${
-                              isSelected
-                                ? 'bg-blue-50 text-blue-700 font-extrabold border border-blue-100/50'
-                                : 'hover:bg-slate-50/80 border border-transparent'
-                            }`}
-                          >
-                            <div
-                              onClick={() => {
-                                setSelectedDisciplineCode(disc.code);
-                                setCurrentFolderId(null); // Limpa pasta selecionada
-                              }}
-                              className="flex items-center gap-2 min-w-0 flex-grow cursor-pointer"
-                            >
-                              {/* Bloco Colorido da Disciplina */}
-                              <span
-                                className="w-7 h-5 flex items-center justify-center text-[9px] font-black uppercase rounded text-white shadow-sm shrink-0"
-                                style={{ backgroundColor: getDisciplineColor(disc.code) }}
-                              >
-                                {disc.code.slice(0, 3)}
-                              </span>
-                              <span className="text-xs font-bold truncate">{disc.name}</span>
-                            </div>
-
-                            {folderList.length > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => toggleNode(disc.code)}
-                                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
-                              >
-                                {isExpanded ? (
-                                  <ChevronDown className="w-3.5 h-3.5" />
-                                ) : (
-                                  <ChevronRight className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Pastas Sob a Disciplina */}
-                          {isExpanded && folderList.length > 0 && (
-                            <div className="pl-4 ml-3.5 border-l border-slate-100/80 space-y-1 animate-in fade-in duration-200">
-                              {folderList.map(folder =>
-                                renderFolderTreeItem(folder, disc.code, 1)
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
-              ) : (
-                // ABA 2: PASTAS PURAS (LOCAIS)
-                <div className="space-y-1.5 pt-2">
-                  {folders
-                    .filter(f => !f.parent_id)
-                    .map(folder =>
-                      renderFolderTreeItem(folder, null, 0)
                     )}
                 </div>
               )}

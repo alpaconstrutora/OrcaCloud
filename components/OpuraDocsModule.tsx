@@ -3651,8 +3651,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           </div>
                         </div>
                       </div>
-                      <div className="text-[10px] font-medium text-slate-500">
-                        <strong className="text-slate-700">Tags disponíveis:</strong> <code className="bg-white px-1 py-0.5 rounded text-blue-600">[OBRA]</code>, <code className="bg-white px-1 py-0.5 rounded text-blue-600">[DISCIPLINA]</code>, <code className="bg-white px-1 py-0.5 rounded text-blue-600">[NUMERO]</code>, <code className="bg-white px-1 py-0.5 rounded text-blue-600">[REVISAO]</code>
+                      <div className="text-[10px] font-medium text-slate-500 space-y-1">
+                        <div><strong className="text-slate-700">Tags disponíveis:</strong> <code className="bg-white px-1 py-0.5 rounded text-blue-600">[OBRA]</code>, <code className="bg-white px-1 py-0.5 rounded text-blue-600">[DISCIPLINA]</code>, <code className="bg-white px-1 py-0.5 rounded text-blue-600">[NUMERO]</code>, <code className="bg-white px-1 py-0.5 rounded text-blue-600">[REVISAO]</code></div>
+                        <div className="text-slate-400 italic">Dica: Use chaves para definir a quantidade de dígitos. Ex: <code className="bg-white px-1 py-0.5 rounded not-italic text-blue-600">[NUMERO&#123;3&#125;]</code> formata como 001.</div>
                       </div>
                     </form>
 

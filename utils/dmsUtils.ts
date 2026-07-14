@@ -89,8 +89,14 @@ export function generateFileNameFromMask(mask: string, tokens: Record<string, st
     if (rawVal !== undefined) {
       // Regex que acha o token, com ou sem a formatação de tamanho, ex: [OBRA] ou [OBRA{3}]
       const tokenName = t.replace(/[\[\]]/g, ''); // "OBRA"
-      const regex = new RegExp(`\\[${tokenName}(?:\\{[0-9,]+\\})?\\]`, 'gi');
-      finalName = finalName.replace(regex, rawVal);
+      const regex = new RegExp(`\\[${tokenName}(?:\\{([0-9,]+)\\})?\\]`, 'gi');
+      finalName = finalName.replace(regex, (match, p1) => {
+        if (p1) {
+          const length = parseInt(p1, 10);
+          return rawVal.padStart(length, '0');
+        }
+        return rawVal;
+      });
     }
   });
 

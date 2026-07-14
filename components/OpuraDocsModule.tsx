@@ -1932,53 +1932,59 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             )}
 
             {/* Lista de Documentos */}
-            {filteredDocuments.length === 0 && folders.filter(f => (f.parent_id || null) === (currentFolderId || null)).length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                <div className="p-4 bg-slate-50 text-slate-400 rounded-full">
-                  <FolderOpen className="w-12 h-12" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-700">Nenhum documento ou pasta encontrado</h3>
-                  <p className="text-slate-400 text-sm mt-1 max-w-sm">
-                    Não existem arquivos ou subpastas neste diretório.
-                  </p>
-                </div>
-              </div>
-            ) : filteredDocuments.length === 0 ? (
-              <div className="p-8 text-center text-xs text-slate-400 font-bold uppercase tracking-wider bg-slate-50/20 border-b border-slate-100">
-                Nenhum arquivo avulso nesta pasta. Navegue pelas subpastas acima.
-              </div>
-            ) : (
-              <div className="bg-white overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+            <div className="bg-white overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                    <tr>
+                      {tableColumns.visibleColumns.includes('nome') && (
+                        <SortableHeader colKey="nome" label="Documento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
+                      )}
+                      {tableColumns.visibleColumns.includes('tipo_documento') && (
+                        <SortableHeader colKey="tipo_documento" label="Tipo / Categoria" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                      )}
+                      {tableColumns.visibleColumns.includes('project_id') && (
+                        <SortableHeader colKey="project_id" label="Obra Vinculada" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                      )}
+                      {tableColumns.visibleColumns.includes('data_emissao') && (
+                        <SortableHeader colKey="data_emissao" label="Emissão" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                      )}
+                      {tableColumns.visibleColumns.includes('data_validade') && (
+                        <SortableHeader colKey="data_validade" label="Validade" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                      )}
+                      {tableColumns.visibleColumns.includes('status') && (
+                        <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                      )}
+                      {tableColumns.visibleColumns.includes('actions') && (
+                        <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500 whitespace-nowrap">Ações</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredDocuments.length === 0 ? (
                       <tr>
-                        {tableColumns.visibleColumns.includes('nome') && (
-                          <SortableHeader colKey="nome" label="Documento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
-                        )}
-                        {tableColumns.visibleColumns.includes('tipo_documento') && (
-                          <SortableHeader colKey="tipo_documento" label="Tipo / Categoria" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                        )}
-                        {tableColumns.visibleColumns.includes('project_id') && (
-                          <SortableHeader colKey="project_id" label="Obra Vinculada" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                        )}
-                        {tableColumns.visibleColumns.includes('data_emissao') && (
-                          <SortableHeader colKey="data_emissao" label="Emissão" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                        )}
-                        {tableColumns.visibleColumns.includes('data_validade') && (
-                          <SortableHeader colKey="data_validade" label="Validade" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                        )}
-                        {tableColumns.visibleColumns.includes('status') && (
-                          <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
-                        )}
-                        {tableColumns.visibleColumns.includes('actions') && (
-                          <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500 whitespace-nowrap">Ações</th>
-                        )}
+                        <td colSpan={tableColumns.visibleColumns.length} className="px-6 py-20 text-center">
+                          {folders.filter(f => (f.parent_id || null) === (currentFolderId || null)).length === 0 ? (
+                            <div className="flex flex-col items-center justify-center space-y-4">
+                              <div className="p-4 bg-slate-50 text-slate-400 rounded-full">
+                                <FolderOpen className="w-12 h-12" />
+                              </div>
+                              <div>
+                                <h3 className="font-bold text-slate-700">Nenhum documento ou pasta encontrado</h3>
+                                <p className="text-slate-400 text-sm mt-1 max-w-sm mx-auto">
+                                  Não existem arquivos ou subpastas neste diretório.
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-sm text-slate-400 font-medium">
+                              Nenhum arquivo avulso nesta pasta. Navegue pelas subpastas acima.
+                            </div>
+                          )}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {filteredDocuments.map((doc) => {
+                    ) : (
+                      filteredDocuments.map((doc) => {
                         // Determinar o status textual para o badge conforme o novo padrão
                         const statusColor = doc.status === 'vencido' ? 'text-red-600' : doc.status === 'alerta' ? 'text-amber-600' : 'text-green-600';
                         const statusLabel = doc.status === 'vencido' ? 'Vencido' : doc.status === 'alerta' ? 'Em Alerta' : 'Ativo';
@@ -2078,12 +2084,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             )}
                           </tr>
                         );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
+            </div>
           </div>
         )}
       </div>

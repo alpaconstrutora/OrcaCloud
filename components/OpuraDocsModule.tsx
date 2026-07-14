@@ -81,7 +81,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   projects,
   currentProfile,
 }) => {
-  const { companies: rawCompanies } = useStore();
+  const { companies: rawCompanies, organizations } = useStore();
   const companies = Array.isArray(rawCompanies) ? rawCompanies : [];
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>('all');
   const [activeTab, setActiveTab] = React.useState<OpuraDocumentCategoria>('engenharia');
@@ -2602,8 +2602,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   >
                     <option value="">Selecione uma organização...</option>
-                    {companies.map(c => (
-                      <option key={c.id} value={c.id}>{c.nome_fantasia || c.razao_social}</option>
+                    {organizations.map(org => (
+                      <option key={org.id} value={org.id}>{org.name}</option>
                     ))}
                   </select>
                 </div>

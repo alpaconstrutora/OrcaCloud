@@ -143,8 +143,8 @@ export const documentService = {
       query = query.eq('status', filters.status);
     }
 
-    if (filters && 'folderId' in filters && filters.folderId !== undefined) {
-      if (filters.folderId === null) {
+    if (filters && 'folderId' in filters && filters.folderId !== undefined && filters.folderId !== 'undefined') {
+      if (filters.folderId === null || filters.folderId === 'null') {
         query = query.is('folder_id', null);
       } else {
         query = query.eq('folder_id', filters.folderId);

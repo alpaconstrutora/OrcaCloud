@@ -160,9 +160,9 @@ export const projectService = {
             query = query.eq('empresa_id', empresaId);
         } else if (organizationId) {
             if (includeOrphans) {
-                query = query.or(`settings->>organizationId.eq.${organizationId},settings->>organizationId.is.null`);
+                query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
             } else {
-                query = query.filter('settings->>organizationId', 'eq', organizationId);
+                query = query.eq('organization_id', organizationId);
             }
         }
 

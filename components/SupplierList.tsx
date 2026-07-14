@@ -11,6 +11,17 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
 import Button from './ui/Button';
 
+// Erros do Supabase/Postgrest não são instâncias de Error — são objetos
+// planos ({code, message, details, hint}). String(error) nesses casos vira
+// "[object Object]"; extrai .message explicitamente para qualquer formato.
+function getErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (error && typeof error === 'object' && 'message' in error && typeof (error as { message: unknown }).message === 'string') {
+        return (error as { message: string }).message;
+    }
+    return String(error);
+}
+
 const SUPPLIER_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
     { key: 'name', label: 'Fornecedor', sortable: true },
@@ -134,7 +145,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
             notify('Fornecedor cadastrado com sucesso.');
         } catch (error) {
             console.error("Erro ao adicionar fornecedor:", error);
-            notify(`Erro ao adicionar o fornecedor: ${error instanceof Error ? error.message : String(error)}`, 'error');
+            notify(`Erro ao adicionar o fornecedor: ${getErrorMessage(error)}`, 'error');
         }
     };
 
@@ -150,7 +161,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
             notify('Fornecedor atualizado com sucesso.');
         } catch (error) {
             console.error("Erro ao editar fornecedor:", error);
-            notify(`Erro ao editar o fornecedor: ${error instanceof Error ? error.message : String(error)}`, 'error');
+            notify(`Erro ao editar o fornecedor: ${getErrorMessage(error)}`, 'error');
         }
     };
 

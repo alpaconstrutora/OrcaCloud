@@ -16,6 +16,11 @@ const isDuplicateEmailError = (error: unknown) => {
     const text = `${err?.message || ''} ${err?.details || ''}`.toLowerCase();
     return err?.code === '23505' && text.includes('email');
 };
+const isDuplicateCodeError = (error: unknown) => {
+    const err = error as { code?: string; message?: string; details?: string };
+    const text = `${err?.message || ''} ${err?.details || ''}`.toLowerCase();
+    return err?.code === '23505' && text.includes('idx_suppliers_org_code');
+};
 const onlyDigits = (value?: string | null) => (value || '').replace(/\D/g, '');
 
 export type SupplierNameMode = 'razao' | 'apelido';
@@ -377,6 +382,10 @@ export const supplierService = {
             error = retry.error;
         }
 
+        if (error && isDuplicateCodeError(error)) {
+            throw new Error('Já existe um fornecedor com esse código nessa organização. Altere o código e tente novamente.');
+        }
+
         if (error) throw error;
         await syncRealEstateBrokerProfile(data as Supplier);
         return data as Supplier;
@@ -387,6 +396,20 @@ export const supplierService = {
             ...updates,
             ...(updates.email !== undefined ? { email: normalizeEmail(updates.email) || null } : {}),
         };
+
+        // O campo `code` é uma numeração sequencial única por organização
+        // (idx_suppliers_org_code, inclusive para o "balde" organization_id
+        // NULL = fornecedores globais/"Todas as Organizações"). Ao mudar a
+        // organização de um fornecedor sem que o chamador informe um novo
+        // código, o código antigo (sequencial na organização de origem) pode
+        // colidir com um fornecedor que já existe no destino — renumera
+        // proativamente em vez de deixar o INSERT falhar com erro de banco.
+        if ('organization_id' in updates && updates.code === undefined) {
+            const { data: nextCode } = await supabase.rpc('get_next_supplier_code', {
+                p_org_id: updates.organization_id ?? null,
+            });
+            if (nextCode) payload.code = nextCode;
+        }
 
         let { data, error } = await supabase
             .from('suppliers')
@@ -405,6 +428,10 @@ export const supplierService = {
                 .single();
             data = retry.data;
             error = retry.error;
+        }
+
+        if (error && isDuplicateCodeError(error)) {
+            throw new Error('Já existe um fornecedor com esse código na organização de destino. Altere o código do fornecedor e tente novamente.');
         }
 
         if (error) throw error;

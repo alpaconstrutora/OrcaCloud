@@ -113,6 +113,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [showMetrics, setShowMetrics] = React.useState(false);
   const [editingDoc, setEditingDoc] = React.useState<OpuraDocument | null>(null);
   const [editDocName, setEditDocName] = React.useState('');
+  const [editDocTokens, setEditDocTokens] = React.useState<Record<string, string>>({});
   const [editDocDesc, setEditDocDesc] = React.useState('');
   const [editDocEmissao, setEditDocEmissao] = React.useState('');
   const [editDocValidade, setEditDocValidade] = React.useState('');
@@ -1240,6 +1241,20 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const handleStartEditDoc = (doc: OpuraDocument) => {
     setEditingDoc(doc);
     setEditDocName(doc.nome);
+    
+    // Check if the document belongs to a folder with a naming mask
+    const docFolder = folders.find(f => f.id === doc.folder_id);
+    if (docFolder && docFolder.naming_mask) {
+      const initialTokens: Record<string, string> = {};
+      // In case we don't have extractMaskTokens locally in this scope, wait it's imported at the top
+      extractMaskTokens(docFolder.naming_mask).forEach(token => {
+        initialTokens[token] = extractTokenFromFileName(doc.nome, docFolder.naming_mask as string, token as any) || '';
+      });
+      setEditDocTokens(initialTokens);
+    } else {
+      setEditDocTokens({});
+    }
+
     setEditDocDesc(doc.descricao || '');
     setEditDocEmissao(doc.data_emissao ? doc.data_emissao.split('T')[0] : '');
     setEditDocValidade(doc.data_validade ? doc.data_validade.split('T')[0] : '');
@@ -1252,6 +1267,15 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const handleEditDocSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingDoc) return;
+    
+    // Obter o nome final (seja da máscara ou do input livre)
+    let finalDocName = editDocName;
+    const docFolder = folders.find(f => f.id === editingDoc.folder_id);
+    if (docFolder && docFolder.naming_mask) {
+      // Usar a mesma lógica de geração de arquivo e remover a extensão '.pdf' dummy
+      const generatedName = generateFileNameFromMask(docFolder.naming_mask, editDocTokens, 'pdf');
+      finalDocName = generatedName.split('.').slice(0, -1).join('.');
+    }
 
     // Se houver uma máscara de nomenclatura configurada na pasta, validar contra o novo nome
     if (editingDoc.folder_id) {

@@ -191,6 +191,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [newDocAlertaDias, setNewDocAlertaDias] = React.useState(30);
   const [newDocTagsInput, setNewDocTagsInput] = React.useState('');
   const [newDocFile, setNewDocFile] = React.useState<File | null>(null);
+  const [uploading, setUploading] = React.useState(false);
   const [uploadProgress, setUploadProgress] = React.useState<number>(0);
   
   // Estados para Smart Rename Modal

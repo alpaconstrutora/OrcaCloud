@@ -7,7 +7,8 @@ import {
     AlertCircle
 } from 'lucide-react';
 import { contractService } from '../services/contractService';
-import { supplierService } from '../services/supplierService';
+import { supplierService, getSupplierDisplayName } from '../services/supplierService';
+import { appSettingsService } from '../services/appSettingsService';
 import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
 import { Contract } from '../types';
@@ -61,6 +62,9 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
 }) => {
     const [contracts, setContracts] = React.useState<Contract[]>([]);
     const [supplierMap, setSupplierMap] = React.useState<Record<string, string>>({});
+    // Preferência global razão social/apelido (definida em Meus Fornecedores) — só a exibição na
+    // lista respeita; contratos/documentos oficiais continuam com a razão social à parte.
+    const nameMode = React.useMemo(() => appSettingsService.get().supplierNameDisplay, []);
     const [clientMap, setClientMap] = React.useState<Record<string, string>>({});
     const [projectMap, setProjectMap] = React.useState<Record<string, string>>({});
     const [loading, setLoading] = React.useState(true);
@@ -93,7 +97,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 projectService.listProjects(undefined, organizationId).catch(() => []),
             ]);
             setContracts(data);
-            setSupplierMap(Object.fromEntries(suppliers.map(s => [s.id, s.name])));
+            setSupplierMap(Object.fromEntries(suppliers.map(s => [s.id, getSupplierDisplayName(s, nameMode)])));
             setClientMap(Object.fromEntries(clients.map((c: { id: string; name: string }) => [c.id, c.name])));
             setProjectMap(Object.fromEntries(projects.map((p: { id: string; name: string }) => [p.id, p.name])));
         } catch (error) {

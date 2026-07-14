@@ -57,6 +57,7 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
     const [calcInfo, setCalcInfo] = useState<string | null>(null);
     const [syncing, setSyncing] = useState(false);
     const [syncInfo, setSyncInfo] = useState<string | null>(null);
+    const [manualEntriesTotal, setManualEntriesTotal] = useState(0);
 
     const [batches, setBatches] = useState<ProfitDistributionBatch[]>([]);
     const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
@@ -113,6 +114,8 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
             setPayroll(p);
             const items = await remuneracaoSocietariaService.listPayrollItems(p.id);
             setPayrollItems(items);
+            const manualEntries = await remuneracaoSocietariaService.listManualEntries(companyId, competenceMonth);
+            setManualEntriesTotal(manualEntries.reduce((s, e) => s + e.amount, 0));
         } catch (e: unknown) {
             setError((e as Error).message);
         } finally {
@@ -549,6 +552,9 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                                                 value={editForm.payment_day}
                                                 onChange={e => setEditForm(f => ({ ...f, payment_day: e.target.value }))} />
                                         </div>
+                                        <p className="md:col-span-3 text-xs text-gray-400">
+                                            Só é usado como base de cálculo se a competência ainda não tiver um total conciliado no banco (Financeiro &gt; Conciliação Bancária &gt; Pró-labore) — quando existir, o valor real do banco manda.
+                                        </p>
                                     </div>
                                 )}
                             </div>
@@ -570,9 +576,10 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId }) => {
                             </span>
                         )}
                         {payroll?.bank_reconciled_total != null && (
-                            <span className="text-xs text-blue-700 font-medium" title="Registrado via Financeiro > Conciliação Bancária > Pró-labore">
-                                Total conciliado no banco: {BRL(payroll.bank_reconciled_total)}
-                                {payroll.bank_reconciled_at ? ` (em ${new Date(payroll.bank_reconciled_at).toLocaleString('pt-BR')})` : ''}
+                            <span className="text-xs text-blue-700 font-medium" title="Registrado via Financeiro > Conciliação Bancária > Pró-labore — esta é a base usada no cálculo da folha (Bruto), não o Valor Mensal fixo da aba Sócios">
+                                Base de cálculo: banco {BRL(payroll.bank_reconciled_total)}
+                                {manualEntriesTotal !== 0 ? ` + manual ${BRL(manualEntriesTotal)} = ${BRL(payroll.bank_reconciled_total + manualEntriesTotal)}` : ''}
+                                {payroll.bank_reconciled_at ? ` (conciliado em ${new Date(payroll.bank_reconciled_at).toLocaleString('pt-BR')})` : ''}
                             </span>
                         )}
                         {periodLocked !== null && (

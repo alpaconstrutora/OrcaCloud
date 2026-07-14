@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-    Send, Lock, Unlock, Loader2, Check, X, AlertTriangle, Wallet, CheckCircle2, Clock, Building2, Undo2,
+    Send, Lock, Unlock, Loader2, Check, X, AlertTriangle, Wallet, CheckCircle2, Clock, Building2, Undo2, Plus, Trash2, PencilLine,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { companyService } from '../services/companyService';
@@ -12,7 +12,7 @@ import { useToast } from '../hooks/useToast';
 import { formatMoney, formatDateBR } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
-import type { Company } from '../types';
+import type { Company, ProlaboreManualEntry } from '../types';
 
 // A categoria pode ter sido gravada de formas diferentes: o RH grava
 // 'Pró-labore' (com acento/hífen) ao enviar a folha ao financeiro
@@ -23,7 +23,7 @@ const PROLABORE_ILIKE_PATTERNS = ['%prolabore%', '%pró-labore%'];
 
 interface ProlaboreRow {
     id: string;
-    source: 'bank' | 'internal';
+    source: 'bank' | 'internal' | 'manual';
     transaction_date: string;
     amount: number;
     description?: string;
@@ -37,8 +37,18 @@ interface ProlaboreRow {
     prolabore_approved_by?: string | null;
 }
 
+// Lançamento manual (prolabore_manual_entries) é sempre contado como "aprovado" —
+// quem digita já está confirmando o valor; a ação disponível é excluir, não aprovar.
 function isApproved(row: ProlaboreRow): boolean {
+    if (row.source === 'manual') return true;
     return row.source === 'internal' ? row.approval_status === 'APROVADO' : !!row.prolabore_approved_at;
+}
+
+function manualEntryToRow(e: ProlaboreManualEntry): ProlaboreRow {
+    return {
+        id: e.id, source: 'manual', transaction_date: e.competence_month, amount: e.amount,
+        description: e.description || 'Ajuste manual', category: 'Ajuste manual',
+    };
 }
 
 function rowKey(row: ProlaboreRow): string {
@@ -102,6 +112,10 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
     const [reconciledInfo, setReconciledInfo] = useState<{ total: number; at: string; by: string } | null>(null);
     const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
     const [bulkApproving, setBulkApproving] = useState(false);
+    const [manualEntries, setManualEntries] = useState<ProlaboreManualEntry[]>([]);
+    const [manualDescription, setManualDescription] = useState('');
+    const [manualAmount, setManualAmount] = useState('');
+    const [addingManual, setAddingManual] = useState(false);
 
     const tableColumns = useTableColumns(COLUMNS, 'prolaboreReconciliationColumns');
 
@@ -159,6 +173,17 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
 
     useEffect(() => { loadTransactions(); }, [loadTransactions]);
 
+    const loadManualEntries = useCallback(async () => {
+        if (!companyId || !competenceMonth) { setManualEntries([]); return; }
+        try {
+            setManualEntries(await remuneracaoSocietariaService.listManualEntries(companyId, competenceMonth));
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Erro ao carregar lançamentos manuais', 'error');
+        }
+    }, [companyId, competenceMonth]);
+
+    useEffect(() => { loadManualEntries(); }, [loadManualEntries]);
+
     useEffect(() => {
         if (!organizationId || !competenceMonth) { setPeriodLocked(null); return; }
         financialCloseService.isClosed(organizationId, competenceMonth).then(setPeriodLocked).catch(() => setPeriodLocked(null));
@@ -173,14 +198,18 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
         }).catch(() => setReconciledInfo(null));
     }, [companyId, competenceMonth]);
 
+    // Une extrato/interno (rows) com os ajustes manuais — mesma base usada
+    // para totais, ordenação e "Lançar total em RH".
+    const allRows = useMemo(() => [...rows, ...manualEntries.map(manualEntryToRow)], [rows, manualEntries]);
+
     const totals = useMemo(() => {
-        const pendente = rows.filter(r => !isApproved(r)).reduce((s, r) => s + r.amount, 0);
-        const aprovado = rows.filter(isApproved).reduce((s, r) => s + r.amount, 0);
-        return { pendente, aprovado, total: pendente + aprovado, count: rows.length };
-    }, [rows]);
+        const pendente = allRows.filter(r => !isApproved(r)).reduce((s, r) => s + r.amount, 0);
+        const aprovado = allRows.filter(isApproved).reduce((s, r) => s + r.amount, 0);
+        return { pendente, aprovado, total: pendente + aprovado, count: allRows.length };
+    }, [allRows]);
 
     const sortedRows = useMemo(() => {
-        const arr = [...rows];
+        const arr = [...allRows];
         return arr.sort((a, b) => {
             if (tableColumns.sortColumn) {
                 const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
@@ -195,7 +224,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
             }
             return b.transaction_date.localeCompare(a.transaction_date);
         });
-    }, [rows, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [allRows, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     /** Aprova um único lançamento sem toast/reload — reusado pela aprovação individual e em lote. */
     const approveOne = async (row: ProlaboreRow, approvedBy: string): Promise<void> => {
@@ -256,6 +285,43 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
             await loadTransactions();
         } catch (e) {
             showToast(e instanceof Error ? e.message : 'Erro ao desfazer aprovação', 'error');
+        } finally {
+            setActingId(null);
+        }
+    };
+
+    const handleAddManualEntry = async () => {
+        const amount = parseFloat(manualAmount.replace(',', '.'));
+        if (!companyId) { showToast('Selecione a empresa.', 'error'); return; }
+        if (!amount || isNaN(amount) || amount <= 0) { showToast('Informe um valor válido.', 'error'); return; }
+        setAddingManual(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            await remuneracaoSocietariaService.addManualEntry({
+                organizationId, companyId, competenceMonth, amount,
+                description: manualDescription || undefined,
+                createdByEmail: user?.email || 'sistema',
+            });
+            setManualDescription('');
+            setManualAmount('');
+            showToast('Lançamento manual adicionado.');
+            await loadManualEntries();
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Erro ao adicionar lançamento manual', 'error');
+        } finally {
+            setAddingManual(false);
+        }
+    };
+
+    const handleDeleteManualEntry = async (row: ProlaboreRow) => {
+        if (!await confirm({ title: 'Excluir lançamento manual?', message: `${row.description || 'Ajuste manual'} — ${formatMoney(row.amount)}`, variant: 'danger', confirmLabel: 'Excluir' })) return;
+        setActingId(row.id);
+        try {
+            await remuneracaoSocietariaService.deleteManualEntry(row.id);
+            showToast('Lançamento manual excluído.');
+            await loadManualEntries();
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Erro ao excluir lançamento manual', 'error');
         } finally {
             setActingId(null);
         }
@@ -413,6 +479,23 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                 </div>
             </div>
 
+            {/* Lançamento manual — soma ao total (banco + manual) quando esse total vira a base de cálculo em RH */}
+            <div className="flex flex-col md:flex-row gap-2.5 items-center flex-wrap px-4 py-3 bg-white border border-gray-100 rounded-[10px]">
+                <PencilLine className="w-4 h-4 text-gray-400 shrink-0" />
+                <span className="text-sm text-gray-500 font-medium whitespace-nowrap">Adicionar lançamento manual</span>
+                <input type="text" value={manualDescription} onChange={e => setManualDescription(e.target.value)}
+                    placeholder="Descrição (opcional)"
+                    className="flex-1 min-w-[160px] h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
+                <input type="number" min="0" step="0.01" value={manualAmount} onChange={e => setManualAmount(e.target.value)}
+                    placeholder="Valor (R$)"
+                    className="w-32 h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
+                <button onClick={handleAddManualEntry} disabled={addingManual}
+                    className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-900 text-white hover:bg-black transition-all active:scale-95 disabled:opacity-50">
+                    {addingManual ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Adicionar
+                </button>
+            </div>
+
             {reconciledInfo && (
                 <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 border border-blue-100 rounded-[10px] text-sm text-blue-800">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -524,7 +607,13 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                                     {tableColumns.visibleColumns.includes('actions') && (
                                         <td className="px-6 py-2.5 text-right">
                                             <div className="flex items-center justify-end gap-2">
-                                                {row.source === 'internal' ? (
+                                                {row.source === 'manual' ? (
+                                                    <button onClick={() => handleDeleteManualEntry(row)} disabled={actingId === row.id}
+                                                        title="Excluir lançamento manual"
+                                                        className="p-2.5 bg-white border border-red-50 text-red-500 hover:bg-red-50 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50">
+                                                        {actingId === row.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                                    </button>
+                                                ) : row.source === 'internal' ? (
                                                     <>
                                                         {row.approval_status !== 'APROVADO' && (
                                                             <button onClick={() => handleApprove(row)} disabled={actingId === row.id}

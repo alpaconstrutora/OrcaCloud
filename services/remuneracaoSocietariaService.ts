@@ -8,7 +8,7 @@ import { getOrgTerceirosTaxes } from './payrollService';
 import { calculateIRRF } from '../lib/payrollCalc';
 import {
     PartnerCompensationSettings, PartnerCompensationSettingsUpsert,
-    ProlaborePayroll, ProlaborePayrollItem,
+    ProlaborePayroll, ProlaborePayrollItem, ProlaboreManualEntry,
     ProfitDistributionBatch, ProfitDistributionItem,
 } from '../types';
 import { CompanyPartner } from '../types';
@@ -308,8 +308,53 @@ export const remuneracaoSocietariaService = {
         return created;
     },
 
+    // ─── Ajustes manuais (somam ao total real conciliado no banco) ──
+
+    async listManualEntries(companyId: string, competenceMonth: string): Promise<ProlaboreManualEntry[]> {
+        const { data, error } = await supabase
+            .from('prolabore_manual_entries')
+            .select('*')
+            .eq('company_id', companyId)
+            .eq('competence_month', competenceMonth)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return (data || []) as ProlaboreManualEntry[];
+    },
+
+    async addManualEntry(params: {
+        organizationId: string; companyId: string; competenceMonth: string;
+        amount: number; description?: string; createdByEmail: string;
+    }): Promise<ProlaboreManualEntry> {
+        const { data, error } = await supabase
+            .from('prolabore_manual_entries')
+            .insert({
+                organization_id: params.organizationId,
+                company_id: params.companyId,
+                competence_month: params.competenceMonth,
+                amount: params.amount,
+                description: params.description,
+                created_by_email: params.createdByEmail,
+            })
+            .select()
+            .single();
+        if (error) throw error;
+        return data as ProlaboreManualEntry;
+    },
+
+    async deleteManualEntry(id: string): Promise<void> {
+        const { error } = await supabase.from('prolabore_manual_entries').delete().eq('id', id);
+        if (error) throw error;
+    },
+
     /**
-     * Recalcula a folha inteira a partir dos sócios com has_prolabore=true.
+     * Recalcula a folha inteira. Se a competência já tem um total conciliado
+     * no banco (payroll.bank_reconciled_total, registrado via Financeiro >
+     * Conciliação Bancária > Pró-labore), ESSE valor + os ajustes manuais
+     * viram a base oficial de cálculo — não mais o "valor mensal" fixo
+     * configurado por sócio, que ignorava o que de fato saiu pelo banco.
+     * Sem total do banco ainda (nenhuma competência conciliada), cai no
+     * comportamento anterior (valor fixo por sócio), para não quebrar quem
+     * ainda não usa a Conciliação Bancária.
      * Substitui os itens existentes (folha ainda em rascunho/calculado).
      * Só é permitido nesses dois status: uma vez aprovada/enviada, os itens
      * mudam de status (aprovado/pago) e não são apagados pelo delete abaixo —
@@ -320,24 +365,51 @@ export const remuneracaoSocietariaService = {
             throw new Error('Esta folha já foi aprovada ou enviada ao financeiro e não pode ser recalculada. Escolha outra competência.');
         }
 
-        const active = settingsList.filter(s => s.has_prolabore && s.prolabore_amount && s.prolabore_amount > 0);
         const company = await companyService.get(payroll.company_id);
-
+        const eligible = settingsList.filter(s => s.has_prolabore);
         const items: Omit<ProlaborePayrollItem, 'id' | 'created_at' | 'updated_at'>[] = [];
-        for (const s of active) {
-            const calc = await this.calculateProlabore(s.prolabore_amount!, payroll.competence_month, company.regime_tributario, payroll.organization_id, company.simples_anexo_iv);
-            items.push({
-                payroll_id: payroll.id,
-                partner_id: s.partner_id,
-                gross_amount: calc.gross_amount,
-                inss_amount: calc.inss_amount,
-                irrf_amount: calc.irrf_amount,
-                net_amount: calc.net_amount,
-                patronal_amount: calc.patronal_amount,
-                terceiros_amount: calc.terceiros_amount,
-                cost_center_id: s.cost_center_id,
-                status: 'calculado',
-            });
+
+        if (payroll.bank_reconciled_total != null) {
+            const manualEntries = await this.listManualEntries(payroll.company_id, payroll.competence_month);
+            const grossBase = payroll.bank_reconciled_total + manualEntries.reduce((s, e) => s + e.amount, 0);
+
+            if (eligible.length === 1) {
+                const calc = await this.calculateProlabore(grossBase, payroll.competence_month, company.regime_tributario, payroll.organization_id, company.simples_anexo_iv);
+                items.push({
+                    payroll_id: payroll.id, partner_id: eligible[0].partner_id,
+                    gross_amount: calc.gross_amount, inss_amount: calc.inss_amount, irrf_amount: calc.irrf_amount,
+                    net_amount: calc.net_amount, patronal_amount: calc.patronal_amount, terceiros_amount: calc.terceiros_amount,
+                    cost_center_id: eligible[0].cost_center_id, status: 'calculado',
+                });
+            } else if (eligible.length > 1) {
+                // Múltiplos sócios com pró-labore: sem vínculo do lançamento bancário a um
+                // sócio específico, distribui a base real proporcionalmente à participação
+                // societária — mesmo critério já usado em createProfitBatch (dividendos).
+                const partners = await this.listEligiblePartners(payroll.company_id);
+                const pctById = new Map(partners.map(p => [p.id, p.participacao_pct]));
+                const totalPct = eligible.reduce((s, e) => s + (pctById.get(e.partner_id) || 0), 0) || 1;
+                for (const s of eligible) {
+                    const share = grossBase * ((pctById.get(s.partner_id) || 0) / totalPct);
+                    const calc = await this.calculateProlabore(share, payroll.competence_month, company.regime_tributario, payroll.organization_id, company.simples_anexo_iv);
+                    items.push({
+                        payroll_id: payroll.id, partner_id: s.partner_id,
+                        gross_amount: calc.gross_amount, inss_amount: calc.inss_amount, irrf_amount: calc.irrf_amount,
+                        net_amount: calc.net_amount, patronal_amount: calc.patronal_amount, terceiros_amount: calc.terceiros_amount,
+                        cost_center_id: s.cost_center_id, status: 'calculado',
+                    });
+                }
+            }
+        } else {
+            const activeFixed = eligible.filter(s => s.prolabore_amount && s.prolabore_amount > 0);
+            for (const s of activeFixed) {
+                const calc = await this.calculateProlabore(s.prolabore_amount!, payroll.competence_month, company.regime_tributario, payroll.organization_id, company.simples_anexo_iv);
+                items.push({
+                    payroll_id: payroll.id, partner_id: s.partner_id,
+                    gross_amount: calc.gross_amount, inss_amount: calc.inss_amount, irrf_amount: calc.irrf_amount,
+                    net_amount: calc.net_amount, patronal_amount: calc.patronal_amount, terceiros_amount: calc.terceiros_amount,
+                    cost_center_id: s.cost_center_id, status: 'calculado',
+                });
+            }
         }
 
         await supabase.from('prolabore_payroll_items').delete().eq('payroll_id', payroll.id).in('status', ['calculado']);

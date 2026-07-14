@@ -23,6 +23,20 @@ export interface PartnerCompensationSettings {
 
 export type PartnerCompensationSettingsUpsert = Omit<PartnerCompensationSettings, 'id' | 'created_at' | 'updated_at'>;
 
+// Ajuste manual que soma ao total real de pró-labore (base = extrato
+// conciliado, ver ProlaborePayroll.bank_reconciled_total) quando o valor
+// pago pelo banco não cobre tudo na competência.
+export interface ProlaboreManualEntry {
+  id: string;
+  organization_id: string;
+  company_id: string;
+  competence_month: string;
+  amount: number;
+  description?: string;
+  created_by_email?: string;
+  created_at: string;
+}
+
 export type ProlaborePayrollStatus =
   | 'rascunho' | 'calculado' | 'em_aprovacao' | 'aprovado'
   | 'enviado_financeiro' | 'pago' | 'contabilizado' | 'encerrado'

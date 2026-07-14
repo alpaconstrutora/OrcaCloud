@@ -1,29 +1,30 @@
 "use client";
 
 import * as React from "react";
-import { MoreHorizontal } from "lucide-react";
+import { MoreVertical } from "lucide-react";
 import { AnimatePresence, motion, type Transition } from "motion/react";
 
 const spring: Transition = {
   type: "spring",
   bounce: 0,
-  duration: 0.35,
+  duration: 0.3,
 };
 
 export interface InlineActionTrayProps {
-  /** Ícones secundários revelados na bandeja horizontal. Se vazio, o gatilho não é renderizado. */
+  /** Ícones secundários revelados na bandeja. Se vazio, o gatilho não é renderizado. */
   children?: React.ReactNode;
   title?: string;
 }
 
 /**
- * Bandeja horizontal de ações secundárias para a coluna "Ações" (§9).
+ * Bandeja de ações secundárias para a coluna "Ações" (§9).
  *
- * Diferente do `InlineDisclosureMenu` (menu vertical de texto que abre para
- * baixo), esta primitiva mantém as ações como ícones e as revela numa faixa
- * horizontal que desliza aberta para a **esquerda** ao clicar no gatilho de
- * 3 pontinhos. Usar quando o objetivo é apenas ocultar ícones secundários de
- * forma compacta, mantendo Editar + Download sempre visíveis na célula.
+ * Diferente do `InlineDisclosureMenu` (menu vertical de texto), esta primitiva
+ * mantém as ações como ícones e as revela num painel **flutuante que abre para
+ * baixo** ao clicar no gatilho de 3 pontinhos. O painel é `absolute` (overlay),
+ * então **não altera a largura da tabela** ao abrir. Usar quando o objetivo é
+ * apenas ocultar ícones secundários de forma compacta, mantendo as ações
+ * primárias (ex: Editar + Download) sempre visíveis na célula.
  */
 export function InlineActionTray({ children, title = "Mais ações" }: InlineActionTrayProps) {
   const [open, setOpen] = React.useState(false);
@@ -45,21 +46,7 @@ export function InlineActionTray({ children, title = "Mais ações" }: InlineAct
   }
 
   return (
-    <div ref={ref} className="inline-flex items-center gap-1.5">
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: "auto", opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={spring}
-            className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {children}
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div ref={ref} className="relative inline-flex items-center">
       <button
         type="button"
         title={title}
@@ -68,8 +55,24 @@ export function InlineActionTray({ children, title = "Mais ações" }: InlineAct
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
         className="bg-white border border-gray-200 rounded-[6px] shadow-sm p-1.5 text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all active:scale-95"
       >
-        <MoreHorizontal className="w-4 h-4" />
+        <MoreVertical className="w-4 h-4" />
       </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.96 }}
+            transition={spring}
+            onClick={(e) => e.stopPropagation()}
+            style={{ transformOrigin: "top right" }}
+            className="absolute right-0 top-full z-50 mt-1.5 flex flex-col items-center gap-1.5 rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg"
+          >
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

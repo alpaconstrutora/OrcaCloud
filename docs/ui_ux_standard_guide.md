@@ -836,6 +836,17 @@ const StatusBadge = ({ status }: { status: string }) => {
 )}
 ```
 
+> **Variante — bandeja horizontal de ícones (`InlineActionTray`).** Quando o
+> objetivo é apenas **ocultar ícones secundários** de forma compacta (e não
+> transformá-los em itens de texto num menu vertical), use
+> `components/ui/InlineActionTray.tsx` em vez do `InlineDisclosureMenu`. O
+> gatilho é um `MoreHorizontal` (⋯) com o mesmo estilo de `<ActionIconButton>`
+> neutro (§9.2); ao clicar, os `<ActionIconButton>` filhos deslizam abertos
+> **para a esquerda** numa faixa animada. Mantenha as ações primárias (ex:
+> Editar + Download) sempre visíveis, fora da bandeja. Em uso real na coluna de
+> ações de `OpuraDocsModule.tsx` (GED). Se os `children` ficarem vazios (todas
+> as ações condicionais suprimidas), o gatilho não é renderizado.
+
 ### 9.1 Ação dominante via clique na linha — quando não sobra "Ver Detalhes"
 
 Nem toda tela tem uma tela de detalhes separada. Quando clicar na linha já

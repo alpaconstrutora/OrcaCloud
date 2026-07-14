@@ -31,6 +31,13 @@ export interface OpuraDmsNamingPattern {
   created_at: string;
 }
 
+export interface OpuraDmsDocumentType {
+  id: string;
+  organization_id: string;
+  name: string;
+  created_at: string;
+}
+
 function generateUUID(): string {
   if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
     return window.crypto.randomUUID();
@@ -1334,6 +1341,20 @@ export const documentService = {
     return data as OpuraDmsDiscipline;
   },
 
+  async updateDiscipline(id: string, code: string, name: string): Promise<OpuraDmsDiscipline> {
+    const { data, error } = await supabase
+      .from('opura_dms_disciplines')
+      .update({ code: code.toUpperCase().trim(), name: name.trim() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) {
+      console.error('[DocumentService] Erro ao atualizar disciplina:', error);
+      throw new Error(`Erro ao atualizar disciplina: ${error.message}`);
+    }
+    return data as OpuraDmsDiscipline;
+  },
+
   async deleteDiscipline(id: string): Promise<void> {
     const { error } = await supabase
       .from('opura_dms_disciplines')
@@ -1376,6 +1397,20 @@ export const documentService = {
     return data as OpuraDmsNamingPattern;
   },
 
+  async updateNamingPattern(id: string, name: string, mask: string): Promise<OpuraDmsNamingPattern> {
+    const { data, error } = await supabase
+      .from('opura_dms_naming_patterns')
+      .update({ name: name.trim(), mask: mask.trim() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) {
+      console.error('[DocumentService] Erro ao atualizar padrão de nomenclatura:', error);
+      throw new Error(`Erro ao atualizar padrão de nomenclatura: ${error.message}`);
+    }
+    return data as OpuraDmsNamingPattern;
+  },
+
   async deleteNamingPattern(id: string): Promise<void> {
     const { error } = await supabase
       .from('opura_dms_naming_patterns')
@@ -1384,7 +1419,65 @@ export const documentService = {
 
     if (error) {
       console.error('[DocumentService] Erro ao excluir padrão de nomenclatura:', error);
-      throw new Error(`Erro ao excluir padrão de nomenclatura: ${error.message}`);
+      throw new Error(`Erro ao excluir padrão: ${error.message}`);
     }
   },
+
+  // --------------------------------------------------------
+  // GESTÃO DE TIPOS DE DOCUMENTO (GED)
+  // --------------------------------------------------------
+  async listDocumentTypes(orgId: string | null): Promise<OpuraDmsDocumentType[]> {
+    let q = supabase
+      .from('opura_dms_document_types')
+      .select('*')
+      .order('name', { ascending: true });
+    if (orgId) q = q.eq('organization_id', orgId);
+    
+    const { data, error } = await q;
+    if (error) {
+      console.error('[DocumentService] Erro ao listar tipos de documento:', error);
+      throw new Error(`Erro ao listar tipos de documento: ${error.message}`);
+    }
+    return (data || []) as OpuraDmsDocumentType[];
+  },
+
+  async createDocumentType(orgId: string, name: string): Promise<OpuraDmsDocumentType> {
+    const { data, error } = await supabase
+      .from('opura_dms_document_types')
+      .insert({ organization_id: orgId, name: name.trim() })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DocumentService] Erro ao criar tipo de documento:', error);
+      throw new Error(`Erro ao criar tipo de documento: ${error.message}`);
+    }
+    return data as OpuraDmsDocumentType;
+  },
+
+  async updateDocumentType(id: string, name: string): Promise<OpuraDmsDocumentType> {
+    const { data, error } = await supabase
+      .from('opura_dms_document_types')
+      .update({ name: name.trim() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) {
+      console.error('[DocumentService] Erro ao atualizar tipo de documento:', error);
+      throw new Error(`Erro ao atualizar tipo de documento: ${error.message}`);
+    }
+    return data as OpuraDmsDocumentType;
+  },
+
+  async deleteDocumentType(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_dms_document_types')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('[DocumentService] Erro ao excluir tipo de documento:', error);
+      throw new Error(`Erro ao excluir tipo de documento: ${error.message}`);
+    }
+  }
 };

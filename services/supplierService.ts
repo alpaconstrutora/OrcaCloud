@@ -397,20 +397,6 @@ export const supplierService = {
             ...(updates.email !== undefined ? { email: normalizeEmail(updates.email) || null } : {}),
         };
 
-        // O campo `code` é uma numeração sequencial única por organização
-        // (idx_suppliers_org_code, inclusive para o "balde" organization_id
-        // NULL = fornecedores globais/"Todas as Organizações"). Ao mudar a
-        // organização de um fornecedor sem que o chamador informe um novo
-        // código, o código antigo (sequencial na organização de origem) pode
-        // colidir com um fornecedor que já existe no destino — renumera
-        // proativamente em vez de deixar o INSERT falhar com erro de banco.
-        if ('organization_id' in updates && updates.code === undefined) {
-            const { data: nextCode } = await supabase.rpc('get_next_supplier_code', {
-                p_org_id: updates.organization_id ?? null,
-            });
-            if (nextCode) payload.code = nextCode;
-        }
-
         let { data, error } = await supabase
             .from('suppliers')
             .update(payload)
@@ -428,6 +414,31 @@ export const supplierService = {
                 .single();
             data = retry.data;
             error = retry.error;
+        }
+
+        // O campo `code` é uma numeração sequencial única por organização
+        // (idx_suppliers_org_code, inclusive para o "balde" organization_id
+        // NULL = fornecedores globais/"Todas as Organizações"). O formulário
+        // de edição reenvia o código atual mesmo quando o usuário só mudou a
+        // organização — então não dá pra saber de antemão se o código vai
+        // colidir. Em vez de prever, reage: se o UPDATE falhar por colisão de
+        // código e a organização estiver mudando, gera um código novo para a
+        // organização de destino (mesma RPC do cadastro) e tenta de novo uma
+        // única vez antes de desistir.
+        if (error && isDuplicateCodeError(error) && 'organization_id' in updates) {
+            const { data: nextCode } = await supabase.rpc('get_next_supplier_code', {
+                p_org_id: updates.organization_id ?? null,
+            });
+            if (nextCode) {
+                const retry = await supabase
+                    .from('suppliers')
+                    .update({ ...payload, code: nextCode })
+                    .eq('id', id)
+                    .select()
+                    .single();
+                data = retry.data;
+                error = retry.error;
+            }
         }
 
         if (error && isDuplicateCodeError(error)) {

@@ -277,11 +277,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const fetchDocs = async () => {
     setLoading(true);
     try {
-      const projFilter = selectedProjectId === 'all' ? undefined : selectedProjectId;
+      const isGlobal = selectedProjectId === 'all';
+      const projFilter = isGlobal ? undefined : selectedProjectId;
       const data = await documentService.listDocuments(activeOrganizationId ?? undefined, {
         projectId: projFilter,
         categoria: activeTab,
-        folderId: selectedDisciplineCode && !currentFolderId ? undefined : currentFolderId,
+        folderId: (selectedDisciplineCode && !currentFolderId) || isGlobal ? undefined : currentFolderId,
       });
       setDocuments(data);
     } catch (err) {

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { X, Plus, Trash2, Save, Loader2, GripVertical, Check } from 'lucide-react'
+import { X, Plus, Save, Loader2, GripVertical, Check } from 'lucide-react'
 import { taskStatusService, type TaskStatus } from '../services/taskService'
 import Button from './ui/Button'
+import ActionIconButton from './ui/ActionIconButton'
 
 const COLORS = [
   { hex: '#94a3b8', label: 'Cinza' },
@@ -258,13 +259,13 @@ const TaskStatusManager: React.FC<Props> = ({ orgId, onClose, onChanged }) => {
                         >
                           Editar
                         </button>
-                        <button
-                          onClick={() => remove(s.id)}
+                        <ActionIconButton
+                          kind="delete"
+                          size="sm"
                           disabled={saving === s.id}
-                          className="p-1.5 rounded-lg text-slate-300 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
-                        >
-                          {saving === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                        </button>
+                          icon={saving === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
+                          onClick={() => remove(s.id)}
+                        />
                       </div>
                     </div>
                   )}

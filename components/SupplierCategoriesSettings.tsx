@@ -2,8 +2,9 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 import { supplierCategoryService } from '../services/supplierCategoryService';
 import { SupplierCategory } from '../types';
-import { Tag, Plus, Edit2, Trash2, Check, X, Loader2, Copy, Download } from 'lucide-react';
+import { Tag, Plus, Check, X, Loader2, Copy, Download } from 'lucide-react';
 import Button from './ui/Button';
+import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
 import { DEFAULT_SUPPLIER_CATEGORIES } from '../constants/supplierCategories';
@@ -208,16 +209,10 @@ const SupplierCategoriesSettings: React.FC = () => {
                                                 </button>
                                             </div>
                                         ) : (
-                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 lg:opacity-100">
-                                                <button onClick={() => startEdit(cat)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors" title="Editar">
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => handleDuplicate(cat)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors" title="Duplicar">
-                                                    <Copy className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => handleDelete(cat.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Excluir">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                            <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 lg:opacity-100">
+                                                <ActionIconButton kind="edit" onClick={() => startEdit(cat)} />
+                                                <ActionIconButton kind="duplicate" onClick={() => handleDuplicate(cat)} />
+                                                <ActionIconButton kind="delete" onClick={() => handleDelete(cat.id)} />
                                             </div>
                                         )}
                                     </>

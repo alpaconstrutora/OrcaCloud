@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { X, Save, Trash2, Loader2, UserPlus, UserMinus, Settings, Users, FolderOpen, Plus, Pencil, Check } from 'lucide-react'
+import { X, Save, Trash2, Loader2, UserPlus, UserMinus, Settings, Users, FolderOpen, Plus, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { taskSpaceService, type TaskSpace, type TaskFolder, type TaskSpaceMember } from '../services/taskSpaceService'
 import Button from './ui/Button'
+import ActionIconButton from './ui/ActionIconButton'
 
 // ── Paleta de cores predefinidas ──────────────────────────────────────────────
 const COLOR_PALETTE = [
@@ -311,10 +312,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
                 {/* botões no hover */}
                 <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
                   {editingFolderId !== f.id && (
-                    <button onClick={() => startEdit(f)} title="Renomear"
-                      className="p-1 rounded-lg text-slate-300 hover:text-blue-600 hover:bg-blue-50">
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
+                    <ActionIconButton kind="edit" size="sm" title="Renomear" onClick={() => startEdit(f)} />
                   )}
                   {editingFolderId === f.id && (
                     <button onClick={() => saveFolder(f.id)} title="Confirmar"
@@ -322,10 +320,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
                       <Check className="w-3.5 h-3.5" />
                     </button>
                   )}
-                  <button onClick={() => deleteFolder(f.id, f.name)} title="Excluir"
-                    className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <ActionIconButton kind="delete" size="sm" onClick={() => deleteFolder(f.id, f.name)} />
                 </div>
               </div>
             ))}

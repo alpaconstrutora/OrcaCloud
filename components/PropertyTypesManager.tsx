@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit, Check, Shield } from 'lucide-react';
+import { Plus, Check, Shield } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { propertyTypesService, PropertyType } from '../services/propertyTypesService';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import { useConfirm } from './ui/confirm';
@@ -140,19 +141,9 @@ const PropertyTypesManager: React.FC<PropertyTypesManagerProps> = ({
                                                 <Check className="w-3.5 h-3.5" />
                                             </button>
                                         ) : (
-                                            <button
-                                                onClick={() => { setEditingId(t.id); setEditLabel(t.label); setError(''); }}
-                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                            >
-                                                <Edit className="w-3.5 h-3.5" />
-                                            </button>
+                                            <ActionIconButton kind="edit" size="sm" onClick={() => { setEditingId(t.id); setEditLabel(t.label); setError(''); }} />
                                         )}
-                                        <button
-                                            onClick={() => handleDelete(t.id, t.label)}
-                                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                        <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(t.id, t.label)} />
                                     </div>
                                 ) : (
                                     <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">Sistema</span>

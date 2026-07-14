@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Home, MapPin, Maximize2, DollarSign, Camera, Check, Info, Package, Layers, Plus, Trash2, Settings2, Settings, Building2 } from 'lucide-react';
+import { X, Home, MapPin, Maximize2, DollarSign, Camera, Check, Info, Package, Layers, Plus, Settings2, Settings, Building2 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { Property, PropertyStatus, Client, TowerMatrixConfig, GridCellConfig } from '../types';
 import { clientService } from '../services/clientService';
 import { propertyTypesService, PropertyType } from '../services/propertyTypesService';
@@ -787,8 +788,10 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                     </div>
                                                 </div>
                                                 <div className="flex items-end pb-1">
-                                                    <button
-                                                        type="button"
+                                                    <ActionIconButton
+                                                        kind="delete"
+                                                        title="Remover Torre"
+                                                        disabled={towerMatrix.length === 1}
                                                         onClick={() => {
                                                             setTowerMatrix(prev => {
                                                                 const removed = prev.filter((_, i) => i !== tIndex);
@@ -800,12 +803,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                                                 return updateTowersGridCells(removed, connectedTowers);
                                                             });
                                                         }}
-                                                        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-                                                        title="Remover Torre"
-                                                        disabled={towerMatrix.length === 1}
-                                                    >
-                                                        <Trash2 className="w-5 h-5" />
-                                                    </button>
+                                                    />
                                                 </div>
                                             </div>
 

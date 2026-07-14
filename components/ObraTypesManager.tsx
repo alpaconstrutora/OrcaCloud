@@ -1,7 +1,8 @@
 import React from 'react';
-import { Plus, Pencil, Trash2, Loader2, X, Check, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Loader2, X, Check, AlertTriangle, RotateCcw } from 'lucide-react';
 import { obraTypeService, ObraType, ObraTypeInsert, COLOR_OPTIONS, colorClasses } from '../services/obraTypeService';
 import Button from './ui/Button';
+import ActionIconButton from './ui/ActionIconButton';
 
 interface Props {
   organizationId: string;
@@ -182,13 +183,7 @@ const TypeRow: React.FC<{
         )}
       </div>
       <div className="flex items-center gap-1">
-        <button
-          onClick={() => onEdit(type)}
-          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-          title="Editar"
-        >
-          <Pencil className="w-4 h-4" />
-        </button>
+        <ActionIconButton kind="edit" onClick={() => onEdit(type)} />
 
         {/* Tipos do sistema original sem override: sem lixeira */}
         {isSystemOriginal && null}
@@ -206,13 +201,7 @@ const TypeRow: React.FC<{
 
         {/* Tipos totalmente personalizados: lixeira */}
         {isCustom && (
-          <button
-            onClick={() => onDelete(type)}
-            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            title="Excluir"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <ActionIconButton kind="delete" onClick={() => onDelete(type)} />
         )}
       </div>
     </li>

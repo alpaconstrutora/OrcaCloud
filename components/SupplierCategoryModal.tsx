@@ -1,5 +1,6 @@
 import React from 'react';
-import { X, Tag, Plus, Edit2, Trash2, Copy, Save } from 'lucide-react';
+import { X, Tag, Plus, Save } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { SupplierCategory } from '../types';
 import { supplierCategoryService } from '../services/supplierCategoryService';
 import { DEFAULT_SUPPLIER_CATEGORIES } from '../constants/supplierCategories';
@@ -185,16 +186,10 @@ export const SupplierCategoryModal: React.FC<SupplierCategoryModalProps> = ({ is
                                                 Padrão
                                             </span>
                                         ) : (
-                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => { setEditingId(category.id); setFormData({ name: category.name }); setIsAdding(false); }} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Editar">
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => handleDuplicate(category)} className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all" title="Duplicar">
-                                                    <Copy className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => handleDelete(category.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all" title="Excluir">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                            <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <ActionIconButton kind="edit" onClick={() => { setEditingId(category.id); setFormData({ name: category.name }); setIsAdding(false); }} />
+                                                <ActionIconButton kind="duplicate" onClick={() => handleDuplicate(category)} />
+                                                <ActionIconButton kind="delete" onClick={() => handleDelete(category.id)} />
                                             </div>
                                         )}
                                     </>

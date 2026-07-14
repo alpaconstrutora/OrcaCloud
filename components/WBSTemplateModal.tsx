@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Trash2, Download, X, FileText, Check, Plus } from 'lucide-react';
+import { Save, X, FileText, Check, Plus } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { WBSGroup } from '../types';
 
 interface WBSTemplate {
@@ -110,20 +111,8 @@ export const WBSTemplateModal: React.FC<WBSTemplateModalProps> = ({
                                                 <p className="text-xs text-gray-400">{new Date(template.createdAt).toLocaleDateString()}</p>
                                             </div>
                                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => handleLoad(template)}
-                                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
-                                                    title="Carregar Modelo"
-                                                >
-                                                    <Download className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteTemplate(template.id)}
-                                                    className="p-1.5 text-red-500 hover:bg-red-50 rounded"
-                                                    title="Excluir Modelo"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                <ActionIconButton kind="download" title="Carregar Modelo" onClick={() => handleLoad(template)} />
+                                                <ActionIconButton kind="delete" title="Excluir Modelo" onClick={() => handleDeleteTemplate(template.id)} />
                                             </div>
                                         </div>
                                     ))

@@ -2,8 +2,9 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 import { clientCategoryService } from '../services/clientCategoryService';
 import { ClientCategory } from '../types';
-import { Users, Plus, Edit2, Trash2, Check, X, Loader2 } from 'lucide-react';
+import { Users, Plus, Check, X, Loader2 } from 'lucide-react';
 import Button from './ui/Button';
+import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
 
@@ -151,13 +152,9 @@ const ClientCategoriesSettings: React.FC = () => {
                                 ) : (
                                     <>
                                         <span className="text-sm font-medium text-gray-700">{cat.name}</span>
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 lg:opacity-100">
-                                            <button onClick={() => startEdit(cat)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
-                                                <Edit2 className="w-4 h-4" />
-                                            </button>
-                                            <button onClick={() => handleDelete(cat.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 lg:opacity-100">
+                                            <ActionIconButton kind="edit" onClick={() => startEdit(cat)} />
+                                            <ActionIconButton kind="delete" onClick={() => handleDelete(cat.id)} />
                                         </div>
                                     </>
                                 )}

@@ -1,8 +1,9 @@
 import React from 'react';
 import {
-    Plus, Pencil, Trash2, Star, X, Building, CreditCard,
+    Plus, Star, X, Building, CreditCard,
     Smartphone, CheckCircle2, AlertCircle, ChevronDown, ChevronUp
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     SupplierBankAccount, AccountType, PixKeyType,
     ACCOUNT_TYPE_LABELS, PIX_KEY_TYPE_LABELS
@@ -223,21 +224,9 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                 </div>
                 {/* Ações */}
                 <div className="flex items-center gap-1 shrink-0">
-                    <button
-                        onClick={() => startEdit(acc)}
-                        className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
-                        title="Editar"
-                    >
-                        <Pencil className="w-3.5 h-3.5" />
-                    </button>
+                    <ActionIconButton kind="edit" size="sm" onClick={() => startEdit(acc)} />
                     {acc.status === 'ativo' && (
-                        <button
-                            onClick={() => handleRemove(acc.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                            title="Desativar"
-                        >
-                            <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <ActionIconButton kind="delete" size="sm" title="Desativar" onClick={() => handleRemove(acc.id)} />
                     )}
                 </div>
             </div>

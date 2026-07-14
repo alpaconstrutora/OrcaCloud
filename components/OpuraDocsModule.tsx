@@ -714,6 +714,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             onClick={() => {
               setCurrentFolderId(folder.id);
               setSelectedDisciplineCode(null);
+              if (!expandedNodes.includes(folder.id)) {
+                setExpandedNodes(prev => [...prev, folder.id]);
+              }
             }}
             className="flex items-center gap-1.5 min-w-0 flex-grow cursor-pointer"
           >

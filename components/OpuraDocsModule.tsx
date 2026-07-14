@@ -541,12 +541,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setSelectedFolderDisciplines(folder.disciplines || []);
     if (!folder.naming_mask) {
       setEditFolderMaskPreset('none');
-    } else if (folder.naming_mask === '[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]') {
-      setEditFolderMaskPreset('preset-alpa');
-    } else if (folder.naming_mask === '[DISCIPLINA]-[NUMERO]') {
-      setEditFolderMaskPreset('preset-simple');
     } else {
-      setEditFolderMaskPreset('custom');
+      // Verifica se a máscara da pasta corresponde a algum padrão salvo no banco
+      const existingPattern = namingPatterns.find(p => p.mask === folder.naming_mask);
+      if (existingPattern) {
+        setEditFolderMaskPreset(existingPattern.mask);
+      } else {
+        setEditFolderMaskPreset('custom');
+      }
     }
   };
 
@@ -557,9 +559,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
     try {
       let finalMask = editFolderMask;
-      if (editFolderMaskPreset === 'none') finalMask = '';
-      else if (editFolderMaskPreset === 'preset-alpa') finalMask = '[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]';
-      else if (editFolderMaskPreset === 'preset-simple') finalMask = '[DISCIPLINA]-[NUMERO]';
+      if (editFolderMaskPreset === 'none') {
+        finalMask = '';
+      } else if (editFolderMaskPreset !== 'custom') {
+        finalMask = editFolderMaskPreset;
+      }
 
       await documentService.updateFolder(editingFolder.id, {
         name: editFolderName,

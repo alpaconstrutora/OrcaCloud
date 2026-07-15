@@ -24,6 +24,15 @@ interface FlatScheduleRow {
     kind: 'item' | 'group';
 }
 
+// Remove o prefixo numérico WBS do nome quando ele já é exibido na coluna ITEM
+// (ex.: "01.02. Etapa X" → "Etapa X"). Só age quando o nome literalmente começa
+// pelo wbsCode do próprio nó — evita cortar números que fazem parte do texto.
+function stripWbsPrefix(name: string, wbsCode?: string): string {
+    if (!wbsCode || !name || name === wbsCode || !name.startsWith(wbsCode)) return name || '';
+    const rest = name.slice(wbsCode.length).replace(/^[.\s]+/, '');
+    return rest || name;
+}
+
 // Achata a árvore hierárquica em uma lista linear de linhas visíveis (respeitando
 // expand/collapse e os filtros de nível/natureza), para permitir virtualização —
 // sem isso, o tbody teria que montar todos os nós de uma vez a cada troca de aba.
@@ -450,7 +459,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                         <td className="px-4 py-2" style={{ paddingLeft: `${(node.level * 20) + 16}px` }}>
                                             <div className="flex items-center gap-2">
                                                 <div className="font-medium text-gray-700 truncate max-w-[300px] text-xs" title={item.sinapiItem.description}>
-                                                    {item.sinapiItem.description}
+                                                    {stripWbsPrefix(item.sinapiItem.description, node.wbsCode)}
                                                 </div>
                                                 {node.nature && (
                                                     <span className={`shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold ${TASK_NATURE_META[node.nature].badge}`} title={`Natureza: ${TASK_NATURE_META[node.nature].label}`}>
@@ -708,7 +717,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                         <td className="px-1 py-3 text-center text-xs font-medium text-gray-500">{node.wbsCode || ''}</td>
                                         <td className="px-4 py-3 font-medium text-gray-800 flex items-center gap-2" style={{ paddingLeft: `${(node.level * 20) + 16}px` }}>
                                             {hasChildren && (isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />)}
-                                            <span className={`${node.isCritical ? 'text-red-700' : ''}`}>{node.name}</span>
+                                            <span className={`${node.isCritical ? 'text-red-700' : ''}`}>{stripWbsPrefix(node.name, node.wbsCode)}</span>
                                             {taskInsights?.[node.id]?.hasAlert && (
                                                 <div className="shrink-0 flex items-center justify-center p-1 bg-red-50 text-red-500 rounded cursor-help transition-all hover:bg-red-100 relative group/insight ml-auto">
                                                     <AlertCircle className="w-3.5 h-3.5" />

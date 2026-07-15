@@ -24,6 +24,15 @@ const fmtLocalDate = (
     return new Date(y, m - 1, d).toLocaleDateString('pt-BR', opts);
 };
 
+// Remove o prefixo numérico WBS do nome quando ele já é exibido na coluna ITEM
+// (ex.: "01.02. Etapa X" → "Etapa X"). Só age quando o nome literalmente começa
+// pelo wbsCode do próprio nó — evita cortar números que fazem parte do texto.
+function stripWbsPrefix(name: string, wbsCode?: string): string {
+    if (!wbsCode || !name || name === wbsCode || !name.startsWith(wbsCode)) return name || '';
+    const rest = name.slice(wbsCode.length).replace(/^[.\s]+/, '');
+    return rest || name;
+}
+
 interface ScheduleGanttProps {
     hierarchy: HierarchyNode[];
     schedule: ProjectSchedule;
@@ -301,7 +310,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             data-gantt-sidebar
                             style={{ paddingLeft: `${(node.level * 20) + 16}px`, width: `${sidebarWidth}px` }}
                         >
-                            <span className="truncate flex-1">{item.sinapiItem.description}</span>
+                            <span className="truncate flex-1">{stripWbsPrefix(item.sinapiItem.description, node.wbsCode)}</span>
                             {node.nature && (
                                 <span className="shrink-0 inline-flex items-center" title={`Natureza: ${TASK_NATURE_META[node.nature].label}`}>
                                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: TASK_NATURE_META[node.nature].color }} />
@@ -792,7 +801,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             {node.children && node.children.length > 0 && (
                                 isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
                             )}
-                            <span className="truncate">{node.name}</span>
+                            <span className="truncate">{stripWbsPrefix(node.name, node.wbsCode)}</span>
                             {taskInsights?.[node.id]?.hasAlert && (
                                 <div className="shrink-0 flex items-center justify-center text-red-500 cursor-help relative group/insight ml-auto mr-2">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>

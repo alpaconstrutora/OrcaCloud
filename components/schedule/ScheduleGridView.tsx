@@ -219,8 +219,8 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
             <table ref={tableRef} className="sched-tbl w-full text-xs" style={{ tableLayout: 'fixed' }}>
                 <colgroup>
                     <col data-col="uid" style={{ width: getColWidth('uid') }} />
-                    <col data-col="item" style={{ width: getColWidth('item') }} />
                     <col data-col="wbs" style={{ width: getColWidth('wbs') }} />
+                    <col data-col="item" style={{ width: getColWidth('item') }} />
                     <col data-col="pred" style={{ width: getColWidth('pred') }} />
                     <col data-col="duration" style={{ width: getColWidth('duration') }} />
                     <col data-col="start" style={{ width: getColWidth('start') }} />
@@ -245,6 +245,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                 <thead className="sticky top-0 z-20 bg-gray-50 text-gray-500 font-medium border-b border-gray-200 uppercase tracking-widest">
                     <tr>
                         <th className="px-1 py-3 text-center relative">ID<ResizeHandle colKey="uid" /></th>
+                        <th className="px-1 py-3 text-center relative">ITEM<ResizeHandle colKey="wbs" /></th>
                         <th className="px-4 py-3 text-left relative">
                             <div className="flex items-center gap-2">
                                 <span>Item / Etapa</span>
@@ -364,7 +365,6 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                             </div>
                             <ResizeHandle colKey="item" />
                         </th>
-                        <th className="px-1 py-3 text-center relative">ITEM<ResizeHandle colKey="wbs" /></th>
                         <th className="px-1 py-3 text-center relative">Pred<ResizeHandle colKey="pred" /></th>
                         <th className="px-4 py-3 text-center relative">Duração<ResizeHandle colKey="duration" /></th>
                         <th className="px-4 py-3 text-center relative">Início<ResizeHandle colKey="start" /></th>
@@ -446,6 +446,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 {itemSchedule.isCritical && <AlertCircle className="w-2.5 h-2.5 animate-pulse" />}
                                             </div>
                                         </td>
+                                        <td className="px-1 py-2 text-center text-xs font-medium text-gray-500">{node.wbsCode || ''}</td>
                                         <td className="px-4 py-2" style={{ paddingLeft: `${(node.level * 20) + 16}px` }}>
                                             <div className="flex items-center gap-2">
                                                 <div className="font-medium text-gray-700 truncate max-w-[300px] text-xs" title={item.sinapiItem.description}>
@@ -493,7 +494,6 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 <button onClick={() => handleClearItem(item.id)} className="text-button text-red-400 hover:text-red-500 hover:underline cursor-pointer">Limpar</button>
                                             </div>
                                         </td>
-                                        <td className="px-1 py-2 text-center text-xs font-medium text-gray-500">{node.wbsCode || ''}</td>
                                         <td className="px-1 py-1 text-center group/pred relative">
                                             <input
                                                 type="text"
@@ -705,6 +705,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                             return (
                                     <tr key={node.id} data-index={virtualRow.index} ref={rowVirtualizer.measureElement} className={`bg-gray-50/50 hover:bg-gray-50 transition-colors cursor-pointer ${node.type === 'subphase' ? 'bg-gray-50/20' : ''}`} onClick={() => toggleNode(node.id)}>
                                         <td className={`px-1 py-3 text-center font-medium ${node.isCritical ? 'text-red-500 bg-red-50' : 'text-gray-400'}`}>{node.uid}</td>
+                                        <td className="px-1 py-3 text-center text-xs font-medium text-gray-500">{node.wbsCode || ''}</td>
                                         <td className="px-4 py-3 font-medium text-gray-800 flex items-center gap-2" style={{ paddingLeft: `${(node.level * 20) + 16}px` }}>
                                             {hasChildren && (isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />)}
                                             <span className={`${node.isCritical ? 'text-red-700' : ''}`}>{node.name}</span>
@@ -722,7 +723,6 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="px-1 py-3 text-center text-xs font-medium text-gray-500">{node.wbsCode || ''}</td>
                                         <td className="px-1 py-1 text-center group/pred relative" onClick={(e) => e.stopPropagation()}>
                                             <input
                                                 type="text"

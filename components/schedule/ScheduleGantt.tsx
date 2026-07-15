@@ -291,6 +291,10 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             {node.uid}
                         </div>
 
+                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gWbs')}>
+                            {node.wbsCode || ''}
+                        </div>
+
                         <div
                             className="shrink-0 truncate px-4 py-2 text-xs text-gray-600 border-r border-gray-100 flex items-center gap-1.5"
                             title={item.sinapiItem.description}
@@ -316,10 +320,6 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     <OutlineRowMenu node={node} actions={outlineActions} />
                                 </div>
                             )}
-                        </div>
-
-                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gWbs')}>
-                            {node.wbsCode || ''}
                         </div>
 
                         <div data-gantt-col="gPred" className="shrink-0 border-r border-gray-100 flex items-center gap-0.5 px-0.5 relative group/pred" style={getGanttColStyle('gPred')}>
@@ -783,6 +783,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         style={{ width: `${getGanttSidebarTotal()}px` }}
                     >
                         <div data-gantt-col="gId" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gId')}>{node.uid}</div>
+                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gWbs')}>{node.wbsCode || ''}</div>
                         <div
                             className={`shrink-0 font-medium ${node.type === 'subphase' ? 'text-gray-700' : 'text-gray-800'} py-1.5 px-4 border-r border-gray-200 flex items-center gap-2`}
                             data-gantt-sidebar
@@ -806,7 +807,6 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 </div>
                             )}
                         </div>
-                        <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gWbs')}>{node.wbsCode || ''}</div>
                         <div data-gantt-col="gPred" className="shrink-0 border-r border-gray-200 flex items-center px-0.5" style={getGanttColStyle('gPred')}>
                             {(() => {
                                 const ns = schedule.itemSchedules?.find(s => s.id === node.id);
@@ -1070,6 +1070,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             style={{ width: `${getGanttSidebarTotal()}px` }}
                         >
                             <div data-gantt-col="gId" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gId')}>ID{GanttResizeHandle && <GanttResizeHandle colKey="gId" />}</div>
+                            <div data-gantt-col="gWbs" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gWbs')}>ITEM{GanttResizeHandle && <GanttResizeHandle colKey="gWbs" />}</div>
                             <div className="relative shrink-0 px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-widest border-r border-gray-200 bg-gray-50/80 backdrop-blur-sm flex items-center justify-between group/h-task" data-gantt-sidebar style={{ width: `${sidebarWidth}px` }}>
                                 {/* Sidebar resize handle */}
                                 <div
@@ -1207,7 +1208,6 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 </div>
                             </div>
 
-                            <div data-gantt-col="gWbs" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gWbs')}>ITEM{GanttResizeHandle && <GanttResizeHandle colKey="gWbs" />}</div>
                             <div data-gantt-col="gPred" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gPred')}>PRÉD.{GanttResizeHandle && <GanttResizeHandle colKey="gPred" />}</div>
                             <div data-gantt-col="gDur" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gDur')}>DUR.{GanttResizeHandle && <GanttResizeHandle colKey="gDur" />}</div>
                             <div data-gantt-col="gStart" className="relative shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gStart')}>INÍCIO{GanttResizeHandle && <GanttResizeHandle colKey="gStart" />}</div>

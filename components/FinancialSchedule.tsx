@@ -1314,7 +1314,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             : { width: `${getGanttColW(key)}px` };
 
     // ── Timeline Splitter (collapsible fixed columns) ──
-    const FIXED_COL_KEYS = ['uid', 'item', 'wbs', 'pred', 'duration', 'start', 'end', 'esef', 'lslf', 'float', 'budgeted', 'budgetedWithBdi', 'planned', 'realized', 'variation', 'resources', 'realPct', 'finPct'];
+    const FIXED_COL_KEYS = ['uid', 'wbs', 'item', 'pred', 'duration', 'start', 'end', 'esef', 'lslf', 'float', 'budgeted', 'budgetedWithBdi', 'planned', 'realized', 'variation', 'resources', 'realPct', 'finPct'];
     const HIDEABLE_COLS = [...FIXED_COL_KEYS].reverse().filter(k => k !== 'item'); // right-to-left, never hide 'item'
     const [collapsedCols, setCollapsedCols] = useState<Set<string>>(() => {
         try {

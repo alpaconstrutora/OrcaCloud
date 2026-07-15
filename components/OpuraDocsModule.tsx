@@ -3444,9 +3444,23 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 />
               </div>
 
-              {/* Regra de Nomenclatura */}
               <div className="space-y-2">
-                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Padrão de Nome (Nomenclatura)</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Padrão de Nome (Nomenclatura)</label>
+                  {isOrgAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingFolder(null);
+                        setSettingsTab('patterns');
+                        setShowSettingsModal(true);
+                      }}
+                      className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline font-bold uppercase tracking-wider transition-all"
+                    >
+                      Gerenciar Fórmulas
+                    </button>
+                  )}
+                </div>
                 <select
                   value={editFolderMaskPreset}
                   onChange={(e) => {

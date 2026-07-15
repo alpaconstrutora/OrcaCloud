@@ -580,9 +580,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 </div>
             )}
 
-            {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — já há KPIs/dashboard
-                acima dando contexto em todos os usos desta tabela. */}
-            <div className="flex flex-col md:flex-row gap-2.5 items-center">
+            {/* Toolbar acoplada dentro do card da tabela (mesmo padrão do ÒPURA Docs/GED):
+                régua de controles §5.1 (escala compacta §16) separada da tabela por border-b. */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-gray-100">
+                <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -655,7 +657,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         <Table2 className="w-4 h-4" />
                     </button>
                 </div>
-            </div>
+                </div>
+              </div>
 
             {(isLoading || isExternalLoading) ? (
                 <div className="text-center py-12">
@@ -663,7 +666,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     <p className="mt-2 text-gray-500">Carregando...</p>
                 </div>
             ) : filteredProjects.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                <div className="text-center py-12">
                     <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">
                         {isDiaryContext ? 'Nenhum diário encontrado' : (activeTab === 'budgets' ? 'Nenhum orçamento encontrado' : 'Nenhuma obra encontrada')}
@@ -680,7 +683,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 </div>
             ) : (
                 viewMode === 'list' ? (
-                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                         <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader
@@ -1077,9 +1079,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             </tbody>
                         </table>
                         </div>
-                    </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
                         {filteredProjects.map(project => (
                             <div
                                 key={project.id}
@@ -1199,6 +1200,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     </div>
                 )
             )}
+            </div>
             <ExcelImportModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}

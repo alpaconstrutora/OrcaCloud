@@ -1704,8 +1704,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <h4 className="font-black text-slate-800 text-sm uppercase tracking-wide">Documentos Críticos & Alertas</h4>
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ações corretivas pendentes</p>
                 </div>
-                <span className="px-2.5 py-1 text-[10px] font-black uppercase bg-red-50 text-red-600 rounded-full tracking-widest">
-                  CRÍTICO
+                <span className="text-sm font-normal text-red-600">
+                  Crítico
                 </span>
               </div>
 
@@ -1817,12 +1817,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             </div>
             
             <button
-              onClick={() => {
-                // Refresh data se necessário
-              }}
-              className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+              onClick={() => { fetchDocs(); fetchFolders(); }}
+              disabled={loading}
+              title="Atualizar"
+              className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <RefreshCw className="w-4 h-4" />
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
 
             <button

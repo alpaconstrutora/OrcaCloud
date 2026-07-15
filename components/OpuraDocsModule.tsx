@@ -795,8 +795,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                const docsInFolder = filteredDocuments.filter(d => d.folder_id === folder.id);
-                openShareModal(docsInFolder.map(d => d.id));
+                let folderDocs = documents.filter(d => d.folder_id === folder.id);
+                if (folderDocs.length === 0) {
+                  documentService.listDocuments(activeOrganizationId || undefined, { folderId: folder.id }).then(data => {
+                    openShareModal(data.map(d => d.id));
+                  }).catch(console.error);
+                } else {
+                  openShareModal(folderDocs.map(d => d.id));
+                }
               }}
               className="p-1 text-slate-400 hover:text-orange-500 rounded hover:bg-orange-50"
               title="Compartilhar toda a pasta"
@@ -869,8 +875,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        const docsInDisc = filteredDocuments.filter(d => d.folder_id === folder.id && (extractTokenFromFileName(d.nome, folder.naming_mask || '', '[DISCIPLINA]')?.toUpperCase() === disc.code.toUpperCase() || d.nome.toUpperCase().includes(disc.code.toUpperCase())));
-                        openShareModal(docsInDisc.map(d => d.id));
+                        let folderDocs = documents.filter(d => d.folder_id === folder.id);
+                        const filterDisc = (docs: OpuraDocument[]) => docs.filter(d => 
+                          (extractTokenFromFileName(d.nome, folder.naming_mask || '', '[DISCIPLINA]')?.toUpperCase() === disc.code.toUpperCase() || d.nome.toUpperCase().includes(disc.code.toUpperCase()))
+                        );
+                        if (folderDocs.length === 0) {
+                          documentService.listDocuments(activeOrganizationId || undefined, { folderId: folder.id }).then(data => {
+                            openShareModal(filterDisc(data).map(d => d.id));
+                          }).catch(console.error);
+                        } else {
+                          openShareModal(filterDisc(folderDocs).map(d => d.id));
+                        }
                       }}
                       className="p-1 text-slate-400 hover:text-orange-500 rounded hover:bg-orange-50"
                       title="Compartilhar disciplina"

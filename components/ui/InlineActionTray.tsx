@@ -67,7 +67,7 @@ export function InlineActionTray({ children, title = "Mais ações" }: InlineAct
             transition={spring}
             onClick={(e) => e.stopPropagation()}
             style={{ transformOrigin: "top right" }}
-            className="absolute right-0 top-full z-50 mt-1.5 flex flex-col items-center gap-1.5 rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg"
+            className="absolute right-0 top-full z-50 mt-1.5 flex flex-row items-center gap-1.5 rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg"
           >
             {children}
           </motion.div>

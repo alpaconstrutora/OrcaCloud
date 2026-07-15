@@ -1746,7 +1746,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           <div className="lg:col-span-1 bg-white rounded-[10px] border border-slate-100 shadow-sm p-5 space-y-4 min-h-[600px] flex flex-col">
             {/* Header com Atalho de Gestão de Disciplinas */}
             <div className="flex border-b border-slate-100 pb-2 px-2 items-center justify-between">
-              <span className="font-black text-[10px] uppercase tracking-wider text-slate-400">Pastas e Disciplinas</span>
+              <span className="text-xs font-semibold text-slate-500">Pastas e disciplinas</span>
               <button
                 type="button"
                 onClick={() => {
@@ -1860,7 +1860,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               
               {/* Filtro por Status da Validade */}
               <div className="space-y-2">
-                <label className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Status de Validade</label>
+                <label className="text-xs font-semibold text-slate-500">Status de validade</label>
                 <div className="flex flex-wrap gap-2">
                   {[
                     { id: 'all', label: 'Todos os Documentos' },
@@ -1892,8 +1892,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Filtro por Tags Rápidas */}
               {allUniqueTags.length > 0 && (
                 <div className="space-y-2 pt-2 border-t border-slate-100">
-                  <label className="text-[10px] text-slate-400 font-black uppercase tracking-wider flex items-center justify-between">
-                    <span>Filtrar por Tags</span>
+                  <label className="text-xs font-semibold text-slate-500 flex items-center justify-between">
+                    <span>Filtrar por tags</span>
                     {selectedTags.length > 0 && (
                       <button
                         onClick={() => setSelectedTags([])}
@@ -1959,20 +1959,20 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div className="flex items-center gap-2">
                 <UserCheck className="w-5 h-5 text-blue-600" />
-                <h3 className="font-black text-slate-800 text-xs uppercase tracking-wider">
+                <h3 className="font-black text-slate-800 text-xs">
                   Aprovações sob sua responsabilidade
                 </h3>
               </div>
               <button
                 onClick={() => setShowPendingOnly(false)}
-                className="text-button font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest"
+                className="text-sm font-medium text-blue-600 hover:text-blue-700"
               >
-                Voltar ao Acervo
+                Voltar ao acervo
               </button>
             </div>
 
             {pendingApprovals.length === 0 ? (
-              <div className="p-8 text-center text-xs text-slate-400 font-bold uppercase tracking-wider bg-white border border-slate-100 rounded-[10px]">
+              <div className="p-8 text-center text-sm text-slate-400 font-medium bg-white border border-slate-100 rounded-[10px]">
                 Você não possui pendências de aprovação de documentos atribuídas a você.
               </div>
             ) : (
@@ -1983,7 +1983,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       <div className="flex items-center gap-2">
                         <FileText className="w-5 h-5 text-blue-500" />
                         <span className="font-bold text-slate-800">{app.document?.nome || 'Documento sem nome'}</span>
-                        <span className="px-2 py-0.5 text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 rounded">
+                        <span className="text-xs font-medium text-slate-500">
                           {app.document?.tipo_documento}
                         </span>
                       </div>
@@ -2013,14 +2013,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                 setRejectingId(null);
                                 setFeedbackText('');
                               }}
-                              className="px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-bold uppercase rounded-lg hover:bg-slate-50"
+                              className="px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-medium rounded-[6px] hover:bg-slate-50"
                             >
                               Cancelar
                             </button>
                             <button
                               onClick={() => approvingId === app.id ? handleApproveAction(app.id) : handleRejectAction(app.id)}
                               disabled={processingAction || (rejectingId === app.id && !feedbackText.trim())}
-                              className={`px-4 py-1.5 text-white text-xs font-black uppercase rounded-lg shadow-sm disabled:opacity-50 ${
+                              className={`px-4 py-1.5 text-white text-xs font-medium rounded-[6px] disabled:opacity-50 ${
                                 approvingId === app.id ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
                               }`}
                             >
@@ -2261,7 +2261,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <Upload className="w-5 h-5 text-blue-600" />
-                <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider">Novo Documento — {CATEGORIES.find(c => c.id === newDocCategory)?.label}</h3>
+                <h3 className="font-black text-slate-800 text-lg">Novo Documento — {CATEGORIES.find(c => c.id === newDocCategory)?.label}</h3>
               </div>
               <button
                 onClick={() => setUploadModalOpen(false)}
@@ -2274,7 +2274,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <form onSubmit={handleUploadSubmit} className="p-6 space-y-5">
               {/* Arquivo (Drag and Drop Simples) */}
               <div className="space-y-1.5">
-                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Arquivo Físico (PDF, DOCX, XLSX, DWG, Imagens — Max 50MB)</label>
+                <label className="text-xs font-semibold text-slate-500">Arquivo Físico (PDF, DOCX, XLSX, DWG, Imagens — Max 50MB)</label>
                 <div className="border-2 border-dashed border-slate-200 rounded-[10px] p-6 text-center hover:border-blue-400 transition-colors bg-slate-50/50 relative">
                   <input
                     type="file"
@@ -2303,7 +2303,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Linha 1: Nome e Tipo de Doc */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Nome do Documento</label>
+                  <label className="text-xs font-semibold text-slate-500">Nome do Documento</label>
                   <input
                     type="text"
                     required
@@ -2314,7 +2314,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Tipo de Documento</label>
+                  <label className="text-xs font-semibold text-slate-500">Tipo de Documento</label>
                   <select
                       required
                       value={newDocType}
@@ -2337,7 +2337,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
               {/* Descrição */}
               <div className="space-y-1.5">
-                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Descrição / Notas</label>
+                <label className="text-xs font-semibold text-slate-500">Descrição / Notas</label>
                 <textarea
                   placeholder="Observações ou detalhes importantes..."
                   value={newDocDesc}
@@ -2348,7 +2348,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </div>
                 
                 <div className="space-y-1.5 mt-4">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Autor do Projeto</label>
+                  <label className="text-xs font-semibold text-slate-500">Autor do Projeto</label>
                   <input
                     type="text"
                     placeholder="Nome do autor ou responsável..."
@@ -2361,7 +2361,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Emissão, Validade e Dias Alerta */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Data de Emissão</label>
+                  <label className="text-xs font-semibold text-slate-500">Data de Emissão</label>
                   <input
                     type="date"
                     value={newDocEmissao}
@@ -2370,7 +2370,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Data de Vencimento</label>
+                  <label className="text-xs font-semibold text-slate-500">Data de Vencimento</label>
                   <input
                     type="date"
                     value={newDocValidade}
@@ -2379,7 +2379,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Alerta de Vencimento</label>
+                  <label className="text-xs font-semibold text-slate-500">Alerta de Vencimento</label>
                   <select
                     value={newDocAlertaDias}
                     onChange={(e) => setNewDocAlertaDias(parseInt(e.target.value))}
@@ -2397,7 +2397,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Tags e Vínculos adicionais */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Tags (Separadas por vírgula)</label>
+                  <label className="text-xs font-semibold text-slate-500">Tags (Separadas por vírgula)</label>
                   <input
                     type="text"
                     placeholder="obra, fundação, AVCB, fiscal"
@@ -2409,7 +2409,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
                 {/* Vínculo de Obra/Empreendimento (Opcional) */}
                 <div className="space-y-1.5">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Obra/Empreendimento (Opcional)</label>
+                  <label className="text-xs font-semibold text-slate-500">Obra/Empreendimento (Opcional)</label>
                   <select
                     value={selectedProjectId !== 'all' ? selectedProjectId : newDocProjectId}
                     onChange={(e) => setNewDocProjectId(e.target.value)}
@@ -2427,7 +2427,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
                 {/* Vínculo de Empresa (Sócio/Filial/Holding) */}
                 <div className="space-y-1.5">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Empresa Vinculada (Opcional)</label>
+                  <label className="text-xs font-semibold text-slate-500">Empresa Vinculada (Opcional)</label>
                   <select
                     value={newDocCompanyId}
                     onChange={(e) => setNewDocCompanyId(e.target.value)}
@@ -2483,7 +2483,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               <div className="flex items-center gap-2">
                 <History className="w-5 h-5 text-blue-600" />
                 <div>
-                  <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">Histórico de Versões</h3>
+                  <h3 className="font-black text-slate-800 text-sm">Histórico de Versões</h3>
                   <p className="text-xs text-slate-400 font-bold">{selectedDocForVersions.nome}</p>
                 </div>
               </div>
@@ -2499,7 +2499,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Form para Upload de Nova Versão / Renovação */}
               {canAccessTab(selectedDocForVersions.categoria) && (
                 <form onSubmit={handleUploadVersionSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
-                  <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                  <h4 className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
                     <Upload className="w-4 h-4" />
                     Subir nova versão ou renovação
                   </h4>
@@ -2536,18 +2536,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
               {/* Histórico / Lista de Versões */}
               <div className="space-y-3">
-                <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">Versões Cadastradas</h4>
+                <h4 className="text-xs font-semibold text-slate-500">Versões Cadastradas</h4>
                 <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-[10px]">
                   {selectedDocForVersions.versions?.map((ver) => {
                     const isActive = selectedDocForVersions.active_version_id === ver.id;
                     return (
                       <div key={ver.id} className="flex items-center justify-between p-4 hover:bg-slate-50/50 transition-colors">
                         <div className="flex items-center gap-3">
-                          <span className={`px-2 py-1 text-xs font-black uppercase tracking-wider rounded ${
-                            isActive
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-slate-100 text-slate-500'
-                          }`}>
+                          <span className={`text-xs font-semibold ${isActive ? 'text-blue-600' : 'text-slate-500'}`}>
                             V{ver.version_number} {isActive && '(Atual)'}
                           </span>
                           <div>
@@ -2575,7 +2571,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Solicitar Aprovação (Onda 2) */}
               {canAccessTab(selectedDocForVersions.categoria) && (selectedDocForVersions.approval_status === 'rascunho' || selectedDocForVersions.approval_status === 'rejeitado') && (
                 <form onSubmit={handleRequestApprovalSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
-                  <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                  <h4 className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
                     <UserCheck className="w-4 h-4 text-blue-600" />
                     Enviar para aprovação de um revisor
                   </h4>
@@ -2613,18 +2609,18 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Histórico de Pareceres de Aprovação (Onda 2) */}
               {documentApprovals.length > 0 && (
                 <div className="space-y-3">
-                  <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">Histórico de Pareceres</h4>
+                  <h4 className="text-xs font-semibold text-slate-500">Histórico de Pareceres</h4>
                   <div className="max-h-40 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-[10px]">
                     {documentApprovals.map((app) => (
                       <div key={app.id} className="p-4 hover:bg-slate-50/50 transition-colors text-xs space-y-1">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded ${
+                            <span className={`text-xs font-medium ${
                               app.status === 'aprovado'
-                                ? 'bg-emerald-100 text-emerald-700'
+                                ? 'text-emerald-700'
                                 : app.status === 'rejeitado'
-                                ? 'bg-rose-100 text-rose-700'
-                                : 'bg-blue-100 text-blue-700'
+                                ? 'text-rose-700'
+                                : 'text-blue-700'
                             }`}>
                               {app.status}
                             </span>
@@ -2645,39 +2641,39 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               )}
               {/* Trilha de Auditoria (Logs) (Onda 4) */}
               <div className="space-y-3 pt-3 border-t border-slate-100">
-                <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">Trilha de Auditoria (Logs)</h4>
+                <h4 className="text-xs font-semibold text-slate-500">Trilha de Auditoria (Logs)</h4>
                 <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-[10px] bg-slate-50/20">
                   {documentAuditLogs.length === 0 ? (
-                    <p className="p-4 text-center text-xs text-slate-400 font-bold uppercase tracking-wider">Nenhum evento registrado para este documento.</p>
+                    <p className="p-4 text-center text-sm text-slate-400 font-medium">Nenhum evento registrado para este documento.</p>
                   ) : (
                     documentAuditLogs.map((log) => {
                       let icon = <FileText className="w-3.5 h-3.5 text-slate-400" />;
-                      let badgeColor = 'bg-slate-100 text-slate-600';
-                      
+                      let badgeColor = 'text-slate-600';
+
                       switch (log.action) {
                         case 'criado':
                           icon = <Plus className="w-3.5 h-3.5 text-blue-600" />;
-                          badgeColor = 'bg-blue-50 text-blue-700 border border-blue-100';
+                          badgeColor = 'text-blue-700';
                           break;
                         case 'versao_enviada':
                           icon = <Upload className="w-3.5 h-3.5 text-violet-600" />;
-                          badgeColor = 'bg-violet-50 text-violet-700 border border-violet-100';
+                          badgeColor = 'text-violet-700';
                           break;
                         case 'download':
                           icon = <Download className="w-3.5 h-3.5 text-emerald-600" />;
-                          badgeColor = 'bg-emerald-50 text-emerald-700 border border-emerald-100';
+                          badgeColor = 'text-emerald-700';
                           break;
                         case 'visualizado':
                           icon = <Eye className="w-3.5 h-3.5 text-indigo-600" />;
-                          badgeColor = 'bg-indigo-50 text-indigo-700 border border-indigo-100';
+                          badgeColor = 'text-indigo-700';
                           break;
                         case 'movido_pasta':
                           icon = <CornerDownRight className="w-3.5 h-3.5 text-amber-600" />;
-                          badgeColor = 'bg-amber-50 text-amber-700 border border-amber-100';
+                          badgeColor = 'text-amber-700';
                           break;
                         case 'status_alterado':
                           icon = <UserCheck className="w-3.5 h-3.5 text-teal-600" />;
-                          badgeColor = 'bg-teal-50 text-teal-700 border border-teal-100';
+                          badgeColor = 'text-teal-700';
                           break;
                       }
 
@@ -2693,7 +2689,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded ${badgeColor}`}>
+                            <span className={`text-xs font-medium ${badgeColor}`}>
                               {log.action}
                             </span>
                             {log.details && (
@@ -2719,7 +2715,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <FolderPlus className="w-5 h-5 text-blue-600" />
-                <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">Nova Pasta Virtual</h3>
+                <h3 className="font-black text-slate-800 text-sm">Nova Pasta Virtual</h3>
               </div>
               <button
                 onClick={() => setCreateFolderModalOpen(false)}
@@ -2732,7 +2728,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <form onSubmit={handleCreateFolderSubmit} className="p-6 space-y-4">
               {!activeOrganizationId && (
                 <div className="space-y-1.5">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Organização</label>
+                  <label className="text-xs font-semibold text-slate-500">Organização</label>
                   <select
                     value={createFolderOrgId}
                     onChange={(e) => setCreateFolderOrgId(e.target.value)}
@@ -2747,7 +2743,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 </div>
               )}
               <div className="space-y-1.5">
-                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Nome da Pasta</label>
+                <label className="text-xs font-semibold text-slate-500">Nome da Pasta</label>
                 <input
                   type="text"
                   required
@@ -2760,7 +2756,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Padrão de Nome (Nomenclatura)</label>
+                <label className="text-xs font-semibold text-slate-500">Padrão de Nome (Nomenclatura)</label>
                 <select
                   value={selectedMaskPreset}
                   onChange={(e) => {
@@ -2786,7 +2782,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
               {selectedMaskPreset !== 'none' && disciplines.length > 0 && (
                 <div className="space-y-1.5 pt-1">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Disciplinas Permitidas nesta pasta</label>
+                  <label className="text-xs font-semibold text-slate-500">Disciplinas Permitidas nesta pasta</label>
                   <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3.5 rounded-[10px] border border-slate-100 max-h-[140px] overflow-y-auto">
                     {disciplines.map((disc) => {
                       const isChecked = selectedFolderDisciplines.includes(disc.code);
@@ -2814,7 +2810,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
               {selectedMaskPreset === 'custom' && (
                 <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-200">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Máscara Personalizada</label>
+                  <label className="text-xs font-semibold text-slate-500">Máscara Personalizada</label>
                   <input
                     type="text"
                     required
@@ -2823,7 +2819,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     onChange={(e) => setFolderNamingMask(e.target.value)}
                     className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   />
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                  <p className="text-xs text-slate-400 font-medium">
                     Use as tags: <span className="text-blue-600">[OBRA]</span>, <span className="text-blue-600">[DISCIPLINA]</span>, <span className="text-blue-600">[NUMERO]</span>, <span className="text-blue-600">[REVISAO]</span>.
                   </p>
                 </div>
@@ -2861,7 +2857,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <CornerDownRight className="w-5 h-5 text-blue-600" />
-                <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">Mover Documento</h3>
+                <h3 className="font-black text-slate-800 text-sm">Mover Documento</h3>
               </div>
               <button
                 onClick={() => {
@@ -2876,7 +2872,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
             <form onSubmit={handleMoveDocumentSubmit} className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Selecione a Pasta de Destino</label>
+                <label className="text-xs font-semibold text-slate-500">Selecione a Pasta de Destino</label>
                 <select
                   value={targetFolderId || ''}
                   onChange={(e) => setTargetFolderId(e.target.value || null)}
@@ -2921,7 +2917,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <Share2 className="w-5 h-5 text-orange-500" />
-                <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">
+                <h3 className="font-black text-slate-800 text-sm">
                     Compartilhar com Parceiro {shareDocIds.length > 1 && `(${shareDocIds.length} arquivos)`}
                   </h3>
                 </div>
@@ -2939,14 +2935,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <form onSubmit={handleShareWithPartner} className="p-6 space-y-4">
               {docAlreadySharedWith.length > 0 && (
                 <div className="bg-blue-50 border border-blue-100 rounded-[6px] px-3.5 py-2.5">
-                  <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">Já compartilhado com:</p>
+                  <p className="text-xs font-semibold text-blue-700 mb-1">Já compartilhado com:</p>
                   <p className="text-xs text-blue-600">
                     {docAlreadySharedWith.map((s) => s.supplier_name).join(', ')}
                   </p>
                 </div>
               )}
               <div className="space-y-1.5">
-                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Parceiro / Fornecedor Habilitado</label>
+                <label className="text-xs font-semibold text-slate-500">Parceiro / Fornecedor Habilitado</label>
                 <select
                   required
                   value={selectedShareWorkspaceId}
@@ -3007,8 +3003,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="bg-white rounded-[10px] w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
               <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
                 <div>
-                  <h3 className="font-black text-slate-800 text-lg uppercase tracking-wide">Etiqueta QR Code</h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Identificação e Validação Física</p>
+                  <h3 className="font-black text-slate-800 text-lg">Etiqueta QR Code</h3>
+                  <p className="text-xs text-slate-400 font-medium mt-0.5">Identificação e validação física</p>
                 </div>
                 <button
                   onClick={() => setSelectedDocForQrCode(null)}
@@ -3029,7 +3025,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     />
                   </div>
                   <div className="space-y-1">
-                    <h4 className="font-black text-slate-800 uppercase tracking-wide text-xs">{selectedDocForQrCode.nome}</h4>
+                    <h4 className="font-black text-slate-800 text-xs">{selectedDocForQrCode.nome}</h4>
                     <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">
                       Revisão Ativa: V{selectedDocForQrCode.active_version?.version_number || 1}
                     </p>
@@ -3171,7 +3167,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <Settings className="w-5 h-5 text-blue-600" />
-                <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider">Editar Metadados</h3>
+                <h3 className="font-black text-slate-800 text-lg">Editar Metadados</h3>
               </div>
               <button
                 onClick={() => setEditingDoc(null)}
@@ -3188,7 +3184,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   if (docFolder && docFolder.naming_mask) {
                     return (
                       <div className="space-y-4 bg-blue-50/50 p-4 rounded-[10px] border border-blue-100">
-                        <label className="text-form-label font-black uppercase text-blue-800 tracking-wider flex items-center gap-2">
+                        <label className="text-xs font-semibold text-blue-800 flex items-center gap-2">
                           <Settings className="w-4 h-4" /> Componentes do Nome (Padrão: {docFolder.naming_mask})
                         </label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3200,7 +3196,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             if (baseToken === 'OBRA') {
                               return (
                                 <div key={token} className="space-y-1.5">
-                                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">OBRA</label>
+                                  <label className="text-xs font-semibold text-slate-500">OBRA</label>
                                   <select
                                     required
                                     value={editDocTokens[token] || ''}
@@ -3219,7 +3215,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                               const allowedDiscs = docFolder.disciplines?.length ? disciplines.filter(d => docFolder.disciplines!.includes(d.code)) : disciplines;
                               return (
                                 <div key={token} className="space-y-1.5">
-                                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">DISCIPLINA</label>
+                                  <label className="text-xs font-semibold text-slate-500">DISCIPLINA</label>
                                   <select
                                     required
                                     value={editDocTokens[token] || ''}
@@ -3236,7 +3232,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             }
                             return (
                               <div key={token} className="space-y-1.5">
-                                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">{baseToken}</label>
+                                <label className="text-xs font-semibold text-slate-500">{baseToken}</label>
                                 <input maxLength={tokenLength || undefined}
                                   type="text"
                                   required
@@ -3250,7 +3246,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           })}
                         </div>
                         <div className="pt-2">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Como ficará o arquivo</span>
+                          <span className="text-xs font-semibold text-slate-500 block mb-1">Como ficará o arquivo</span>
                           <div className="font-mono text-xs text-blue-600 font-bold break-all bg-white p-2 rounded border border-blue-100">
                             {(() => {
                               const newNameWithExt = generateFileNameFromMask(docFolder.naming_mask, editDocTokens, 'pdf');
@@ -3265,7 +3261,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   // Se não tem máscara, mostra input livre padrão
                   return (
                     <div className="space-y-1.5">
-                      <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Nome do Documento / Planta</label>
+                      <label className="text-xs font-semibold text-slate-500">Nome do Documento / Planta</label>
                       <input
                         type="text"
                         required
@@ -3279,7 +3275,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
               {/* Descrição */}
               <div className="space-y-1.5">
-                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Descrição / Notas complementares</label>
+                <label className="text-xs font-semibold text-slate-500">Descrição / Notas complementares</label>
                 <textarea
                   rows={3}
                   value={editDocDesc}
@@ -3289,7 +3285,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </div>
                 
                 <div className="space-y-1.5 mt-4">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Autor do Projeto</label>
+                  <label className="text-xs font-semibold text-slate-500">Autor do Projeto</label>
                   <input
                     type="text"
                     value={editDocAutor}
@@ -3303,7 +3299,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Datas e Alertas em Grid */}
                 <div className={`grid ${editingDoc.categoria === 'engenharia' ? 'grid-cols-1 sm:grid-cols-1' : 'grid-cols-1 sm:grid-cols-3'} gap-4`}>
                   <div className="space-y-1.5">
-                    <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Data de Emissão</label>
+                    <label className="text-xs font-semibold text-slate-500">Data de Emissão</label>
                     <input
                       type="date"
                       value={editDocEmissao}
@@ -3315,7 +3311,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   {editingDoc.categoria !== 'engenharia' && (
                     <>
                       <div className="space-y-1.5">
-                        <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Data de Vencimento</label>
+                        <label className="text-xs font-semibold text-slate-500">Data de Vencimento</label>
                         <input
                           type="date"
                           value={editDocValidade}
@@ -3325,7 +3321,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Alerta de Vencimento (Dias)</label>
+                        <label className="text-xs font-semibold text-slate-500">Alerta de Vencimento (Dias)</label>
                         <input
                           type="number"
                           min={0}
@@ -3340,7 +3336,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
               {/* Tags */}
               <div className="space-y-1.5">
-                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Tags / Palavras-chave (Separadas por vírgula)</label>
+                <label className="text-xs font-semibold text-slate-500">Tags / Palavras-chave (Separadas por vírgula)</label>
                 <input
                   type="text"
                   placeholder="Estrutural, Revisado, Medição, Alpa"
@@ -3352,7 +3348,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Tipo de Documento</label>
+                    <label className="text-xs font-semibold text-slate-500">Tipo de Documento</label>
                     <select
                       value={editDocType}
                       onChange={(e) => setEditDocType(e.target.value)}
@@ -3368,7 +3364,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Obra Vinculada</label>
+                    <label className="text-xs font-semibold text-slate-500">Obra Vinculada</label>
                     <select
                       value={editDocProjectId}
                       onChange={(e) => setEditDocProjectId(e.target.value)}
@@ -3381,7 +3377,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     </select>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Empresa Vinculada</label>
+                    <label className="text-xs font-semibold text-slate-500">Empresa Vinculada</label>
                     <select
                       value={editDocCompanyId}
                       onChange={(e) => setEditDocCompanyId(e.target.value)}
@@ -3399,7 +3395,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
                 {/* Status do Documento */}
               <div className="space-y-1.5">
-                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Status do Documento</label>
+                <label className="text-xs font-semibold text-slate-500">Status do Documento</label>
                 <select
                   value={editDocStatus}
                   onChange={(e) => setEditDocStatus(e.target.value as any)}
@@ -3440,7 +3436,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <Settings className="w-5 h-5 text-blue-600" />
-                <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider">Configurar Pasta</h3>
+                <h3 className="font-black text-slate-800 text-lg">Configurar Pasta</h3>
               </div>
               <button
                 onClick={() => setEditingFolder(null)}
@@ -3452,7 +3448,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
             <form onSubmit={handleEditFolderSubmit} className="p-6 space-y-4">
               <div className="space-y-1.5">
-                <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Nome da Pasta</label>
+                <label className="text-xs font-semibold text-slate-500">Nome da Pasta</label>
                 <input
                   type="text"
                   required
@@ -3464,7 +3460,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Padrão de Nome (Nomenclatura)</label>
+                  <label className="text-xs font-semibold text-slate-500">Padrão de Nome (Nomenclatura)</label>
                   {isOrgAdmin && (
                     <button
                       type="button"
@@ -3473,7 +3469,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         setSettingsTab('patterns');
                         setShowSettingsModal(true);
                       }}
-                      className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline font-bold uppercase tracking-wider transition-all"
+                      className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-semibold transition-all"
                     >
                       Gerenciar Fórmulas
                     </button>
@@ -3504,7 +3500,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
               {editFolderMaskPreset !== 'none' && disciplines.length > 0 && (
                 <div className="space-y-1.5 pt-1">
-                  <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Disciplinas Permitidas nesta pasta</label>
+                  <label className="text-xs font-semibold text-slate-500">Disciplinas Permitidas nesta pasta</label>
                   <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3.5 rounded-[10px] border border-slate-100 max-h-[140px] overflow-y-auto">
                     {disciplines.map((disc) => {
                       const isChecked = selectedFolderDisciplines.includes(disc.code);
@@ -3575,7 +3571,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <span className="text-xl">{settingsTab === 'disciplines' ? '📋' : '⚙️'}</span>
-                <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider">
+                <h3 className="font-black text-slate-800 text-lg">
                   {settingsTab === 'disciplines' ? 'Gestão de Disciplinas' : 'Ajustes do GED'}
                 </h3>
               </div>
@@ -3589,10 +3585,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
             {/* Abas Internas */}
             
-              <div className="flex border-b border-slate-100 bg-slate-50/20 px-6 overflow-x-auto">
+              <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/20 px-6 overflow-x-auto">
                 <button
                   onClick={() => setSettingsTab('document_types')}
-                  className={`py-3.5 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
+                  className={`h-9 px-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
                     settingsTab === 'document_types'
                       ? 'border-blue-600 text-blue-600'
                       : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -3602,7 +3598,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 </button>
                 <button
                   onClick={() => setSettingsTab('disciplines')}
-                  className={`py-3.5 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
+                  className={`h-9 px-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
                     settingsTab === 'disciplines'
                       ? 'border-blue-600 text-blue-600'
                       : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -3612,7 +3608,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 </button>
                 <button
                   onClick={() => setSettingsTab('patterns')}
-                  className={`py-3.5 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition-all whitespace-nowrap ${
+                  className={`h-9 px-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
                     settingsTab === 'patterns'
                       ? 'border-blue-600 text-blue-600'
                       : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -3627,10 +3623,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 {settingsTab === 'document_types' && (
                   <div className="space-y-5">
                     <form onSubmit={handleCreateDocTypeSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
-                      <h4 className="font-black text-slate-700 text-xs uppercase tracking-wider">Cadastrar Novo Tipo de Documento</h4>
+                      <h4 className="font-black text-slate-700 text-xs">Cadastrar Novo Tipo de Documento</h4>
                       <div className="flex flex-col sm:flex-row gap-3 items-end">
                         <div className="space-y-1 flex-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nome do Tipo (ex: Projeto Hidráulico)</label>
+                          <label className="text-xs font-semibold text-slate-500">Nome do Tipo (ex: Projeto Hidráulico)</label>
                           <input
                             type="text"
                             required
@@ -3705,10 +3701,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <div className="space-y-5">
                     {/* Formulário Novo */}
                     <form onSubmit={handleCreateDisciplineSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
-                      <h4 className="font-black text-slate-700 text-xs uppercase tracking-wider">Cadastrar Nova Disciplina</h4>
+                      <h4 className="font-black text-slate-700 text-xs">Cadastrar Nova Disciplina</h4>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Código (ex: ARQ)</label>
+                          <label className="text-xs font-semibold text-slate-500">Código (ex: ARQ)</label>
                           <input
                             type="text"
                             required
@@ -3720,7 +3716,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           />
                         </div>
                         <div className="space-y-1 sm:col-span-2">
-                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nome da Disciplina (ex: Arquitetura)</label>
+                          <label className="text-xs font-semibold text-slate-500">Nome da Disciplina (ex: Arquitetura)</label>
                           <div className="flex gap-2">
                             <input
                               type="text"
@@ -3811,10 +3807,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <div className="space-y-5">
                     {/* Formulário Novo */}
                     <form onSubmit={handleCreateNamingPatternSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
-                      <h4 className="font-black text-slate-700 text-xs uppercase tracking-wider">Cadastrar Nova Fórmula</h4>
+                      <h4 className="font-black text-slate-700 text-xs">Cadastrar Nova Fórmula</h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nome do Padrão</label>
+                          <label className="text-xs font-semibold text-slate-500">Nome do Padrão</label>
                           <input
                             type="text"
                             required
@@ -3825,7 +3821,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Máscara de Composição</label>
+                          <label className="text-xs font-semibold text-slate-500">Máscara de Composição</label>
                           <div className="flex gap-2">
                             <input
                               type="text"
@@ -3929,7 +3925,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-black text-slate-800 text-lg uppercase tracking-wider leading-tight">Fora do Padrão</h3>
+                  <h3 className="font-black text-slate-800 text-lg leading-tight">Fora do Padrão</h3>
                   <p className="text-[11px] text-slate-500 font-bold mt-0.5 max-w-[260px] leading-tight">O arquivo enviado não atende ao padrão da pasta. Preencha os campos abaixo para corrigir.</p>
                 </div>
               </div>
@@ -3945,7 +3941,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   if (baseToken === 'OBRA') {
                     return (
                       <div key={token} className="space-y-1.5">
-                        <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">OBRA</label>
+                        <label className="text-xs font-semibold text-slate-500">OBRA</label>
                         <select
                           required
                           value={renameTokens[token] || ''}
@@ -3967,7 +3963,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     
                     return (
                       <div key={token} className="space-y-1.5">
-                        <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">DISCIPLINA</label>
+                        <label className="text-xs font-semibold text-slate-500">DISCIPLINA</label>
                         <select
                           required
                           value={renameTokens[token] || ''}
@@ -3985,7 +3981,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
                   return (
                     <div key={token} className="space-y-1.5">
-                      <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">
+                      <label className="text-xs font-semibold text-slate-500">
                         {baseToken}
                         </label>
                       <input maxLength={tokenLength || undefined}
@@ -4002,7 +3998,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </div>
 
               <div className="bg-slate-50 p-4 rounded-[10px] border border-slate-200">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Como ficará o arquivo</span>
+                <span className="text-xs font-semibold text-slate-500 block mb-1">Como ficará o arquivo</span>
                 <div className="font-mono text-xs text-blue-600 font-bold break-all bg-white p-2 rounded border border-blue-100">
                   {generateFileNameFromMask(renameTargetMask, renameTokens, newDocFile?.name.split('.').pop() || '')}
                 </div>

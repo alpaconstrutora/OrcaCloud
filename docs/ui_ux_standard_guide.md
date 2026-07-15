@@ -91,6 +91,7 @@ suficiente).
 - [ ] §18 Não duplicar contexto já visível no shell
 - [ ] §19 Navegação de módulos — se a tela pertencer a um módulo com navegação de nível de módulo, conferir se é via sidebar (padrão atual) ou, em módulos legados, se a barra de abas local bate com a escala de radius/tamanho da página
 - [ ] §20 Cabeçalho de tela (título + subtítulo + KPIs) — `space-y-6`, `h1` + `p mt-1.5` direto (sem card/hero, a menos que seja decisão documentada), grid de KPI logo em seguida
+- [ ] §21 Rótulo de campo e título de modal — sentence case em `<h3>`/`<h4>`/`<label>` de formulário, badge/pill dentro de modal segue §8, sub-abas dentro de modal seguem §19; exceção só para token literal de máscara e preview de impressão
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -1282,6 +1283,64 @@ Referência: `SupplierList.tsx`, `ClientList.tsx`, `InvestorList.tsx`.
 > ℹ️ Quando um dos KPIs é "o total" do qual os outros são decomposição, veja
 > §4.2 (quebra de simetria) — a régua de espaçamento título↔KPI é a mesma
 > nos dois casos (simétrico ou não), só a grade de KPI muda.
+
+---
+
+## 21. RÓTULO DE CAMPO E TÍTULO DE MODAL (formulários)
+
+**Origem:** até 2026-07-15 nenhuma tela migrada tratava disto — os modais de
+formulário (upload, edição, criação de pasta, configurações...) usavam
+`font-black uppercase tracking-wider/widest` tanto no título (`<h3>`/`<h4>`)
+quanto em todo rótulo de campo (`<label>`), o mesmo estilo "gritado" que as
+seções 6.2/8/17 já vinham removendo de tabela/badge/botão. `SupplierModal.tsx`
+ainda usa esse estilo antigo hoje — **não é referência**, é o padrão que este
+guia está deprecando a partir de `OpuraDocsModule.tsx` (Gestão de Documentos).
+
+**Título de modal (`<h3>`):** sentence case, sem `uppercase`/`tracking-wider`.
+O peso continua `font-black` (mesmo peso do `<h1>` de página) — a mudança é
+só tirar a caixa alta:
+
+```tsx
+<h3 className="font-black text-slate-800 text-lg">Editar Metadados</h3>
+```
+
+**Rótulo de campo (`<label>`):** troca o antigo `text-form-label font-black
+uppercase text-slate-400 tracking-wider` por `text-xs font-semibold
+text-slate-500` — mesmo vocabulário já usado no `<thead>` sentence case
+(§6.2), aplicado agora a rótulo de formulário:
+
+```tsx
+<label className="text-xs font-semibold text-slate-500">Nome do Documento</label>
+```
+
+> ✅ O texto do rótulo já deve estar em capitalização normal no código
+> (`"Nome do Documento"`, não `"NOME DO DOCUMENTO""`) — a versão antiga
+> dependia só da classe `uppercase` para transformar o texto, igual ao caso
+> do `<thead>` documentado em §6.2.
+> ✅ **Badge/pill dentro de modal também segue §8**, não é uma exceção por
+> estar fora da tabela principal: histórico de versões, pareceres de
+> aprovação e trilha de auditoria de `OpuraDocsModule.tsx` tinham badges
+> `rounded`+`bg-*`+`uppercase` para status (rascunho/pendente/aprovado/
+> rejeitado, ação do log) — viraram texto colorido simples, mesmo critério
+> da seção 8.
+> ✅ **Barra de sub-abas dentro de um modal** (ex: Tipos de Documento /
+> Disciplinas / Padrões dentro do modal "Ajustes do GED") segue o mesmo
+> vocabulário compacto do §19: `h-9`, `text-sm font-medium`, sem
+> `uppercase`/`tracking-wider`/`font-black`.
+> ❌ Não é exceção legítima "é só um modal, não é a tela principal" — mesmo
+> raciocínio do §6.3: o critério é sobre o elemento (rótulo/título/badge),
+> não sobre onde ele mora.
+> ℹ️ **Exceção real:** token literal de máscara de nomenclatura (`OBRA`,
+> `DISCIPLINA`, `NUMERO`, `REVISAO`) continua em caixa alta porque é o nome
+> exato do placeholder no sistema (equivalente às siglas `CNPJ`/`CPF` do
+> §6.2) — não é decoração, é conteúdo. Também não se aplica a preview de
+> impressão (ex: a etiqueta QR Code de canteiro em
+> `OpuraDocsModule.tsx`, dentro de `#printable-qr-label`) — ali a tipografia
+> tem que casar com o que sai impresso na etiqueta física, não com a tela.
+> ⚠️ **Pendência de propagação:** esta seção nasceu de uma correção pontual
+> em `OpuraDocsModule.tsx`. Outros modais do sistema (`SupplierModal.tsx`,
+> `ClientModal.tsx` etc.) ainda não foram migrados — não tratar isso como
+> "já resolvido no app inteiro" numa auditoria futura.
 
 ---
 

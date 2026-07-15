@@ -1,4 +1,5 @@
 import React from 'react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     LayoutDashboard,
     Calendar,
@@ -70,31 +71,6 @@ import { storageService } from '../services/storageService';
 import { PurchaseOrder } from '../types';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import { useConfirm } from './ui/confirm';
-import { Edit2, Trash2 } from 'lucide-react';
-
-const ActionIconButton = ({ kind, icon, onClick, className = '' }: { kind: 'download' | 'edit' | 'delete' | 'settings', icon?: React.ReactNode, onClick: (e: any) => void, className?: string }) => {
-    let defaultIcon = null;
-    let baseClass = "p-1.5 rounded-lg transition-colors ";
-    if (kind === 'download') {
-        defaultIcon = <Download className="w-4 h-4" />;
-        baseClass += "text-slate-400 hover:text-blue-600 hover:bg-blue-50";
-    } else if (kind === 'edit') {
-        defaultIcon = <Edit2 className="w-4 h-4" />;
-        baseClass += "text-slate-400 hover:text-blue-600 hover:bg-blue-50";
-    } else if (kind === 'delete') {
-        defaultIcon = <Trash2 className="w-4 h-4" />;
-        baseClass += "text-slate-400 hover:text-red-600 hover:bg-red-50";
-    } else {
-        defaultIcon = icon;
-        baseClass += "text-slate-400 hover:text-blue-600 hover:bg-blue-50";
-    }
-    
-    return (
-        <button onClick={onClick} className={`${baseClass} ${className}`}>
-            {icon || defaultIcon}
-        </button>
-    );
-};
 
 interface ClientAreaProps {
     settings: ProjectSettings;
@@ -3145,17 +3121,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     {doc.date || '--'}
                                                 </td>
                                                 <td className="px-8 py-4 text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <button
-                                                            onClick={() => handleDownload(doc)}
-                                                            className="p-2 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl transition-all"
-                                                            title="Download"
-                                                        >
-                                                            <Download className="w-4 h-4" />
-                                                        </button>
+                                                    <div className="flex justify-end gap-1.5">
+                                                        <ActionIconButton kind="download" onClick={() => handleDownload(doc)} />
                                                         {isAdmin && !doc.isDummy && (
                                                             <>
-                                                                <button
+                                                                <ActionIconButton
+                                                                    kind="edit"
                                                                     onClick={(e) => {
                                                                         const newName = prompt('Novo nome:', doc.name);
                                                                         const newCat = prompt('Nova categoria:', doc.category);
@@ -3175,11 +3146,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                                             }
                                                                         }
                                                                     }}
-                                                                    className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
-                                                                >
-                                                                    <Pencil className="w-4 h-4" />
-                                                                </button>
-                                                                <button
+                                                                />
+                                                                <ActionIconButton
+                                                                    kind="delete"
+                                                                    icon={<X className="w-4 h-4" />}
                                                                     onClick={async () => {
                                                                         if (await confirm({ title: 'Remover este documento?', variant: 'danger', confirmLabel: 'Remover' })) {
                                                                             const newDocs = currentClientDocs.filter((d) => d !== doc);
@@ -3190,10 +3160,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                                             }
                                                                         }
                                                                     }}
-                                                                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                                                                >
-                                                                    <X className="w-4 h-4" />
-                                                                </button>
+                                                                />
                                                             </>
                                                         )}
                                                     </div>

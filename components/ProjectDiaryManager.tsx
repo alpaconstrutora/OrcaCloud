@@ -13,7 +13,6 @@ import {
     Paperclip,
     Save,
     CheckCircle2,
-    Trash2,
     X,
     User,
     Briefcase as BriefcaseIcon,
@@ -27,9 +26,9 @@ import {
     CloudRain,
     CloudSun,
     Ban,
-    Video,
-    Pencil
+    Video
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { ProjectSettings, DiaryEntry, BudgetEntry, WeatherShift, DiaryActivity, LaborEntry, ProjectSchedule } from '../types';
 import { projectService } from '../services/projectService';
 import { useStore } from '../store/useStore';
@@ -1200,7 +1199,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                         <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest border ${act.evolution === 100 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
                                                             {act.evolution === 100 ? 'Finalizada' : 'Em Andamento'}
                                                         </span>
-                                                        <button onClick={() => removeActivity(idx)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 className="w-5 h-5" /></button>
+                                                        <ActionIconButton kind="delete" onClick={() => removeActivity(idx)} />
                                                     </div>
                                                 </div>
                                             ))}
@@ -1356,8 +1355,8 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                         ))}
                                     </div>
                                     <div className="flex gap-1">
-                                        <button onClick={() => handleEdit(entry)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"><Pencil className="w-4 h-4" /></button>
-                                        <button onClick={() => handleDelete(entry.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
+                                        <ActionIconButton kind="edit" onClick={() => handleEdit(entry)} />
+                                        <ActionIconButton kind="delete" onClick={() => handleDelete(entry.id)} />
                                     </div>
                                 </div>
                             </div>
@@ -1422,8 +1421,8 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(entry); }} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"><Pencil className="w-4 h-4" /></button>
-                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(entry.id); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></button>
+                                                <ActionIconButton kind="edit" onClick={(e) => { e.stopPropagation(); handleEdit(entry); }} />
+                                                <ActionIconButton kind="delete" onClick={(e) => { e.stopPropagation(); handleDelete(entry.id); }} />
                                             </div>
                                         </td>
                                     </tr>

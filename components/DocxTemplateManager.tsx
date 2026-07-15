@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    X, FileText, Upload, Trash2, Pencil, Plus, Loader2, Save, AlertCircle, Link2,
+    X, FileText, Upload, Plus, Loader2, Save, AlertCircle, Link2,
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     documentTemplateService, DocumentTemplate,
 } from '../services/documentTemplateService';
@@ -362,12 +363,8 @@ const DocxTemplateManager: React.FC<Props> = ({ organizationId, onClose }) => {
                                                         {t.file_name ?? '—'} · {mapped}/{t.detected_tokens.length} marcadores mapeados
                                                     </p>
                                                 </div>
-                                                <button onClick={() => startEdit(t)} title="Editar" className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500">
-                                                    <Pencil className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => remove(t)} title="Remover" className="p-2 rounded-lg hover:bg-red-50 text-red-500">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                <ActionIconButton kind="edit" onClick={() => startEdit(t)} />
+                                                <ActionIconButton kind="delete" title="Remover" onClick={() => remove(t)} />
                                             </div>
                                         );
                                     })}

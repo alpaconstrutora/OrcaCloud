@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import ActionIconButton from './ui/ActionIconButton'
 import {
   Calendar, AlertTriangle, ListChecks, Inbox,
   ChevronRight, ChevronDown, Plus, FolderOpen, Loader2, Hash, Settings2, GripVertical,
@@ -429,13 +430,14 @@ const TaskSpaceRail: React.FC<Props> = ({
 
                       {/* Botão editar */}
                       {!isEditing && (
-                        <button
-                          onClick={e => { e.stopPropagation(); setEditingFolderId(folder.id); setEditingFolderName(folder.name); setMovingFolderId(null) }}
+                        <ActionIconButton
+                          kind="edit"
+                          size="sm"
+                          className="flex-shrink-0"
                           title="Renomear pasta"
-                          className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors flex-shrink-0"
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </button>
+                          icon={<Pencil className="w-3 h-3" />}
+                          onClick={e => { e.stopPropagation(); setEditingFolderId(folder.id); setEditingFolderName(folder.name); setMovingFolderId(null) }}
+                        />
                       )}
                       {isEditing && (
                         <button

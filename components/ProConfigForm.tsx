@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { proService } from '../services/proService';
 import { ProConfig, ProPixKeyType } from '../types';
-import { Loader2, Sparkles, User, Landmark, FileText, ChevronLeft, Plus, Trash2, Edit, X } from 'lucide-react';
+import { Loader2, Sparkles, User, Landmark, FileText, ChevronLeft, Plus, X } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 
 interface ProConfigFormProps {
   userId: string;
@@ -404,20 +405,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                         <p className="text-xs text-slate-500 font-medium line-clamp-2">{t.descricao}</p>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button
-                          onClick={(e) => handleEditTemplate(e, t)}
-                          className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
-                          title="Editar modelo"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteTemplate(e, t.id)}
-                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Excluir modelo"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <ActionIconButton kind="edit" size="sm" title="Editar modelo" onClick={(e) => handleEditTemplate(e, t)} />
+                        <ActionIconButton kind="delete" size="sm" title="Excluir modelo" onClick={(e) => handleDeleteTemplate(e, t.id)} />
                       </div>
                     </div>
                   );

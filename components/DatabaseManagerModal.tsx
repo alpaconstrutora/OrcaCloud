@@ -1,6 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Edit2, Trash2, Copy, Save, Database, Loader2 } from 'lucide-react';
+import { X, Plus, Save, Database, Loader2 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { CustomDatabase } from '../types';
 
@@ -189,28 +190,10 @@ const DatabaseManagerModal: React.FC<DatabaseManagerModalProps> = ({ isOpen, onC
                                             Criado em: {new Date(db.created_at).toLocaleDateString()}
                                         </span>
                                     </div>
-                                    <div className="flex items-center gap-1 pl-4 border-l border-gray-100 ml-4">
-                                        <button
-                                            onClick={() => startEdit(db)}
-                                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                            title="Editar"
-                                        >
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDuplicate(db)}
-                                            className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                                            title="Duplicar (Em breve)"
-                                        >
-                                            <Copy className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(db.id, db.name)}
-                                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                            title="Excluir"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                    <div className="flex items-center gap-1.5 pl-4 border-l border-gray-100 ml-4">
+                                        <ActionIconButton kind="edit" onClick={() => startEdit(db)} />
+                                        <ActionIconButton kind="duplicate" title="Duplicar (Em breve)" onClick={() => handleDuplicate(db)} />
+                                        <ActionIconButton kind="delete" onClick={() => handleDelete(db.id, db.name)} />
                                         {currentDbId === db.id ? (
                                             <div className="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-lg ml-2">
                                                 Ativa

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
-  FileText, Search, RefreshCw, CheckCircle2, Clock, AlertTriangle, ArrowLeft, Plus, UploadCloud, Trash2,
+  FileText, Search, RefreshCw, CheckCircle2, Clock, AlertTriangle, ArrowLeft, Plus, UploadCloud,
 } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink, linkExistingTransaction, createOrderFromNfe, deleteNfeInvoice } from '../../services/nfeService';
 import { projectService } from '../../services/projectService';
 import type { NfeInvoice, NfeInvoiceWithItems } from '../../types/fiscal';
@@ -877,13 +878,7 @@ export function FiscalDocuments({ organizationId, onToast, onOpenUpload, onViewO
                         >
                           Ver detalhes
                         </button>
-                        <button
-                          onClick={() => handleDelete(inv)}
-                          title="Excluir NF-e"
-                          className="text-red-600 hover:text-red-800 p-1.5 hover:bg-red-50 rounded-lg transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <ActionIconButton kind="delete" title="Excluir NF-e" onClick={() => handleDelete(inv)} />
                       </div>
                     </td>
                   )}

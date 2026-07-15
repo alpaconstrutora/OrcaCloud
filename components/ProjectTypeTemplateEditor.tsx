@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Layers, Plus, Trash2, Save, Loader2, AlertCircle, CheckCircle2,
+  Layers, Plus, Save, Loader2, AlertCircle, CheckCircle2,
   RotateCcw, ChevronDown, ChevronRight, GripVertical, Settings2,
 } from 'lucide-react'
 import { TipoObra, ProjectTypeTemplate, EapPhase, RequiredDoc, TemplateIndicator, ChecklistTemplateItem } from '../types/project'
 import { projectTypeTemplatesService } from '../services/projectTypeTemplatesService'
 import { obraTypeService, ObraType } from '../services/obraTypeService'
 import Button from './ui/Button'
+import ActionIconButton from './ui/ActionIconButton'
 
 const TIPO_OBRA_LABELS_FALLBACK: Record<string, string> = {
   residencial_multifamiliar: 'Residencial Multifamiliar',
@@ -287,9 +288,7 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                           value={phase.name}
                           onChange={e => updateEapPhase(i, 'name', e.target.value)}
                         />
-                        <Button variant="ghost" size="icon" onClick={() => removeEapPhase(i)} className="text-slate-300 hover:text-red-500 shrink-0">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <ActionIconButton kind="delete" className="shrink-0" onClick={() => removeEapPhase(i)} />
                       </div>
                     ))}
                   </div>
@@ -337,9 +336,7 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                           />
                           Obrig.
                         </label>
-                        <Button variant="ghost" size="icon" onClick={() => removeDoc(i)} className="text-slate-300 hover:text-red-500 shrink-0">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <ActionIconButton kind="delete" className="shrink-0" onClick={() => removeDoc(i)} />
                       </div>
                     ))}
                   </div>
@@ -389,9 +386,7 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                           onChange={e => updateIndicator(i, 'unit', e.target.value)}
                           placeholder="unid."
                         />
-                        <Button variant="ghost" size="icon" onClick={() => removeIndicator(i)} className="text-slate-300 hover:text-red-500 shrink-0">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <ActionIconButton kind="delete" className="shrink-0" onClick={() => removeIndicator(i)} />
                       </div>
                     ))}
                   </div>
@@ -436,9 +431,7 @@ const ProjectTypeTemplateEditor: React.FC<Props> = ({ orgId }) => {
                         {ct.items.map((item, idx) => (
                           <div key={idx} className="flex items-center gap-2">
                             <span className="flex-1 text-xs text-slate-700 bg-slate-50 rounded-lg px-3 py-1.5 border border-slate-100">{item}</span>
-                            <Button variant="ghost" size="icon" onClick={() => removeChecklistItem(phase, idx)} className="text-slate-300 hover:text-red-500">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
+                            <ActionIconButton kind="delete" size="sm" onClick={() => removeChecklistItem(phase, idx)} />
                           </div>
                         ))}
                         <div className="flex items-center gap-2">

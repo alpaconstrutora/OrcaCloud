@@ -1,6 +1,6 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, Pencil, Trash2 } from 'lucide-react';
-import Button from '../ui/Button';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import type {
     AreaEngineRpcResult,
     AreaFractionIdeal,
@@ -262,13 +262,9 @@ export function StructureAdminList({ title, rows, empty, disabled, onEdit, onDel
                             </div>
                             <div className="flex shrink-0 items-center gap-1">
                                 {onEdit && (
-                                    <Button type="button" variant="ghost" size="icon" onClick={() => onEdit(row.id)} disabled={disabled} className="text-slate-600 hover:text-blue-700">
-                                        <Pencil className="w-4 h-4" />
-                                    </Button>
+                                    <ActionIconButton kind="edit" disabled={disabled} onClick={() => onEdit(row.id)} />
                                 )}
-                                <Button type="button" variant="ghost" size="icon" onClick={() => onDelete(row.id)} disabled={disabled} className="text-red-600 hover:text-red-700">
-                                    <Trash2 className="w-4 h-4" />
-                                </Button>
+                                <ActionIconButton kind="delete" disabled={disabled} onClick={() => onDelete(row.id)} />
                             </div>
                         </div>
                     ))}

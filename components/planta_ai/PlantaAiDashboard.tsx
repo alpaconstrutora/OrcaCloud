@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { PlantStudy } from '../../types/plantaAi';
 import PlantaAiStudyDetail from './PlantaAiStudyDetail';
-import { Plus, Eye, Trash2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import { useStore } from '../../store/useStore';
 
 export default function PlantaAiDashboard() {
@@ -130,23 +131,15 @@ export default function PlantaAiDashboard() {
                   }`}>
                     {study.status}
                   </span>
-                  <button 
-                    onClick={() => setSelectedStudyId(study.id)}
-                    className="text-gray-400 hover:text-indigo-600"
-                    title="Ver Estudo"
-                  >
-                    <Eye className="h-5 w-5" />
-                  </button>
-                  <button 
+                  <ActionIconButton kind="view" title="Ver Estudo" onClick={() => setSelectedStudyId(study.id)} />
+                  <ActionIconButton
+                    kind="delete"
+                    title="Excluir Estudo"
                     onClick={(e) => {
                       e.stopPropagation();
                       deleteStudy(study.id);
                     }}
-                    className="text-gray-400 hover:text-red-600 ml-2"
-                    title="Excluir Estudo"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
+                  />
                 </div>
               </div>
             </li>

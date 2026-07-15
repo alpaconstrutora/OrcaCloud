@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    Plus, Trash2, Edit2, X, Search,
+    Plus, X, Search,
     Building2, BarChart as BarChartIcon, AlertTriangle, Users, TrendingUp, CheckCircle,
     ChevronDown, ChevronRight
 } from 'lucide-react';
+import ActionIconButton from './ui/ActionIconButton';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
@@ -850,9 +851,9 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                         </div>
                                     </div>
                                     {group.items.length === 1 && (
-                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => handleEditRole(group.items[0])} className="p-1 hover:bg-gray-100 rounded-lg"><Edit2 className="w-4 h-4 text-gray-400" /></button>
-                                            <button onClick={() => handleDeleteRole(group.items[0].id)} className="p-1 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" /></button>
+                                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <ActionIconButton kind="edit" size="sm" onClick={() => handleEditRole(group.items[0])} />
+                                            <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteRole(group.items[0].id)} />
                                         </div>
                                     )}
                                 </div>
@@ -876,9 +877,9 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                     <p className="text-xs text-blue-600 font-medium">{resources.roles.find(r => r.id === w.roleId)?.name}</p>
                                     <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase mt-2 inline-block">{w.source || 'Local'}</span>
                                 </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => handleEditWorker(w)}><Edit2 className="w-4 h-4 text-gray-400" /></button>
-                                    <button onClick={() => handleDeleteWorker(w.id)}><Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" /></button>
+                                <div className="flex gap-1.5">
+                                    <ActionIconButton kind="edit" size="sm" onClick={() => handleEditWorker(w)} />
+                                    <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteWorker(w.id)} />
                                 </div>
                             </div>
                         ))}
@@ -896,9 +897,9 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                     </p>
                                     <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase mt-2 inline-block">{team.source || 'Local'}</span>
                                 </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => handleEditTeam(team)} className="p-1 hover:bg-gray-100 rounded-lg transition-all"><Edit2 className="w-4 h-4 text-gray-400" /></button>
-                                    <button onClick={() => handleDeleteTeam(team.id)} className="p-1 hover:bg-gray-100 rounded-lg transition-all"><Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" /></button>
+                                <div className="flex gap-1.5">
+                                    <ActionIconButton kind="edit" size="sm" onClick={() => handleEditTeam(team)} />
+                                    <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteTeam(team.id)} />
                                 </div>
                             </div>
                         ))}
@@ -922,9 +923,9 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                     </p>
                                     <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase mt-2 inline-block">{m.source || 'Local'}</span>
                                 </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => handleEditMaterial(m)}><Edit2 className="w-4 h-4 text-gray-400" /></button>
-                                    <button onClick={() => handleDeleteMaterial(m.id)}><Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" /></button>
+                                <div className="flex gap-1.5">
+                                    <ActionIconButton kind="edit" size="sm" onClick={() => handleEditMaterial(m)} />
+                                    <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteMaterial(m.id)} />
                                 </div>
                             </div>
                         ))}

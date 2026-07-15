@@ -3,9 +3,10 @@
 // Usado dentro do OperacionalModule / WorkOrder detail
 
 import React from 'react';
-import { X, Plus, Trash2, Loader2, PackageMinus, Check, AlertTriangle } from 'lucide-react';
+import { X, Plus, Loader2, PackageMinus, Check, AlertTriangle } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import Button from './ui/Button';
+import ActionIconButton from './ui/ActionIconButton';
 import { formatMoney } from './ui/Format';
 import type { Warehouse, StockBalance, StockConsumptionItem } from '../types/inventory';
 
@@ -240,9 +241,7 @@ export const StockConsumptionModal: React.FC<Props> = ({
                                                     </span>
                                                 )}
                                             </div>
-                                            <button onClick={() => removeLine(line._key)} className="text-gray-600 hover:text-red-400">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            <ActionIconButton kind="delete" onClick={() => removeLine(line._key)} />
                                         </div>
                                     </div>
                                 ))}

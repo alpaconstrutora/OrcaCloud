@@ -167,9 +167,14 @@ export const documentService = {
 
     let result = (data || []) as OpuraDocument[];
 
-    // SE A CATEGORIA FOR CONTRATOS (juridico), INTEGRA OS CONTRATOS DA TABELA contracts
-    if (!filters?.categoria || filters.categoria === 'juridico') {
-      try {
+    // Documentos integrados (Contratos, Invoices, etc.) não possuem folder_id.
+    // Portanto, se a busca for restrita a uma pasta específica (ID válido, não nulo), pulamos a integração.
+    const isSpecificFolder = filters && 'folderId' in filters && filters.folderId !== undefined && filters.folderId !== 'undefined' && filters.folderId !== null && filters.folderId !== 'null';
+
+    if (!isSpecificFolder) {
+      // SE A CATEGORIA FOR CONTRATOS (juridico), INTEGRA OS CONTRATOS DA TABELA contracts
+      if (!filters?.categoria || filters.categoria === 'juridico') {
+        try {
         let contractQuery = supabase
           .from('contracts')
           .select('id, title, number, contract_type, status, start_date, end_date, signed_contract_url, minuta_versions, responsible_email, created_at, project_id, organization_id');
@@ -555,6 +560,7 @@ export const documentService = {
       } catch (err) {
         console.error('[DocumentService] Erro ao integrar documentos de oportunidade no Docs:', err);
       }
+    }
     }
 
     // Ordena por data de criação de forma descendente

@@ -791,7 +791,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             className="flex items-center gap-1.5 min-w-0 flex-grow cursor-pointer"
           >
             <FolderOpen className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-            <span className="text-xs truncate">{folder.name}</span>
+            <span className="text-sm truncate">{folder.name}</span>
           </div>
 
           <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1 mr-1">
@@ -868,7 +868,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     >
                       {disc.code.slice(0, 3)}
                     </span>
-                    <span className="text-xs truncate">{disc.name}</span>
+                    <span className="text-sm truncate">{disc.name}</span>
                   </div>
 
                   <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1 mr-1">
@@ -1767,7 +1767,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 placeholder="Pesquisar pasta ou disciplina..."
                 value={leftSearchQuery}
                 onChange={(e) => setLeftSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-[6px] text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
               />
               <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
             </div>
@@ -1781,7 +1781,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   setCurrentFolderId(null);
                   setSelectedDisciplineCode(null);
                 }}
-                className={`w-full flex items-center gap-2 p-2 rounded-[6px] text-left text-xs font-bold transition-all ${
+                className={`w-full flex items-center gap-2 p-2 rounded-[6px] text-left text-sm font-medium transition-all ${
                   !currentFolderId && !selectedDisciplineCode
                     ? 'bg-blue-50 text-blue-700 font-extrabold shadow-sm border border-blue-100'
                     : 'hover:bg-slate-50 border border-transparent'

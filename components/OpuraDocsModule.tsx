@@ -1056,11 +1056,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     if (selectedDisciplineCode) {
       result = result.filter(doc => {
         const docFolder = folders.find(f => f.id === doc.folder_id);
-        let cleanFileName = doc.active_version?.storage_path.split('/').pop() || doc.nome;
-        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i.test(cleanFileName)) {
-          cleanFileName = cleanFileName.substring(37);
-        }
-        
+        const cleanFileName = doc.nome;
+
         let isMatch = false;
         if (docFolder?.naming_mask) {
           const extracted = extractTokenFromFileName(cleanFileName, docFolder.naming_mask, '[DISCIPLINA]');
@@ -2160,11 +2157,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
                             {dynamicColumns.map((col, idx) => {
                               let val = '-';
-                              let cleanFileName = doc.active_version?.storage_path.split('/').pop() || doc.nome;
-                              // Remove prefixo UUID gerado pelo Supabase Storage (36 chars + '_')
-                              if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i.test(cleanFileName)) {
-                                cleanFileName = cleanFileName.substring(37);
-                              }
+                              // Usa o código exibido (doc.nome), não o nome físico no Storage: eles podem
+                              // divergir quando o documento é renomeado depois do upload (edição de metadados
+                              // não renomeia o arquivo no Storage) ou quando veio de import legado.
+                              const cleanFileName = doc.nome;
                               if (col.toUpperCase().includes('OBRA')) val = extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[OBRA]') || '-';
                               else if (col.toUpperCase().includes('DISCIPLINA')) val = extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[DISCIPLINA]') || '-';
                               else if (col.toUpperCase().includes('NUMERO')) val = extractTokenFromFileName(cleanFileName, activeFolder!.naming_mask!, '[NUMERO]') || '-';

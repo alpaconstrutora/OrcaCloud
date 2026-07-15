@@ -1348,8 +1348,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setEditingDoc(doc);
     setEditDocName(doc.nome);
     
-    // Check if the document belongs to a folder with a naming mask
-    const docFolder = folders.find(f => f.id === doc.folder_id);
+    // Check if the document belongs to a folder with a naming mask.
+    // Fallback para activeFolder: em "Todos os Empreendimentos" a lista não filtra por
+    // pasta (fetchDocs manda folderId undefined), então documentos de pastas reais
+    // diferentes aparecem juntos — mas a tabela já extrai OBRA/DISCIPLINA/NUMERO/REVISAO
+    // usando a máscara da pasta "ativa" na árvore. Sem este fallback, o modal de edição
+    // não achava a pasta real do documento e caía no campo de nome livre.
+    const docFolder = folders.find(f => f.id === doc.folder_id) || activeFolder;
     if (docFolder && docFolder.naming_mask) {
       const initialTokens: Record<string, string> = {};
       // In case we don't have extractMaskTokens locally in this scope, wait it's imported at the top
@@ -1379,34 +1384,33 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     if (!editingDoc) return;
     
     // Obter o nome final (seja da máscara ou do input livre)
+    // Fallback para activeFolder: mesma justificativa de handleStartEditDoc — em
+    // "Todos os Empreendimentos" o doc pode não ter sua pasta real em `folders`/com máscara.
     let finalDocName = editDocName;
-    const docFolder = folders.find(f => f.id === editingDoc.folder_id);
+    const docFolder = folders.find(f => f.id === editingDoc.folder_id) || activeFolder;
     if (docFolder && docFolder.naming_mask) {
       // Usar a mesma lógica de geração de arquivo e remover a extensão '.pdf' dummy
       const generatedName = generateFileNameFromMask(docFolder.naming_mask, editDocTokens, 'pdf');
       finalDocName = generatedName.split('.').slice(0, -1).join('.');
     }
 
-    // Se houver uma máscara de nomenclatura configurada na pasta, validar contra o novo nome
-    if (editingDoc.folder_id) {
-      const targetFolder = folders.find(f => f.id === editingDoc.folder_id);
-      if (targetFolder?.naming_mask) {
-        const ext = editingDoc.active_version?.storage_path.split('.').pop() || 'pdf';
-        const dummyFileName = `${finalDocName}.${ext}`;
-        if (!validateFileNameAgainstMask(dummyFileName, targetFolder.naming_mask)) {
-          notify(`O nome gerado ("${finalDocName}") não atende ao padrão exigido nesta pasta:\n"${targetFolder.naming_mask}"\n\nPor favor, verifique se a quantidade de letras ou dígitos informada está correta.`, 'error');
-          return;
-        }
+    // Se houver uma máscara de nomenclatura em vigor (da pasta real ou da pasta ativa), validar contra o novo nome
+    if (docFolder?.naming_mask) {
+      const ext = editingDoc.active_version?.storage_path.split('.').pop() || 'pdf';
+      const dummyFileName = `${finalDocName}.${ext}`;
+      if (!validateFileNameAgainstMask(dummyFileName, docFolder.naming_mask)) {
+        notify(`O nome gerado ("${finalDocName}") não atende ao padrão exigido nesta pasta:\n"${docFolder.naming_mask}"\n\nPor favor, verifique se a quantidade de letras ou dígitos informada está correta.`, 'error');
+        return;
+      }
 
-        // Validação adicional de Disciplinas permitidas na pasta
-        if (targetFolder.disciplines && targetFolder.disciplines.length > 0) {
-          const extractedDisc = extractTokenFromFileName(dummyFileName, targetFolder.naming_mask, '[DISCIPLINA]');
-          if (extractedDisc) {
-            const isAllowed = targetFolder.disciplines.some(d => d.toUpperCase() === extractedDisc.toUpperCase());
-            if (!isAllowed) {
-              notify(`A disciplina extraída do nome do documento ("${extractedDisc}") não é permitida nesta pasta virtual.\n\nDisciplinas permitidas: ${targetFolder.disciplines.join(', ')}`, 'error');
-              return;
-            }
+      // Validação adicional de Disciplinas permitidas na pasta
+      if (docFolder.disciplines && docFolder.disciplines.length > 0) {
+        const extractedDisc = extractTokenFromFileName(dummyFileName, docFolder.naming_mask, '[DISCIPLINA]');
+        if (extractedDisc) {
+          const isAllowed = docFolder.disciplines.some(d => d.toUpperCase() === extractedDisc.toUpperCase());
+          if (!isAllowed) {
+            notify(`A disciplina extraída do nome do documento ("${extractedDisc}") não é permitida nesta pasta virtual.\n\nDisciplinas permitidas: ${docFolder.disciplines.join(', ')}`, 'error');
+            return;
           }
         }
       }
@@ -3180,7 +3184,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <form onSubmit={handleEditDocSubmit} className="p-6 space-y-5">
                 {/* Nome ou Tokens */}
                 {(() => {
-                  const docFolder = folders.find(f => f.id === editingDoc?.folder_id);
+                  const docFolder = folders.find(f => f.id === editingDoc?.folder_id) || activeFolder;
                   if (docFolder && docFolder.naming_mask) {
                     return (
                       <div className="space-y-4 bg-blue-50/50 p-4 rounded-[10px] border border-blue-100">

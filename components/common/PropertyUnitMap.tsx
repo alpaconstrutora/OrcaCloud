@@ -40,8 +40,8 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
     const [selectedUnit, setSelectedUnit] = useState<Property | null>(null);
     const [groupingMode, setGroupingMode] = useState<'position' | 'orientation'>('position');
     const [density, setDensity] = useState<'completo' | 'compacto'>(() => {
-        if (typeof window === 'undefined') return 'completo';
-        return (localStorage.getItem('propertyUnitMap.density') as 'completo' | 'compacto') || 'completo';
+        if (typeof window === 'undefined') return 'compacto';
+        return (localStorage.getItem('propertyUnitMap.density') as 'completo' | 'compacto') || 'compacto';
     });
 
     const handleDensityChange = (value: 'completo' | 'compacto') => {
@@ -358,11 +358,11 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                     {floor}º<br/>Pavimento
                                 </span>
                             </div>
-                            <div className={`flex-1 flex flex-wrap ${isCompact ? 'gap-1.5 p-2' : 'gap-4 p-4'}`}>
+                            <div className={`flex-1 flex flex-wrap ${isCompact ? 'gap-1.5 p-2' : 'gap-2 p-3'}`}>
                                 {(() => {
                                     if (selectedBlock !== 'all') {
                                         return (
-                                            <div className={`flex flex-wrap ${isCompact ? 'gap-1.5' : 'gap-4'}`}>
+                                            <div className={`flex flex-wrap ${isCompact ? 'gap-1.5' : 'gap-2'}`}>
                                                 {floorUnits
                                                     .sort((a, b) => (a.number || '').localeCompare(b.number || ''))
                                                     .map(unit => renderUnit(unit))}
@@ -432,7 +432,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                                     </div>
                                                                     
                                                                     <div 
-                                                                        className={`grid mt-2 ${isCompact ? 'gap-1.5' : 'gap-2 sm:gap-4'}`}
+                                                                        className={`grid mt-2 ${isCompact ? 'gap-1.5' : 'gap-1.5 sm:gap-2'}`}
                                                                         style={{ gridTemplateColumns: `repeat(${t.unitsWidth || 1}, minmax(100px, 1fr))` }}
                                                                     >
                                                                         {t.gridCells.map((cell: GridCellConfig, cIndex: number) => {
@@ -541,13 +541,13 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                     const allBlocks = blocks.length > 0 ? blocks : ['Geral'];
 
                                     return (
-                                        <div className={`flex-1 grid ${isCompact ? 'gap-3' : 'gap-8'} ${allBlocks.length > 1 ? `md:grid-cols-${Math.min(allBlocks.length, 3)} lg:grid-cols-${Math.min(allBlocks.length, 4)}` : 'grid-cols-1'}`}>
+                                        <div className={`flex-1 grid ${isCompact ? 'gap-3' : 'gap-4'} ${allBlocks.length > 1 ? `md:grid-cols-${Math.min(allBlocks.length, 3)} lg:grid-cols-${Math.min(allBlocks.length, 4)}` : 'grid-cols-1'}`}>
                                             {allBlocks.map(blockName => {
                                                 const blockUnits = floorUnits.filter(u => (u.block || 'Geral') === blockName);
                                                 if (blockUnits.length === 0) return <div key={blockName} className="hidden md:block" />;
 
                                                 return (
-                                                    <div key={blockName} className="p-4 border-2 border-dashed border-blue-200 rounded-[2rem] relative mt-2 min-h-[140px] flex flex-col gap-6">
+                                                    <div key={blockName} className="p-3 border-2 border-dashed border-blue-200 rounded-[2rem] relative mt-2 min-h-[96px] flex flex-col gap-3">
                                                         <div className="absolute -top-3 left-6 px-3 bg-white border border-blue-200 rounded-full shadow-sm">
                                                             <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em]">Torre {blockName}</span>
                                                         </div>
@@ -629,7 +629,7 @@ const PropertyUnitMap: React.FC<PropertyUnitMapProps> = ({
                                                                                 </span>
                                                                             )}
                                                                         </div>
-                                                                        <div className={`flex flex-wrap ${isCompact ? 'gap-1.5' : 'gap-3'}`}>
+                                                                        <div className={`flex flex-wrap ${isCompact ? 'gap-1.5' : 'gap-2'}`}>
                                                                             {sortedUnits.map(unit => renderUnit(unit))}
                                                                         </div>
                                                                     </div>

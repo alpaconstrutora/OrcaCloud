@@ -131,6 +131,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [editDocTagsInput, setEditDocTagsInput] = React.useState('');
   const [editDocStatus, setEditDocStatus] = React.useState<OpuraDocumentStatus>('ativo');
   const [editDocProjectId, setEditDocProjectId] = React.useState('');
+  const [editDocCompanyId, setEditDocCompanyId] = React.useState('');
   const [editDocType, setEditDocType] = React.useState('');
   const [folderNamingMask, setFolderNamingMask] = React.useState('');
   const [editingFolder, setEditingFolder] = React.useState<OpuraFolder | null>(null);
@@ -1354,6 +1355,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setEditDocTagsInput(doc.tags ? doc.tags.join(', ') : '');
     setEditDocStatus(doc.status as any || 'ativo');
     setEditDocProjectId(doc.project_id || '');
+    setEditDocCompanyId(doc.company_id || '');
     setEditDocType(doc.tipo_documento || '');
   };
 
@@ -1404,16 +1406,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
       await documentService.updateDocument(editingDoc.id, {
         nome: finalDocName,
-        descricao: editDocDesc || undefined,
-          autor: editDocAutor || undefined,
-        data_emissao: editDocEmissao || undefined,
-        data_validade: editDocValidade || undefined,
+        descricao: editDocDesc || null,
+        autor: editDocAutor || null,
+        data_emissao: editDocEmissao || null,
+        data_validade: editDocValidade || null,
         alerta_dias_antecedencia: editDocAlertaDias,
         tags,
         status: editDocStatus as any,
-          project_id: editDocProjectId || undefined,
-          tipo_documento: editDocType || undefined,
-      });
+        project_id: editDocProjectId || null,
+        company_id: editDocCompanyId || null,
+        tipo_documento: editDocType || null,
+      } as any);
 
       if (activeOrganizationId && currentProfile?.email) {
         await documentService.logDocumentAction(
@@ -3329,7 +3332,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Tipo de Documento</label>
                     <select
@@ -3356,6 +3359,21 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       <option value="">Nenhuma Obra</option>
                       {projects?.map(p => (
                         <option key={p.id} value={p.id}>{p.code || p.id} - {p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-form-label font-black uppercase text-slate-400 tracking-wider">Empresa Vinculada</label>
+                    <select
+                      value={editDocCompanyId}
+                      onChange={(e) => setEditDocCompanyId(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    >
+                      <option value="">Nenhuma Empresa</option>
+                      {companies.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.razao_social}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -3598,7 +3616,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
                     <div className="border border-slate-100 rounded-[10px] overflow-hidden bg-white">
                       <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-wider">
+                        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                           <tr>
                             <th className="px-4 py-3">Tipo de Documento</th>
                             <th className="px-4 py-3 text-right">Ação</th>
@@ -3691,7 +3709,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     {/* Tabela de Disciplinas */}
                     <div className="border border-slate-100 rounded-[10px] overflow-hidden bg-white">
                       <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-wider">
+                        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                           <tr>
                             <th className="px-4 py-3">Código</th>
                             <th className="px-4 py-3">Nome da Disciplina</th>
@@ -3800,7 +3818,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     {/* Tabela de Padrões */}
                     <div className="border border-slate-100 rounded-[10px] overflow-hidden bg-white">
                       <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-wider">
+                        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
                           <tr>
                             <th className="px-4 py-3">Nome do Padrão</th>
                             <th className="px-4 py-3">Fórmula / Máscara</th>

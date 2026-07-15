@@ -209,7 +209,124 @@ substituir botões hand-rolled por `ActionIconButton`, rodar
   não tinham nenhum botão-ícone correspondente aos kinds do componente.
   **Não migrados, com motivo:** nenhum — todos os candidatos encontrados
   neste lote foram pares/trios limpos, sem risco de fileira multicolor.
-- **Lote F — resto (empreendimento, investor, structural, schedule, offices…).**
+- **Lote F — resto (empreendimento, investor, structural, schedule, offices,
+  contratos avulsos, config cliente/fornecedor, dashboards, Opura*, e um
+  grande grupo residual).** ✅ **Concluído (2026-07-15), em 9 sub-lotes
+  (F1-F9)** — o "resto" acabou sendo ~121 arquivos candidatos (bem mais que
+  a estimativa inicial de ~13), então foi tratado como sequência própria de
+  sub-lotes menores, cada um com deploy independente.
+
+  - **F1 — empreendimento/ + investor/ (12 arquivos).** Migrados:
+    `empreendimento/EmpreendimentoModule`, `FloorEditor`, `UnitEditor` (trio
+    Editar+Duplicar+Excluir), `TowerEditor`, `CommonAreaEditor`;
+    `investor/SpeManager`, `ContributionsManager`, `ObraTimeline`,
+    `DataRoomPanel` (par Download+Excluir com spinner de loading).
+    **Não migrados:** `OpportunityForm`/`OpportunitiesTab`/`PhotoGallery`
+    (overlay sobre foto translúcido, ou fileira mista com toggle
+    Eye/EyeOff fora do vocabulário).
+
+  - **F2 — structural/ + schedule/ (12 arquivos).** Migrados:
+    `StructuralModule`, `structural/StructuralDimension`,
+    `StructuralRebars`; `schedule/ResourceAllocationModal`, `ConfigModal`,
+    `PredecessorModal`, `BaselineModal`. **Não migrados:**
+    `StructuralAssemblies`/`StructuralElements` (item de árvore lateral que
+    fica azul-sólido quando selecionado — botão opaco quebraria
+    visualmente); `ScheduleHeader`/`ScenariosPanel` (texto+ícone);
+    `OutlineRowMenu` (itens de menu suspenso, não coluna de ações).
+
+  - **F3 — offices/ + broker/ + Company*Tab (10 arquivos).** Migrados:
+    `OfficesTimeTracking`, `OfficesEspecificador`, `broker/BrokerMaterials`,
+    `BrokerIntegrations`, os 6 `CompanyXTab` (padrão idêntico entre eles).
+    **Não migrados:** `OfficesCRM` (botão "Deletar" com texto),
+    `OfficesBiblioteca` (delete sobre thumbnail de foto — revertido),
+    `BrokerModal` (grupo de 3 botões de modal Copiar/Regenerar/Revogar,
+    mesmo padrão já pulado no Lote A).
+
+  - **F4 — Contract*Modal avulsos + Imovib* (7 arquivos).** Migrados:
+    `ContractModal`, `ContractTypesSettings`, `ContractScopeManager`,
+    `ImovibDashboard`, `ImovibBlocksTypologyTab`, `ImovibRegulatoryMapTab`,
+    `ImovibCapexForm`. **Não migrados:** 5 modais `Contract*Modal` com
+    "Excluir" em texto+ícone no rodapé do Sheet; `ContractMeasurementModal`
+    (painel de tema escuro `bg-white/5` — botão opaco quebraria).
+
+  - **F5 — services/ + financeiro diverso (9 arquivos).** Migrados:
+    `services/ServicesVisit`, `ServicesPipelineConfigModal`,
+    `ServicesBudget`, `ProlaboreReconciliationPanel`,
+    `FinancialApprovalModule`, `BIReportScheduler`, `PayrollEventModal`,
+    `PayrollRunDetail`, `DunningModule`. **Não migrados:**
+    `FinancialIntelligence`/`ProjectFinancialManager` (fileiras de 3 botões
+    com um 3º elemento fora do vocabulário — toggle Bell ou "Anexar
+    comprovante" — mesmo estilo, converter só 2 fragmentaria). Nota:
+    `ProlaboreReconciliationPanel` ainda tem 3 botões de fluxo de aprovação
+    (Aprovar/Rejeitar/Desfazer) com o estilo antigo — não são
+    Excluir/Editar/Download/Histórico, fora do escopo deste plano, ficam
+    como dívida sinalizada pelo linter (§9.2).
+
+  - **F6 — config cliente/fornecedor + Task* (10 arquivos).** Migrados:
+    `SupplierCategoriesSettings`, `ClientCategoriesSettings`,
+    `SupplierBankAccountsTab`, `SupplierCategoryModal`,
+    `PropertyTypesManager`, `PropertyModal`, `ObraTypesManager`,
+    `TaskStatusManager`, `TaskSpaceManager`, `WBSTemplateModal`. **Não
+    migrados:** `TaskForm` (texto+ícone), `ReformasDiarios`/
+    `ReformasCronograma` (overlay sobre foto ou painel de tema escuro
+    `bg-white/5`).
+
+  - **F7 — dashboards financeiros + notificações/settings/org + Opura*
+    (7 arquivos).** Migrados: `ReconciliationDashboard`, `PaymentsPanel`,
+    `NotificationPanel`, `NotificationsCenter`, `CompaniesModule`,
+    `OpuraAssetsModule`, `OpuraCnoModule` (4 botões de download sem
+    `onClick` — não funcionais — não convertidos, código incompleto não é
+    mexido). **Não migrados:** `CashFlowDashboard`/`DREReport`/
+    `PaystubModal` (Download em texto+ícone), `FinancialRegistryManager`
+    (toolbar de 3 botões estilo idêntico, só 1 no vocabulário), `TaxReport`
+    (botão desabilitado "disponível em breve"), `Settings`/
+    `CompanyDetailPage` (texto+ícone), `OrganizationPage` (overlay sobre
+    logo), `OpuraGovernanceModule` (**módulo inteiro** de tema escuro,
+    `text-white`/`bg-gray-900` — botão opaco quebraria em todas as 3
+    ocorrências), `OpuraReports` (texto+ícone).
+
+  - **F8 — partner/investor extras + Operacional + services extras
+    (5 arquivos).** Migrados: `partner/PartnerWorkspaceManager`,
+    `investor/ReportsTab`, `OperacionalEvidence`,
+    `OperacionalTemplateManager` (fileira de 4: Renomear/Duplicar/
+    Exportar/Excluir, toggle de ativo/inativo ao lado preservado),
+    `services/ServicesOpportunityDetail`. **Não migrados:**
+    `PartnerPortal`/`MonthlyReportTrigger`/`ServicesProposal` (texto+ícone
+    ou `<a>` com texto), `OfficesDashboard`/`LaborDashboard` (Exportar em
+    texto+ícone), `OperacionalDetail` (Editar em texto+ícone),
+    `ServicesPipeline` (ícone decorativo, não é botão). Nota:
+    `PartnerWorkspaceManager` ainda tem uma fileira de 3 botões (Link de
+    Acesso/Visualizar como Parceiro/Ativar-Desativar) com estilo antigo —
+    só 1 bate com o vocabulário, fica como dívida sinalizada pelo linter.
+
+  - **F9 — módulos diversos, o grupo residual (13 arquivos).** Migrados:
+    `AutomationManager` (3 pontos), `ClientArea` (3 pontos, parcial — ver
+    achado abaixo), `DatabaseManagerModal` (trio), `DocxTemplateManager`,
+    `ProConfigForm`, `ProjectDiaryManager` (3 pontos), `TaskSpaceRail`,
+    `ProjectTypeTemplateEditor` (4 pontos), `ResourceManagement` (4
+    pares), `StockConsumptionModal`, `area-engine/AreaEngineShared`,
+    `fiscal/FiscalDocuments`, `planta_ai/PlantaAiDashboard`. **Achado:**
+    `ClientArea.tsx` já tinha um `ActionIconButton` **local** hand-rolled
+    (mesma API, estilo antigo sem borda) — removido em favor do
+    componente compartilhado, exatamente a duplicação que este plano
+    existe para eliminar. O arquivo é grande e complexo (vários pares
+    Editar/Remover usam `window.prompt()` e ícone `X` em vez de `Trash2`)
+    — só os 3 pontos mais simples e seguros foram convertidos, o resto
+    fica como dívida documentada, não uma migração completa do arquivo.
+    **Não migrados:** `AssetImportModal`/`ImovibExecutiveSummary`/
+    `ParametricEstimator`/`WBSImportModal` (texto+ícone), `MeasureAIModule`
+    (tema escuro), `NegotiationHub`/`SupplierDashboard` (ícone decorativo),
+    `ProjectGallery` (lightbox sobre foto), `ui/DocumentMarkupViewer`
+    (paleta de ferramentas de desenho — "lápis" seleciona modo de desenho,
+    não é uma ação de CRUD, incompatível com o vocabulário do componente).
+
+  **Descoberta durante o F9:** identificada uma **sessão paralela** ativa no
+  mesmo repositório construindo `components/ui/InlineActionTray.tsx` — um
+  "kebab" que abre um painel flutuante com `<ActionIconButton>` filhos,
+  documentado no mesmo §9 do guia (variante "bandeja de ícones"). Não é um
+  conflito: é uma continuação coerente do mesmo plano, resolvendo
+  exatamente a dívida de estrutura já registrada no §9.2 desde a Fase 1
+  (`OpuraDocsModule.tsx` com 8 botões soltos sem agrupar em kebab).
 
 Regras da migração (para não introduzir bug):
 - Preservar exatamente o `onClick` existente (incl. `stopPropagation`,
@@ -251,5 +368,19 @@ Regras da migração (para não introduzir bug):
 
 1. Fase 0 — criar `ActionIconButton` + refatorar `OpuraDocsModule` (golden sample). ⭐ começar aqui
 2. Fase 1 — reescrever §9.2 do guia + ajustar linter.
-3. Fase 2 — Lotes A→F, um commit por lote, com checagem visual e `tsc`.
-4. Fase 3 — varredura de resíduos + atualizar memória.
+3. Fase 2 — Lotes A→F (F dividido em F1-F9), um commit por lote, com
+   checagem visual e `tsc`. ✅ **Concluído (2026-07-15)** — todos os arquivos
+   com `Trash2`/`Pencil`/`Edit2`/`Edit3`/`Download`/`History` foram
+   varridos pelo menos uma vez; ~100 arquivos migrados no total, o
+   restante ficou como dívida documentada por motivo específico em cada
+   lote (overlay sobre foto, tema escuro, texto+ícone, fileira mista com
+   3º elemento fora do vocabulário, ou fora de escopo — ex: fluxo de
+   aprovação, paleta de ferramentas de desenho).
+4. Fase 3 — varredura de resíduos + atualizar memória. **Pendente** —
+   próximo passo natural: (a) atualizar a memória de UI
+   (`project_ui_patterns.md`) com o componente e o novo §9.2; (b) decidir
+   o que fazer com os "resíduos por motivo" documentados acima — a maioria
+   é exceção legítima permanente (overlay/tema escuro), mas alguns são
+   dívida real retomável (fileiras multicoloridas com `kind`s novos a
+   criar, `InlineActionTray` para agrupar os 8 botões soltos do
+   `OpuraDocsModule.tsx` — já em andamento pela sessão paralela).

@@ -434,6 +434,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Resetar a pasta ativa para a raiz ao mudar de projeto ou categoria
   React.useEffect(() => {
     setCurrentFolderId(null);
+    setSelectedDisciplineCode(null);
   }, [selectedProjectId, activeTab]);
 
   React.useEffect(() => {

@@ -244,38 +244,6 @@ export default function ClientChargesModule({ organizationId }: Props) {
                 <KpiCard shadow={false} size="sm" label="Vencido"       value={fmt(kpis.vencido)}  sub={`${rows.filter(c => c.status === 'OVERDUE').length} em atraso`}   icon={<AlertCircle className="w-4 h-4" />} color={kpis.vencido > 0 ? 'red' : 'gray'} />
             </div>
 
-            {/* Toolbar — §5.1 (variante desaninhada, escala compacta §16) */}
-            <div className="flex flex-col xl:flex-row gap-2.5 items-center">
-                <div className="relative flex-1 w-full">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder="Buscar por cliente, descrição ou ID Asaas..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
-                    />
-                </div>
-                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide shrink-0 w-full xl:w-auto">
-                    {FILTERS.map(f => {
-                        const isActive = filter === f.id;
-                        return (
-                            <button
-                                key={f.id}
-                                onClick={() => setFilter(f.id)}
-                                className={`h-9 px-3 rounded-[6px] transition-all active:scale-95 text-sm font-medium whitespace-nowrap ${
-                                    isActive
-                                        ? 'bg-emerald-600 text-white'
-                                        : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white'
-                                }`}
-                            >
-                                {f.label}
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
-
             {/* Barra de ação em massa (§10) */}
             {selectedVisible.length > 0 && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
@@ -300,8 +268,41 @@ export default function ClientChargesModule({ organizationId }: Props) {
                 </div>
             )}
 
-            {/* Table */}
-            <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+            {/* Toolbar acoplada dentro do card da tabela (mesmo padrão do ÒPURA Docs/GED):
+                régua de busca+filtros §5.1 (escala compacta §16) separada da tabela por border-b. */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+                <div className="p-4 border-b border-gray-100">
+                    <div className="flex flex-col xl:flex-row gap-2.5 items-center">
+                        <div className="relative flex-1 w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar por cliente, descrição ou ID Asaas..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all"
+                            />
+                        </div>
+                        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide shrink-0 w-full xl:w-auto">
+                            {FILTERS.map(f => {
+                                const isActive = filter === f.id;
+                                return (
+                                    <button
+                                        key={f.id}
+                                        onClick={() => setFilter(f.id)}
+                                        className={`h-9 px-3 rounded-[6px] transition-all active:scale-95 text-sm font-medium whitespace-nowrap ${
+                                            isActive
+                                                ? 'bg-emerald-600 text-white'
+                                                : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white'
+                                        }`}
+                                    >
+                                        {f.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
                 {error && (
                     <div className="m-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold">{error}</div>
                 )}

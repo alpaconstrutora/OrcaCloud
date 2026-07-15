@@ -427,6 +427,29 @@ export const partnerService = {
     }
   },
 
+  async shareDocumentsBatch(workspaceId: string, documentIds: string[], sharedBy: string): Promise<void> {
+    if (documentIds.length === 0) return;
+    
+    const payloads = documentIds.map(docId => ({
+      partner_workspace_id: workspaceId,
+      document_id: docId,
+      shared_by: sharedBy
+    }));
+
+    const { error } = await supabase
+      .from('partner_shared_documents')
+      .upsert(payloads, { onConflict: 'partner_workspace_id,document_id', ignoreDuplicates: true });
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error sharing documents batch:', error);
+      throw error;
+    }
+
+    this.notifyPartnersOfSharedDocument(workspaceId, `Lote de ${documentIds.length} documentos`, sharedBy).catch((err) => {
+      console.error('[PARTNER SERVICE] Erro ao notificar parceiros sobre lote de documentos:', err);
+    });
+  },
+
   // Link assinado para abrir/baixar um documento compartilhado — o bucket 'opura-docs' é privado,
   // então getPublicUrl() nunca funciona aqui (retorna 404 "Bucket not found" ao navegar até a URL)
   async getDocumentDownloadUrl(storagePath: string): Promise<string> {

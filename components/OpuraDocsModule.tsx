@@ -48,6 +48,7 @@ import {
   OpuraDmsNamingPattern
 } from '../services/documentService';
 import { partnerService } from '../services/partnerService';
+import { supabase } from '../lib/supabase';
 import { DocumentMarkupViewer } from './ui/DocumentMarkupViewer';
 import { validateFileNameAgainstMask, extractTokenFromFileName, generateFileNameFromMask, extractMaskTokens, getNextSequentialNumber, getInitialRevision } from '../utils/dmsUtils';
 import {
@@ -190,7 +191,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Estados locais — compartilhamento com Portal do Parceiro (PLANO_MODULO_PARCEIRO_DOCUMENTOS.md, Onda 1)
   const [partnerWorkspaces, setPartnerWorkspaces] = React.useState<PartnerWorkspace[]>([]);
   const [shareModalOpen, setShareModalOpen] = React.useState(false);
-  const [shareDocId, setShareDocId] = React.useState<string | null>(null);
+  const [shareDocIds, setShareDocIds] = React.useState<string[]>([]);
   const [selectedShareWorkspaceId, setSelectedShareWorkspaceId] = React.useState('');
   const [sharingSubmitting, setSharingSubmitting] = React.useState(false);
   const [docAlreadySharedWith, setDocAlreadySharedWith] = React.useState<{ partner_workspace_id: string; supplier_name: string }[]>([]);
@@ -792,6 +793,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
           <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1 mr-1">
             <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const docsInFolder = filteredDocuments.filter(d => d.folder_id === folder.id);
+                openShareModal(docsInFolder.map(d => d.id));
+              }}
+              className="p-1 text-slate-400 hover:text-orange-500 rounded hover:bg-orange-50"
+              title="Compartilhar toda a pasta"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
+            <button
               onClick={(e) => { e.stopPropagation(); handleStartEditFolder(folder); }}
               className="p-1 text-slate-400 hover:text-blue-600 rounded hover:bg-blue-50"
               title="Configurar/Incluir Disciplinas"
@@ -855,6 +867,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
                   <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1 mr-1">
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const docsInDisc = filteredDocuments.filter(d => d.folder_id === folder.id && (extractTokenFromFileName(d.nome, folder.naming_mask || '', '[DISCIPLINA]')?.toUpperCase() === disc.code.toUpperCase() || d.nome.toUpperCase().includes(disc.code.toUpperCase())));
+                        openShareModal(docsInDisc.map(d => d.id));
+                      }}
+                      className="p-1 text-slate-400 hover:text-orange-500 rounded hover:bg-orange-50"
+                      title="Compartilhar disciplina"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       onClick={async (e) => {
                         e.stopPropagation();
                         if (!confirm(`Remover disciplina ${disc.name} da pasta?`)) return;
@@ -902,8 +925,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   // Fornecedor do documento sendo compartilhado, para priorizar o parceiro correspondente no seletor (Onda 2)
   const shareTargetSupplierId = React.useMemo(
-    () => documents.find((d) => d.id === shareDocId)?.supplier_id || null,
-    [documents, shareDocId]
+    () => (shareDocIds.length > 0 ? documents.find((d) => d.id === shareDocIds[0])?.supplier_id || null : null),
+    [documents, shareDocIds]
   );
   const sortedShareWorkspaces = React.useMemo(() => {
     const recommended = partnerWorkspaces.filter((ws) => shareTargetSupplierId && ws.supplier_id === shareTargetSupplierId);
@@ -913,12 +936,31 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     return [...recommended, ...others];
   }, [partnerWorkspaces, shareTargetSupplierId]);
 
-  // Abrir modal de compartilhamento com parceiro, carregando workspaces ativos sob demanda
-  const openShareModal = async (docId: string) => {
-    setShareDocId(docId);
+  // Abrir modal de compartilhamento em lote ou unitário com parceiro
+  const openShareModal = async (docIds: string[]) => {
+    if (docIds.length === 0) {
+      alert("Nenhum documento encontrado nesta pasta/disciplina.");
+      return;
+    }
+    setShareDocIds(docIds);
     setSelectedShareWorkspaceId('');
     setDocAlreadySharedWith([]);
     setShareModalOpen(true);
+
+    try {
+      if (docIds.length === 1) {
+        const { data: sharings, error } = await supabase
+          .from('partner_shared_documents')
+          .select('*, workspace:opura_partner_workspaces(supplier_name)')
+          .eq('document_id', docIds[0]);
+
+        if (error) throw error;
+        setDocAlreadySharedWith(sharings);
+      }
+    } catch (err) {
+      console.error('[OpuraDocsModule] Erro ao carregar compartilhamentos existentes do documento:', err);
+    }
+    
     if (partnerWorkspaces.length === 0 && activeOrganizationId) {
       try {
         const wss = await partnerService.listWorkspaces(activeOrganizationId);
@@ -928,8 +970,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       }
     }
     try {
-      const sharings = await partnerService.listSharingsForDocument(docId);
-      setDocAlreadySharedWith(sharings);
+      if (docIds.length === 1) {
+          const sharings = await partnerService.listSharingsForDocument(docIds[0]);
+          setDocAlreadySharedWith(sharings);
+        }
     } catch (err) {
       console.error('[OpuraDocsModule] Erro ao carregar compartilhamentos existentes do documento:', err);
     }
@@ -938,18 +982,18 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Compartilhar o documento selecionado com o workspace de parceiro escolhido
   const handleShareWithPartner = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shareDocId || !selectedShareWorkspaceId) return;
+    if (shareDocIds.length === 0 || !selectedShareWorkspaceId) return;
     const chosenWorkspace = partnerWorkspaces.find((w) => w.id === selectedShareWorkspaceId);
     setSharingSubmitting(true);
     try {
-      await partnerService.shareDocument(
+      await partnerService.shareDocumentsBatch(
         selectedShareWorkspaceId,
-        shareDocId,
+        shareDocIds,
         currentProfile?.email || 'sistema'
       );
       setShareModalOpen(false);
-      setShareDocId(null);
-      alert(`Documento compartilhado com ${chosenWorkspace?.supplier_name || 'o parceiro'} com sucesso.`);
+      setShareDocIds([]);
+      alert(`${shareDocIds.length} documento(s) compartilhado(s) com ${chosenWorkspace?.supplier_name || 'o parceiro'} com sucesso.`);
     } catch (err: any) {
       if (err?.code === '23505' || /duplicate key/i.test(err?.message || '')) {
         alert('Este documento já está compartilhado com este parceiro.');
@@ -2157,7 +2201,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                           <ActionIconButton kind="annotate" onClick={() => setSelectedDocForMarkup(doc)} />
                                         )}
                                         {isOrgAdmin && (
-                                          <ActionIconButton kind="share" onClick={() => openShareModal(doc.id)} />
+                                          <ActionIconButton kind="share" onClick={() => openShareModal([doc.id])} />
                                         )}
                                         <ActionIconButton kind="history" onClick={async (e: React.MouseEvent<HTMLButtonElement>) => {
                                           const btn = e.currentTarget; btn.style.pointerEvents = 'none'; btn.style.opacity = '0.7';
@@ -2859,13 +2903,15 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <Share2 className="w-5 h-5 text-orange-500" />
-                <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">Compartilhar com Parceiro</h3>
-              </div>
-              <button
-                onClick={() => {
-                  setShareModalOpen(false);
-                  setShareDocId(null);
-                }}
+                <h3 className="font-black text-slate-800 text-sm uppercase tracking-wider">
+                    Compartilhar com Parceiro {shareDocIds.length > 1 && `(${shareDocIds.length} arquivos)`}
+                  </h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setShareModalOpen(false);
+                    setShareDocIds([]);
+                  }}
                 className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
               >
                 <X className="w-5 h-5" />
@@ -2914,7 +2960,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   type="button"
                   onClick={() => {
                     setShareModalOpen(false);
-                    setShareDocId(null);
+                    setShareDocIds([]);
                   }}
                   className="px-4 py-2.5 border border-slate-200 text-slate-500 font-bold text-button uppercase tracking-wider rounded-xl hover:bg-slate-50 transition-colors"
                 >

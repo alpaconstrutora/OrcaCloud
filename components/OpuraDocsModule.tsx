@@ -1746,7 +1746,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           <div className="lg:col-span-1 bg-white rounded-[10px] border border-slate-100 shadow-sm p-5 space-y-4 min-h-[600px] flex flex-col">
             {/* Header com Atalho de Gestão de Disciplinas */}
             <div className="flex border-b border-slate-100 pb-2 px-2 items-center justify-between">
-              <span className="text-xs font-semibold text-slate-500">Pastas e disciplinas</span>
+              <span className="text-sm font-semibold text-slate-700">Pastas e disciplinas</span>
               <button
                 type="button"
                 onClick={() => {
@@ -2499,7 +2499,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Form para Upload de Nova Versão / Renovação */}
               {canAccessTab(selectedDocForVersions.categoria) && (
                 <form onSubmit={handleUploadVersionSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
-                  <h4 className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                  <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
                     <Upload className="w-4 h-4" />
                     Subir nova versão ou renovação
                   </h4>
@@ -2536,7 +2536,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
               {/* Histórico / Lista de Versões */}
               <div className="space-y-3">
-                <h4 className="text-xs font-semibold text-slate-500">Versões Cadastradas</h4>
+                <h4 className="text-sm font-semibold text-slate-700">Versões Cadastradas</h4>
                 <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-[10px]">
                   {selectedDocForVersions.versions?.map((ver) => {
                     const isActive = selectedDocForVersions.active_version_id === ver.id;
@@ -2571,7 +2571,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Solicitar Aprovação (Onda 2) */}
               {canAccessTab(selectedDocForVersions.categoria) && (selectedDocForVersions.approval_status === 'rascunho' || selectedDocForVersions.approval_status === 'rejeitado') && (
                 <form onSubmit={handleRequestApprovalSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
-                  <h4 className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                  <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
                     <UserCheck className="w-4 h-4 text-blue-600" />
                     Enviar para aprovação de um revisor
                   </h4>
@@ -2609,7 +2609,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* Histórico de Pareceres de Aprovação (Onda 2) */}
               {documentApprovals.length > 0 && (
                 <div className="space-y-3">
-                  <h4 className="text-xs font-semibold text-slate-500">Histórico de Pareceres</h4>
+                  <h4 className="text-sm font-semibold text-slate-700">Histórico de Pareceres</h4>
                   <div className="max-h-40 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-[10px]">
                     {documentApprovals.map((app) => (
                       <div key={app.id} className="p-4 hover:bg-slate-50/50 transition-colors text-xs space-y-1">
@@ -2641,7 +2641,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               )}
               {/* Trilha de Auditoria (Logs) (Onda 4) */}
               <div className="space-y-3 pt-3 border-t border-slate-100">
-                <h4 className="text-xs font-semibold text-slate-500">Trilha de Auditoria (Logs)</h4>
+                <h4 className="text-sm font-semibold text-slate-700">Trilha de Auditoria (Logs)</h4>
                 <div className="max-h-48 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-[10px] bg-slate-50/20">
                   {documentAuditLogs.length === 0 ? (
                     <p className="p-4 text-center text-sm text-slate-400 font-medium">Nenhum evento registrado para este documento.</p>
@@ -3184,7 +3184,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   if (docFolder && docFolder.naming_mask) {
                     return (
                       <div className="space-y-4 bg-blue-50/50 p-4 rounded-[10px] border border-blue-100">
-                        <label className="text-xs font-semibold text-blue-800 flex items-center gap-2">
+                        <label className="text-sm font-semibold text-blue-800 flex items-center gap-2">
                           <Settings className="w-4 h-4" /> Componentes do Nome (Padrão: {docFolder.naming_mask})
                         </label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3623,7 +3623,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 {settingsTab === 'document_types' && (
                   <div className="space-y-5">
                     <form onSubmit={handleCreateDocTypeSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
-                      <h4 className="font-black text-slate-700 text-xs">Cadastrar Novo Tipo de Documento</h4>
+                      <h4 className="font-semibold text-slate-700 text-sm">Cadastrar Novo Tipo de Documento</h4>
                       <div className="flex flex-col sm:flex-row gap-3 items-end">
                         <div className="space-y-1 flex-1">
                           <label className="text-xs font-semibold text-slate-500">Nome do Tipo (ex: Projeto Hidráulico)</label>
@@ -3701,7 +3701,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <div className="space-y-5">
                     {/* Formulário Novo */}
                     <form onSubmit={handleCreateDisciplineSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
-                      <h4 className="font-black text-slate-700 text-xs">Cadastrar Nova Disciplina</h4>
+                      <h4 className="font-semibold text-slate-700 text-sm">Cadastrar Nova Disciplina</h4>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="space-y-1">
                           <label className="text-xs font-semibold text-slate-500">Código (ex: ARQ)</label>
@@ -3807,7 +3807,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <div className="space-y-5">
                     {/* Formulário Novo */}
                     <form onSubmit={handleCreateNamingPatternSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
-                      <h4 className="font-black text-slate-700 text-xs">Cadastrar Nova Fórmula</h4>
+                      <h4 className="font-semibold text-slate-700 text-sm">Cadastrar Nova Fórmula</h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <label className="text-xs font-semibold text-slate-500">Nome do Padrão</label>

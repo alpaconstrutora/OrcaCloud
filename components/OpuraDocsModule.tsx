@@ -1103,7 +1103,21 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const dynamicColumns = React.useMemo(() => {
     if (!activeFolder?.naming_mask) return [];
     return activeFolder.naming_mask.split(/[-_]+/).filter(Boolean);
-  }, [activeFolder?.naming_mask]);  // Coletar tags únicas dos documentos carregados para filtragem rápida
+  }, [activeFolder?.naming_mask]);
+
+  // Rótulo de exibição (sentence case) para colunas dinâmicas — `dynamicColumns` guarda o
+  // token bruto da máscara (ex: "[OBRA{3}]") porque é isso que o corpo da tabela usa para
+  // casar com `col.toUpperCase().includes(...)"; aqui só traduzimos para o cabeçalho (§6.2).
+  const getDynamicColumnLabel = (col: string): string => {
+    const upper = col.toUpperCase();
+    if (upper.includes('OBRA')) return 'Obra';
+    if (upper.includes('DISCIPLINA')) return 'Disciplina';
+    if (upper.includes('NUMERO')) return 'Número';
+    if (upper.includes('REVISAO')) return 'Revisão';
+    return col;
+  };
+
+  // Coletar tags únicas dos documentos carregados para filtragem rápida
   const allUniqueTags = React.useMemo(() => {
     if (!documents || !Array.isArray(documents)) return [];
     const tagsSet = new Set<string>();
@@ -2060,7 +2074,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       
                       {dynamicColumns.map((col, idx) => (
                         <th key={`dyn-head-${idx}`} className="px-6 py-2 border-r border-gray-100 text-left text-table-header font-semibold text-gray-500 whitespace-nowrap">
-                          {col}
+                          {getDynamicColumnLabel(col)}
                         </th>
                       ))}
                       

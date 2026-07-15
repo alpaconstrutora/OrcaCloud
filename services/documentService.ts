@@ -71,6 +71,7 @@ export const documentService = {
       search?: string;
       status?: string;
       folderId?: string | null;
+      folderIds?: string[];
     }
   ): Promise<OpuraDocument[]> {
     if (!organizationId) {
@@ -150,7 +151,9 @@ export const documentService = {
       query = query.eq('status', filters.status);
     }
 
-    if (filters && 'folderId' in filters && filters.folderId !== undefined && filters.folderId !== 'undefined') {
+    if (filters?.folderIds && filters.folderIds.length > 0) {
+      query = query.in('folder_id', filters.folderIds);
+    } else if (filters && 'folderId' in filters && filters.folderId !== undefined && filters.folderId !== 'undefined') {
       if (filters.folderId === null || filters.folderId === 'null') {
         query = query.is('folder_id', null);
       } else {
@@ -168,8 +171,8 @@ export const documentService = {
     let result = (data || []) as OpuraDocument[];
 
     // Documentos integrados (Contratos, Invoices, etc.) não possuem folder_id.
-    // Portanto, se a busca for restrita a uma pasta específica (ID válido, não nulo), pulamos a integração.
-    const isSpecificFolder = filters && 'folderId' in filters && filters.folderId !== undefined && filters.folderId !== 'undefined' && filters.folderId !== null && filters.folderId !== 'null';
+    // Portanto, se a busca for restrita a uma pasta específica (ID válido, não nulo) ou a um conjunto de pastas, pulamos a integração.
+    const isSpecificFolder = (filters && 'folderId' in filters && filters.folderId !== undefined && filters.folderId !== 'undefined' && filters.folderId !== null && filters.folderId !== 'null') || (filters?.folderIds && filters.folderIds.length > 0);
 
     if (!isSpecificFolder) {
       // SE A CATEGORIA FOR CONTRATOS (juridico), INTEGRA OS CONTRATOS DA TABELA contracts

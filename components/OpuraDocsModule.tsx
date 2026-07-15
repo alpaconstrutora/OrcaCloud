@@ -2209,27 +2209,29 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                       <ActionIconButton kind="settings" onClick={() => handleStartEditDoc(doc)} />
                                       {/* Ações secundárias — bandeja horizontal (abre para a esquerda) */}
                                       <InlineActionTray>
-                                        {isOrgAdmin && (
+                                        {isOrgAdmin && !doc.is_integrated && (
                                           <ActionIconButton kind="move" onClick={() => { setMovingDocId(doc.id); setTargetFolderId(doc.folder_id || null); setMoveModalOpen(true); }} />
                                         )}
                                         <ActionIconButton kind="qrcode" onClick={() => setSelectedDocForQrCode(doc)} />
                                         {doc.active_version && (doc.active_version.mime_type === 'application/pdf' || doc.nome.toLowerCase().endsWith('.pdf')) && (
                                           <ActionIconButton kind="annotate" onClick={() => setSelectedDocForMarkup(doc)} />
                                         )}
-                                        {isOrgAdmin && (
+                                        {isOrgAdmin && !doc.is_integrated && (
                                           <ActionIconButton kind="share" onClick={() => openShareModal([doc.id])} />
                                         )}
-                                        <ActionIconButton kind="history" onClick={async (e: React.MouseEvent<HTMLButtonElement>) => {
-                                          const btn = e.currentTarget; btn.style.pointerEvents = 'none'; btn.style.opacity = '0.7';
-                                          try {
-                                            const fullDoc = await documentService.getDocumentById(doc.id);
-                                            if (!fullDoc) return;
-                                            setSelectedDocForVersions(fullDoc); loadApprovalsForDoc(fullDoc.id); loadAuditLogsForDoc(fullDoc.id);
-                                          } finally {
-                                            btn.style.pointerEvents = 'auto'; btn.style.opacity = '1';
-                                          }
-                                        }} />
-                                        {isOrgAdmin && (
+                                        {!doc.is_integrated && (
+                                          <ActionIconButton kind="history" onClick={async (e: React.MouseEvent<HTMLButtonElement>) => {
+                                            const btn = e.currentTarget; btn.style.pointerEvents = 'none'; btn.style.opacity = '0.7';
+                                            try {
+                                              const fullDoc = await documentService.getDocumentById(doc.id);
+                                              if (!fullDoc) return;
+                                              setSelectedDocForVersions(fullDoc); loadApprovalsForDoc(fullDoc.id); loadAuditLogsForDoc(fullDoc.id);
+                                            } finally {
+                                              btn.style.pointerEvents = 'auto'; btn.style.opacity = '1';
+                                            }
+                                          }} />
+                                        )}
+                                        {isOrgAdmin && !doc.is_integrated && (
                                           <ActionIconButton kind="delete" onClick={() => handleDeleteDoc(doc.id)} />
                                         )}
                                       </InlineActionTray>

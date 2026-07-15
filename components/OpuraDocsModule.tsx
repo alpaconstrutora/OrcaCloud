@@ -755,6 +755,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     
     const hasChildren = subfolders.length > 0 || folderDisciplines.length > 0;
 
+    // Helper para pegar IDs de toda a árvore de pastas
+    const getFolderTreeIds = (rootFolderId: string): string[] => {
+      let ids = [rootFolderId];
+      const children = folders.filter(f => f.parent_id === rootFolderId);
+      for (const child of children) {
+        ids = ids.concat(getFolderTreeIds(child.id));
+      }
+      return ids;
+    };
+
     // isSelected foca apenas na pasta se nenhuma disciplina estiver selecionada
     const isFolderSelected = currentFolderId === folder.id && selectedDisciplineCode === null;
 
@@ -796,10 +806,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                let folderDocs = documents.filter(d => d.folder_id === folder.id);
+                const treeIds = getFolderTreeIds(folder.id);
+                let folderDocs = documents.filter(d => d.folder_id && treeIds.includes(d.folder_id));
                 if (folderDocs.length === 0) {
-                  documentService.listDocuments(activeOrganizationId || undefined, { folderId: folder.id }).then(data => {
-                    openShareModal(data.map(d => d.id));
+                  const targetProjectId = selectedProjectId !== 'all' ? selectedProjectId : undefined;
+                  documentService.listDocuments(activeOrganizationId || undefined, { projectId: targetProjectId }).then(data => {
+                    const serverFolderDocs = data.filter(d => d.folder_id && treeIds.includes(d.folder_id));
+                    openShareModal(serverFolderDocs.map(d => d.id));
                   }).catch(console.error);
                 } else {
                   openShareModal(folderDocs.map(d => d.id));
@@ -876,13 +889,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        let folderDocs = documents.filter(d => d.folder_id === folder.id);
+                        const treeIds = getFolderTreeIds(folder.id);
+                        let folderDocs = documents.filter(d => d.folder_id && treeIds.includes(d.folder_id));
                         const filterDisc = (docs: OpuraDocument[]) => docs.filter(d => 
                           (extractTokenFromFileName(d.nome, folder.naming_mask || '', '[DISCIPLINA]')?.toUpperCase() === disc.code.toUpperCase() || d.nome.toUpperCase().includes(disc.code.toUpperCase()))
                         );
                         if (folderDocs.length === 0) {
-                          documentService.listDocuments(activeOrganizationId || undefined, { folderId: folder.id }).then(data => {
-                            openShareModal(filterDisc(data).map(d => d.id));
+                          const targetProjectId = selectedProjectId !== 'all' ? selectedProjectId : undefined;
+                          documentService.listDocuments(activeOrganizationId || undefined, { projectId: targetProjectId }).then(data => {
+                            const serverFolderDocs = data.filter(d => d.folder_id && treeIds.includes(d.folder_id));
+                            openShareModal(filterDisc(serverFolderDocs).map(d => d.id));
                           }).catch(console.error);
                         } else {
                           openShareModal(filterDisc(folderDocs).map(d => d.id));

@@ -1,6 +1,7 @@
 import React from 'react';
-import { Filter, Plus, Trash2, ChevronDown, Bookmark, X } from 'lucide-react';
+import { Filter, Plus, ChevronDown, Bookmark, X } from 'lucide-react';
 import { usePersistedState } from './TableUtils';
+import ActionIconButton from './ActionIconButton';
 
 export type FilterFieldType = 'text' | 'select' | 'date' | 'number';
 
@@ -250,9 +251,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
                       <button className="text-left flex-1 text-gray-700" onClick={() => { state.applySavedFilter(f.id); setShowSaved(false); }}>
                         {f.name}
                       </button>
-                      <button onClick={() => state.deleteSavedFilter(f.id)} className="text-gray-300 hover:text-red-500">
-                        <Trash2 className="w-3 h-3" />
-                      </button>
+                      <ActionIconButton kind="delete" size="sm" title="Excluir filtro salvo" onClick={() => state.deleteSavedFilter(f.id)} />
                     </div>
                   ))}
                 </div>
@@ -323,9 +322,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
                     <div className="flex-1" />
                   )}
 
-                  <button onClick={() => state.removeRule(rule.id)} className="text-gray-300 hover:text-red-500 shrink-0">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <ActionIconButton kind="delete" size="sm" title="Remover regra" className="shrink-0" onClick={() => state.removeRule(rule.id)} />
                 </div>
               );
             })}

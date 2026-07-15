@@ -1,9 +1,10 @@
 import React from 'react';
-import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star, Pencil, Trash2 } from 'lucide-react';
+import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star } from 'lucide-react';
 import { warrantyService } from '../services/warrantyService';
 import { useToast } from '../hooks/useToast';
 import type { WarrantyClaim, ClaimState, WarrantyKPIs, ClaimFilters } from '../types/warranty';
 import Button from './ui/Button';
+import ActionIconButton from './ui/ActionIconButton';
 
 // ── Sub-componentes inline ────────────────────────────────────────────────────
 
@@ -587,20 +588,17 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                         <p className="text-xs text-gray-400">{claim.client_name || 'Cliente não informado'} · {claim.unidade_ref || '—'}</p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
+                        <ActionIconButton
+                            kind="edit"
                             onClick={() => { setEditMode(e => !e); setTab('info'); setConfirmDelete(false); }}
                             title="Editar chamado"
-                            className={`p-1.5 rounded-lg transition-colors ${editMode ? 'bg-blue-100 text-blue-600' : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'}`}
-                        >
-                            <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
+                            aria-pressed={editMode}
+                        />
+                        <ActionIconButton
+                            kind="delete"
                             onClick={() => { setConfirmDelete(true); setEditMode(false); }}
                             title="Excluir chamado"
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
+                        />
                         <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors ml-1">✕</button>
                     </div>
                 </div>

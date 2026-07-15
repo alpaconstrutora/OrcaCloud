@@ -342,10 +342,48 @@ Regras da migração (para não introduzir bug):
 
 ## Fase 3 — Fechamento
 
-- Varredura final: `grep` por `rounded-xl`/`rounded-lg` + `Trash2/Pencil/Download/History`
-  em botões de linha ainda não migrados → lista de resíduos legítimos vs pendentes.
-- Atualizar a memória de UI (`project_ui_patterns.md` / `MEMORY.md`) com o novo
-  componente e o novo §9.2.
+**Concluída em 2026-07-15.**
+
+- Memória de UI atualizada: `project_ui_patterns.md` (parágrafo novo sobre
+  `ActionIconButton`), `project_padronizacao_botoes_acao.md` (memória
+  dedicada com o histórico completo) e `MEMORY.md` (índice).
+- Varredura final: grep por `Trash2|Pencil|Edit2|Edit3|Download|History` em
+  todos os arquivos do repo (97 arquivos com ocorrência), cruzado contra o
+  registro de decisões de Fase 0/A-E/F1-F9. Resultado:
+  - **2 arquivos convertidos nesta varredura** (não tinham sido revisados em
+    nenhum lote anterior):
+    - `WarrantyModule.tsx` — par Editar/Excluir do header do chamado (linhas
+      590-604), estilo antigo `p-1.5 rounded-lg`, limpo, sem conflito de
+      vocabulário → `ActionIconButton kind="edit"`/`kind="delete"`.
+    - `components/ui/FilterUtils.tsx` — **primitiva compartilhada** (não uma
+      tela única): botão de excluir filtro salvo + botão de remover regra,
+      ambos `Trash2` solto sem bg/border → convertidos para
+      `ActionIconButton kind="delete" size="sm"`. Decisão: como é primitiva
+      usada por várias telas, converter aqui propaga o padrão para todos os
+      consumidores de uma vez — maior alavancagem que migrar tela por tela.
+  - **5 arquivos confirmados como resíduo legítimo, sem ação:**
+    - `BoletoFormModal.tsx` (944-950) — botão texto+ícone ("Excluir" com
+      label visível), fora do escopo (só ícone-só entra no componente).
+    - `PWAInstallPrompt.tsx` (63-71) — `Download` decorativo dentro de um
+      card de instalação, não é botão.
+    - `components/ui/confirm.tsx` (32-37) — `Trash2` é o ícone default da
+      variante `danger` do próprio modal do `useConfirm()`, não um botão de
+      coluna de ações; falso-positivo do grep.
+    - `DunningModule.tsx` (539-543) — `History` decorativo de empty-state,
+      já mapeado no lote F5.
+    - `FinancialCategoriesManager.tsx` (273-282) — já usa
+      `ActionIconButton kind="edit"`/`kind="delete"` desde o Lote B; o grep
+      pegou o `<Edit3` dentro do próprio `icon={...}` de override.
+  - **1 achado fora de escopo, não corrigido:** `WarrantyModule.tsx:80` tem
+    um badge `rounded-full ... font-bold` dentro de célula de lista — viola
+    §7/§8 do guia, mas é pré-existente e não relacionado a botão de ação;
+    registrado aqui para não se perder, correção fica para quando alguém
+    tocar aquele arquivo por outro motivo (ou auditoria futura de badges).
+  - Todos os outros ~90 arquivos da lista de 97 já estavam contabilizados em
+    algum lote anterior (migrados ou documentados como dívida por motivo
+    específico).
+
+Com isso, a Fase 3 e o plano como um todo são considerados **concluídos**.
 
 ---
 
@@ -376,11 +414,7 @@ Regras da migração (para não introduzir bug):
    lote (overlay sobre foto, tema escuro, texto+ícone, fileira mista com
    3º elemento fora do vocabulário, ou fora de escopo — ex: fluxo de
    aprovação, paleta de ferramentas de desenho).
-4. Fase 3 — varredura de resíduos + atualizar memória. **Pendente** —
-   próximo passo natural: (a) atualizar a memória de UI
-   (`project_ui_patterns.md`) com o componente e o novo §9.2; (b) decidir
-   o que fazer com os "resíduos por motivo" documentados acima — a maioria
-   é exceção legítima permanente (overlay/tema escuro), mas alguns são
-   dívida real retomável (fileiras multicoloridas com `kind`s novos a
-   criar, `InlineActionTray` para agrupar os 8 botões soltos do
-   `OpuraDocsModule.tsx` — já em andamento pela sessão paralela).
+4. Fase 3 — varredura de resíduos + atualizar memória. ✅ **Concluída
+   (2026-07-15)** — ver seção "Fase 3 — Fechamento" acima para o detalhe
+   completo do que foi convertido, do que ficou como exceção legítima e do
+   único achado fora de escopo (badge em `WarrantyModule.tsx:80`).

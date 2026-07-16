@@ -527,11 +527,11 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
   return (
     <div className={
       mode === 'edit'
-        ? 'fixed inset-0 z-50 bg-gray-50 flex flex-col'
+        ? 'absolute inset-0 z-50 bg-white flex flex-col'
         : 'absolute inset-0 z-50 flex items-center justify-center p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200'
     }>
 
-      {/* Page Content (edit mode = tela dedicada, sem backdrop/overlay) */}
+      {/* Page Content (edit mode = tela dedicada dentro da área de conteúdo, sidebar/topbar permanecem visíveis) */}
       <div className={
         mode === 'edit'
           ? 'flex-1 flex flex-col bg-white overflow-hidden'
@@ -539,9 +539,10 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
       }>
 
         {/* Header */}
-        <div className={`border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 ${mode === 'edit' ? 'px-6 py-5' : 'px-12 py-8'}`}>
-          <div className="flex items-start gap-5 flex-1 min-w-0">
-            {mode === 'edit' && (
+        {mode === 'edit' ? (
+          // Cabeçalho de tela — h1 + p direto, sem card/hero (padrão §20 do guia de UI)
+          <div className="px-6 md:px-10 pt-6 pb-5 border-b border-gray-100 shrink-0">
+            <div className="flex items-center gap-4">
               <button
                 type="button"
                 onClick={onClose}
@@ -549,48 +550,55 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
               >
                 <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
               </button>
-            )}
-            {/* Bloco de Identidade: Ícone */}
-            <div className="flex flex-col items-center gap-2 shrink-0">
-              <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
-                <Building2 className="w-6 h-6" />
+              <div>
+                <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+                  {(formData.classification as string) === 'OBRA' ? 'Editar Obra' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Editar Planejamento' : (formData.classification as string) === 'DIARIO' ? 'Editar Diário' : 'Editar Dados do Orçamento'}
+                </h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                  {(formData.classification as string) === 'OBRA' ? 'Atualize as informações da obra selecionada.' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Atualize as informações do planejamento selecionado.' : 'Atualize as informações do orçamento selecionado.'}
+                </p>
               </div>
-              <div className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
-                {formData.classification === 'OBRA' ? 'OBRA' : (formData.classification === 'PLANEJAMENTO' ? 'PLAN' : (formData.classification === 'DIARIO' ? 'DIAR' : 'BUDG'))}
-              </div>
-            </div>
-
-            <div className="flex-1 min-w-0 flex flex-col gap-1">
-              <div className="flex items-center gap-3 flex-wrap">
-                <h2 className="text-xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
-                  {mode === 'create'
-                    ? ((formData.classification as string) === 'OBRA' ? 'Nova Obra' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Novo Planejamento' : (formData.classification as string) === 'DIARIO' ? 'Novo Diário' : 'Novo Orçamento')
-                    : ((formData.classification as string) === 'OBRA' ? 'Editar Obra' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Editar Planejamento' : (formData.classification as string) === 'DIARIO' ? 'Editar Diário' : 'Editar Dados do Orçamento')}
-                </h2>
-                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
-                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Tipo:</span>
-                  <span className="text-xs font-bold text-gray-600 uppercase">
-                    {(formData.classification as string) === 'OBRA' ? 'Modelo / Obra Base' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Escopo Temporal' : (formData.classification as string) === 'DIARIO' ? 'Controle de Campo' : 'Quantitativo'}
-                  </span>
-                </div>
-              </div>
-              <p className="text-sm text-gray-500 font-medium leading-tight max-w-4xl">
-                {mode === 'create'
-                  ? `Configure os detalhes e a localização ${(formData.classification as string) === 'OBRA' ? 'da obra' : (formData.classification as string) === 'PLANEJAMENTO' ? 'do planejamento' : 'do orçamento'}.`
-                  : `Atualize as informações ${(formData.classification as string) === 'OBRA' ? 'da obra selecionada' : (formData.classification as string) === 'PLANEJAMENTO' ? 'do planejamento selecionado' : 'do orçamento selecionado'}.`}
-              </p>
             </div>
           </div>
+        ) : (
+          <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 px-12 py-8">
+            <div className="flex items-start gap-5 flex-1 min-w-0">
+              {/* Bloco de Identidade: Ícone */}
+              <div className="flex flex-col items-center gap-2 shrink-0">
+                <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
+                  <Building2 className="w-6 h-6" />
+                </div>
+                <div className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
+                  {formData.classification === 'OBRA' ? 'OBRA' : (formData.classification === 'PLANEJAMENTO' ? 'PLAN' : (formData.classification === 'DIARIO' ? 'DIAR' : 'BUDG'))}
+                </div>
+              </div>
 
-          {mode !== 'edit' && (
+              <div className="flex-1 min-w-0 flex flex-col gap-1">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h2 className="text-xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
+                    {(formData.classification as string) === 'OBRA' ? 'Nova Obra' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Novo Planejamento' : (formData.classification as string) === 'DIARIO' ? 'Novo Diário' : 'Novo Orçamento'}
+                  </h2>
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Tipo:</span>
+                    <span className="text-xs font-bold text-gray-600 uppercase">
+                      {(formData.classification as string) === 'OBRA' ? 'Modelo / Obra Base' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Escopo Temporal' : (formData.classification as string) === 'DIARIO' ? 'Controle de Campo' : 'Quantitativo'}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-500 font-medium leading-tight max-w-4xl">
+                  {`Configure os detalhes e a localização ${(formData.classification as string) === 'OBRA' ? 'da obra' : (formData.classification as string) === 'PLANEJAMENTO' ? 'do planejamento' : 'do orçamento'}.`}
+                </p>
+              </div>
+            </div>
+
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
             >
               <X className="w-6 h-6" />
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Tabs - Only show if NOT an 'OBRA' creation from Management */}
         {initialClassification !== 'OBRA' && (

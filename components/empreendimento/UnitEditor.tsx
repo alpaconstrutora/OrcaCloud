@@ -14,6 +14,7 @@ import {
   POSITION_LABEL, VIEW_LABEL, SUN_LABEL, POSITION_STYLE, VIEW_STYLE, SUN_STYLE,
 } from '../../utils/empreendimentoComercial';
 import Button from '../ui/Button';
+import { useConfirm } from '../ui/confirm';
 
 // ── Constantes de exibição ───────────────────────────────────────────────────
 
@@ -27,6 +28,9 @@ const FLOOR_TIPO_STYLE: Record<FloorTipo, string> = {
   COBERTURA: 'bg-amber-500/10 text-amber-700', TECNICO: 'bg-gray-500/10 text-gray-600',
   GARAGEM: 'bg-orange-500/10 text-orange-600', OUTRO: 'bg-purple-500/10 text-purple-600',
 };
+// §8 Status Badge = texto simples colorido. Reaproveita a cor de texto das
+// paletas acima (bg+text combinados) extraindo só o token `text-*`.
+const textColor = (style?: string) => style?.split(' ').find(c => c.startsWith('text-')) ?? 'text-gray-600';
 type SortCol = 'name' | 'floor' | 'floor_tipo' | 'typology' | 'private_area' | 'common_area' | 'bedrooms' | 'bathrooms' | 'parking_spaces' | 'position_type' | 'view_type' | 'sun_orientation';
 
 const emptyForm = () => ({
@@ -55,6 +59,7 @@ interface Props {
 // ── Componente principal ─────────────────────────────────────────────────────
 
 export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
+  const confirm = useConfirm();
   const [units, setUnits] = React.useState<EmpreendimentoUnit[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -254,7 +259,12 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   };
 
   const handleDelete = async (unit: EmpreendimentoUnit) => {
-    if (!window.confirm(`Excluir "${unit.name}"?`)) return;
+    const ok = await confirm({
+      title: 'Excluir unidade?',
+      message: `A unidade "${unit.name}" será removida. Essa ação não pode ser desfeita.`,
+      variant: 'danger', confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
     try {
       await empreendimentoService.deleteUnit(unit.id);
       setUnits(prev => prev.filter(u => u.id !== unit.id));
@@ -309,7 +319,12 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
     const startFloor = Number(genForm.start_floor);
     if (!floors || !perFloor) { alert('Informe número de pavimentos e unidades por pavimento.'); return; }
     if (floors > 100 || perFloor > 50) { alert('Máx 100 pav / 50 un/pav.'); return; }
-    if (!window.confirm(`Gerar ${floors * perFloor} unidades para "${tower.name}"?`)) return;
+    const ok = await confirm({
+      title: 'Gerar unidades?',
+      message: `${floors * perFloor} unidades serão criadas para "${tower.name}".`,
+      variant: 'warning', confirmLabel: 'Gerar',
+    });
+    if (!ok) return;
     setGenerating(true);
     try {
       const toCreate: EmpreendimentoUnitInsert[] = [];
@@ -347,8 +362,8 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
 
   const genTotal = (Number(genForm.floors_count) || 0) * (Number(genForm.units_per_floor) || 0);
 
-  const inputCls = 'px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium outline-none focus:border-blue-400';
-  const editCls = 'px-2 py-1 border border-blue-200 rounded-lg text-xs font-medium outline-none focus:border-blue-400 bg-white w-full';
+  const inputCls = 'px-3 py-2 border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:border-blue-400';
+  const editCls = 'px-2 py-1 border border-blue-200 rounded-[6px] text-sm font-normal outline-none focus:border-blue-400 bg-white w-full';
 
   // Totais gerais
   const totalPriv = units.reduce((s, u) => s + (u.private_area ?? 0), 0);
@@ -359,7 +374,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   return (
     <div className="space-y-4">
       {/* Add form */}
-      <form onSubmit={handleAdd} className="bg-gray-50/60 border border-gray-100 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
+      <form onSubmit={handleAdd} className="bg-gray-50/60 border border-gray-100 rounded-[10px] p-4 grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
         <input className={inputCls} placeholder="Unidade (ex: 101)" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
         <input className={inputCls} placeholder="Pav." type="number" value={form.floor} onChange={e => setForm(p => ({ ...p, floor: e.target.value }))} />
         <select className={inputCls} value={form.floor_tipo} onChange={e => setForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))}>
@@ -390,10 +405,10 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       </form>
 
       {/* Geração automática */}
-      <div className="border border-dashed border-blue-200 rounded-2xl overflow-hidden">
+      <div className="border border-dashed border-blue-200 rounded-[10px] overflow-hidden">
         <button onClick={() => setGenOpen(v => !v)} className="w-full flex items-center justify-between px-4 py-3 text-blue-600 hover:bg-blue-50/50 transition-colors">
-          <span className="flex items-center gap-2 text-xs font-black uppercase tracking-widest">
-            <Zap className="w-4 h-4" /> Gerar Unidades Automaticamente
+          <span className="flex items-center gap-2 text-sm font-semibold">
+            <Zap className="w-4 h-4" /> Gerar unidades automaticamente
           </span>
           {genOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         </button>
@@ -407,7 +422,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                 { label: 'Prefixo (opcional)', key: 'prefix', type: 'text', placeholder: 'ex: A' },
               ].map(({ label, key, type, placeholder }) => (
                 <div key={key}>
-                  <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">{label}</label>
+                  <label className="text-xs font-semibold text-slate-500 block mb-1">{label}</label>
                   <input type={type} min={type === 'number' ? '0' : undefined} className={inputCls + ' w-full'} placeholder={placeholder}
                     value={(genForm as any)[key]} onChange={e => setGenForm(p => ({ ...p, [key]: e.target.value }))} />
                 </div>
@@ -430,7 +445,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                 { label: 'Preço Padrão (R$)', key: 'price', type: 'number' },
               ].map(({ label, key, type, placeholder }) => (
                 <div key={key}>
-                  <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">{label}</label>
+                  <label className="text-xs font-semibold text-slate-500 block mb-1">{label}</label>
                   <input type={type} step={type === 'number' ? '0.01' : undefined} className={inputCls + ' w-full'} placeholder={placeholder}
                     value={(genForm as any)[key]} onChange={e => setGenForm(p => ({ ...p, [key]: e.target.value }))} />
                 </div>
@@ -455,10 +470,11 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
           <p className="text-xs font-semibold">Nenhuma unidade cadastrada nesta torre.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider bg-gray-50/50">
+              <tr className="border-b border-gray-200 text-gray-500 font-semibold text-xs bg-gray-50">
                 {/* Checkbox select-all */}
                 <th className="py-3 px-3 w-10">
                   <input
@@ -481,7 +497,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                 <SortableHeader col="position_type" current={sortCol} dir={sortDir} onSort={handleSort}>Posição</SortableHeader>
                 <SortableHeader col="view_type" current={sortCol} dir={sortDir} onSort={handleSort}>Vista</SortableHeader>
                 <SortableHeader col="sun_orientation" current={sortCol} dir={sortDir} onSort={handleSort}>Orient.</SortableHeader>
-                <th className="py-3 px-4 text-center">Ações</th>
+                <th className="py-2.5 px-4 text-center text-table-header font-semibold text-gray-500">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -515,17 +531,17 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                             ? <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
                             : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
                           }
-                          <span className="font-black text-gray-700 text-xs">{group.label}</span>
-                          <span className="bg-gray-200 text-gray-600 text-[9px] font-black px-1.5 py-0.5 rounded-full">
+                          <span className="font-semibold text-gray-700 text-sm">{group.label}</span>
+                          <span className="bg-gray-200 text-gray-600 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
                             {group.units.length}
                           </span>
                         </button>
                       </td>
                       {/* Somatório de áreas por pavimento */}
-                      <td className="py-2 px-4 text-xs font-bold text-blue-600">
+                      <td className="py-2.5 px-4 text-sm font-medium text-blue-600">
                         {group.totalPriv > 0 ? `${fmtArea(group.totalPriv)} m²` : '—'}
                       </td>
-                      <td className="py-2 px-4 text-xs font-bold text-teal-600">
+                      <td className="py-2.5 px-4 text-sm font-medium text-teal-600">
                         {group.totalComum > 0 ? `${fmtArea(group.totalComum)} m²` : '—'}
                       </td>
                       <td colSpan={7} />
@@ -583,42 +599,42 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                               </td>
                               <td className="py-2 px-3 text-center">
                                 <div className="flex items-center justify-center gap-1">
-                                  <button onClick={() => handleSaveEdit(u)} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg"><Check className="w-3.5 h-3.5" /></button>
-                                  <button onClick={() => setEditingId(null)} className="p-1.5 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-lg"><X className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => handleSaveEdit(u)} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-[6px]"><Check className="w-3.5 h-3.5" /></button>
+                                  <button onClick={() => setEditingId(null)} className="p-1.5 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-[6px]"><X className="w-3.5 h-3.5" /></button>
                                 </div>
                               </td>
                             </>
                           ) : (
                             <>
-                              <td className="py-3 px-4 font-bold text-gray-800">{u.name}</td>
-                              <td className="py-3 px-4 text-gray-500">{u.floor ?? '—'}</td>
-                              <td className="py-3 px-4">
+                              <td className="py-2.5 px-4 text-sm font-normal text-gray-700">{u.name}</td>
+                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.floor ?? '—'}</td>
+                              <td className="py-2.5 px-4 text-sm font-normal">
                                 {u.floor_tipo
-                                  ? <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${FLOOR_TIPO_STYLE[u.floor_tipo]}`}>{FLOOR_TIPO_LABEL[u.floor_tipo]}</span>
-                                  : <span className="text-gray-300 text-[10px]">—</span>}
+                                  ? <span className={textColor(FLOOR_TIPO_STYLE[u.floor_tipo])}>{FLOOR_TIPO_LABEL[u.floor_tipo]}</span>
+                                  : <span className="text-gray-300">—</span>}
                               </td>
-                              <td className="py-3 px-4 text-gray-500">{u.typology || '—'}</td>
-                              <td className="py-3 px-4 text-gray-500">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>
-                              <td className="py-3 px-4 text-gray-500">{u.common_area != null ? `${u.common_area} m²` : '—'}</td>
-                              <td className="py-3 px-4 text-gray-500">{u.bedrooms ?? '—'}</td>
-                              <td className="py-3 px-4 text-gray-500">{u.bathrooms ?? '—'}</td>
-                              <td className="py-3 px-4 text-gray-500">{u.parking_spaces ?? '—'}</td>
-                              <td className="py-3 px-4">
+                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.typology || '—'}</td>
+                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>
+                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.common_area != null ? `${u.common_area} m²` : '—'}</td>
+                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bedrooms ?? '—'}</td>
+                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bathrooms ?? '—'}</td>
+                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.parking_spaces ?? '—'}</td>
+                              <td className="py-2.5 px-4 text-sm font-normal">
                                 {u.position_type
-                                  ? <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${POSITION_STYLE[u.position_type]}`}>{POSITION_LABEL[u.position_type]}</span>
-                                  : <span className="text-gray-300 text-[10px]">—</span>}
+                                  ? <span className={textColor(POSITION_STYLE[u.position_type])}>{POSITION_LABEL[u.position_type]}</span>
+                                  : <span className="text-gray-300">—</span>}
                               </td>
-                              <td className="py-3 px-4">
+                              <td className="py-2.5 px-4 text-sm font-normal">
                                 {u.view_type
-                                  ? <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${VIEW_STYLE[u.view_type]}`}>{VIEW_LABEL[u.view_type]}</span>
-                                  : <span className="text-gray-300 text-[10px]">—</span>}
+                                  ? <span className={textColor(VIEW_STYLE[u.view_type])}>{VIEW_LABEL[u.view_type]}</span>
+                                  : <span className="text-gray-300">—</span>}
                               </td>
-                              <td className="py-3 px-4">
+                              <td className="py-2.5 px-4 text-sm font-normal">
                                 {u.sun_orientation
-                                  ? <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${SUN_STYLE[u.sun_orientation]}`}>{SUN_LABEL[u.sun_orientation]}</span>
-                                  : <span className="text-gray-300 text-[10px]">—</span>}
+                                  ? <span className={textColor(SUN_STYLE[u.sun_orientation])}>{SUN_LABEL[u.sun_orientation]}</span>
+                                  : <span className="text-gray-300">—</span>}
                               </td>
-                              <td className="py-3 px-4 text-center">
+                              <td className="py-2.5 px-4 text-center">
                                 <div className="flex items-center justify-center gap-1">
                                   <ActionIconButton kind="edit" size="sm" onClick={() => startEdit(u)} />
                                   <ActionIconButton kind="duplicate" size="sm" onClick={() => handleDuplicate(u)} />
@@ -635,57 +651,58 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 border-gray-200 bg-gray-50/70 font-bold text-xs text-gray-700">
+              <tr className="border-t-2 border-gray-200 bg-gray-50/70 text-sm text-gray-700">
                 <td className="py-2.5 px-3" />
                 <td className="py-2.5 px-4" colSpan={4}>
-                  <span className="text-xs font-black uppercase tracking-widest text-gray-400">Total ({units.length} unid.)</span>
+                  <span className="text-xs font-semibold text-gray-500">Total ({units.length} unid.)</span>
                 </td>
-                <td className="py-2.5 px-4 text-blue-600">{totalPriv > 0 ? `${fmtArea(totalPriv)} m²` : '—'}</td>
-                <td className="py-2.5 px-4 text-teal-600">{totalComum > 0 ? `${fmtArea(totalComum)} m²` : '—'}</td>
+                <td className="py-2.5 px-4 font-medium text-blue-600">{totalPriv > 0 ? `${fmtArea(totalPriv)} m²` : '—'}</td>
+                <td className="py-2.5 px-4 font-medium text-teal-600">{totalComum > 0 ? `${fmtArea(totalComum)} m²` : '—'}</td>
                 <td colSpan={7} />
               </tr>
             </tfoot>
           </table>
+          </div>
         </div>
       )}
 
       {/* Barra de edição em lote */}
       {selected.size > 0 && (
-        <div className="sticky bottom-4 z-20 bg-white border border-blue-200 shadow-xl rounded-2xl p-4 space-y-3">
+        <div className="sticky bottom-4 z-20 bg-white border border-blue-200 shadow-xl rounded-[10px] p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase tracking-widest text-blue-600">
+            <span className="text-sm font-semibold text-blue-600">
               {selected.size} unidade{selected.size > 1 ? 's' : ''} selecionada{selected.size > 1 ? 's' : ''}
             </span>
             <button onClick={() => { setSelected(new Set()); setBulkForm(emptyBulkForm()); }}
-              className="p-1.5 hover:bg-gray-100 text-gray-400 rounded-lg">
+              className="p-1.5 hover:bg-gray-100 text-gray-400 rounded-[6px]">
               <X className="w-4 h-4" />
             </button>
           </div>
           <p className="text-[10px] text-gray-400 font-medium -mt-1">Campos em branco não serão alterados.</p>
           <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-            <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Pav. nº" value={bulkForm.floor} onChange={e => setBulkForm(p => ({ ...p, floor: e.target.value }))} />
+            <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Pav. nº" value={bulkForm.floor} onChange={e => setBulkForm(p => ({ ...p, floor: e.target.value }))} />
             <select value={bulkForm.floor_tipo} onChange={e => setBulkForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))}
-              className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-400">
+              className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-semibold outline-none focus:border-blue-400">
               <option value="">Tipo Pav....</option>
               {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>)}
             </select>
-            <input className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Tipologia..." value={bulkForm.typology} onChange={e => setBulkForm(p => ({ ...p, typology: e.target.value }))} />
-            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Priv. m²" value={bulkForm.private_area} onChange={e => setBulkForm(p => ({ ...p, private_area: e.target.value }))} />
-            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Comum m²" value={bulkForm.common_area} onChange={e => setBulkForm(p => ({ ...p, common_area: e.target.value }))} />
-            <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Dormitórios" value={bulkForm.bedrooms} onChange={e => setBulkForm(p => ({ ...p, bedrooms: e.target.value }))} />
-            <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-blue-400" placeholder="Banheiros" value={bulkForm.bathrooms} onChange={e => setBulkForm(p => ({ ...p, bathrooms: e.target.value }))} />
+            <input className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Tipologia..." value={bulkForm.typology} onChange={e => setBulkForm(p => ({ ...p, typology: e.target.value }))} />
+            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Priv. m²" value={bulkForm.private_area} onChange={e => setBulkForm(p => ({ ...p, private_area: e.target.value }))} />
+            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Comum m²" value={bulkForm.common_area} onChange={e => setBulkForm(p => ({ ...p, common_area: e.target.value }))} />
+            <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Dormitórios" value={bulkForm.bedrooms} onChange={e => setBulkForm(p => ({ ...p, bedrooms: e.target.value }))} />
+            <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Banheiros" value={bulkForm.bathrooms} onChange={e => setBulkForm(p => ({ ...p, bathrooms: e.target.value }))} />
             <select value={bulkForm.position_type} onChange={e => setBulkForm(p => ({ ...p, position_type: e.target.value as UnitPositionType | '' }))}
-              className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-400">
+              className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-semibold outline-none focus:border-blue-400">
               <option value="">Posição...</option>
               {(Object.keys(POSITION_LABEL) as UnitPositionType[]).map(t => <option key={t} value={t}>{POSITION_LABEL[t]}</option>)}
             </select>
             <select value={bulkForm.view_type} onChange={e => setBulkForm(p => ({ ...p, view_type: e.target.value as UnitViewType | '' }))}
-              className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-400">
+              className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-semibold outline-none focus:border-blue-400">
               <option value="">Vista...</option>
               {(Object.keys(VIEW_LABEL) as UnitViewType[]).map(t => <option key={t} value={t}>{VIEW_LABEL[t]}</option>)}
             </select>
             <select value={bulkForm.sun_orientation} onChange={e => setBulkForm(p => ({ ...p, sun_orientation: e.target.value as UnitSunOrientation | '' }))}
-              className="px-2 py-1.5 border border-gray-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-400">
+              className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-semibold outline-none focus:border-blue-400">
               <option value="">Orientação...</option>
               {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
             </select>
@@ -710,7 +727,7 @@ const SortableHeader: React.FC<{
   return (
     <th
       onClick={() => onSort(col)}
-      className={`py-3 px-4 cursor-pointer select-none transition-colors ${active ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+      className={`py-2.5 px-4 text-table-header font-semibold cursor-pointer select-none transition-colors ${active ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
     >
       <div className="flex items-center gap-1">
         {children}

@@ -28,6 +28,77 @@ export const imovibService = {
         return data || [];
     },
 
+    /**
+     * Lista os estudos JÁ com blocos+unidades e todos os campos escalares que o
+     * motor financeiro (computeImovibMath) consome — para a listagem calcular
+     * VGV/VPL/TIR/margem por linha sem abrir estudo por estudo.
+     *
+     * Custo fixo de 3 round-trips independentemente do número de estudos:
+     * estudos → blocos (in study_id) → unidades (in block_id). O nesting é
+     * remontado em memória, mesmo padrão de getStudyById. capex_items NÃO é
+     * carregado de propósito: o motor não lê capex detalhado (só usa os campos
+     * capex_simplified_* quando capex_mode === 'simplified').
+     */
+    async getStudiesWithMetrics(organizationId?: string): Promise<ImovibStudy[]> {
+        let query = supabase
+            .from('imovib_studies')
+            // metadados da listagem + todos os escalares lidos por computeImovibMath
+            .select('id, organization_id, name, cnpj, developer, manager, version, segment, sub_classification, phase, development_modality, zoning, created_at, updated_at, land_cost, capex_mode, capex_simplified_cost_sqm, capex_simplified_area_sqm, construction_duration_months, sales_duration_months, construction_start_month, sales_start_month, inflation_rate, discount_rate, tax_rate, brokerage_fee, financing_percent, financing_rate_annual, funding_debt_percent, swap_physical_percent, swap_financial_percent, default_rate_percent, cancellation_rate_percent, revenue_downpayment_percent, revenue_construction_percent, revenue_handover_percent, esg_initiatives')
+            .order('created_at', { ascending: false });
+
+        if (organizationId) {
+            query = query.eq('organization_id', organizationId);
+        }
+
+        const { data: studies, error } = await query;
+
+        if (error) {
+            console.error('Error fetching IMOVIB studies with metrics:', error);
+            throw new Error(`Failed to fetch IMOVIB studies: ${error.message}`);
+        }
+
+        if (!studies || studies.length === 0) return [];
+
+        const studyIds = studies.map(s => s.id);
+
+        const { data: blocks, error: blocksError } = await supabase
+            .from('imovib_blocks')
+            .select('id, study_id, name, construction_cost_sqm, sales_price_sqm, created_at, updated_at')
+            .in('study_id', studyIds)
+            .order('created_at', { ascending: true });
+
+        if (blocksError) {
+            console.error('Error fetching IMOVIB blocks in batch:', blocksError);
+            throw new Error(`Failed to fetch IMOVIB blocks: ${blocksError.message}`);
+        }
+
+        let units: ImovibUnit[] = [];
+        const blockIds = (blocks || []).map(b => b.id);
+        if (blockIds.length > 0) {
+            const { data: unitsData, error: unitsError } = await supabase
+                .from('imovib_units')
+                .select('id, block_id, name, quantity, private_area, common_area, pavimentos, is_vendavel, created_at, updated_at')
+                .in('block_id', blockIds)
+                .order('created_at', { ascending: true });
+
+            if (unitsError) {
+                console.error('Error fetching IMOVIB units in batch:', unitsError);
+                throw new Error(`Failed to fetch IMOVIB units: ${unitsError.message}`);
+            }
+            units = unitsData || [];
+        }
+
+        const blocksByStudy = new Map<string, ImovibBlock[]>();
+        (blocks || []).forEach(b => {
+            const withUnits = { ...b, units: units.filter(u => u.block_id === b.id) };
+            const arr = blocksByStudy.get(b.study_id) || [];
+            arr.push(withUnits);
+            blocksByStudy.set(b.study_id, arr);
+        });
+
+        return studies.map(s => ({ ...s, blocks: blocksByStudy.get(s.id) || [] }));
+    },
+
     async getStudyById(id: string, includeDetails: boolean = false): Promise<ImovibStudy | null> {
         const { data: study, error } = await supabase
             .from('imovib_studies')

@@ -76,8 +76,13 @@ const calculateIRR = (cashFlows: number[]): number => {
     return (low + high) / 2;
 };
 
-export const useImovibMath = (study: ImovibStudy | null | undefined, options?: ImovibMathOptions): ImovibMathResult => {
-    return useMemo(() => {
+/**
+ * Núcleo de cálculo puro — sem React. Extraído do corpo do useMemo abaixo para
+ * poder rodar em lote (ex.: uma linha por estudo na listagem de Estudos de
+ * Viabilidade), onde chamar o hook num loop violaria as regras dos Hooks.
+ * O hook useImovibMath passou a ser um wrapper memoizado desta função.
+ */
+export const computeImovibMath = (study: ImovibStudy | null | undefined, options?: ImovibMathOptions): ImovibMathResult => {
         if (!study) {
             return {
                 monthlyFlows: [],
@@ -312,5 +317,8 @@ export const useImovibMath = (study: ImovibStudy | null | undefined, options?: I
             esgVgvPremiumValue,
             esgFundingDiscount
         };
-    }, [study, options?.vgvDelta, options?.costDelta]);
+};
+
+export const useImovibMath = (study: ImovibStudy | null | undefined, options?: ImovibMathOptions): ImovibMathResult => {
+    return useMemo(() => computeImovibMath(study, options), [study, options?.vgvDelta, options?.costDelta]);
 };

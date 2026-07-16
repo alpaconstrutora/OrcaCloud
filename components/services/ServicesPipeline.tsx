@@ -354,24 +354,27 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
   const hasFilter = !!search || filterPriority !== 'all';
 
   return (
-    <div className="p-4 h-full flex flex-col">
+    <div className="p-4 space-y-6 h-full flex flex-col">
       {/* Cabeçalho */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-white">Pipeline de Serviços</h2>
-          {realtimeStatus === 'connected' && (
-            <span title="Atualizações em tempo real ativas" className="text-green-500"><Wifi size={14} /></span>
-          )}
-          {realtimeStatus === 'error' && (
-            <span title="Tempo real indisponível" className="text-red-400"><WifiOff size={14} /></span>
-          )}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Pipeline de Serviços</h1>
+            {realtimeStatus === 'connected' && (
+              <span title="Atualizações em tempo real ativas" className="text-green-500"><Wifi size={16} /></span>
+            )}
+            {realtimeStatus === 'error' && (
+              <span title="Tempo real indisponível" className="text-red-400"><WifiOff size={16} /></span>
+            )}
+          </div>
+          <p className="text-gray-400 text-sm mt-1.5 font-medium">Funil comercial de oportunidades de serviços, da captação ao contrato assinado.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setShowConfig(true)}
             disabled={!organizationId}
             title={!organizationId ? 'Selecione uma organização específica para configurar' : 'Configurar funil'}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-gray-500 rounded-[6px] hover:bg-gray-50 hover:text-blue-600 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Settings size={16} />
           </button>
@@ -379,15 +382,15 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
             onClick={() => setIsModalOpen(true)}
             disabled={!organizationId}
             title={!organizationId ? 'Selecione uma organização específica para criar um lead' : undefined}
-            className="flex items-center gap-1.5 text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Plus size={15} /> Novo Lead
+            <Plus className="w-[15px] h-[15px]" /> Novo Lead
           </button>
         </div>
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {kpis ? (
           <>
             <KpiCard shadow={false} size="sm" label="Leads ativos" value={kpis.activeLeads} icon={<Users className="w-4 h-4" />} color="blue" />
@@ -397,85 +400,94 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
           </>
         ) : (
           [...Array(4)].map((_, i) => (
-            <div key={i} className="h-16 bg-gray-100 dark:bg-gray-700 rounded-[10px] animate-pulse" />
+            <div key={i} className="h-16 bg-gray-100 rounded-[10px] animate-pulse" />
           ))
         )}
       </div>
 
-      {/* Filtros */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <div className="relative flex-1 min-w-48">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar cliente, cidade, tipo..."
-            className="w-full pl-8 pr-8 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-              <X size={14} />
-            </button>
-          )}
-        </div>
-        <div className="flex gap-1 shrink-0">
-          {(['all', 'high', 'medium', 'low'] as const).map(p => (
-            <button
-              key={p}
-              onClick={() => setFilterPriority(p)}
-              className={`px-2.5 py-1.5 rounded-lg text-button font-medium transition-colors ${
-                filterPriority === p
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
-              }`}
-            >
-              {p === 'all' ? 'Todos' : p === 'high' ? 'Alta' : p === 'medium' ? 'Média' : 'Baixa'}
-            </button>
-          ))}
-        </div>
-        {hasFilter && (
-          <span className="text-button text-gray-400">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</span>
-        )}
-      </div>
+      {/* Toolbar acoplada + Board (padrão §5.2, extraído do ÒPURA Docs) */}
+      <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
+        <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+          <div className="flex flex-col md:flex-row gap-2.5 items-center">
+            <div className="flex-1 relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar cliente, cidade, tipo..."
+                className="w-full h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
 
-      {/* Board */}
-      <div className="flex gap-4 overflow-x-auto pb-6 flex-1 min-h-0">
-        {stageView.stages.map(({ id, label, hex }) => (
-          <PipelineColumn
-            key={id}
-            id={id}
-            label={label}
-            hex={hex}
-            cards={byStage(id)}
-            loading={loading}
-            isOver={dragOverStage === id}
-            readonly={id === 'won'}
-            draggingId={draggingId}
-            onDragOver={e => { e.preventDefault(); if (id !== 'won') setDragOverStage(id); }}
-            onDragLeave={() => setDragOverStage(null)}
-            onDrop={() => handleDrop(id)}
-            onNavigate={onNavigate}
-            setDraggingId={setDraggingId}
-            onAddNew={id === 'lead' && organizationId ? () => setIsModalOpen(true) : undefined}
-          />
-        ))}
+            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+              {(['all', 'high', 'medium', 'low'] as const).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setFilterPriority(p)}
+                  className={`px-2.5 h-7 rounded-[6px] text-xs font-semibold transition-all ${
+                    filterPriority === p
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  {p === 'all' ? 'Todos' : p === 'high' ? 'Alta' : p === 'medium' ? 'Média' : 'Baixa'}
+                </button>
+              ))}
+            </div>
 
-        {/* Coluna Perdido — somente leitura */}
-        <PipelineColumn
-          id="lost"
-          label={stageView.lost.label}
-          hex={stageView.lost.hex}
-          cards={opportunities.filter(o => o.stage === 'lost')}
-          loading={loading}
-          isOver={false}
-          readonly
-          draggingId={draggingId}
-          onDragOver={e => e.preventDefault()}
-          onDragLeave={() => {}}
-          onDrop={() => {}}
-          onNavigate={onNavigate}
-          setDraggingId={setDraggingId}
-        />
+            {hasFilter && (
+              <span className="text-xs text-gray-400 font-medium shrink-0">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Board */}
+        <div className="flex-1 min-h-0 overflow-x-auto p-4">
+          <div className="flex gap-4 h-full">
+            {stageView.stages.map(({ id, label, hex }) => (
+              <PipelineColumn
+                key={id}
+                id={id}
+                label={label}
+                hex={hex}
+                cards={byStage(id)}
+                loading={loading}
+                isOver={dragOverStage === id}
+                readonly={id === 'won'}
+                draggingId={draggingId}
+                onDragOver={e => { e.preventDefault(); if (id !== 'won') setDragOverStage(id); }}
+                onDragLeave={() => setDragOverStage(null)}
+                onDrop={() => handleDrop(id)}
+                onNavigate={onNavigate}
+                setDraggingId={setDraggingId}
+                onAddNew={id === 'lead' && organizationId ? () => setIsModalOpen(true) : undefined}
+              />
+            ))}
+
+            {/* Coluna Perdido — somente leitura */}
+            <PipelineColumn
+              id="lost"
+              label={stageView.lost.label}
+              hex={stageView.lost.hex}
+              cards={opportunities.filter(o => o.stage === 'lost')}
+              loading={loading}
+              isOver={false}
+              readonly
+              draggingId={draggingId}
+              onDragOver={e => e.preventDefault()}
+              onDragLeave={() => {}}
+              onDrop={() => {}}
+              onNavigate={onNavigate}
+              setDraggingId={setDraggingId}
+            />
+          </div>
+        </div>
       </div>
 
       {isModalOpen && organizationId && (

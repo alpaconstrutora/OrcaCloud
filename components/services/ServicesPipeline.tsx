@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { Plus, Phone, MapPin, Wifi, WifiOff, Search, X, Clock, History, Settings } from 'lucide-react';
+import { Plus, Phone, MapPin, Wifi, WifiOff, Search, X, Clock, History, Settings, Users, Send, DollarSign, Percent } from 'lucide-react';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
 import {
@@ -11,6 +11,15 @@ import {
 import { ServicesView } from '../ServicesCommercialModule';
 import ServicesOpportunityModal from './ServicesOpportunityModal';
 import ServicesPipelineConfigModal from './ServicesPipelineConfigModal';
+import { KpiCard } from '../ui/KpiCard';
+import { usePersistedState } from '../ui/TableUtils';
+
+interface KPIs {
+  activeLeads: number;
+  proposalsSent: number;
+  inNegotiation: number;
+  conversionRate: number;
+}
 
 interface Props {
   organizationId: string | null;
@@ -26,6 +35,9 @@ const STAGES: { id: OpportunityStage; label: string; hex: string }[] = [
 ];
 
 const LOST_HEX = '#f87171';
+
+const fmtCurrency = (n: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n);
 
 const PRIORITY_BADGE: Record<string, { label: string; bg: string; color: string }> = {
   high:   { label: 'ALTA',   bg: '#ffedd5', color: '#ea580c' },
@@ -248,16 +260,21 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
   const [dragOverStage, setDragOverStage] = useState<OpportunityStage | null>(null);
   const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const channelRef = useRef<RealtimeChannel | null>(null);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = usePersistedState('services_pipeline_search', '');
   const [filterPriority, setFilterPriority] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   const [stageConfig, setStageConfig] = useState<PipelineStageConfig[]>([]);
   const [showConfig, setShowConfig] = useState(false);
+  const [kpis, setKpis] = useState<KPIs | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
     servicesCommercialService.listOpportunities(organizationId)
       .then(setOpportunities)
       .finally(() => setLoading(false));
+  }, [organizationId]);
+
+  const loadKpis = useCallback(() => {
+    servicesCommercialService.getKPIs(organizationId).then(setKpis).catch(() => setKpis(null));
   }, [organizationId]);
 
   const loadConfig = useCallback(() => {
@@ -269,6 +286,7 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadConfig(); }, [loadConfig]);
+  useEffect(() => { loadKpis(); }, [loadKpis]);
 
   // Mescla rótulo/cor configurados por org sobre os estágios canônicos.
   const stageView = useMemo(() => {
@@ -313,6 +331,7 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
     setOpportunities(prev => prev.map(o => o.id === id ? { ...o, stage, updated_at: new Date().toISOString() } : o));
     try {
       await servicesCommercialService.moveStage(id, stage);
+      loadKpis();
     } catch {
       load();
     }
@@ -365,6 +384,22 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
             <Plus size={15} /> Novo Lead
           </button>
         </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        {kpis ? (
+          <>
+            <KpiCard shadow={false} size="sm" label="Leads ativos" value={kpis.activeLeads} icon={<Users className="w-4 h-4" />} color="blue" />
+            <KpiCard shadow={false} size="sm" label="Propostas enviadas" value={kpis.proposalsSent} icon={<Send className="w-4 h-4" />} color="purple" />
+            <KpiCard shadow={false} size="sm" label="Em negociação" value={fmtCurrency(kpis.inNegotiation)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
+            <KpiCard shadow={false} size="sm" label="Taxa de conversão" value={`${kpis.conversionRate}%`} icon={<Percent className="w-4 h-4" />} color="orange" />
+          </>
+        ) : (
+          [...Array(4)].map((_, i) => (
+            <div key={i} className="h-16 bg-gray-100 dark:bg-gray-700 rounded-[10px] animate-pulse" />
+          ))
+        )}
       </div>
 
       {/* Filtros */}
@@ -447,7 +482,7 @@ const ServicesPipeline: React.FC<Props> = ({ organizationId, onNavigate }) => {
         <ServicesOpportunityModal
           organizationId={organizationId}
           onClose={() => setIsModalOpen(false)}
-          onSaved={() => { setIsModalOpen(false); load(); }}
+          onSaved={() => { setIsModalOpen(false); load(); loadKpis(); }}
         />
       )}
 

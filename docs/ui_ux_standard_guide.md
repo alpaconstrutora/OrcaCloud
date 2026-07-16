@@ -79,6 +79,7 @@ suficiente).
 - [ ] §7.1 Campos editáveis inline dentro de TD
 - [ ] §7.2 Altura da linha — `py-2.5` em toda `<td>`, sem exceção não documentada
 - [ ] §8 Status Badge
+- [ ] §8.1 Rótulo de diagrama — se a tela acusar §8, conferir se é legenda de desenho (exceção) ou status de verdade; a exceção exige os 3 critérios, não basta "é um chip"
 - [ ] §9 Coluna de Ações (+ §9.1 ação dominante via clique na linha, se aplicável; + §9.2 botão-ícone via `<ActionIconButton>` — `bg-white border shadow-sm rounded-[6px] p-1.5`, não o flat antigo nem o `rounded-xl`/`p-2.5`)
 - [ ] §10 Barra de ações em lote (+ §10.1 seleção de intervalo Shift+clique) — decisão explícita se a tela tem seleção múltipla
 - [ ] §11 Loading State
@@ -855,6 +856,51 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 > ❌ **NUNCA usar** `rounded-full`, `uppercase`, `font-black`, `bg-*` ou `px-2 py-1` no StatusBadge.
 > ✅ Apenas `text-sm font-normal` + cor de texto.
+
+### 8.1 Rótulo de diagrama não é status badge (exceção)
+
+O §8 governa **status de registro** — o dado de uma linha/card que diz em que
+estado a entidade está (Disponível, Alugado, Confirmado, Cancelado). A regra
+existe porque, em lista, a pílula colorida compete com o dado e polui a leitura
+horizontal.
+
+Um **rótulo de diagrama** é outra coisa: é legenda de eixo/face dentro de um
+desenho técnico (planta baixa, matriz de torres, mapa de unidades). Ele não
+descreve o estado de nenhum registro — descreve **posição no espaço do próprio
+desenho** — e não vive em `<td>` nem em card de lista. Aí a pílula é o que
+separa a legenda do conteúdo desenhado; texto solto colorido some no meio da
+grade e o desenho fica ilegível.
+
+```tsx
+{/* ✅ Rótulo de diagrama — legenda de face na planta baixa (PropertyModal.tsx) */}
+<div className="text-[9px] font-black text-blue-400 uppercase tracking-[0.2em] border border-blue-200/50 bg-white px-4 py-1 rounded-full shadow-sm">
+  Lado A (Topo/Frente)
+</div>
+```
+
+**Critério (os três, juntos):**
+
+1. O texto nomeia parte do **desenho** (face, eixo, torre, quadrante), não o
+   estado de uma entidade;
+2. Está **dentro** de um container de diagrama — nunca em `<td>`, card de lista
+   ou coluna de tabela;
+3. Se virar texto solto colorido, **perde a função** (deixa de se distinguir da
+   grade que rotula).
+
+> ❌ Não é exceção legítima: "é um chip", "fica bonito assim", "é pequeno demais
+> pra atrapalhar", "está dentro de um modal". Status dentro de modal continua
+> §8 puro — ver §21. Falhou qualquer um dos três critérios → §8 se aplica
+> inteiro.
+> ℹ️ `scripts/check-ui-standard.sh` **continua acusando** essas linhas: o
+> checador é textual (`rounded-full` + `uppercase`) e não sabe distinguir
+> legenda de badge. Isso é intencional — a saída correta é justificar
+> apontando para esta seção, não silenciar o check.
+
+**Ocorrências hoje:** `PropertyModal.tsx`, na aba "Gestão de Unidades" — as 11
+legendas da matriz geradora (Lado A/B/C/D, Frente (Rua), Fundos, TORRE {n}).
+Achado real em 2026-07-16, quando a tela de imóvel de Gestão de Locações migrou
+de painel lateral para tela dedicada e o checador acusou §8 nessas linhas; a
+verificação confirmou que são legendas da planta baixa, não status.
 
 ---
 

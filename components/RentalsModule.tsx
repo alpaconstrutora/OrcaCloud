@@ -516,6 +516,36 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         </div>
     );
 
+    // Toast de Notificação — §13 (compartilhado entre a lista e a tela do imóvel)
+    const notificationToast = notification && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+            notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {notification.message}
+        </div>
+    );
+
+    // Editar/criar imóvel abre uma tela dedicada (UI_PATTERNS §2: fluxo multi-aba),
+    // não um painel — a lista fica atrás e volta pelo "Voltar" do cabeçalho.
+    if (isPropertyModalOpen) {
+        return (
+            <div>
+                <PropertyModal
+                    renderMode="page"
+                    isOpen
+                    onClose={() => { setIsPropertyModalOpen(false); setEditingProperty(undefined); }}
+                    onSubmit={handleSaveProperty}
+                    initialData={editingProperty}
+                    defaultPurpose="RENTAL"
+                    buildings={properties.filter(p => p.type === 'BUILDING')}
+                    organizationId={organizationId}
+                />
+                {notificationToast}
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6 pb-20">
             {/* Header — §20 (flat, sem hero) */}
@@ -1074,15 +1104,6 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             }
 
 
-            <PropertyModal
-                isOpen={isPropertyModalOpen}
-                onClose={() => { setIsPropertyModalOpen(false); setEditingProperty(undefined); }}
-                onSubmit={handleSaveProperty}
-                initialData={editingProperty}
-                defaultPurpose="RENTAL"
-                organizationId={organizationId}
-            />
-
             <DealModal
                 isOpen={isDealModalOpen}
                 onClose={() => { setIsDealModalOpen(false); setEditingDeal(undefined); }}
@@ -1091,15 +1112,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 organizationId={organizationId}
             />
 
-            {/* Toast de Notificação — §13 */}
-            {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
-                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-                }`}>
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    {notification.message}
-                </div>
-            )}
+            {notificationToast}
         </div >
     );
 };

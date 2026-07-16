@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, Home, MapPin, Maximize2, DollarSign, Camera, Check, Info, Package, Layers, Plus, Settings2, Settings, Building2 } from 'lucide-react';
+import { X, Home, MapPin, Maximize2, DollarSign, Camera, Check, Info, Package, Layers, Plus, Settings2, Settings, Building2, ArrowLeft } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { Property, PropertyStatus, Client, TowerMatrixConfig, GridCellConfig } from '../types';
 import { clientService } from '../services/clientService';
 import { propertyTypesService, PropertyType } from '../services/propertyTypesService';
 import PropertyTypesManager from './PropertyTypesManager';
 import { Sheet, SheetPanel, SheetFooter } from './ui/sheet';
+import { useConfirm } from './ui/confirm';
 import { supabase } from '../lib/supabase';
 import Button from './ui/Button';
 
@@ -17,9 +18,17 @@ interface PropertyModalProps {
     defaultPurpose?: 'SALE' | 'RENTAL' | 'BOTH';
     buildings?: Property[];
     organizationId?: string;
+    /**
+     * 'sheet' (default) = painel lateral. 'page' = tela dedicada, ocupando o
+     * conteúdo do módulo (UI_PATTERNS §2: fluxo multi-aba/multi-etapa).
+     * No modo 'page' quem renderiza controla a montagem — o componente não
+     * desenha backdrop nem se posiciona sozinho.
+     */
+    renderMode?: 'sheet' | 'page';
 }
 
-const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit, initialData, defaultPurpose, buildings = [], organizationId }) => {
+const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit, initialData, defaultPurpose, buildings = [], organizationId, renderMode = 'sheet' }) => {
+    const asPage = renderMode === 'page';
     const [formData, setFormData] = useState<Partial<Property>>({
         name: '',
         type: 'APARTMENT',
@@ -53,11 +62,20 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
 
     const [dirty, setDirty] = useState(false);
     const update = (patch: Partial<Property>) => { setFormData(prev => ({ ...prev, ...patch })); setDirty(true); };
-    const handleRequestClose = React.useCallback(() => {
-        if (dirty && !window.confirm('Há alterações não salvas. Deseja sair mesmo assim?')) return;
+    const confirm = useConfirm();
+    const handleRequestClose = React.useCallback(async () => {
+        if (dirty) {
+            const ok = await confirm({
+                title: 'Sair sem salvar?',
+                message: 'Há alterações não salvas neste imóvel. Se sair agora, elas serão perdidas.',
+                variant: 'warning',
+                confirmLabel: 'Sair sem salvar',
+            });
+            if (!ok) return;
+        }
         setDirty(false);
         onClose();
-    }, [dirty, onClose]);
+    }, [dirty, onClose, confirm]);
 
     const [connectedTowers, setConnectedTowers] = useState(false);
     const [connectionDirection, setConnectionDirection] = useState<'HORIZONTAL' | 'VERTICAL'>('HORIZONTAL');
@@ -261,9 +279,8 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
         }
     };
 
-    return (
+    const content = (
         <>
-        <Sheet open={isOpen} onClose={handleRequestClose} size="2xl">
                 {/* Header */}
                 <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0">
                     <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -315,15 +332,26 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                             )}
                         </div>
                     </div>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={handleRequestClose}
-                        className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 shrink-0"
-                    >
-                        <X className="w-5 h-5" />
-                    </Button>
+                    {asPage ? (
+                        <button
+                            type="button"
+                            onClick={handleRequestClose}
+                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all shrink-0"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Voltar
+                        </button>
+                    ) : (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={handleRequestClose}
+                            className="text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 shrink-0"
+                        >
+                            <X className="w-5 h-5" />
+                        </Button>
+                    )}
                 </div>
 
                 {/* Tab Bar */}
@@ -1313,7 +1341,22 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                     </Button>
                 </SheetFooter>
                 </form>
+        </>
+    );
+
+    return (
+        <>
+        {/* Modo página: altura travada na viewport (padrão ImovibDetailView) — cabeçalho
+            e rodapé ficam fixos e só o corpo rola (§6.4). */}
+        {asPage ? (
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[calc(100vh-8rem)]">
+                {content}
+            </div>
+        ) : (
+            <Sheet open={isOpen} onClose={handleRequestClose} size="2xl">
+                {content}
             </Sheet>
+        )}
 
         {organizationId && (
             <PropertyTypesManager

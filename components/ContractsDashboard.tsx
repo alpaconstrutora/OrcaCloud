@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     FileText, AlertTriangle, TrendingUp, Clock, DollarSign,
-    CheckCircle2, XCircle, RotateCcw, ChevronRight, RefreshCw, Plus, Shield,
+    CheckCircle2, XCircle, RotateCcw, ChevronRight, RefreshCw, Plus, Shield, Search,
 } from 'lucide-react';
 import { contractService } from '../services/contractService';
 import { contractGuaranteeService, ContractGuaranteeExpiring } from '../services/contractGuaranteeService';
 import { supabase } from '../lib/supabase';
 import { Contract } from '../types';
-import Button from './ui/Button';
+import { KpiCard } from './ui/KpiCard';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { formatDateBR as fmtDate } from './ui/Format';
 
 interface Props {
@@ -31,11 +32,30 @@ const STATUS_LABEL: Record<string, string> = {
     Aprovado: 'Aprovado', Assinado: 'Assinado', Ativo: 'Ativo',
     Concluído: 'Concluído', Suspenso: 'Suspenso', Encerrado: 'Encerrado', Cancelado: 'Cancelado',
 };
-const STATUS_DOT: Record<string, string> = {
-    Rascunho: 'bg-gray-400', Revisão: 'bg-purple-400', Enviado: 'bg-blue-500',
-    Aprovado: 'bg-teal-500', Assinado: 'bg-indigo-500', Ativo: 'bg-emerald-500',
-    Concluído: 'bg-emerald-300', Suspenso: 'bg-amber-500', Encerrado: 'bg-gray-300', Cancelado: 'bg-red-400',
+// ui_ux_standard_guide.md §8 — Status Badge: texto colorido, sem pílula/fundo/uppercase.
+const STATUS_COLOR: Record<string, string> = {
+    Rascunho: 'text-gray-600', Revisão: 'text-purple-600', Enviado: 'text-blue-600',
+    Aprovado: 'text-teal-600', Assinado: 'text-indigo-600', Ativo: 'text-emerald-600',
+    Concluído: 'text-emerald-500', Suspenso: 'text-amber-600', Encerrado: 'text-gray-400', Cancelado: 'text-red-600',
 };
+
+const StatusBadge: React.FC<{ status: string }> = ({ status }) => (
+    <span className={`text-sm font-normal ${STATUS_COLOR[status] ?? 'text-gray-600'}`}>
+        {STATUS_LABEL[status] ?? status}
+    </span>
+);
+
+// ui_ux_standard_guide.md §2 — colunas fora do componente.
+// `client` só existe em domínios que mostram Contratante (showsClient); filtrada por domínio dentro do componente.
+const COLUMNS: (ColumnConfig & { clientOnly?: boolean })[] = [
+    { key: 'number', label: 'Número', sortable: true },
+    { key: 'title', label: 'Título', sortable: true },
+    { key: 'client', label: 'Contratante', sortable: true, clientOnly: true },
+    { key: 'value', label: 'Valor', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'end_date', label: 'Vencimento', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
 
 export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewContract, direction, domain, onCreateNew }) => {
     const [contracts, setContracts] = useState<Contract[]>([]);
@@ -44,11 +64,19 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     const [measuredTotal, setMeasuredTotal] = useState(0);
     const [clientNames, setClientNames] = useState<Record<string, string>>({});
     const [guaranteesExpiring, setGuaranteesExpiring] = useState<ContractGuaranteeExpiring[]>([]);
+    const [loadError, setLoadError] = useState<string | null>(null);
+
+    // ui_ux_standard_guide.md §3 — busca persistida.
+    const [searchTerm, setSearchTerm] = usePersistedState<string>('contractsDashboard:search', '');
 
     // Layout "com cliente" (mostra coluna Contratante): qualquer domínio OUTGOING.
     const showsClient = direction === 'OUTGOING' || domain === 'SERVICOS' || domain === 'LOCACAO' || domain === 'VENDAS';
 
-    const [loadError, setLoadError] = useState<string | null>(null);
+    const domainColumns = React.useMemo(
+        () => COLUMNS.filter(c => !c.clientOnly || showsClient),
+        [showsClient]
+    );
+    const tableColumns = useTableColumns(domainColumns, 'contractsDashboardColumns');
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -105,7 +133,6 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     const active = contracts.filter(c => c.status === 'Ativo');
     const rascunho = contracts.filter(c => c.status === 'Rascunho' || c.status === 'Enviado');
     const totalReceita = active.reduce((s, c) => s + (c.current_value ?? 0), 0);
-    const today = new Date();
 
     const vencendo30 = active.filter(c => {
         if (!c.end_date || c.is_recurring) return false;
@@ -151,57 +178,17 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
     const saldoContratual = totalReceita - measuredTotal;
 
     const kpis = showsClient ? [
-        {
-            label: 'Contratos Ativos', value: active.length.toString(),
-            sub: `${rascunho.length} em elaboração`,
-            icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',
-        },
-        {
-            label: 'Receita Contratada', value: fmt(totalReceita),
-            sub: `${active.filter(c => c.is_recurring).length} recorrentes`,
-            icon: DollarSign, color: 'text-blue-600', bg: 'bg-blue-50',
-        },
-        {
-            label: 'Total Medido', value: fmt(measuredTotal),
-            sub: `${((totalReceita > 0 ? measuredTotal / totalReceita : 0) * 100).toFixed(0)}% do contratado`,
-            icon: TrendingUp, color: 'text-violet-600', bg: 'bg-violet-50',
-        },
-        {
-            label: 'Saldo Contratual', value: fmt(saldoContratual),
-            sub: `${vencidos.length > 0 ? `${vencidos.length} contrato(s) vencido(s)` : 'Sem vencimentos'}`,
-            icon: Clock, color: saldoContratual < 0 ? 'text-red-600' : 'text-gray-500', bg: saldoContratual < 0 ? 'bg-red-50' : 'bg-gray-50',
-        },
-        {
-            label: 'Apólices Vencendo', value: guaranteesExpiring.length.toString(),
-            sub: guaranteesExpiring.some(g => g.days_remaining < 0) ? `${guaranteesExpiring.filter(g => g.days_remaining < 0).length} já vencida(s)` : 'Próximos 30 dias',
-            icon: Shield, color: guaranteesExpiring.length > 0 ? 'text-red-600' : 'text-gray-400', bg: guaranteesExpiring.length > 0 ? 'bg-red-50' : 'bg-gray-50',
-        },
+        { label: 'Contratos Ativos', value: active.length.toString(), sub: `${rascunho.length} em elaboração`, icon: <CheckCircle2 className="w-4 h-4" />, color: 'emerald' as const },
+        { label: 'Receita Contratada', value: fmt(totalReceita), sub: `${active.filter(c => c.is_recurring).length} recorrentes`, icon: <DollarSign className="w-4 h-4" />, color: 'blue' as const },
+        { label: 'Total Medido', value: fmt(measuredTotal), sub: `${((totalReceita > 0 ? measuredTotal / totalReceita : 0) * 100).toFixed(0)}% do contratado`, icon: <TrendingUp className="w-4 h-4" />, color: 'violet' as const },
+        { label: 'Saldo Contratual', value: fmt(saldoContratual), sub: vencidos.length > 0 ? `${vencidos.length} contrato(s) vencido(s)` : 'Sem vencimentos', icon: <Clock className="w-4 h-4" />, color: saldoContratual < 0 ? ('red' as const) : ('gray' as const) },
+        { label: 'Apólices Vencendo', value: guaranteesExpiring.length.toString(), sub: guaranteesExpiring.some(g => g.days_remaining < 0) ? `${guaranteesExpiring.filter(g => g.days_remaining < 0).length} já vencida(s)` : 'Próximos 30 dias', icon: <Shield className="w-4 h-4" />, color: guaranteesExpiring.length > 0 ? ('red' as const) : ('gray' as const) },
     ] : [
-        {
-            label: 'Contratos Ativos', value: active.length.toString(),
-            sub: `${rascunho.length} em rascunho/enviado`,
-            icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',
-        },
-        {
-            label: 'Receita Contratada', value: fmt(totalReceita),
-            sub: `${active.filter(c => c.is_recurring).length} recorrentes`,
-            icon: DollarSign, color: 'text-blue-600', bg: 'bg-blue-50',
-        },
-        {
-            label: 'Vencendo em 30 dias', value: vencendo30.length.toString(),
-            sub: `${vencidos.length} já vencido(s)`,
-            icon: Clock, color: vencendo30.length > 0 ? 'text-amber-600' : 'text-gray-400', bg: vencendo30.length > 0 ? 'bg-amber-50' : 'bg-gray-50',
-        },
-        {
-            label: 'Reajustes Pendentes', value: reajustePendente.length.toString(),
-            sub: `${semAprovacao.length} aguardando aprovação`,
-            icon: RotateCcw, color: reajustePendente.length > 0 ? 'text-orange-600' : 'text-gray-400', bg: reajustePendente.length > 0 ? 'bg-orange-50' : 'bg-gray-50',
-        },
-        {
-            label: 'Apólices Vencendo', value: guaranteesExpiring.length.toString(),
-            sub: guaranteesExpiring.some(g => g.days_remaining < 0) ? `${guaranteesExpiring.filter(g => g.days_remaining < 0).length} já vencida(s)` : 'Próximos 30 dias',
-            icon: Shield, color: guaranteesExpiring.length > 0 ? 'text-red-600' : 'text-gray-400', bg: guaranteesExpiring.length > 0 ? 'bg-red-50' : 'bg-gray-50',
-        },
+        { label: 'Contratos Ativos', value: active.length.toString(), sub: `${rascunho.length} em rascunho/enviado`, icon: <CheckCircle2 className="w-4 h-4" />, color: 'emerald' as const },
+        { label: 'Receita Contratada', value: fmt(totalReceita), sub: `${active.filter(c => c.is_recurring).length} recorrentes`, icon: <DollarSign className="w-4 h-4" />, color: 'blue' as const },
+        { label: 'Vencendo em 30 dias', value: vencendo30.length.toString(), sub: `${vencidos.length} já vencido(s)`, icon: <Clock className="w-4 h-4" />, color: vencendo30.length > 0 ? ('amber' as const) : ('gray' as const) },
+        { label: 'Reajustes Pendentes', value: reajustePendente.length.toString(), sub: `${semAprovacao.length} aguardando aprovação`, icon: <RotateCcw className="w-4 h-4" />, color: reajustePendente.length > 0 ? ('orange' as const) : ('gray' as const) },
+        { label: 'Apólices Vencendo', value: guaranteesExpiring.length.toString(), sub: guaranteesExpiring.some(g => g.days_remaining < 0) ? `${guaranteesExpiring.filter(g => g.days_remaining < 0).length} já vencida(s)` : 'Próximos 30 dias', icon: <Shield className="w-4 h-4" />, color: guaranteesExpiring.length > 0 ? ('red' as const) : ('gray' as const) },
     ];
 
     const tabContracts = tab === 'alerts'
@@ -209,152 +196,232 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
         : tab === 'active' ? active
         : contracts;
 
-    return (
-        <div className="p-6 space-y-6 max-w-6xl mx-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Carteira de Contratos</h2>
-                <div className="flex items-center gap-3">
-                    {onCreateNew && (
-                        <Button onClick={onCreateNew} size="sm">
-                            <Plus size={15} /> Novo Contrato
-                        </Button>
-                    )}
-                    <button onClick={load} disabled={loading} className="text-gray-400 hover:text-gray-700 disabled:opacity-50">
-                        <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                    </button>
-                </div>
-            </div>
+    // Busca + ordenação (§3/§6.3) — aplicadas em cima do recorte da aba ativa.
+    const visibleContracts = React.useMemo(() => {
+        const q = searchTerm.trim().toLowerCase();
+        let list = !q ? tabContracts : tabContracts.filter(c => {
+            const clientName = (c as any).client_id ? (clientNames[(c as any).client_id] ?? '') : '';
+            return (c.number ?? '').toString().toLowerCase().includes(q)
+                || (c.title ?? '').toLowerCase().includes(q)
+                || clientName.toLowerCase().includes(q)
+                || (STATUS_LABEL[c.status] ?? c.status).toLowerCase().includes(q);
+        });
+        if (tableColumns.sortColumn) {
+            const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+            const col = tableColumns.sortColumn;
+            list = [...list].sort((a, b) => {
+                switch (col) {
+                    case 'number':
+                        return (a.number ?? '').localeCompare(b.number ?? '', undefined, { numeric: true }) * dir;
+                    case 'title':
+                        return (a.title ?? '').localeCompare(b.title ?? '') * dir;
+                    case 'client': {
+                        const an = (a as any).client_id ? (clientNames[(a as any).client_id] ?? '') : '';
+                        const bn = (b as any).client_id ? (clientNames[(b as any).client_id] ?? '') : '';
+                        return an.localeCompare(bn) * dir;
+                    }
+                    case 'value':
+                        return ((a.current_value ?? 0) - (b.current_value ?? 0)) * dir;
+                    case 'status':
+                        return (STATUS_LABEL[a.status] ?? a.status).localeCompare(STATUS_LABEL[b.status] ?? b.status) * dir;
+                    case 'end_date':
+                        return ((a.end_date ? new Date(a.end_date).getTime() : Infinity) - (b.end_date ? new Date(b.end_date).getTime() : Infinity)) * dir;
+                    default:
+                        return 0;
+                }
+            });
+        }
+        return list;
+    }, [tabContracts, searchTerm, clientNames, tableColumns.sortColumn, tableColumns.sortDirection]);
 
+    const sortHeaderProps = {
+        sortColumn: tableColumns.sortColumn,
+        sortDirection: tableColumns.sortDirection,
+        onSort: tableColumns.handleColumnSort,
+        uppercase: false as const,
+    };
+    const vc = tableColumns.visibleColumns;
+
+    return (
+        <div className="space-y-6">
             {/* Erro de carregamento */}
             {loadError && (
-                <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm font-medium">
+                <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-[10px] text-red-700 text-sm font-medium">
                     <AlertTriangle size={16} className="shrink-0" />
                     <span>{loadError}</span>
-                    <button onClick={load} className="ml-auto text-button underline hover:no-underline">Tentar novamente</button>
+                    <button onClick={load} className="ml-auto text-sm font-medium underline hover:no-underline">Tentar novamente</button>
                 </div>
             )}
 
-            {/* KPIs */}
+            {/* KPIs — §4, componente canônico KpiCard */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 {kpis.map(k => (
-                    <div key={k.label} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5 space-y-3">
-                        <div className={`w-9 h-9 ${k.bg} rounded-xl flex items-center justify-center`}>
-                            <k.icon size={18} className={k.color} />
-                        </div>
-                        <div>
-                            <p className="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight">{loading ? '…' : k.value}</p>
-                            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mt-0.5">{k.label}</p>
-                            <p className="text-xs text-gray-400 mt-1">{k.sub}</p>
-                        </div>
-                    </div>
+                    <KpiCard key={k.label} shadow={false} size="sm" label={k.label} value={loading ? '…' : k.value} sub={k.sub} icon={k.icon} color={k.color} />
                 ))}
             </div>
 
-            {/* Tabs */}
-            <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
-                {([
-                    { id: 'alerts', label: `Alertas${alerts.length > 0 ? ` (${alerts.length})` : ''}` },
-                    { id: 'active', label: `Ativos (${active.length})` },
-                    { id: 'all',    label: `Todos (${contracts.length})` },
-                ] as const).map(t => (
-                    <button key={t.id} onClick={() => setTab(t.id)}
-                        className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                            tab === t.id ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                        }`}>
-                        {t.label}
+            {/* Tabs (Alertas/Ativos/Todos) + toolbar acoplada à tabela (§5.2/§19) */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0 w-fit">
+                    {([
+                        { id: 'alerts', label: `Alertas${alerts.length > 0 ? ` (${alerts.length})` : ''}` },
+                        { id: 'active', label: `Ativos (${active.length})` },
+                        { id: 'all',    label: `Todos (${contracts.length})` },
+                    ] as const).map(t => (
+                        <button key={t.id} onClick={() => setTab(t.id)}
+                            className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${
+                                tab === t.id ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'
+                            }`}>
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+
+                {onCreateNew && (
+                    <button
+                        onClick={onCreateNew}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                    >
+                        <Plus className="w-[15px] h-[15px]" />
+                        Novo contrato
                     </button>
-                ))}
+                )}
             </div>
 
-            {/* Alert badges quando na aba Alertas */}
+            {/* Alert badges quando na aba Alertas e sem nenhum alerta */}
             {tab === 'alerts' && alerts.length === 0 && !loading && (
-                <div className="flex flex-col items-center gap-3 py-12 text-gray-400">
+                <div className="flex flex-col items-center gap-3 py-12 text-gray-400 bg-white rounded-[10px] border border-gray-100">
                     <CheckCircle2 size={32} strokeWidth={1} className="text-emerald-400" />
                     <p className="text-sm">Nenhum alerta. Carteira saudável.</p>
                 </div>
             )}
 
-            {/* Tabela */}
+            {/* Toolbar + Tabela — card único acoplado (§5.2) */}
             {(tab !== 'alerts' || alerts.length > 0) && (
-                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
-                    {loading ? (
-                        <div className="space-y-px">
-                            {[...Array(5)].map((_, i) => <div key={i} className="h-14 bg-gray-50 dark:bg-gray-700/50 animate-pulse" />)}
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar por número, título, contratante ou status..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
                         </div>
-                    ) : tabContracts.length === 0 ? (
-                        <div className="py-12 text-center text-sm text-gray-400">Nenhum contrato encontrado.</div>
+                        <button onClick={load} disabled={loading} className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 disabled:opacity-50 shrink-0" title="Atualizar">
+                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                        </button>
+                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={domainColumns.filter(c => c.key !== 'actions')}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                        </div>
+                    </div>
+
+                    {loading ? (
+                        <div className="text-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                            <p className="mt-2 text-gray-500">Carregando...</p>
+                        </div>
+                    ) : visibleContracts.length === 0 ? (
+                        <div className="text-center py-12">
+                            <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum contrato encontrado</h3>
+                            <p className="text-sm text-gray-500">Tente ajustar sua busca.</p>
+                        </div>
                     ) : (
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700">
-                                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Número</th>
-                                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Título</th>
-                                    {showsClient && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Contratante</th>}
-                                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Valor</th>
-                                    <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Vencimento</th>
-                                    {tab === 'alerts' && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Alerta</th>}
-                                    <th className="w-8" />
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
-                                {tabContracts.map(c => {
-                                    const contractAlerts = alerts.filter(a => a.id === c.id);
-                                    const topAlert = contractAlerts[0];
-                                    const endDays = c.end_date && !c.is_recurring ? daysUntil(c.end_date) : null;
-                                    return (
-                                        <tr key={c.id} onClick={() => onViewContract(c.id)}
-                                            className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer">
-                                            <td className="px-4 py-3 font-mono text-table-body font-semibold text-blue-700 dark:text-blue-400">{c.number}</td>
-                                            <td className="px-4 py-3 text-gray-900 dark:text-white font-medium max-w-[200px] truncate">{c.title}</td>
-                                            {showsClient && (
-                                                <td className="px-4 py-3 text-table-body text-gray-500 max-w-[160px] truncate">
-                                                    {(c as any).client_id ? (clientNames[(c as any).client_id] ?? '…') : '—'}
+                        // §6.5 — cabeçalho fixo: a aba "Todos" pode crescer bastante.
+                        <div className="overflow-auto max-h-[70vh]">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        {vc.includes('number') && <SortableHeader colKey="number" label="Número" {...sortHeaderProps} className="px-4 py-2.5 border-r border-gray-100" />}
+                                        {vc.includes('title') && <SortableHeader colKey="title" label="Título" {...sortHeaderProps} className="px-4 py-2.5 border-r border-gray-100" />}
+                                        {showsClient && vc.includes('client') && <SortableHeader colKey="client" label="Contratante" {...sortHeaderProps} className="px-4 py-2.5 border-r border-gray-100" />}
+                                        {vc.includes('value') && <SortableHeader colKey="value" label="Valor" {...sortHeaderProps} className="px-4 py-2.5 border-r border-gray-100 text-right" />}
+                                        {vc.includes('status') && <SortableHeader colKey="status" label="Status" {...sortHeaderProps} className="px-4 py-2.5 border-r border-gray-100 text-center" />}
+                                        {vc.includes('end_date') && <SortableHeader colKey="end_date" label="Vencimento" {...sortHeaderProps} className="px-4 py-2.5 border-r border-gray-100" />}
+                                        {tab === 'alerts' && <th className="px-4 py-2.5 border-r border-gray-100 text-table-header font-semibold text-gray-500">Alerta</th>}
+                                        <th className="px-4 py-2.5 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {visibleContracts.map(c => {
+                                        const contractAlerts = alerts.filter(a => a.id === c.id);
+                                        const topAlert = contractAlerts[0];
+                                        const endDays = c.end_date && !c.is_recurring ? daysUntil(c.end_date) : null;
+                                        return (
+                                            // §9.1 — clique na linha já é a ação dominante (abrir detalhe); coluna de
+                                            // ações não duplica um botão "Ver Detalhes" de texto.
+                                            <tr key={c.id} onClick={() => onViewContract(c.id)}
+                                                className="hover:bg-blue-50/50 transition-colors cursor-pointer">
+                                                {vc.includes('number') && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{c.number}</td>
+                                                )}
+                                                {vc.includes('title') && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 max-w-[220px] truncate">{c.title}</td>
+                                                )}
+                                                {showsClient && vc.includes('client') && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 max-w-[160px] truncate">
+                                                        {(c as any).client_id ? (clientNames[(c as any).client_id] ?? '…') : '—'}
+                                                    </td>
+                                                )}
+                                                {vc.includes('value') && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
+                                                        {fmt(c.current_value ?? 0)}
+                                                    </td>
+                                                )}
+                                                {vc.includes('status') && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-center">
+                                                        <StatusBadge status={c.status} />
+                                                    </td>
+                                                )}
+                                                {vc.includes('end_date') && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                                        {c.is_recurring ? (
+                                                            <span className="text-blue-500">Recorrente</span>
+                                                        ) : c.end_date ? (
+                                                            <span className={endDays !== null && endDays < 0 ? 'text-red-600' : endDays !== null && endDays <= 30 ? 'text-amber-600' : ''}>
+                                                                {fmtDate(c.end_date)}
+                                                                {endDays !== null && endDays < 0 && ` (vencido)`}
+                                                            </span>
+                                                        ) : '—'}
+                                                    </td>
+                                                )}
+                                                {tab === 'alerts' && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100">
+                                                        {topAlert && (
+                                                            <span className={`inline-flex items-center gap-1 text-sm font-normal ${
+                                                                topAlert.level === 'critical' ? 'text-red-600' :
+                                                                topAlert.level === 'warning'  ? 'text-amber-600' :
+                                                                                                 'text-blue-600'
+                                                            }`}>
+                                                                {topAlert.level === 'critical' && <XCircle size={14} />}
+                                                                {topAlert.level === 'warning'  && <AlertTriangle size={14} />}
+                                                                {topAlert.label}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                )}
+                                                <td className="px-4 py-2.5 text-right">
+                                                    <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+                                                        <ChevronRight size={16} className="text-gray-300" />
+                                                    </div>
                                                 </td>
-                                            )}
-                                            <td className="px-4 py-3 text-right font-semibold text-gray-700 dark:text-gray-200">
-                                                {fmt(c.current_value ?? 0)}
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-gray-300">
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[c.status] ?? 'bg-gray-300'}`} />
-                                                    {STATUS_LABEL[c.status] ?? c.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-table-body text-gray-500">
-                                                {c.is_recurring ? (
-                                                    <span className="text-blue-500">Recorrente</span>
-                                                ) : c.end_date ? (
-                                                    <span className={endDays !== null && endDays < 0 ? 'text-red-600 font-semibold' : endDays !== null && endDays <= 30 ? 'text-amber-600 font-semibold' : ''}>
-                                                        {fmtDate(c.end_date)}
-                                                        {endDays !== null && endDays < 0 && ` (vencido)`}
-                                                    </span>
-                                                ) : '—'}
-                                            </td>
-                                            {tab === 'alerts' && (
-                                                <td className="px-4 py-3">
-                                                    {topAlert && (
-                                                        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
-                                                            topAlert.level === 'critical' ? 'bg-red-100 text-red-700' :
-                                                            topAlert.level === 'warning'  ? 'bg-amber-100 text-amber-700' :
-                                                                                             'bg-blue-100 text-blue-700'
-                                                        }`}>
-                                                            {topAlert.level === 'critical' && <XCircle size={11} />}
-                                                            {topAlert.level === 'warning'  && <AlertTriangle size={11} />}
-                                                            {topAlert.label}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                            )}
-                                            <td className="px-3 py-3 text-gray-300">
-                                                <ChevronRight size={14} />
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
                 </div>
             )}
@@ -365,10 +432,9 @@ export const ContractsDashboard: React.FC<Props> = ({ organizationId, onViewCont
                     {Object.entries(
                         contracts.reduce((acc, c) => { acc[c.status] = (acc[c.status] ?? 0) + 1; return acc; }, {} as Record<string, number>)
                     ).map(([status, count]) => (
-                        <div key={status} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 px-4 py-3 flex items-center gap-3">
-                            <span className={`w-2 h-2 rounded-full ${STATUS_DOT[status] ?? 'bg-gray-300'}`} />
-                            <span className="text-sm text-gray-700 dark:text-gray-200 font-medium flex-1">{STATUS_LABEL[status] ?? status}</span>
-                            <span className="text-sm font-bold text-gray-900 dark:text-white">{count}</span>
+                        <div key={status} className="bg-white rounded-[10px] border border-gray-100 px-4 py-3 flex items-center gap-3">
+                            <span className={`text-sm font-normal flex-1 ${STATUS_COLOR[status] ?? 'text-gray-600'}`}>{STATUS_LABEL[status] ?? status}</span>
+                            <span className="text-sm font-bold text-gray-900">{count}</span>
                         </div>
                     ))}
                 </div>

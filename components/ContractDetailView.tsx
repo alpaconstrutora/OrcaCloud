@@ -40,6 +40,7 @@ import ContractTechnicalResponsibilityModal from './ContractTechnicalResponsibil
 import ContractEvaluationModal from './ContractEvaluationModal';
 import ContractSupplyMatrixModal from './ContractSupplyMatrixModal';
 import ContractInterfaceModal from './ContractInterfaceModal';
+import { useConfirm } from './ui/confirm';
 
 const GUARANTEE_KIND_LABELS: Record<GuaranteeKind, string> = {
     RC_GERAL: 'RC Geral',
@@ -107,6 +108,7 @@ interface ContractDetailViewProps {
 }
 
 const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onBack, budget, organizationId: orgIdProp, onEdit }) => {
+    const confirm = useConfirm();
     const [contract, setContract] = React.useState<Contract | null>(null);
     const [items, setItems] = React.useState<ContractItem[]>([]);
     const [addendums, setAddendums] = React.useState<ContractAddendum[]>([]);
@@ -1061,7 +1063,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     {(contract as any).direction === 'OUTGOING' && !contract.project_id && ['Assinado', 'Ativo'].includes(contract.status) && (
                         <button
                             onClick={async () => {
-                                if (!window.confirm('Gerar obra vinculada a este contrato?')) return;
+                                const ok = await confirm({
+                                    title: 'Gerar obra?',
+                                    message: 'Gerar obra vinculada a este contrato?',
+                                    variant: 'warning',
+                                    confirmLabel: 'Gerar',
+                                });
+                                if (!ok) return;
                                 try {
                                     const { projectId } = await contractService.generateObra(contract.id);
                                     setContract({ ...contract, project_id: projectId });
@@ -1253,7 +1261,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                 <tr key={i} className="hover:bg-gray-50/50">
                                                     <td className="px-4 py-3">
                                                         <p className="font-semibold text-gray-800">{diff.description}</p>
-                                                        <p className="text-xs text-gray-400 font-mono">{diff.code || 'AVULSO'} · {diff.unit}</p>
+                                                        <p className="text-xs text-gray-400 font-normal">{diff.code || 'AVULSO'} · {diff.unit}</p>
                                                     </td>
                                                     <td className="px-4 py-3 text-right tabular-nums">
                                                         {diff.type === 'added' ? '—' : (
@@ -1272,11 +1280,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                         )}
                                                     </td>
                                                     <td className="px-4 py-3 text-center">
-                                                        <span className={`inline-flex px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                                            diff.type === 'quantity_changed' ? 'bg-amber-50 text-amber-700' :
-                                                            diff.type === 'price_changed' ? 'bg-blue-50 text-blue-700' :
-                                                            diff.type === 'removed' ? 'bg-red-50 text-red-700' :
-                                                            'bg-emerald-50 text-emerald-700'
+                                                        <span className={`text-xs font-normal ${
+                                                            diff.type === 'quantity_changed' ? 'text-amber-700' :
+                                                            diff.type === 'price_changed' ? 'text-blue-700' :
+                                                            diff.type === 'removed' ? 'text-red-700' :
+                                                            'text-emerald-700'
                                                         }`}>
                                                             {diff.type === 'quantity_changed' ? 'Qtd Alterada' :
                                                              diff.type === 'price_changed' ? 'Preço Alt.' :
@@ -1583,7 +1591,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                             <LockIcon className="w-5 h-5 text-emerald-500" />
                                             <span className="text-xs font-medium text-gray-700">Orçamento contratado</span>
                                         </div>
-                                        <span className="text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wide">Congelado</span>
+                                        <span className="text-sm font-normal text-emerald-700">Congelado</span>
                                     </div>
                                 )}
                                 <div className="p-4 bg-gray-50 rounded-2xl flex items-center justify-between">
@@ -2054,7 +2062,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col">
-                                                    <p className="text-sm font-bold text-gray-700 uppercase tracking-tight leading-tight">{item.description}</p>
+                                                    <p className="text-sm font-normal text-gray-700 tracking-tight leading-tight">{item.description}</p>
                                                     <div className="flex items-center gap-3 mt-1">
                                                         <p className="text-xs text-gray-400 font-medium tracking-tighter">ID: {item.id.slice(0, 8)}</p>
                                                         <button
@@ -2077,14 +2085,14 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                 <p className="text-sm font-medium text-gray-900 tracking-tighter">{item.quantity.toLocaleString()}</p>
                                             </td>
                                             <td className="px-4 py-4 text-right border-l border-gray-50">
-                                                <p className="text-xs font-bold text-gray-700">R$ {item.unit_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                <p className="text-xs font-medium text-gray-700">R$ {item.unit_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                             </td>
                                             <td className="px-4 py-4 text-right bg-blue-50/10">
                                                 {(() => {
                                                     const bItem = activeBudget.find(b => b.id === item.budget_item_id);
                                                     if (!bItem) return <span className="text-gray-300">-</span>;
                                                     return (
-                                                        <p className="text-xs font-bold text-blue-600">R$ {bItem.sinapiItem.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                        <p className="text-xs font-medium text-blue-600">R$ {bItem.sinapiItem.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                                     );
                                                 })()}
                                             </td>
@@ -2097,14 +2105,14 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                     if (!bItem) return <span className="text-gray-300">-</span>;
                                                     const totalBudgeted = bItem.sinapiItem.price * item.quantity;
                                                     return (
-                                                        <p className="text-xs font-bold text-blue-600">R$ {totalBudgeted.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                                                        <p className="text-xs font-medium text-blue-600">R$ {totalBudgeted.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                                                     );
                                                 })()}
                                             </td>
                                             <td className="px-8 py-4 text-right bg-emerald-50/10 border-l border-emerald-50">
                                                 {(() => {
                                                     const bItem = activeBudget.find(b => b.id === item.budget_item_id);
-                                                    if (!bItem) return <span className="text-gray-300 font-bold">-</span>;
+                                                    if (!bItem) return <span className="text-gray-300 font-medium">-</span>;
                                                     const saving = (bItem.sinapiItem.price - item.unit_price) * item.quantity;
                                                     const percent = ((bItem.sinapiItem.price - item.unit_price) / bItem.sinapiItem.price) * 100;
                                                     return (
@@ -2228,7 +2236,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     <div className="flex justify-between items-center mb-2">
                         <div>
                             <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
-                                Aditivos Contratuais <span className="text-xs font-medium bg-blue-100 text-blue-600 px-3 py-1 rounded-full uppercase tracking-widest">{addendums.length} Total</span>
+                                Aditivos Contratuais <span className="text-sm font-normal text-blue-600">{addendums.length} total</span>
                             </h3>
                             <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-1">Gestão de alterações de valor, prazo e escopo.</p>
                         </div>
@@ -2313,7 +2321,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     <div className="flex justify-between items-center mb-2">
                         <div>
                             <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
-                                Diário de Medições <span className="text-xs font-medium bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full uppercase tracking-widest">{measurements.length} Registradas</span>
+                                Diário de Medições <span className="text-sm font-normal text-emerald-600">{measurements.length} registradas</span>
                             </h3>
                             <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-1">Acompanhamento da execução física e liberação de pagamentos.</p>
                         </div>
@@ -2509,7 +2517,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         <div className="flex justify-between items-center mb-2">
                             <div>
                                 <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
-                                    Lançamentos Financeiros <span className="text-xs font-medium bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full uppercase tracking-widest">{financialEntries.length} registro(s)</span>
+                                    Lançamentos Financeiros <span className="text-sm font-normal text-emerald-600">{financialEntries.length} registro(s)</span>
                                 </h3>
                                 <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-1">Boletos, parcelas e valores gerados a partir deste contrato no módulo Financeiro.</p>
                             </div>
@@ -2555,7 +2563,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     ) : financialEntries.length === 0 ? (
                                         <tr>
                                             <td colSpan={5} className="px-8 py-20 text-center">
-                                                <p className="text-sm font-bold text-gray-400">Nenhum lançamento financeiro gerado para este contrato ainda.</p>
+                                                <p className="text-sm font-normal text-gray-400">Nenhum lançamento financeiro gerado para este contrato ainda.</p>
                                                 <p className="text-xs text-gray-400 mt-1">Use "Lançar / Atualizar" para gerar as parcelas/boletos no Financeiro.</p>
                                             </td>
                                         </tr>
@@ -2756,7 +2764,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     <div className="flex justify-between items-center mb-2">
                         <div>
                             <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
-                                Histórico de Consumo <span className="text-xs font-medium bg-blue-100 text-blue-600 px-3 py-1 rounded-full uppercase tracking-widest">{utilityBills.length} Faturas</span>
+                                Histórico de Consumo <span className="text-sm font-normal text-blue-600">{utilityBills.length} faturas</span>
                             </h3>
                             <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mt-1">Gerencie os pagamentos mensais deste contrato recorrente.</p>
                         </div>
@@ -3722,6 +3730,7 @@ interface MinutaVersionsPanelProps {
 }
 
 const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onVersionAdded, onNotify }) => {
+    const confirm = useConfirm();
     const versions = (contract.minuta_versions ?? []).slice().sort((a, b) => b.v - a.v);
     const [notes, setNotes] = React.useState('');
     const [docName, setDocName] = React.useState('');
@@ -3777,7 +3786,13 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
 
     const handleDelete = async (ver: MinutaVersion) => {
         if (isEmitted(ver)) return;
-        if (!window.confirm(`Excluir a versão ${ver.v}? Esta ação não pode ser desfeita.`)) return;
+        const ok = await confirm({
+            title: 'Excluir versão?',
+            message: `Excluir a versão ${ver.v}? Esta ação não pode ser desfeita.`,
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
         setBusyV(ver.v);
         try {
             await contractService.deleteMinutaVersion(contract.id, ver.v);
@@ -3883,7 +3898,7 @@ const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onV
                                     <>
                                         <div className="flex items-center gap-2">
                                             <p className="text-sm font-bold text-gray-800 truncate">{ver.name?.trim() || `Versão ${ver.v}`}</p>
-                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider shrink-0 ${emitted ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            <span className={`text-sm font-normal shrink-0 ${emitted ? 'text-emerald-700' : 'text-amber-700'}`}>
                                                 {emitted ? 'Emitida' : 'Rascunho'}
                                             </span>
                                         </div>

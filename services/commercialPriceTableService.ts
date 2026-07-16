@@ -23,6 +23,7 @@ export interface CommercialPriceTableItem {
     created_at: string;
     property_name?: string;
     current_price?: number; // preço vigente na commercial_properties, para diff visual
+    property_status?: string; // status da unidade (AVAILABLE/RESERVED/SOLD/RENTED), para coluna Status
 }
 
 const TABLE_COLS = 'id, organization_id, building_id, version_label, effective_date, status, notes, created_at, activated_at';
@@ -53,7 +54,7 @@ export const commercialPriceTableService = {
     async getTableItems(tableId: string): Promise<CommercialPriceTableItem[]> {
         const { data, error } = await supabase
             .from('commercial_price_table_items')
-            .select(`${ITEM_COLS}, property:commercial_properties(name, price)`)
+            .select(`${ITEM_COLS}, property:commercial_properties(name, price, status)`)
             .eq('price_table_id', tableId);
         if (error) throw error;
         return (data ?? []).map((row: any) => ({
@@ -64,6 +65,7 @@ export const commercialPriceTableService = {
             created_at: row.created_at,
             property_name: row.property?.name,
             current_price: row.property?.price != null ? Number(row.property.price) : undefined,
+            property_status: row.property?.status ?? undefined,
         }));
     },
 

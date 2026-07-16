@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Loader2, CheckCircle2, Clock, Archive, Percent, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Plus, Loader2, CheckCircle2, Clock, Archive, Percent, TrendingUp, AlertTriangle, Search } from 'lucide-react';
 import {
     commercialPriceTableService,
     CommercialPriceTable,
@@ -8,6 +8,7 @@ import {
 import { IndexName } from '../services/contractIndexService';
 import { useConfirm } from './ui/confirm';
 import { formatMoney } from './ui/Format';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
 interface Props {
     organizationId: string;
@@ -22,6 +23,67 @@ const STATUS_STYLE: Record<string, string> = {
     superseded: 'bg-gray-500/10 text-gray-500',
 };
 const INDEX_NAMES: IndexName[] = ['INCC-M', 'INCC', 'IPCA', 'IGP-M', 'CUB', 'OUTROS'];
+
+// Status da unidade (commercial_properties.status) — labels/cores alinhadas a PropertyUnitMap.tsx
+const UNIT_STATUS_LABEL: Record<string, string> = {
+    AVAILABLE: 'Disponível',
+    RESERVED: 'Reservado',
+    SOLD: 'Vendido',
+    RENTED: 'Alugado',
+    WAITING_PAYMENT: 'Aguardando pagamento',
+    BLOCKED: 'Bloqueado',
+};
+const UNIT_STATUS_COLOR: Record<string, string> = {
+    AVAILABLE: 'text-emerald-700',
+    RESERVED: 'text-amber-700',
+    SOLD: 'text-red-600',
+    RENTED: 'text-blue-700',
+    WAITING_PAYMENT: 'text-amber-700',
+    BLOCKED: 'text-gray-600',
+};
+
+// §8 Status Badge — texto simples colorido, sem pílula/fundo/uppercase
+const UnitStatusBadge: React.FC<{ status?: string }> = ({ status }) => {
+    if (!status) return <span className="text-sm font-normal text-gray-400">—</span>;
+    return (
+        <span className={`text-sm font-normal ${UNIT_STATUS_COLOR[status] || 'text-gray-600'}`}>
+            {UNIT_STATUS_LABEL[status] || status}
+        </span>
+    );
+};
+
+// §7.1 campo editável inline — mesma tipografia do TD (text-sm font-normal), com máscara R$
+const parsePrice = (s: string): number => {
+    const cleaned = s.replace(/[^\d.,-]/g, '').trim();
+    if (!cleaned) return 0;
+    const normalized = cleaned.includes(',') ? cleaned.replace(/\./g, '').replace(',', '.') : cleaned;
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : 0;
+};
+
+const PriceInput: React.FC<{ value: number; onCommit: (v: number) => void }> = ({ value, onCommit }) => {
+    const [focused, setFocused] = React.useState(false);
+    const [draft, setDraft] = React.useState('');
+    return (
+        <input
+            type="text"
+            inputMode="decimal"
+            value={focused ? draft : formatMoney(value)}
+            onFocus={() => { setFocused(true); setDraft(value ? String(value) : ''); }}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={() => { setFocused(false); onCommit(parsePrice(draft)); }}
+            className="w-36 text-right text-sm font-normal px-2 py-1 rounded border border-gray-200 bg-gray-50 outline-none focus:border-blue-400 focus:bg-white transition-all"
+        />
+    );
+};
+
+const COLUMNS: ColumnConfig[] = [
+    { key: 'unit',    label: 'Unidade',            sortable: true },
+    { key: 'status',  label: 'Status',             sortable: true },
+    { key: 'current', label: 'Preço vigente',      sortable: true },
+    { key: 'price',   label: 'Preço nesta versão', sortable: true },
+    { key: 'delta',   label: 'Δ',                  sortable: true },
+];
 
 const fmtBRL = formatMoney;
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
@@ -38,6 +100,9 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     const [creating, setCreating] = React.useState(false);
     const [activating, setActivating] = React.useState(false);
     const [applyingAdjustment, setApplyingAdjustment] = React.useState(false);
+
+    const [searchTerm, setSearchTerm] = usePersistedState<string>('priceTable:search', '');
+    const tableColumns = useTableColumns(COLUMNS, 'priceTableColumns');
 
     // Reajuste em massa
     const [adjustMode, setAdjustMode] = React.useState<'percent' | 'index'>('percent');
@@ -155,6 +220,33 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     const totalDraft = items.reduce((s, i) => s + i.price, 0);
     const totalCurrent = items.reduce((s, i) => s + (i.current_price ?? i.price), 0);
     const deltaPct = totalCurrent > 0 ? ((totalDraft - totalCurrent) / totalCurrent) * 100 : 0;
+
+    const itemDelta = (i: CommercialPriceTableItem) => {
+        const cur = i.current_price ?? i.price;
+        return cur > 0 ? ((i.price - cur) / cur) * 100 : 0;
+    };
+
+    const visibleItems = React.useMemo(() => {
+        const term = searchTerm.trim().toLowerCase();
+        const filtered = term
+            ? items.filter(i => (i.property_name || '').toLowerCase().includes(term)
+                || (UNIT_STATUS_LABEL[i.property_status || ''] || '').toLowerCase().includes(term))
+            : items;
+        const { sortColumn, sortDirection } = tableColumns;
+        const dir = sortDirection === 'asc' ? 1 : -1;
+        const sorted = [...filtered].sort((a, b) => {
+            if (!sortColumn) return (a.property_name || '').localeCompare(b.property_name || '', 'pt-BR', { numeric: true });
+            switch (sortColumn) {
+                case 'unit':    return (a.property_name || '').localeCompare(b.property_name || '', 'pt-BR', { numeric: true }) * dir;
+                case 'status':  return (UNIT_STATUS_LABEL[a.property_status || ''] || '').localeCompare(UNIT_STATUS_LABEL[b.property_status || ''] || '', 'pt-BR') * dir;
+                case 'current': return ((a.current_price ?? a.price) - (b.current_price ?? b.price)) * dir;
+                case 'price':   return (a.price - b.price) * dir;
+                case 'delta':   return (itemDelta(a) - itemDelta(b)) * dir;
+                default:        return 0;
+            }
+        });
+        return sorted;
+    }, [items, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
 
@@ -297,47 +389,116 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                         </div>
                     )}
 
+                    {/* Toolbar — busca por unidade/status + configurar colunas (§5.1 desaninhada, sem grid/lista) */}
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar por unidade ou status..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                        </div>
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={COLUMNS}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                        </div>
+                    </div>
+
                     {/* Itens */}
                     {loadingItems ? (
-                        <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-blue-600" /></div>
+                        <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-blue-600" /></div>
+                    ) : visibleItems.length === 0 ? (
+                        <div className="text-center py-12 text-sm text-gray-400 font-medium">
+                            {items.length === 0 ? 'Nenhuma unidade nesta versão.' : 'Nenhuma unidade encontrada para a busca.'}
+                        </div>
                     ) : (
-                        <div className="border border-gray-100 rounded-2xl overflow-hidden">
-                            <table className="w-full text-left text-xs">
-                                <thead>
-                                    <tr className="bg-gray-50/50 text-gray-400 font-bold uppercase tracking-wider border-b border-gray-100">
-                                        <th className="py-2.5 px-4">Unidade</th>
-                                        <th className="py-2.5 px-4 text-right">Preço Vigente</th>
-                                        <th className="py-2.5 px-4 text-right">Preço Nesta Versão</th>
-                                        <th className="py-2.5 px-4 text-right">Δ</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {items.map(item => {
-                                        const cur = item.current_price ?? item.price;
-                                        const diff = cur > 0 ? ((item.price - cur) / cur) * 100 : 0;
-                                        return (
-                                            <tr key={item.id} className="border-b border-gray-50 hover:bg-gray-50/40">
-                                                <td className="py-2 px-4 font-bold text-gray-800">{item.property_name || '—'}</td>
-                                                <td className="py-2 px-4 text-right text-gray-500">{fmtBRL(cur)}</td>
-                                                <td className="py-2 px-4 text-right">
-                                                    {isDraft ? (
-                                                        <input
-                                                            type="number" step="0.01" value={item.price}
-                                                            onChange={e => handleUpdateItemPrice(item.id, Number(e.target.value))}
-                                                            className="w-32 text-right px-2 py-1 border border-gray-200 rounded-lg text-xs font-bold outline-none focus:border-blue-400"
-                                                        />
-                                                    ) : (
-                                                        <span className="font-bold text-gray-700">{fmtBRL(item.price)}</span>
+                        <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            {tableColumns.visibleColumns.includes('unit') && (
+                                                <SortableHeader colKey="unit" label="Unidade" uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    className="px-6 py-2 border-r border-gray-100" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('status') && (
+                                                <SortableHeader colKey="status" label="Status" uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    className="px-6 py-2 border-r border-gray-100" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('current') && (
+                                                <SortableHeader colKey="current" label="Preço vigente" uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    className="px-6 py-2 border-r border-gray-100 text-right" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('price') && (
+                                                <SortableHeader colKey="price" label="Preço nesta versão" uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    className="px-6 py-2 border-r border-gray-100 text-right" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('delta') && (
+                                                <SortableHeader colKey="delta" label="Δ" uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    className="px-6 py-2 text-right" />
+                                            )}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                        {visibleItems.map(item => {
+                                            const cur = item.current_price ?? item.price;
+                                            const diff = itemDelta(item);
+                                            return (
+                                                <tr key={item.id} className="hover:bg-blue-50/50 transition-colors">
+                                                    {tableColumns.visibleColumns.includes('unit') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                                            {item.property_name || '—'}
+                                                        </td>
                                                     )}
-                                                </td>
-                                                <td className={`py-2 px-4 text-right font-bold ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-gray-300'}`}>
-                                                    {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff.toFixed(1)}%` : '—'}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                                                    {tableColumns.visibleColumns.includes('status') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                            <UnitStatusBadge status={item.property_status} />
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('current') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">
+                                                            {fmtBRL(cur)}
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('price') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
+                                                            {isDraft ? (
+                                                                <PriceInput value={item.price} onCommit={v => handleUpdateItemPrice(item.id, v)} />
+                                                            ) : (
+                                                                <span className="text-sm font-medium text-gray-800">{fmtBRL(item.price)}</span>
+                                                            )}
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('delta') && (
+                                                        <td className={`px-6 py-2.5 text-right text-sm font-medium ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-gray-300'}`}>
+                                                            {diff !== 0 ? `${diff > 0 ? '+' : ''}${diff.toFixed(1)}%` : '—'}
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     )}
                 </div>

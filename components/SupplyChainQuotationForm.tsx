@@ -467,53 +467,46 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
     };
 
     return (
-        <div className="absolute inset-0 z-[110] flex items-center justify-center p-12 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300">
-            <div className="relative bg-white rounded-[3rem] shadow-2xl w-full h-full flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden border border-white/20">
-
-                {/* Cabeçalho Executivo Premium */}
-                <div className="px-12 py-10 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between shrink-0">
-                    <div className="flex items-center gap-6">
-                        <button
-                            onClick={onBack}
-                            className="p-4 bg-white text-gray-400 hover:text-blue-600 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all group"
-                        >
-                            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-                        </button>
-                        <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl shadow-sm shadow-blue-100/50 hidden md:block">
-                            <FileText className="w-8 h-8" />
-                        </div>
-                        <div>
-                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-                                {editingQuotationId ? 'Editar Solicitação de Cotação' : 'Nova Solicitação de Cotação'}
-                            </h1>
-                            <p className="text-gray-400 text-xs font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
-                                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                                {editingQuotationId ? 'Gestão de Suprimentos • Edição Executiva' : 'Gestão de Suprimentos • Criação de Cotação'}
-                            </p>
-                        </div>
-                    </div>
+        <div className="space-y-6 animate-in slide-in-from-right-4 duration-500 pb-20">
+            {/* Header — mesmo padrão de página de SupplyChainQuotationComparison.tsx */}
+            <div className="flex items-center justify-between bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-4">
                     <button
-                        onClick={handleSubmit}
-                        disabled={loading || (selectedItems.size + formData.items.length) === 0}
-                        className="flex items-center gap-2 bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-900/20 active:scale-95 transition-all"
+                        onClick={onBack}
+                        className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
                     >
-                        <Save className="w-4 h-4" />
-                        <span>{editingQuotationId ? 'Salvar Alterações' : 'Disparar Cotação'}</span>
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <div>
+                        <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+                            {editingQuotationId ? 'Editar Solicitação de Cotação' : 'Nova Solicitação de Cotação'}
+                        </h1>
+                        <p className="text-gray-500 text-sm mt-1">
+                            {editingQuotationId ? 'Gestão de Suprimentos • Edição' : 'Gestão de Suprimentos • Criação de Cotação'}
+                        </p>
+                    </div>
+                </div>
+                <button
+                    onClick={handleSubmit}
+                    disabled={loading || (selectedItems.size + formData.items.length) === 0}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                >
+                    <Save className="w-4 h-4" />
+                    <span>{editingQuotationId ? 'Salvar Alterações' : 'Disparar Cotação'}</span>
+                </button>
+            </div>
+
+            {formError && (
+                <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 animate-in slide-in-from-top-2 duration-200">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <p className="text-xs font-medium flex-1">{formError}</p>
+                    <button onClick={() => setFormError(null)} className="text-red-400 hover:text-red-600 transition-colors">
+                        <X className="w-4 h-4" />
                     </button>
                 </div>
+            )}
 
-                {formError && (
-                    <div className="px-12 py-3 bg-red-50 border-b border-red-100 flex items-center gap-3 text-red-600 shrink-0 animate-in slide-in-from-top-2 duration-200">
-                        <AlertCircle className="w-4 h-4 shrink-0" />
-                        <p className="text-xs font-medium flex-1">{formError}</p>
-                        <button onClick={() => setFormError(null)} className="text-red-400 hover:text-red-600 transition-colors">
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
-                )}
-
-                <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* Main Form */}
                         <div className="lg:col-span-2 space-y-6">
                             {/* General Info Card */}
@@ -727,7 +720,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
                                                                     />
                                                                 </td>
-                                                                <td className="px-4 py-3 text-table-body font-mono text-gray-400">
+                                                                <td className="px-4 py-3 text-sm font-normal text-gray-500">
                                                                     <div className="flex items-center gap-2">
                                                                         {item.sinapiItem?.type === SinapiType.COMPOSITION && (
                                                                             <Layers className="w-3 h-3 text-blue-500" />
@@ -739,7 +732,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                                     <div className="flex flex-col">
                                                                         <span>{item.sinapiItem!.description}</span>
                                                                         {item.sinapiItem?.type === SinapiType.COMPOSITION && (
-                                                                            <span className="text-[9px] text-blue-600 font-bold uppercase tracking-wider mt-0.5 animate-pulse">Clique para selecionar insumos</span>
+                                                                            <span className="text-[9px] text-blue-600 font-medium uppercase tracking-wider mt-0.5 animate-pulse">Clique para selecionar insumos</span>
                                                                         )}
                                                                     </div>
                                                                 </td>
@@ -754,7 +747,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                                                 step="any"
                                                                                 value={customPrices.get(code) ?? item.sinapiItem!.price ?? 0}
                                                                                 onChange={(e) => updateItemPrice(code, parseFloat(e.target.value) || 0)}
-                                                                                className="w-24 text-right rounded border border-emerald-300 p-1 text-form-input font-bold text-emerald-700 bg-emerald-50 outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
+                                                                                className="w-24 text-right rounded border border-emerald-300 p-1 text-sm font-normal text-emerald-700 bg-emerald-50 outline-none focus:ring-1 focus:ring-emerald-500 transition-all"
                                                                             />
                                                                         </div>
                                                                     ) : (
@@ -769,7 +762,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                                             type="number"
                                                                             value={customQuantities.get(code) ?? item.quantity}
                                                                             onChange={(e) => updateItemQuantity(code, parseFloat(e.target.value) || 0)}
-                                                                            className="w-20 bg-white border border-blue-200 rounded px-2 py-1 text-right font-bold text-blue-600 focus:ring-1 focus:ring-blue-500 outline-none"
+                                                                            className="w-20 bg-white border border-blue-200 rounded px-2 py-1 text-right text-sm font-normal text-blue-600 focus:ring-1 focus:ring-blue-500 outline-none"
                                                                         />
                                                                     ) : (
                                                                         <span className="text-gray-300 italic">--</span>
@@ -825,7 +818,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                             type="text"
                                                             value={item.code}
                                                             onChange={e => handleUpdateItem(idx, 'code', e.target.value)}
-                                                            className="w-20 bg-transparent border-none p-0 text-form-input font-mono text-gray-500 focus:ring-0"
+                                                            className="w-20 bg-transparent border-none p-0 text-sm font-normal text-gray-500 focus:ring-0"
                                                             placeholder="Cód."
                                                         />
                                                     </td>
@@ -835,7 +828,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                             type="text"
                                                             value={item.description}
                                                             onChange={e => handleUpdateItem(idx, 'description', e.target.value)}
-                                                            className="w-full bg-transparent border-none p-0 font-medium text-gray-900 focus:ring-0"
+                                                            className="w-full bg-transparent border-none p-0 text-sm font-normal text-gray-900 focus:ring-0"
                                                             placeholder="Descrição do material..."
                                                         />
                                                     </td>
@@ -845,7 +838,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                             type="number"
                                                             value={item.quantity}
                                                             onChange={e => handleUpdateItem(idx, 'quantity', parseFloat(e.target.value))}
-                                                            className="w-16 bg-transparent border-none p-0 text-right font-bold text-blue-600 focus:ring-0"
+                                                            className="w-16 bg-transparent border-none p-0 text-right text-sm font-normal text-blue-600 focus:ring-0"
                                                         />
                                                     </td>
                                                     <td className="px-4 py-3">
@@ -963,9 +956,6 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-
             {isMaterialModalOpen && selectedCompositionItem && (
                 <MaterialSelectionModal
                     isOpen={isMaterialModalOpen}

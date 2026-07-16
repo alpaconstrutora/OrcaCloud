@@ -294,7 +294,6 @@ const PartnerPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
   );
 };
 import { ContractModal } from './components/ContractModal';
-import SupplyChainQuotationForm from './components/SupplyChainQuotationForm';
 import SupplyChainOrderForm from './components/SupplyChainOrderForm';
 import { INITIAL_PROJECT_SETTINGS } from './constants';
 import { BudgetEntry, ProjectSettings, Organization, Contract, Client } from './types';
@@ -715,14 +714,6 @@ const App: React.FC = () => {
           organizations={organizations.map(o => ({ id: o.id, name: o.name }))}
         />
       </React.Suspense>
-
-      {isCreatingQuotation && (
-        <SupplyChainQuotationForm
-          onBack={() => { setIsCreatingQuotation(false); setEditingQuotationId(null); }}
-          onSave={() => { setIsCreatingQuotation(false); setEditingQuotationId(null); }}
-          editingQuotationId={editingQuotationId || null}
-        />
-      )}
 
       {isCreatingOrder && (
         <SupplyChainOrderForm

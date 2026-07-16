@@ -36,6 +36,7 @@ const ProjectSettingsView   = React.lazy(() => import('./ProjectSettingsView'));
 const SupplyChainOrderList  = React.lazy(() => import('./SupplyChainOrderList'));
 const SupplyChainOrderDetails = React.lazy(() => import('./SupplyChainOrderDetails'));
 const SupplyChainQuotationList = React.lazy(() => import('./SupplyChainQuotationList'));
+const SupplyChainQuotationForm = React.lazy(() => import('./SupplyChainQuotationForm'));
 const SupplyChainQuotationComparison = React.lazy(() => import('./SupplyChainQuotationComparison'));
 const SupplyChainContractList = React.lazy(() => import('./SupplyChainContractList'));
 const ContractDetailView    = React.lazy(() => import('./ContractDetailView'));
@@ -832,6 +833,15 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       );
 
     case 'supplies-quotations':
+      if (isCreatingQuotation) {
+        return (
+          <SupplyChainQuotationForm
+            onBack={() => { setIsCreatingQuotation(false); setEditingQuotationId(null); }}
+            onSave={() => { setIsCreatingQuotation(false); setEditingQuotationId(null); }}
+            editingQuotationId={editingQuotationId || null}
+          />
+        );
+      }
       return (
         <SupplyChainQuotationList
           onCreateNew={() => setIsCreatingQuotation(true)}

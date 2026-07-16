@@ -79,8 +79,11 @@ export const commercialPriceTableService = {
         return (data ?? []).map((row: any) => {
             const p = row.property ?? {};
             const specs = p.specs ?? {};
-            // Coluna top-level tem prioridade; specs é o fallback (padrão PropertyUnitMap.tsx).
-            const num = (a: any, b: any) => (a != null ? Number(a) : b != null ? Number(b) : null);
+            // Padrão canônico de PropertyUnitMap.tsx: `coluna || specs || 0`. Usa `||`
+            // (falsy) de propósito — a coluna top-level de commercial_properties fica em
+            // 0 (o publish/push grava esses campos em specs, não na coluna), então um
+            // `!= null` prenderia no 0 e nunca cairia no specs. Retorna null p/ exibir "—".
+            const num = (a: any, b: any) => (Number(a) || Number(b)) || null;
             return {
                 id: row.id,
                 price_table_id: row.price_table_id,

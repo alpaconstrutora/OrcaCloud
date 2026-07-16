@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Building2, MapPin, Ruler, FileText, Cloud, Search, ChevronDown, TrendingUp, Calendar, Hash, Layers, Settings2, Users } from 'lucide-react';
+import { X, ArrowLeft, Building2, MapPin, Ruler, FileText, Cloud, Search, ChevronDown, TrendingUp, Calendar, Hash, Layers, Settings2, Users } from 'lucide-react';
 import { TipoObra, RegimeObra, TechnicalConfig } from '../types/project';
 import { BASE_CUB_RATES, CUB_STANDARDS_DATA } from '../constants';
 import { clientService } from '../services/clientService';
@@ -460,15 +460,6 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
     }
   }, [isOpen, projects.length, initialClassification, initialData?.linkedProjectId]);
 
-  // Delay sheet open state by one frame so CSS transition plays on mount
-  const [sheetOpen, setSheetOpen] = React.useState(false);
-  React.useEffect(() => {
-    if (isOpen && mode === 'edit') {
-      const id = requestAnimationFrame(() => setSheetOpen(true));
-      return () => { cancelAnimationFrame(id); setSheetOpen(false); };
-    }
-    setSheetOpen(false);
-  }, [isOpen, mode]);
 
   if (!isOpen) return null;
 
@@ -536,28 +527,29 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
   return (
     <div className={
       mode === 'edit'
-        ? 'fixed inset-0 z-50'
+        ? 'fixed inset-0 z-50 bg-gray-50 flex flex-col'
         : 'absolute inset-0 z-50 flex items-center justify-center p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200'
     }>
 
-      {/* Sheet backdrop (edit mode only) */}
-      {mode === 'edit' && (
-        <div
-          className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-200 ${sheetOpen ? 'opacity-100' : 'opacity-0'}`}
-          onClick={onClose}
-        />
-      )}
-
-      {/* Modal / Sheet Content */}
+      {/* Page Content (edit mode = tela dedicada, sem backdrop/overlay) */}
       <div className={
         mode === 'edit'
-          ? `absolute top-0 right-0 bottom-0 flex flex-col bg-white shadow-2xl w-full max-w-2xl overflow-hidden border-l border-gray-200 transition-transform duration-300 ease-in-out ${sheetOpen ? 'translate-x-0' : 'translate-x-full'}`
+          ? 'flex-1 flex flex-col bg-white overflow-hidden'
           : 'relative bg-white rounded-[2.5rem] shadow-2xl w-full h-full flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden border border-gray-200'
       }>
 
         {/* Header */}
         <div className={`border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 ${mode === 'edit' ? 'px-6 py-5' : 'px-12 py-8'}`}>
           <div className="flex items-start gap-5 flex-1 min-w-0">
+            {mode === 'edit' && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-3 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm active:scale-95 group shrink-0"
+              >
+                <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+              </button>
+            )}
             {/* Bloco de Identidade: Ícone */}
             <div className="flex flex-col items-center gap-2 shrink-0">
               <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
@@ -590,12 +582,14 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
+          {mode !== 'edit' && (
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          )}
         </div>
 
         {/* Tabs - Only show if NOT an 'OBRA' creation from Management */}
@@ -642,7 +636,11 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
-          <div className={`flex-1 overflow-y-auto space-y-6 ${mode === 'edit' ? 'p-6' : 'p-12'}`}>
+          <div className={mode === 'edit'
+            ? 'flex-1 overflow-y-auto space-y-6 p-6 md:p-10'
+            : 'flex-1 overflow-y-auto space-y-6 p-12'
+          }>
+            <div className={mode === 'edit' ? 'max-w-3xl mx-auto space-y-6' : 'contents'}>
 
             {initialClassification === 'OBRA' ? (
               <div className="space-y-6 animate-in fade-in duration-300">
@@ -1541,14 +1539,14 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                               <tr key={p.id} className={`transition-all duration-200 ${linkedProjectId === p.id ? 'bg-green-50 ring-1 ring-inset ring-green-200' : 'hover:bg-blue-50/50'}`}>
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2">
-                                    <div className={`font-bold text-sm ${linkedProjectId === p.id ? 'text-green-800' : 'text-gray-700'}`}>{p.name}</div>
+                                    <div className={`text-sm font-normal ${linkedProjectId === p.id ? 'text-green-800' : 'text-gray-700'}`}>{p.name}</div>
                                     {linkedProjectId === p.id && (
-                                      <span className="text-[9px] bg-green-600 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-tighter shadow-sm">Vinculado</span>
+                                      <span className="text-sm font-normal text-green-700">Vinculado</span>
                                     )}
                                   </div>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${p.settings?.classification === 'OBRA' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                  <span className={`text-sm font-normal ${p.settings?.classification === 'OBRA' ? 'text-blue-700' : 'text-emerald-700'}`}>
                                     {p.settings?.classification === 'OBRA' ? 'Obra' : 'Orçamento'}
                                   </span>
                                 </td>
@@ -1567,7 +1565,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                                           linkedProjectName: undefined
                                         }));
                                       }}
-                                      className="text-button font-black uppercase px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 transition-all border border-red-200 shadow-sm"
+                                      className="text-sm font-normal px-2 py-1 rounded text-red-600 hover:bg-red-50 transition-all"
                                     >
                                       Desvincular
                                     </button>
@@ -1616,7 +1614,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                                         setLinkedProjectId(p.id);
                                         setActiveTab('technical');
                                       }}
-                                      className="text-button font-black uppercase px-2 py-1 rounded text-blue-600 hover:bg-blue-100 transition-all"
+                                      className="text-sm font-normal px-2 py-1 rounded text-blue-600 hover:bg-blue-50 transition-all"
                                     >
                                       Vincular
                                     </button>
@@ -2166,6 +2164,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
               </>
             )}
 
+            </div>
           </div>
 
           {/* Footer - Standard Style */}

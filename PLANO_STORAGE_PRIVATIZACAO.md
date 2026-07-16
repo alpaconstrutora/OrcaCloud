@@ -102,9 +102,10 @@ Por isso, por bucket:
   `receipts`, `invoices`. Um bucket por vez, com a sequência segura. Atenção ao
   `invoices` (fluxo anon do fornecedor: upload pode precisar de signed upload URL
   ou edge function; leitura vira signed).
-  - **`receipts` ✅ (piloto dado real, 2026-07-15) — migration
-    `20270208000005_storage_fase1_receipts_private.sql` (CRIADA, aguardando
-    aplicação).** receiptService já persistia o PATH (photo_path) — só a leitura
+  - **`receipts` ✅ COMPLETO (piloto dado real, 2026-07-15) — migration
+    `20270208000005_storage_fase1_receipts_private.sql` APLICADA + código
+    deployado (commit e25e0d7). Verificado: public=false, 4 policies org-scoped,
+    0 antigas.** receiptService já persistia o PATH (photo_path) — só a leitura
     mudou: `SupplyChainOrderDetails.tsx` troca `storageService.getPublicUrl` por
     signed URL 15min resolvida em estado (`receiptPhotoUrls`, helper
     `resolveReceiptPhotos` chamado nos 2 pontos de carga). Migration: remove

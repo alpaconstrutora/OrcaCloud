@@ -535,9 +535,11 @@ export const boletoService = {
         return (data || []) as BoletoAuditoria[];
     },
 
-    getDocumentoUrl(path: string): string {
-        const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-        return data.publicUrl;
+    // Bucket privado: gera URL assinada (15min). documento_path guarda só o PATH.
+    async getDocumentoUrl(path: string): Promise<string> {
+        const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60 * 15);
+        if (error) throw error;
+        return data.signedUrl;
     },
 
     async exportarExcel(boletos: Boleto[], nomeArquivo = 'boletos'): Promise<void> {

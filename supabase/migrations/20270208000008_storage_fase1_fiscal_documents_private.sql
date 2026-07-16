@@ -1,0 +1,22 @@
+-- ============================================================
+-- Migration: 20270208000008_storage_fase1_fiscal_documents_private.sql
+-- Fase 1 do PLANO_STORAGE_PRIVATIZACAO.md — privatiza `fiscal-documents`
+-- (XML/DANFE de NF-e; 302 objetos no remoto).
+--
+-- Flip LIMPO (sem companheiro de código) — verificado:
+--   • Nenhum getPublicUrl/publicUrl aponta para fiscal-documents em todo o repo.
+--   • O único leitor do arquivo é a Edge Function fiscal-nfe-processor, que usa
+--     SUPABASE_SERVICE_ROLE_KEY + storage.download() → bypassa RLS e a flag
+--     public; privatizar NÃO a afeta.
+--   • A UI (FiscalDocuments.tsx) lê metadados de raw_documents, nunca o arquivo
+--     via URL pública.
+--   • nfeService persiste o PATH (raw_documents.file_path = {orgId}/{ano}/{arquivo}),
+--     nunca a URL pública → sem URL persistida para quebrar.
+--   • Já existem policies org-scoped fiscal_docs_select/insert/delete
+--     (foldername[1] = organization_id) e NÃO há policy public/anon.
+--
+-- Única exposição fechada aqui: a flag public=true deixava os 302 XMLs fiscais
+-- mundialmente legíveis por URL. Zero mudança de comportamento para os fluxos.
+-- ============================================================
+
+UPDATE storage.buckets SET public = false WHERE id = 'fiscal-documents';

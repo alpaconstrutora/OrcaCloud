@@ -131,10 +131,16 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         }
     }, [boleto?.id]);
 
-    const documentoUrl = useMemo(
-        () => boleto ? boletoService.getDocumentoUrl(boleto.documento_path) : null,
-        [boleto?.documento_path],
-    );
+    // Bucket 'boletos' privado: resolve a signed URL (async) em estado.
+    const [documentoUrl, setDocumentoUrl] = useState<string | null>(null);
+    useEffect(() => {
+        if (!boleto?.documento_path) { setDocumentoUrl(null); return; }
+        let cancelled = false;
+        boletoService.getDocumentoUrl(boleto.documento_path)
+            .then(url => { if (!cancelled) setDocumentoUrl(url); })
+            .catch(() => { if (!cancelled) setDocumentoUrl(null); });
+        return () => { cancelled = true; };
+    }, [boleto?.documento_path]);
 
     // Busca o documento como blob para contornar CSP que bloqueia iframes cross-origin
     useEffect(() => {

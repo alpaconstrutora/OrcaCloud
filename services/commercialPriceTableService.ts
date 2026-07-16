@@ -24,6 +24,14 @@ export interface CommercialPriceTableItem {
     property_name?: string;
     current_price?: number; // preço vigente na commercial_properties, para diff visual
     property_status?: string; // status da unidade (AVAILABLE/RESERVED/SOLD/RENTED), para coluna Status
+    // Atributos da unidade (commercial_properties) — dormitórios/banheiros/vagas caem
+    // em specs quando não há coluna top-level (mesmo fallback de PropertyUnitMap.tsx).
+    private_area?: number | null;
+    bedrooms?: number | null;
+    bathrooms?: number | null;
+    parking_spaces?: number | null;
+    floor?: number | null;
+    position_type?: string | null;
 }
 
 const TABLE_COLS = 'id, organization_id, building_id, version_label, effective_date, status, notes, created_at, activated_at';
@@ -54,19 +62,31 @@ export const commercialPriceTableService = {
     async getTableItems(tableId: string): Promise<CommercialPriceTableItem[]> {
         const { data, error } = await supabase
             .from('commercial_price_table_items')
-            .select(`${ITEM_COLS}, property:commercial_properties(name, price, status)`)
+            .select(`${ITEM_COLS}, property:commercial_properties(name, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs)`)
             .eq('price_table_id', tableId);
         if (error) throw error;
-        return (data ?? []).map((row: any) => ({
-            id: row.id,
-            price_table_id: row.price_table_id,
-            property_id: row.property_id,
-            price: Number(row.price),
-            created_at: row.created_at,
-            property_name: row.property?.name,
-            current_price: row.property?.price != null ? Number(row.property.price) : undefined,
-            property_status: row.property?.status ?? undefined,
-        }));
+        return (data ?? []).map((row: any) => {
+            const p = row.property ?? {};
+            const specs = p.specs ?? {};
+            // Coluna top-level tem prioridade; specs é o fallback (padrão PropertyUnitMap.tsx).
+            const num = (a: any, b: any) => (a != null ? Number(a) : b != null ? Number(b) : null);
+            return {
+                id: row.id,
+                price_table_id: row.price_table_id,
+                property_id: row.property_id,
+                price: Number(row.price),
+                created_at: row.created_at,
+                property_name: p.name,
+                current_price: p.price != null ? Number(p.price) : undefined,
+                property_status: p.status ?? undefined,
+                private_area: p.private_area != null ? Number(p.private_area) : null,
+                bedrooms: num(p.bedrooms, specs.bedrooms),
+                bathrooms: num(p.bathrooms, specs.bathrooms),
+                parking_spaces: num(p.parking_spaces, specs.parkingSpaces),
+                floor: p.floor != null ? Number(p.floor) : null,
+                position_type: p.position_type ?? null,
+            };
+        });
     },
 
     /** Cria um rascunho clonando os preços vigentes das unidades do prédio (filhas diretas). */

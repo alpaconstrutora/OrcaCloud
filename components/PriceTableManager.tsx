@@ -79,12 +79,24 @@ const PriceInput: React.FC<{ value: number; onCommit: (v: number) => void }> = (
     );
 };
 
+// position_type (commercial_properties) — labels alinhadas a PropertyModal.tsx
+const POSITION_LABEL: Record<string, string> = { FRONT: 'Frente', LATERAL: 'Lateral', BACK: 'Fundos' };
+
+const num = (v: number | null | undefined) => (v != null ? String(v) : '—');
+const areaFmt = (v: number | null | undefined) => (v != null ? `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m²` : '—');
+
 const COLUMNS: ColumnConfig[] = [
-    { key: 'unit',    label: 'Unidade',            sortable: true },
-    { key: 'status',  label: 'Status',             sortable: true },
-    { key: 'current', label: 'Preço vigente',      sortable: true },
-    { key: 'price',   label: 'Preço nesta versão', sortable: true },
-    { key: 'delta',   label: 'Δ',                  sortable: true },
+    { key: 'unit',     label: 'Unidade',            sortable: true },
+    { key: 'status',   label: 'Status',             sortable: true },
+    { key: 'privArea', label: 'Área privativa',     sortable: true },
+    { key: 'bedrooms', label: 'Dormitórios',        sortable: true },
+    { key: 'parking',  label: 'Vagas',              sortable: true },
+    { key: 'bathrooms',label: 'Banheiros',          sortable: true },
+    { key: 'floor',    label: 'Pavimento',          sortable: true },
+    { key: 'position', label: 'Posição',            sortable: true },
+    { key: 'current',  label: 'Preço vigente',      sortable: true },
+    { key: 'price',    label: 'Preço nesta versão', sortable: true },
+    { key: 'delta',    label: 'Δ',                  sortable: true },
 ];
 
 const fmtBRL = formatMoney;
@@ -238,13 +250,20 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
         const dir = sortDirection === 'asc' ? 1 : -1;
         const sorted = [...filtered].sort((a, b) => {
             if (!sortColumn) return (a.property_name || '').localeCompare(b.property_name || '', 'pt-BR', { numeric: true });
+            const n = (v: number | null | undefined) => v ?? -Infinity;
             switch (sortColumn) {
-                case 'unit':    return (a.property_name || '').localeCompare(b.property_name || '', 'pt-BR', { numeric: true }) * dir;
-                case 'status':  return (UNIT_STATUS_LABEL[a.property_status || ''] || '').localeCompare(UNIT_STATUS_LABEL[b.property_status || ''] || '', 'pt-BR') * dir;
-                case 'current': return ((a.current_price ?? a.price) - (b.current_price ?? b.price)) * dir;
-                case 'price':   return (a.price - b.price) * dir;
-                case 'delta':   return (itemDelta(a) - itemDelta(b)) * dir;
-                default:        return 0;
+                case 'unit':      return (a.property_name || '').localeCompare(b.property_name || '', 'pt-BR', { numeric: true }) * dir;
+                case 'status':    return (UNIT_STATUS_LABEL[a.property_status || ''] || '').localeCompare(UNIT_STATUS_LABEL[b.property_status || ''] || '', 'pt-BR') * dir;
+                case 'privArea':  return (n(a.private_area) - n(b.private_area)) * dir;
+                case 'bedrooms':  return (n(a.bedrooms) - n(b.bedrooms)) * dir;
+                case 'parking':   return (n(a.parking_spaces) - n(b.parking_spaces)) * dir;
+                case 'bathrooms': return (n(a.bathrooms) - n(b.bathrooms)) * dir;
+                case 'floor':     return (n(a.floor) - n(b.floor)) * dir;
+                case 'position':  return (POSITION_LABEL[a.position_type || ''] || '').localeCompare(POSITION_LABEL[b.position_type || ''] || '', 'pt-BR') * dir;
+                case 'current':   return ((a.current_price ?? a.price) - (b.current_price ?? b.price)) * dir;
+                case 'price':     return (a.price - b.price) * dir;
+                case 'delta':     return (itemDelta(a) - itemDelta(b)) * dir;
+                default:          return 0;
             }
         });
         return sorted;
@@ -440,6 +459,42 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                     onSort={tableColumns.handleColumnSort}
                                                     className="px-6 py-2 border-r border-gray-100" />
                                             )}
+                                            {tableColumns.visibleColumns.includes('privArea') && (
+                                                <SortableHeader colKey="privArea" label="Área privativa" uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('bedrooms') && (
+                                                <SortableHeader colKey="bedrooms" label="Dormitórios" uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('parking') && (
+                                                <SortableHeader colKey="parking" label="Vagas" uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('bathrooms') && (
+                                                <SortableHeader colKey="bathrooms" label="Banheiros" uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('floor') && (
+                                                <SortableHeader colKey="floor" label="Pavimento" uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    className="px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap" />
+                                            )}
+                                            {tableColumns.visibleColumns.includes('position') && (
+                                                <SortableHeader colKey="position" label="Posição" uppercase={false}
+                                                    sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                                    onSort={tableColumns.handleColumnSort}
+                                                    className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                                            )}
                                             {tableColumns.visibleColumns.includes('current') && (
                                                 <SortableHeader colKey="current" label="Preço vigente" uppercase={false}
                                                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
@@ -474,6 +529,36 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                     {tableColumns.visibleColumns.includes('status') && (
                                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                             <UnitStatusBadge status={item.property_status} />
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('privArea') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                            {areaFmt(item.private_area)}
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('bedrooms') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
+                                                            {num(item.bedrooms)}
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('parking') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
+                                                            {num(item.parking_spaces)}
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('bathrooms') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
+                                                            {num(item.bathrooms)}
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('floor') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
+                                                            {num(item.floor)}
+                                                        </td>
+                                                    )}
+                                                    {tableColumns.visibleColumns.includes('position') && (
+                                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                                                            {item.position_type ? (POSITION_LABEL[item.position_type] || item.position_type) : '—'}
                                                         </td>
                                                     )}
                                                     {tableColumns.visibleColumns.includes('current') && (

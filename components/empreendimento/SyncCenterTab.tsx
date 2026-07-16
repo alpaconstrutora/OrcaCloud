@@ -319,46 +319,42 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
 
         {/* Triângulo, não estrela: Arquitetura tem DUAS arestas — uma com o hub e outra
             direta com a Viabilidade (imovib_studies.planta_ai_study_id). Desenhar só os raios
-            do hub escondia a ligação mais antiga das três. */}
+            do hub escondia a ligação mais antiga das três.
+
+            Layout (desktop):                [ARQUITETURA]
+                                        ↙(direto)      ↕
+                            [VIABILIDADE] ↔ [HUB] ↔ [COMERCIAL]
+
+            Cada aresta é um <EdgeConnector> com seus 2 botões — o conector É a ação. Ter os
+            botões dentro do card do vértice fazia o ↕ Arquitetura↔Hub parecer uma ligação
+            sem ação nenhuma. */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-3 items-stretch">
-          {/* Linha 1 — Arquitetura, centrada sobre Viabilidade+Hub (as suas duas arestas) */}
-          <div className="md:col-span-3 flex justify-center">
-            <VertexCard
-              icon={Ruler}
-              tint="indigo"
-              title="Arquitetura"
-              subtitle="Planta IA"
-              linked={!!e.planta_ai_study_id}
-              unlinkedLabel="Nenhum estudo vinculado"
-              error={plantaError}
-              divergences={plantaDiverge}
-              extraOrphans={plantaOrphans}
-              footer={plantaReport ? `${plantaReport.scenarioUnits} unidade(s) no cenário` : null}
-              className="w-full md:max-w-md"
-              actions={e.planta_ai_study_id ? [
-                {
-                  label: 'Sincronizar do cenário', icon: Download, dir: 'in',
-                  onClick: handlePlantaSync,
-                  disabled: plantaDiverge === 0, busy: plantaSyncing,
-                  title: plantaDiverge === 0 ? 'Nada a sincronizar — cenário e torres alinhados' : 'Criar/atualizar torres e unidades a partir do cenário',
-                },
-                {
-                  label: 'Enviar ao cenário', icon: Upload, dir: 'out',
-                  onClick: handlePlantaWriteBack,
-                  disabled: plantaChanges === 0, busy: plantaWritingBack,
-                  title: plantaChanges === 0 ? 'Nada a enviar — cenário já reflete o realizado' : 'Recalcular os agregados do cenário a partir das torres reais',
-                },
-              ] : undefined}
-            />
-          </div>
+          {/* Linha 1 — Arquitetura, sobre o hub */}
+          <div className="hidden md:block" />
+          <div className="hidden md:block" />
+          <VertexCard
+            icon={Ruler}
+            tint="indigo"
+            title="Arquitetura"
+            subtitle="Planta IA"
+            linked={!!e.planta_ai_study_id}
+            unlinkedLabel="Nenhum estudo vinculado"
+            error={plantaError}
+            divergences={plantaDiverge}
+            extraOrphans={plantaOrphans}
+            footer={plantaReport ? `${plantaReport.scenarioUnits} unidade(s) no cenário` : null}
+          />
           <div className="hidden md:block" />
           <div className="hidden md:block" />
 
-          {/* Linha 2 — as duas arestas da Arquitetura: diagonal p/ Viabilidade, vertical p/ Hub */}
+          {/* Linha 2 — as duas arestas da Arquitetura */}
+          <div className="hidden md:block" />
           <EdgeConnector
-            diagonal="sw"
+            orientation="diagonal"
             label="Direto"
+            tint="indigo"
             active={!!axStudy?.pairedWithImovib}
+            activeTitle="Arquitetura ↔ Viabilidade: ligação direta entre os dois estudos, sem passar pelo Empreendimento"
             inactiveTitle={
               !e.planta_ai_study_id || !e.imovib_study_id
                 ? 'Requer os dois estudos vinculados ao empreendimento'
@@ -366,23 +362,40 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
             }
             actions={axStudy?.pairedWithImovib ? [
               {
-                label: 'Testar viabilidade', icon: Send, dir: 'out',
+                label: 'Testar viabilidade', icon: Send,
                 onClick: handleAxToImovib,
                 disabled: !axStudy.selectedScenarioId, busy: axBusy === 'toImovib',
                 title: axStudy.selectedScenarioId ? 'Enviar o cenário escolhido ao estudo de viabilidade' : 'Escolha um cenário no Planta IA primeiro',
               },
               {
-                label: 'Atualizar do Imovib', icon: Download, dir: 'in',
+                label: 'Atualizar do Imovib', icon: Download,
                 onClick: handleAxFromImovib,
                 disabled: false, busy: axBusy === 'fromImovib',
                 title: 'Trazer terreno, regras e briefing da viabilidade para a arquitetura',
               },
             ] : undefined}
           />
-          <div className="hidden md:block" />
-          <div className="hidden md:flex items-start justify-center text-gray-300 pt-1">
-            <ArrowLeftRight className="w-5 h-5 rotate-90" />
-          </div>
+          <EdgeConnector
+            orientation="vertical"
+            tint="indigo"
+            active={!!e.planta_ai_study_id}
+            activeTitle="Arquitetura ↔ Empreendimento"
+            inactiveTitle="Nenhum estudo de arquitetura vinculado — vincule pelo botão Editar"
+            actions={e.planta_ai_study_id ? [
+              {
+                label: 'Sincronizar do cenário', icon: Download,
+                onClick: handlePlantaSync,
+                disabled: plantaDiverge === 0, busy: plantaSyncing,
+                title: plantaDiverge === 0 ? 'Nada a sincronizar — cenário e torres alinhados' : 'Criar/atualizar torres e unidades a partir do cenário',
+              },
+              {
+                label: 'Enviar ao cenário', icon: Upload,
+                onClick: handlePlantaWriteBack,
+                disabled: plantaChanges === 0, busy: plantaWritingBack,
+                title: plantaChanges === 0 ? 'Nada a enviar — cenário já reflete o realizado' : 'Recalcular os agregados do cenário a partir das torres reais',
+              },
+            ] : undefined}
+          />
           <div className="hidden md:block" />
           <div className="hidden md:block" />
 
@@ -398,23 +411,29 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
             divergences={studyDiverge}
             extraOrphans={studyOrphans}
             footer={e.last_synced_at ? `Última sync: ${fmtDate(e.last_synced_at)}` : 'Nunca sincronizado'}
+          />
+
+          <EdgeConnector
+            orientation="horizontal"
+            tint="violet"
+            active={!!e.imovib_study_id}
+            activeTitle="Viabilidade ↔ Empreendimento"
+            inactiveTitle="Nenhum estudo de viabilidade vinculado — vincule pelo botão Editar"
             actions={e.imovib_study_id ? [
               {
-                label: 'Sincronizar do estudo', icon: Download, dir: 'in',
+                label: 'Sincronizar do estudo', icon: Download,
                 onClick: onOpenStudySync,
                 disabled: studyDiverge === 0, busy: false,
                 title: studyDiverge === 0 ? 'Nada a sincronizar' : 'Abrir a sincronização do estudo (permite escolher o que sobrescrever)',
               },
               {
-                label: 'Enviar ao estudo', icon: Upload, dir: 'out',
+                label: 'Enviar ao estudo', icon: Upload,
                 onClick: handleWriteBack,
                 disabled: !writeBackReport || writeBackReport.instancesUpdated === 0, busy: writingBack,
                 title: !writeBackReport || writeBackReport.instancesUpdated === 0 ? 'Nada a enviar' : 'Enviar dados estruturais das unidades ao estudo',
               },
             ] : undefined}
           />
-
-          <Arrow />
 
           {/* Empreendimento (HUB) */}
           <div className="rounded-2xl border-2 border-blue-200 bg-blue-50/40 p-4 flex flex-col items-center justify-center text-center">
@@ -423,7 +442,27 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
             <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mt-0.5">Hub Central</span>
           </div>
 
-          <Arrow />
+          <EdgeConnector
+            orientation="horizontal"
+            tint="emerald"
+            active={!!comm && comm.total > 0}
+            activeTitle="Empreendimento ↔ Venda de Ativos"
+            inactiveTitle="Nenhuma unidade cadastrada nas torres deste empreendimento"
+            actions={comm && comm.total > 0 ? [
+              {
+                label: 'Publicar no Comercial', icon: Upload,
+                onClick: handlePublishAll,
+                disabled: comm.unpublished === 0, busy: commBusy === 'publish',
+                title: comm.unpublished === 0 ? 'Todas as unidades já estão publicadas' : `Publicar ${comm.unpublished} unidade(s) não publicada(s)`,
+              },
+              {
+                label: 'Trazer status', icon: Download,
+                onClick: handlePullFromCommercial,
+                disabled: comm.statusDiverge === 0, busy: commBusy === 'pull',
+                title: comm.statusDiverge === 0 ? 'Nenhum status divergente' : `Aplicar o status de venda de ${comm.statusDiverge} unidade(s)`,
+              },
+            ] : undefined}
+          />
 
           {/* Comercial */}
           <VertexCard
@@ -437,20 +476,6 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
             divergences={commDiverge}
             extraOrphans={comm?.orphans ?? 0}
             footer={comm ? `${comm.published}/${comm.total} publicadas` : '—'}
-            actions={comm && comm.total > 0 ? [
-              {
-                label: 'Publicar no Comercial', icon: Upload, dir: 'out',
-                onClick: handlePublishAll,
-                disabled: comm.unpublished === 0, busy: commBusy === 'publish',
-                title: comm.unpublished === 0 ? 'Todas as unidades já estão publicadas' : `Publicar ${comm.unpublished} unidade(s) não publicada(s)`,
-              },
-              {
-                label: 'Trazer status', icon: Download, dir: 'in',
-                onClick: handlePullFromCommercial,
-                disabled: comm.statusDiverge === 0, busy: commBusy === 'pull',
-                title: comm.statusDiverge === 0 ? 'Nenhum status divergente' : `Aplicar o status de venda de ${comm.statusDiverge} unidade(s)`,
-              },
-            ] : undefined}
           />
         </div>
       </div>
@@ -581,12 +606,11 @@ const TINTS: Record<string, { bg: string; text: string; ring: string }> = {
   indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-600',  ring: 'border-indigo-100' },
 };
 
-/** Uma ação de sincronização de uma aresta. `dir` é só semântico: 'in' = puxa para o
- *  Empreendimento, 'out' = empurra para fora. */
+/** Uma ação de sincronização de uma aresta. O sentido é comunicado pelo ícone
+ *  (Download = entra no Empreendimento, Upload/Send = sai). */
 interface EdgeAction {
   label: string;
   icon: any;
-  dir: 'in' | 'out';
   onClick: () => void;
   disabled: boolean;
   busy: boolean;
@@ -595,10 +619,10 @@ interface EdgeAction {
 
 /** Os dois botões de uma aresta (um por sentido). Desabilitado quando não há o que fazer —
  *  o `title` explica o porquê, senão o botão apagado vira mistério. */
-const EdgeActions: React.FC<{ actions: EdgeAction[]; tint: string; compact?: boolean }> = ({ actions, tint, compact }) => {
+const EdgeActions: React.FC<{ actions: EdgeAction[]; tint: string }> = ({ actions, tint }) => {
   const t = TINTS[tint] ?? TINTS.violet;
   return (
-    <div className={compact ? 'flex flex-col gap-1.5 mt-1.5' : 'flex flex-col gap-1.5 mt-3 pt-3 border-t border-white/60'}>
+    <div className="flex flex-col gap-1.5 w-full">
       {actions.map(a => (
         <button
           key={a.label}
@@ -611,7 +635,7 @@ const EdgeActions: React.FC<{ actions: EdgeAction[]; tint: string; compact?: boo
         >
           {a.busy
             ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-            : <a.icon className={`w-3.5 h-3.5 shrink-0 ${a.dir === 'in' ? 'rotate-0' : ''}`} />}
+            : <a.icon className="w-3.5 h-3.5 shrink-0" />}
           <span className="truncate">{a.label}</span>
         </button>
       ))}
@@ -619,13 +643,54 @@ const EdgeActions: React.FC<{ actions: EdgeAction[]; tint: string; compact?: boo
   );
 };
 
+/**
+ * Uma aresta do diagrama: o ícone da ligação + os 2 botões (um por sentido).
+ *
+ * Toda aresta é um conector — inclusive a que liga ao hub. Ter os botões dentro do card do
+ * vértice e só a aresta "Direto" com botões próprios fazia o `↕` Arquitetura↔Hub parecer uma
+ * ligação sem ação nenhuma (feedback real do usuário). Aqui o conector é a ação.
+ *
+ * Visível também no mobile: com `hidden md:flex` os botões sumiriam na coluna única.
+ */
+const EdgeConnector: React.FC<{
+  orientation: 'horizontal' | 'vertical' | 'diagonal';
+  label?: string;
+  tint: string;
+  active: boolean;
+  inactiveTitle?: string;
+  activeTitle?: string;
+  actions?: EdgeAction[];
+}> = ({ orientation, label, tint, active, inactiveTitle, activeTitle, actions }) => {
+  const t = TINTS[tint] ?? TINTS.violet;
+  const rot = orientation === 'vertical' ? 'rotate-90' : orientation === 'diagonal' ? '-rotate-45' : '';
+  return (
+    <div className="flex flex-col items-center justify-center gap-1.5 min-w-[168px] py-1">
+      <div className="flex items-center gap-1.5" title={active ? activeTitle : inactiveTitle}>
+        <ArrowLeftRight className={`w-4 h-4 ${rot} ${active ? t.text : 'text-gray-300'}`} />
+        {label && (
+          <span className={`text-[9px] font-bold uppercase tracking-widest ${active ? t.text : 'text-gray-300'}`}>
+            {label}
+          </span>
+        )}
+      </div>
+      {active && actions
+        ? <EdgeActions actions={actions} tint={tint} />
+        : (
+          <span className="text-[9px] text-gray-300 font-medium text-center leading-snug max-w-[160px]" title={inactiveTitle}>
+            {inactiveTitle ? 'Sem vínculo' : ''}
+          </span>
+        )}
+    </div>
+  );
+};
+
+/** Vértice = só estado (vínculo, divergências, rodapé). As ações vivem nos conectores. */
 const VertexCard: React.FC<{
   icon: any; tint: string; title: string; subtitle: string;
   linked: boolean; unlinkedLabel: string; error: string | null;
   divergences: number; extraOrphans: number; footer: string | null;
-  actions?: EdgeAction[];
   className?: string;
-}> = ({ icon: Icon, tint, title, subtitle, linked, unlinkedLabel, error, divergences, footer, actions, className = '' }) => {
+}> = ({ icon: Icon, tint, title, subtitle, linked, unlinkedLabel, error, divergences, footer, className = '' }) => {
   const t = TINTS[tint] ?? TINTS.violet;
   const aligned = linked && !error && divergences === 0;
   return (
@@ -647,48 +712,9 @@ const VertexCard: React.FC<{
         <span className="text-[10px] font-black text-amber-600 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> {divergences} divergência{divergences > 1 ? 's' : ''}</span>
       )}
       {footer && <span className="text-[9px] font-medium text-gray-400 pt-2">{footer}</span>}
-      {actions && <div className="mt-auto"><EdgeActions actions={actions} tint={tint} /></div>}
     </div>
   );
 };
-
-/** A aresta Arquitetura ↔ Viabilidade: não passa pelo hub, então não cabe num VertexCard.
- *  É um conector diagonal com as duas ações da ligação direta. */
-const EdgeConnector: React.FC<{
-  diagonal: 'sw' | 'se';
-  label: string;
-  active: boolean;
-  inactiveTitle: string;
-  actions?: EdgeAction[];
-}> = ({ diagonal, label, active, inactiveTitle, actions }) => (
-  // Caixa tracejada: sem ela os dois botões ficam soltos entre os cards e parecem
-  // pertencer ao vértice de baixo, em vez de à ligação entre os dois.
-  <div className="hidden md:flex flex-col items-center justify-start pt-1">
-    <div
-      className={`w-full max-w-[210px] rounded-[10px] border border-dashed px-2.5 py-2
-        ${active ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-200 bg-gray-50/40'}`}
-      title={active ? 'Ligação direta entre o estudo de arquitetura e o de viabilidade — não passa pelo Empreendimento' : inactiveTitle}
-    >
-      <div className="flex items-center justify-center gap-1.5">
-        <ArrowLeftRight className={`w-4 h-4 ${diagonal === 'sw' ? '-rotate-45' : 'rotate-45'} ${active ? 'text-indigo-400' : 'text-gray-300'}`} />
-        <span className={`text-[9px] font-bold uppercase tracking-widest ${active ? 'text-indigo-500' : 'text-gray-400'}`}>{label}</span>
-      </div>
-      {active && actions
-        ? <EdgeActions actions={actions} tint="indigo" compact />
-        : (
-          <p className="text-[9px] text-gray-400 font-medium text-center leading-snug pt-1.5 mt-1.5 border-t border-dashed border-gray-200">
-            Sem par
-          </p>
-        )}
-    </div>
-  </div>
-);
-
-const Arrow: React.FC = () => (
-  <div className="hidden md:flex items-center justify-center text-gray-300">
-    <ArrowLeftRight className="w-5 h-5" />
-  </div>
-);
 
 const RelationCard: React.FC<{ title: string; icon: any; tint: string; children: React.ReactNode }> = ({ title, icon: Icon, tint, children }) => {
   const t = TINTS[tint] ?? TINTS.violet;

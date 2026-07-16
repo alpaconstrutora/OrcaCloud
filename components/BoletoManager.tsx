@@ -733,8 +733,20 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 ))}
             </div>
 
-            {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — escolhida
-                porque os KPIs acima já dão contexto, mesmo padrão de ClientList.tsx. */}
+            {/* Erro — antes do card, para não quebrar a costura toolbar↔tabela abaixo */}
+            {error && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                    <span>{error}</span>
+                </div>
+            )}
+
+            {/* Toolbar acoplada à tabela (padrão OpuraDocsModule/GED): toolbar e
+                conteúdo dividem um único bloco — border/rounded/shadow ficam só no
+                container pai (overflow-hidden corta os cantos), a única costura
+                visível entre os dois é o border-b da toolbar, sem bordas duplicadas. */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-gray-100 bg-white space-y-3">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -861,14 +873,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     </div>
                 </div>
             )}
-
-            {/* Estado de carregamento / erro / vazio */}
-            {error && (
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                    <span>{error}</span>
-                </div>
-            )}
+            </div>
 
             {/* Barra de ações em lote — fixa (fora do fluxo normal) para não forçar
                 reflow da lista inteira de boletos ao selecionar/desmarcar o primeiro item */}
@@ -909,14 +914,15 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             )}
 
-            {/* Loading — padrão guia seção 11 */}
+            {/* Loading — padrão guia seção 11 (sem borda/rounded/shadow própria:
+                já está dentro do card acoplado toolbar+conteúdo, ver abertura acima) */}
             {loading ? (
                 <div className="text-center py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                     <p className="mt-2 text-gray-500">Carregando boletos...</p>
                 </div>
             ) : filtered.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+                <div className="text-center py-12">
                     {/* Empty State — padrão guia seção 12, escala compacta §16 */}
                     <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum boleto encontrado</h3>
@@ -926,7 +932,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     </button>
                 </div>
             ) : viewMode === 'grid' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
                     {filtered.map((b, idx) => {
                         const atrasado = !!(b.vencimento && !['pago','cancelado'].includes(b.status)
                             && new Date(b.vencimento + 'T00:00:00') < new Date());
@@ -948,11 +954,11 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             ) : (
                 /* ── Vista em lista ── */
-                <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
-                    {/* Cabeçalho fixo (guia §6.5) — lista pode crescer bastante (captura
-                        contínua de boletos); overflow-auto cobre rolagem vertical E
-                        horizontal (§15) no mesmo container. */}
-                    <div className="overflow-auto max-h-[70vh]">
+                /* Cabeçalho fixo (guia §6.5) — lista pode crescer bastante (captura
+                    contínua de boletos); overflow-auto cobre rolagem vertical E
+                    horizontal (§15). Sem bg/border/rounded/shadow própria: já está
+                    dentro do card acoplado toolbar+conteúdo (ver abertura acima). */
+                <div className="overflow-auto max-h-[70vh]">
                     <table className="w-full text-left border-collapse">
                         {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader
                             força uppercase internamente por padrão; classes de estilo no <tr>. */}
@@ -1110,9 +1116,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                             </tr>
                         </tfoot>
                     </table>
-                    </div>
                 </div>
             )}
+            </div>
 
             {isModalOpen && (
                 <BoletoFormModal

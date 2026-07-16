@@ -68,7 +68,7 @@ suficiente).
 - [ ] §2 Columns — definição das colunas
 - [ ] §3 State — filtros persistidos e colunas
 - [ ] §4 KPI Cards (+ §4.1 `sub` opcional, §4.2 quebra de simetria, §4.3 uppercase por `size`)
-- [ ] §5 Toolbar (+ §5.1 variante desaninhada — qual das duas foi escolhida e por quê)
+- [ ] §5 Toolbar (+ §5.1 variante desaninhada, §5.2 variante acoplada à tabela — qual das três foi escolhida e por quê)
 - [ ] §6 Tabela — container e `<thead>`
 - [ ] §6.1 Redimensionamento de colunas — decisão explícita (tem ou não tem, por quê)
 - [ ] §6.2 `<thead>` sentence case (padrão único desde §16 fechado — ❌ se ainda uppercase, não é mais decisão)
@@ -394,6 +394,64 @@ página, mais baixa e mais leve. Extraído de `components/SupplierList.tsx` (F5)
 > ℹ️ Esta variante usa a escala de radius compacta (§16): `10px` em containers,
 > `6px` em inputs/botões — não a escala `rounded-[1.25rem]`/`rounded-2xl` da §5.
 > Ver §16 antes de decidir qual escala usar numa tela nova.
+
+### 5.2 Variante acoplada à tabela (toolbar + conteúdo em um único card)
+
+Terceira variante, além do card independente (§5) e da régua desaninhada
+(§5.1): a toolbar e a tabela/grid abaixo dividem **um único** container —
+`border`/`rounded`/`shadow`/`overflow-hidden` ficam só no elemento pai, e a
+toolbar interna não tem moldura própria. A única linha visível entre os dois
+blocos é o `border-b` da toolbar; sem gap, sem duas bordas concêntricas.
+Extraído de `components/OpuraDocsModule.tsx` (GED) e replicado em
+`components/BoletoManager.tsx` (Captura de Boletos, 2026-07-16).
+
+```tsx
+<div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+  <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+      {/* ...busca, filtros, ColumnConfigButton, toggle grid/lista — mesmo
+          conteúdo do §5.1, só que agora dentro do card acoplado... */}
+    </div>
+    {showFiltros && (
+      <div className="bg-gray-50 border border-gray-200 rounded-[10px] p-4 space-y-4">
+        {/* painel de filtros avançados */}
+      </div>
+    )}
+  </div>
+
+  {/* Conteúdo — loading / empty state / grid / lista, SEM bg/border/rounded/
+      shadow próprios (o card pai já supre); só o wrapper de scroll (§6.5)
+      continua necessário quando a lista pode crescer bastante */}
+  {loading ? (
+    <div className="text-center py-12">{/* ... */}</div>
+  ) : filtered.length === 0 ? (
+    <div className="text-center py-12">{/* empty state */}</div>
+  ) : viewMode === 'grid' ? (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">{/* cards */}</div>
+  ) : (
+    <div className="overflow-auto max-h-[70vh]">
+      <table className="w-full text-left border-collapse">{/* ... */}</table>
+    </div>
+  )}
+</div>
+```
+
+> ✅ Use esta variante quando a tela quer que toolbar e tabela **leiam como um
+> só bloco** (em vez de dois cards empilhados com espaço entre eles) — mais
+> compacto verticalmente que o card independente (§5).
+> ✅ O banner de erro (`{error && (...)}`) fica **fora** do card acoplado,
+> antes dele — se ficar entre a toolbar e o conteúdo (dentro do mesmo card),
+> ele quebra a costura visual do `border-b` da toolbar. A barra de ações em
+> lote (`position: fixed`) pode ficar em qualquer posição estrutural — não é
+> afetada por `overflow-hidden` do ancestral.
+> ❌ Não deixe a tabela/empty state com sua própria `bg-white rounded-[10px]
+> border shadow-sm` dentro do card acoplado — isso duplica a moldura (o mesmo
+> defeito de "caixa dentro de caixa" que o §5.1 já corrige entre input e
+> toolbar, só que um nível acima, entre toolbar e tabela).
+> ℹ️ Continua válido escolher §5, §5.1 **ou** §5.2 por tela conforme o peso
+> visual desejado — não é substituição obrigatória das duas primeiras
+> variantes, é uma terceira opção para quando o acoplamento visual é a
+> intenção.
 
 ---
 

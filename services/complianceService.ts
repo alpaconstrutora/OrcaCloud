@@ -308,10 +308,9 @@ export const complianceService = {
   // ==========================================
   async uploadEvidenceFile(file: File, orgId: string): Promise<string> {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${orgId}/${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
-    const filePath = `${fileName}`;
+    const filePath = `${orgId}/${Date.now()}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
 
-    const { data, error } = await supabase.storage
+    const { error } = await supabase.storage
       .from('compliance-evidences')
       .upload(filePath, file);
 
@@ -320,10 +319,21 @@ export const complianceService = {
       throw new Error(`Erro ao enviar arquivo de evidência: ${error.message}`);
     }
 
-    const { data: urlData } = supabase.storage
-      .from('compliance-evidences')
-      .getPublicUrl(filePath);
+    // Bucket privado (evidence_url passa a guardar o PATH, não a URL pública) —
+    // resolver via getEvidenceSignedUrl no momento da leitura.
+    return filePath;
+  },
 
-    return urlData.publicUrl;
+  async getEvidenceSignedUrl(path: string): Promise<string> {
+    const { data, error } = await supabase.storage
+      .from('compliance-evidences')
+      .createSignedUrl(path, 60 * 15);
+
+    if (error) {
+      console.error('[ComplianceService] Erro ao gerar link assinado da evidência:', error);
+      throw new Error(`Erro ao gerar link de acesso: ${error.message}`);
+    }
+
+    return data.signedUrl;
   }
 };

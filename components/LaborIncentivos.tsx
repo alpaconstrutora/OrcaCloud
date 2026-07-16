@@ -48,6 +48,18 @@ const RULE_TYPES: { id: RuleType; label: string }[] = [
 
 const projName = (p: ProjectLite) => p.name || p.title || '';
 
+// Bucket incentive-evidence é privado — attachment_url guarda o PATH do storage;
+// resolve para signed URL (15min) só no momento em que o comprovante é aberto.
+const abrirComprovante = async (path: string) => {
+    try {
+        const { data, error } = await supabase.storage.from('incentive-evidence').createSignedUrl(path, 60 * 15);
+        if (error) throw error;
+        window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+        alert(err.message || 'Erro ao abrir comprovante.');
+    }
+};
+
 // ════════════════════════════════════════════════════════════
 const LaborIncentivos: React.FC<Props> = ({ orgId, employees, teams, projects }) => {
     const [tab, setTab] = useState<SubTab>('launch');
@@ -178,7 +190,9 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
         const path = `${orgId}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`;
         const { error } = await supabase.storage.from('incentive-evidence').upload(path, file);
         if (error) throw error;
-        return supabase.storage.from('incentive-evidence').getPublicUrl(path).data.publicUrl;
+        // Bucket privado — attachment_url passa a guardar o PATH, resolvido para
+        // signed URL no momento em que o comprovante é aberto (abrirComprovante).
+        return path;
     };
 
     const handleSubmit = async () => {
@@ -400,7 +414,7 @@ const ApprovalsTab: React.FC<{ orgId: string }> = ({ orgId }) => {
                                 <p className="text-sm font-black text-slate-800 truncate">{ev.employee_name || ev.employee_id} — <span className="text-indigo-600">{brl(ev.amount)}</span></p>
                                 <p className="text-xs font-bold text-slate-500 truncate">{ev.description} • {ev.reference_date}</p>
                                 {ev.justification && <p className="text-xs text-slate-400 italic truncate">"{ev.justification}"</p>}
-                                {ev.attachment_url && <a href={ev.attachment_url} target="_blank" rel="noreferrer" className="text-xs font-black text-indigo-500 uppercase flex items-center gap-1 mt-0.5"><Paperclip size={10} /> Comprovante</a>}
+                                {ev.attachment_url && <button type="button" onClick={() => abrirComprovante(ev.attachment_url!)} className="text-xs font-black text-indigo-500 uppercase flex items-center gap-1 mt-0.5"><Paperclip size={10} /> Comprovante</button>}
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                                 <button disabled={busy === ev.id} onClick={() => act(() => incentiveService.approveEvent(ev.id!), ev.id!)}

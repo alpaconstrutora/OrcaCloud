@@ -34,8 +34,14 @@ const GATE_COLORS: Record<string, string> = {
   free: 'bg-slate-100 text-slate-600',
 }
 
+const EVIDENCE_BUCKET = 'operational-evidence'
+
 const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
   const [files, setFiles] = useState<EvidenceFile[]>([])
+  // Bucket privado — file_url/thumbnail_url no banco guardam o PATH do storage,
+  // não a URL pública. signedUrls resolve path → URL assinada (15min) para
+  // renderização, já que <img src> precisa da URL de forma síncrona.
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,6 +52,20 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
   useEffect(() => {
     loadFiles()
   }, [workOrderId])
+
+  const resolveSignedUrls = async (records: EvidenceFile[]) => {
+    const paths = Array.from(new Set(records.flatMap(f => [f.file_url, f.thumbnail_url].filter((p): p is string => !!p))))
+    if (paths.length === 0) { setSignedUrls({}); return }
+    const results = await Promise.all(
+      paths.map(async (path) => {
+        const { data, error: signErr } = await supabase.storage.from(EVIDENCE_BUCKET).createSignedUrl(path, 60 * 15)
+        return [path, signErr ? null : data?.signedUrl] as const
+      })
+    )
+    const map: Record<string, string> = {}
+    for (const [path, url] of results) { if (url) map[path] = url }
+    setSignedUrls(map)
+  }
 
   const loadFiles = async () => {
     setLoading(true)
@@ -58,6 +78,7 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
         .order('created_at', { ascending: false })
       if (fetchErr) throw fetchErr
       setFiles(data ?? [])
+      await resolveSignedUrls(data ?? [])
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro ao carregar evidências')
     } finally {
@@ -73,18 +94,15 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
     try {
       const ext = file.name.split('.').pop() ?? 'bin'
       const path = `evidence/${orgId}/${workOrderId}/${Date.now()}.${ext}`
-      const bucket = 'operational-evidence'
 
-      const { error: upErr } = await supabase.storage.from(bucket).upload(path, file, { upsert: false })
+      const { error: upErr } = await supabase.storage.from(EVIDENCE_BUCKET).upload(path, file, { upsert: false })
       if (upErr) throw upErr
-
-      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path)
 
       const isPhoto = file.type.startsWith('image/')
       const { error: insErr } = await supabase.from('evidence_files').insert({
         work_order_id: workOrderId,
         file_type: isPhoto ? 'photo' : 'document',
-        file_url: urlData.publicUrl,
+        file_url: path,
         gate,
         description: description || null,
         captured_at: new Date().toISOString(),
@@ -105,11 +123,8 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
     if (!confirm('Remover esta evidência?')) return
     setError(null)
     try {
-      // Try to delete from storage
-      const urlParts = file.file_url.split('/operational-evidence/')
-      if (urlParts.length > 1) {
-        await supabase.storage.from('operational-evidence').remove([urlParts[1]])
-      }
+      // file_url já é o path do storage (bucket privado).
+      await supabase.storage.from(EVIDENCE_BUCKET).remove([file.file_url])
       const { error: delErr } = await supabase.from('evidence_files').delete().eq('id', file.id)
       if (delErr) throw delErr
       await loadFiles()
@@ -189,13 +204,13 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
             {photos.map(f => (
               <div key={f.id} className="group relative rounded-2xl overflow-hidden border border-slate-100 aspect-square bg-slate-100">
                 <img
-                  src={f.thumbnail_url || f.file_url}
+                  src={signedUrls[f.thumbnail_url || f.file_url] || ''}
                   alt={f.description || 'Evidência'}
                   className="w-full h-full object-cover"
-                  onError={e => { (e.target as HTMLImageElement).src = f.file_url }}
+                  onError={e => { (e.target as HTMLImageElement).src = signedUrls[f.file_url] || '' }}
                 />
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                  <a href={f.file_url} target="_blank" rel="noopener noreferrer"
+                  <a href={signedUrls[f.file_url] || '#'} target="_blank" rel="noopener noreferrer"
                     className="text-white bg-blue-600/90 rounded-lg p-1.5 hover:bg-blue-700">
                     <ExternalLink className="w-4 h-4" />
                   </a>
@@ -239,7 +254,7 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <a href={f.file_url} target="_blank" rel="noopener noreferrer"
+                  <a href={signedUrls[f.file_url] || '#'} target="_blank" rel="noopener noreferrer"
                     className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                     <ExternalLink className="w-4 h-4" />
                   </a>

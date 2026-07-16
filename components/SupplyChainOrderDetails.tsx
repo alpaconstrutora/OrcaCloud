@@ -61,6 +61,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [editUnit, setEditUnit] = React.useState<string>('');
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const [receipts, setReceipts] = React.useState<PurchaseReceipt[]>([]);
+    // Bucket 'receipts' é privado: photo_path guarda o PATH; resolvemos signed URL
+    // (15min) por path para exibir a foto do comprovante. (Fase 1 privatização storage.)
+    const [receiptPhotoUrls, setReceiptPhotoUrls] = React.useState<Record<string, string>>({});
     const [discrepancies, setDiscrepancies] = React.useState<PurchaseDiscrepancy[]>([]);
     const [notifLogs, setNotifLogs] = React.useState<NotificationLogEntry[]>([]);
     const [resolutionInputs, setResolutionInputs] = React.useState<Record<string, string>>({});
@@ -184,6 +187,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     const orderReceipts = await receiptService.listByOrder(orderId);
                     if (cancelled) return;
                     setReceipts(orderReceipts);
+                    resolveReceiptPhotos(orderReceipts);
 
                     const orderDiscrepancies = await discrepancyService.listByOrder(orderId);
                     if (cancelled) return;
@@ -208,6 +212,22 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         return () => { cancelled = true; };
     }, [orderId]);
 
+    // Resolve signed URLs (15min) para as fotos dos comprovantes (bucket privado).
+    const resolveReceiptPhotos = async (list: PurchaseReceipt[]) => {
+        const paths = Array.from(new Set(list.map(r => r.photoPath).filter((p): p is string => !!p)));
+        if (paths.length === 0) return;
+        const entries = await Promise.all(
+            paths.map(async (path) => {
+                try {
+                    return [path, await storageService.createSignedUrl('receipts', path, 60 * 15)] as const;
+                } catch {
+                    return [path, ''] as const;
+                }
+            })
+        );
+        setReceiptPhotoUrls(prev => ({ ...prev, ...Object.fromEntries(entries) }));
+    };
+
     const loadOrderData = async (): Promise<PurchaseOrder | null> => {
         try {
             const [allOrders, linkedInvoices, orderReceipts, orderDiscrepancies, orderNotifLogs] = await Promise.all([
@@ -221,6 +241,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             if (foundOrder) setOrder(foundOrder);
             setInvoices(linkedInvoices);
             setReceipts(orderReceipts);
+            resolveReceiptPhotos(orderReceipts);
             setDiscrepancies(orderDiscrepancies);
             setNotifLogs(orderNotifLogs);
             return foundOrder;
@@ -908,15 +929,15 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                         </div>
                                     )}
 
-                                    {receipt.photoPath && (
+                                    {receipt.photoPath && receiptPhotoUrls[receipt.photoPath] && (
                                         <a
-                                            href={storageService.getPublicUrl('receipts', receipt.photoPath)}
+                                            href={receiptPhotoUrls[receipt.photoPath]}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="block relative group overflow-hidden rounded-xl border-2 border-gray-100 hover:border-indigo-500 transition-all aspect-video bg-gray-50"
                                         >
                                             <img
-                                                src={storageService.getPublicUrl('receipts', receipt.photoPath)}
+                                                src={receiptPhotoUrls[receipt.photoPath]}
                                                 alt="Comprovante"
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                             />

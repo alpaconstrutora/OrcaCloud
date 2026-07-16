@@ -86,6 +86,17 @@ export const clientPortalService = {
         return res.valid ? (res.data ?? []) : [];
     },
 
+    // Portal por token (anon): lê o realizado das POs de um projeto via RPC
+    // SECURITY DEFINER, já que purchase_orders passou a ter RLS. Retorna só
+    // { status, items } — o único dado que o cálculo de progresso financeiro
+    // do portal consome (calculateRealizedFinancialProgress).
+    async getOrdersByToken(token: string, projectId: string): Promise<{ status: string; items: any[] }[]> {
+        const { data, error } = await supabase.rpc('fn_portal_get_orders', { p_token: token, p_project_id: projectId });
+        if (error) { console.error('[clientPortalService] getOrdersByToken:', error); return []; }
+        const res = data as { valid: boolean; data: { status: string; items: any[] }[] | null };
+        return res?.valid ? (res.data ?? []) : [];
+    },
+
     async getPlanningByToken(token: string): Promise<PortalPlanning | null> {
         const { data, error } = await supabase.rpc('fn_portal_get_planning', { p_token: token });
         if (error) throw error;

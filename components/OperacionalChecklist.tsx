@@ -388,14 +388,14 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
         .upload(path, file, { upsert: false })
       if (upErr) throw upErr
 
-      const { data: urlData } = supabase.storage.from('operational-evidence').getPublicUrl(path)
-
+      // Bucket privado: evidence_files.file_url guarda o PATH (não a URL pública);
+      // a leitura resolve signed URL (ver OperacionalEvidence.resolveSignedUrls).
       const { data: ev, error: evErr } = await supabase
         .from('evidence_files')
         .insert({
           work_order_id: workOrderId,
           file_type: 'photo',
-          file_url: urlData.publicUrl,
+          file_url: path,
           gate: item.gate,
           description: `Checklist: ${item.description}`,
           captured_at: new Date().toISOString(),

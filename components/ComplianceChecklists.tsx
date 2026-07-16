@@ -367,14 +367,20 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
                           <div key={ev.id} className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-2">
                             <div className="flex items-center justify-between text-xs">
                               <span className="font-bold text-slate-800 uppercase">📦 {ev.operation_type}</span>
-                              <a
-                                href={ev.evidence_url}
-                                target="_blank"
-                                rel="noreferrer"
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    const url = await complianceService.getEvidenceSignedUrl(ev.evidence_url);
+                                    window.open(url, '_blank', 'noopener,noreferrer');
+                                  } catch (err: any) {
+                                    alert(err.message || 'Erro ao abrir anexo.');
+                                  }
+                                }}
                                 className="text-xs font-bold text-sky-600 hover:underline"
                               >
                                 Ver Anexo 🔗
-                              </a>
+                              </button>
                             </div>
 
                             <div className="text-[9px] text-slate-400 space-y-1 font-mono">

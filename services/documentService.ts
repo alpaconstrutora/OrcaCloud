@@ -161,19 +161,19 @@ export const documentService = {
       }
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('[DocumentService] Erro ao listar documentos:', error);
-      throw new Error(`Erro ao listar documentos: ${error.message}`);
-    }
-
-    let result = (data || []) as OpuraDocument[];
-
     // Documentos integrados (Contratos, Invoices, etc.) não possuem folder_id.
     // Portanto, se a busca for restrita a uma pasta específica (ID válido, não nulo) ou a um conjunto de pastas, pulamos a integração.
     const isSpecificFolder = (filters && 'folderId' in filters && filters.folderId !== undefined && filters.folderId !== 'undefined' && filters.folderId !== null && filters.folderId !== 'null') || (filters?.folderIds && filters.folderIds.length > 0);
 
+    // PERF: a query principal de opura_documents e as integrações (contracts,
+    // invoices, risk, accidents, proposals, opportunity_documents) são
+    // independentes entre si — só dependem de targetProjectIds/organizationId, já
+    // resolvidos acima. Disparamos as integrações numa IIFE (que começa a rodar
+    // imediatamente) e, logo em seguida, a query principal, aguardando ambas com
+    // Promise.all → as integrações saem do caminho crítico. A ordem de append não
+    // importa: o result.sort(created_at desc) abaixo normaliza tudo.
+    const integrated: OpuraDocument[] = [];
+    const integrationsWork = (async () => {
     if (!isSpecificFolder) {
       // SE A CATEGORIA FOR CONTRATOS (juridico), INTEGRA OS CONTRATOS DA TABELA contracts
       if (!filters?.categoria || filters.categoria === 'juridico') {
@@ -231,7 +231,7 @@ export const documentService = {
             };
           });
 
-          result = [...result, ...mappedContracts];
+          integrated.push(...mappedContracts);
         }
       } catch (err) {
         console.error('[DocumentService] Erro ao integrar contratos no Docs:', err);
@@ -297,7 +297,7 @@ export const documentService = {
             } : undefined,
           }));
 
-          result = [...result, ...mappedInvoices];
+          integrated.push(...mappedInvoices);
         }
       } catch (err) {
         console.error('[DocumentService] Erro ao integrar Notas Fiscais no Docs:', err);
@@ -364,7 +364,7 @@ export const documentService = {
               },
             }));
 
-          result = [...result, ...mappedRisks];
+          integrated.push(...mappedRisks);
         }
       } catch (err) {
         console.error('[DocumentService] Erro ao integrar laudos SST no Docs:', err);
@@ -429,7 +429,7 @@ export const documentService = {
               },
             }));
 
-          result = [...result, ...mappedAccidents];
+          integrated.push(...mappedAccidents);
         }
       } catch (err) {
         console.error('[DocumentService] Erro ao integrar CATs no Docs:', err);
@@ -496,7 +496,7 @@ export const documentService = {
             } : undefined,
           }));
 
-          result = [...result, ...mappedProposals];
+          integrated.push(...mappedProposals);
         }
       } catch (err) {
         console.error('[DocumentService] Erro ao integrar propostas no Docs:', err);
@@ -558,13 +558,25 @@ export const documentService = {
             } : undefined,
           }));
 
-          result = [...result, ...mappedOppDocs];
+          integrated.push(...mappedOppDocs);
         }
       } catch (err) {
         console.error('[DocumentService] Erro ao integrar documentos de oportunidade no Docs:', err);
       }
     }
     }
+    })(); // fim da IIFE de integrações
+
+    // Query principal disparada em paralelo com as integrações (IIFE acima já em voo).
+    const { data, error } = await query.order('created_at', { ascending: false });
+    await integrationsWork;
+
+    if (error) {
+      console.error('[DocumentService] Erro ao listar documentos:', error);
+      throw new Error(`Erro ao listar documentos: ${error.message}`);
+    }
+
+    let result = [...((data || []) as OpuraDocument[]), ...integrated];
 
     // Ordena por data de criação de forma descendente
     result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());

@@ -240,11 +240,18 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         const fetchOrders = async () => {
             if (!settings.id && !settings.linkedProjectId) return;
             try {
+                // No portal por token (anon) purchase_orders tem RLS: lemos via RPC
+                // DEFINER (só status+items, que é o que o progresso financeiro usa).
+                // No modo autenticado, seguimos com listOrders (dados completos).
+                const fetchForProject = (projectId: string) =>
+                    portalToken
+                        ? clientPortalService.getOrdersByToken(portalToken, projectId)
+                        : orderService.listOrders(projectId);
                 const results = await Promise.all([
-                    settings.id ? orderService.listOrders(settings.id) : Promise.resolve([]),
-                    settings.linkedProjectId ? orderService.listOrders(settings.linkedProjectId) : Promise.resolve([])
+                    settings.id ? fetchForProject(settings.id) : Promise.resolve([]),
+                    settings.linkedProjectId ? fetchForProject(settings.linkedProjectId) : Promise.resolve([])
                 ]);
-                setOrders(results.flat());
+                setOrders(results.flat() as PurchaseOrder[]);
             } catch (error) {
                 console.error("Error fetching orders for progress:", error);
             }

@@ -44,7 +44,8 @@ export interface BrokerProposal {
     monthly_value: number;
     balloon_value?: number;
     financing_value?: number;
-    payment_plan_id?: string;
+    // Composição do pagamento. Vira FK para sales_plans quando o Plano de Vendas existir.
+    payment_plan?: Record<string, unknown>;
     discount_pct?: number;
     total_value: number;
     status: 'RASCUNHO' | 'ENVIADA' | 'EM_ANALISE' | 'APROVADA' | 'CONTRAPROPOSTA' | 'REJEITADA';

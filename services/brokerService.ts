@@ -88,7 +88,7 @@ export const brokerService = {
     async listProposals(organizationId: string, brokerEmail?: string) {
         let query = supabase
             .from('broker_portal_proposals')
-            .select('id, property_id, broker_id, broker_email, organization_id, buyer_name, buyer_cpf, buyer_email, buyer_phone, buyer_income, unit_price, down_payment, monthly_installments, monthly_value, balloon_value, financing_value, payment_plan_id, discount_pct, total_value, status, notes, admin_notes, created_at, updated_at')
+            .select('id, property_id, broker_id, broker_email, organization_id, buyer_name, buyer_cpf, buyer_email, buyer_phone, buyer_income, unit_price, down_payment, monthly_installments, monthly_value, balloon_value, financing_value, payment_plan, discount_pct, total_value, status, notes, admin_notes, created_at, updated_at')
             .eq('organization_id', organizationId)
             .order('created_at', { ascending: false });
 

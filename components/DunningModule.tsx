@@ -600,14 +600,11 @@ export default function DunningModule({ organizationId }: Props) {
     ] as const;
 
     return (
-        <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+        <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-blue-600" />
-                <div>
-                    <h1 className="text-lg font-bold text-gray-900">Cobrança Automatizada</h1>
-                    <p className="text-xs text-gray-500">Régua de e-mails automáticos por dias de vencimento</p>
-                </div>
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Cobrança Automatizada</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Régua de e-mails automáticos por dias de vencimento.</p>
             </div>
 
             {/* Tabs */}

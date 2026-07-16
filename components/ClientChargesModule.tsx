@@ -394,32 +394,32 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                         />
                                     </th>
                                     {tableColumns.visibleColumns.includes('party_name') && (
-                                        <SortableHeader label="Cliente" colKey="party_name"
+                                        <SortableHeader label="Cliente" colKey="party_name" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                             onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left" />
                                     )}
                                     {tableColumns.visibleColumns.includes('description') && (
-                                        <SortableHeader label="Descrição" colKey="description"
+                                        <SortableHeader label="Descrição" colKey="description" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                             onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left" />
                                     )}
                                     {tableColumns.visibleColumns.includes('billing_type') && (
-                                        <SortableHeader label="Tipo" colKey="billing_type"
+                                        <SortableHeader label="Tipo" colKey="billing_type" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                             onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left" />
                                     )}
                                     {tableColumns.visibleColumns.includes('due_date') && (
-                                        <SortableHeader label="Vencimento" colKey="due_date"
+                                        <SortableHeader label="Vencimento" colKey="due_date" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                             onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left" />
                                     )}
                                     {tableColumns.visibleColumns.includes('value') && (
-                                        <SortableHeader label="Valor" colKey="value"
+                                        <SortableHeader label="Valor" colKey="value" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                             onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left" />
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
-                                        <SortableHeader label="Status" colKey="status"
+                                        <SortableHeader label="Status" colKey="status" uppercase={false}
                                             sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                             onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left" />
                                     )}

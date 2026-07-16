@@ -12,6 +12,7 @@ import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilter
 import { Money, formatMoney, formatDateBR } from './ui/Format';
 import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
 import { KpiCard } from './ui/KpiCard';
+import ActionIconButton from './ui/ActionIconButton';
 
 type InvoiceRow = Invoice & { supplierName?: string; supplierOrganizationId?: string };
 
@@ -380,7 +381,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                     <button
                                         key={s}
                                         onClick={() => setStatusFilter(s)}
-                                        className={`h-9 px-3 rounded-[6px] text-xs font-semibold transition-all whitespace-nowrap ${statusFilter === s ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider whitespace-nowrap transition-all ${statusFilter === s ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
                                     >
                                         {s === 'all' ? 'Todos' : s === 'overdue' ? 'Atrasado' : STATUS_PT[s]}
                                     </button>
@@ -478,12 +479,14 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 <p className="text-sm text-gray-500">Aprove um boleto para ele aparecer aqui.</p>
                             </div>
                         ) : (
-                            <div className="overflow-x-auto">
+                            /* §6.5 — lista pode crescer (todas as contas em aberto, multi-org):
+                               container rola em altura própria e o thead fica fixo no topo. */
+                            <div className="overflow-auto max-h-[70vh]">
                             <table className="w-full text-sm text-left border-collapse">
                                 {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader
                                     força uppercase internamente por padrão. */}
                                 <thead>
-                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                         <th className="w-10 px-4 py-2 text-center">
                                             <input
                                                 type="checkbox"
@@ -610,24 +613,22 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                     </td>
                                                 )}
                                                 <td className="px-4 py-2.5">
-                                                    <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                                        {/* Ver documento — botão-ícone padrão §9.2 */}
+                                                    <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                        {/* Ver documento — botão-ícone padrão §9.2 (<ActionIconButton>) */}
                                                         {inv.filePath && (
-                                                            <a
-                                                                href="#"
-                                                                onClick={(e) => { e.preventDefault(); invoiceService.openInvoice(inv.filePath); }}
-                                                                className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
+                                                            <ActionIconButton
+                                                                kind="view"
                                                                 title="Ver documento"
-                                                            >
-                                                                <ExternalLink className="w-4 h-4" />
-                                                            </a>
+                                                                icon={<ExternalLink className="w-4 h-4" />}
+                                                                onClick={() => invoiceService.openInvoice(inv.filePath)}
+                                                            />
                                                         )}
 
                                                         {/* Pagar via Asaas — só para invoices originados de boleto com linha digitável */}
                                                         {!['paid', 'rejected'].includes(inv.status) && fromBoleto && inv.supplierOrganizationId && (
                                                             <button
                                                                 onClick={() => setPagandoAsaas(inv)}
-                                                                className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all shadow-sm text-sm font-semibold active:scale-95"
+                                                                className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 rounded-[6px] transition-all shadow-sm text-sm font-semibold active:scale-95"
                                                                 title="Pagar via Asaas"
                                                             >
                                                                 <Landmark className="w-4 h-4" />
@@ -640,7 +641,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                             <button
                                                                 onClick={() => handleMarcarPago(inv)}
                                                                 disabled={marcandoPago === inv.id}
-                                                                className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-green-200 text-green-700 hover:bg-green-50 rounded-xl transition-all shadow-sm text-sm font-semibold disabled:opacity-50 active:scale-95"
+                                                                className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-green-200 text-green-700 hover:bg-green-50 rounded-[6px] transition-all shadow-sm text-sm font-semibold disabled:opacity-50 active:scale-95"
                                                                 title="Marcar como pago"
                                                             >
                                                                 {marcandoPago === inv.id ? (

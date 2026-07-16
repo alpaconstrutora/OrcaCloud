@@ -1066,16 +1066,18 @@ export const bankReconciliationService = {
 
         lines.slice(1).forEach(line => {
             const cols = parseCSVLine(line);
-            const rawAmount = cols[1]?.trim().replace(',', '.');
-            const amount = parseFloat(rawAmount);
-            if (cols.length >= 3 && !isNaN(amount)) {
-                transactions.push({
-                    date: cols[0].trim(),
-                    amount,
-                    description: cols[2].trim(),
-                    id: `csv-${Math.random().toString(36).substring(7)}`
-                });
-            }
+            if (cols.length < 3) return;
+
+            const date = this.parseDateCell(cols[0]);
+            const amount = this.parseAmountBR(cols[1]);
+            if (!date || isNaN(amount)) return;
+
+            transactions.push({
+                date,
+                amount,
+                description: cols[2].trim(),
+                id: `csv-${Math.random().toString(36).substring(7)}`
+            });
         });
 
         return transactions;

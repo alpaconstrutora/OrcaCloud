@@ -2435,9 +2435,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 setTimeout(() => setActionFeedback(null), 4000);
             }
         } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            alert('Erro na importação: ' + error.message);
-            throw error;
+            const message = err instanceof Error
+                ? err.message
+                : (err && typeof err === 'object' && 'message' in err
+                    ? String((err as { message: unknown }).message)
+                    : String(err));
+            alert('Erro na importação: ' + message);
+            throw err;
         } finally {
             setIsImporting(false);
             setImportingMessage(null);

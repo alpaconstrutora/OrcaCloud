@@ -53,33 +53,31 @@ const ServiceContractsModule: React.FC<Props> = ({
                     }}
                 />
             ) : (
-                <div className="p-6 lg:p-8">
-                    <SupplyChainContractList
-                        projectId=""
-                        organizationId={organizationId}
-                        direction="OUTGOING"
-                        domain="SERVICOS"
-                        title="Contratos de Serviço"
-                        subtitle="Contratos emitidos para clientes — aditivos e medições."
-                        version={version}
-                        onCreateNew={() => {
-                            if (!organizationId) return;
-                            setEditingContract({
-                                contract_type: 'Prestação de Serviços',
-                                nature: 'Serviço',
-                                direction: 'OUTGOING',
-                                domain: 'SERVICOS',
-                            } as any);
-                            setIsModalOpen(true);
-                        }}
-                        onViewDetails={(id) => { setSelectedId(id); setView('detail'); }}
-                        onEdit={(contract) => {
-                            setEditingContract(contract);
-                            setIsModalOpen(true);
-                        }}
-                        onDelete={() => setVersion(v => v + 1)}
-                    />
-                </div>
+                <SupplyChainContractList
+                    projectId=""
+                    organizationId={organizationId}
+                    direction="OUTGOING"
+                    domain="SERVICOS"
+                    title="Contratos de Serviço"
+                    subtitle="Contratos emitidos para clientes — aditivos e medições."
+                    version={version}
+                    onCreateNew={() => {
+                        if (!organizationId) return;
+                        setEditingContract({
+                            contract_type: 'Prestação de Serviços',
+                            nature: 'Serviço',
+                            direction: 'OUTGOING',
+                            domain: 'SERVICOS',
+                        } as any);
+                        setIsModalOpen(true);
+                    }}
+                    onViewDetails={(id) => { setSelectedId(id); setView('detail'); }}
+                    onEdit={(contract) => {
+                        setEditingContract(contract);
+                        setIsModalOpen(true);
+                    }}
+                    onDelete={() => setVersion(v => v + 1)}
+                />
             )}
 
             {(organizationId || editingContract?.organization_id) && (

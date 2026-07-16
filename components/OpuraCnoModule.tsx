@@ -17,18 +17,27 @@ import {
   Zap,
   Plus,
   RefreshCw,
-  FolderOpen
+  FolderOpen,
+  Link2,
+  UploadCloud,
+  Paperclip
 } from 'lucide-react';
 import { cnoService } from '../services/cnoService';
 import { useStore } from '../store/useStore';
 import { useConfirm } from './ui/confirm';
+import { DocumentPicker } from './ui/DocumentPicker';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import {
   OpuraCnoRegistration,
   OpuraCnoSimulation,
   OpuraCnoDeduction,
   OpuraCnoComplianceScore,
-  OpuraCnoDctfweb
+  OpuraCnoDctfweb,
+  OpuraCnoDocument,
+  OpuraCnoDocumentBloco,
+  CNO_DOCUMENT_CATALOG
 } from '../types';
+import type { OpuraDocument } from '../types/documents';
 
 interface OpuraCnoModuleProps {
   activeOrganizationId: string | null;
@@ -41,9 +50,17 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
   projectId: initialProjectId,
   onChangeView
 }) => {
-  const { projects } = useStore();
+  const { projects, session } = useStore();
   const confirm = useConfirm();
+  const userEmail = session?.user?.email;
   const [activeTab, setActiveTab] = React.useState<'dashboard' | 'cadastro' | 'simulador' | 'deducoes' | 'dctfweb' | 'dossie'>('dashboard');
+
+  // Toast de notificação (§13 do guia — substitui os alert() nativos)
+  const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const notify = React.useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4500);
+  }, []);
   const [selectedProjectId, setSelectedProjectId] = React.useState<string | null>(initialProjectId);
   const [loading, setLoading] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState(false);
@@ -63,6 +80,26 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
     fine_amount: '',
     interest_amount: ''
   });
+
+  // Checklist documental (aba Dossiê Digital)
+  const [cnoDocuments, setCnoDocuments] = React.useState<OpuraCnoDocument[]>([]);
+  const [docSheetOpen, setDocSheetOpen] = React.useState(false);
+  const [editingDoc, setEditingDoc] = React.useState<OpuraCnoDocument | null>(null);
+  const [docBusy, setDocBusy] = React.useState(false);
+  const [pendingFile, setPendingFile] = React.useState<File | null>(null);
+  const [pendingLink, setPendingLink] = React.useState<OpuraDocument | null>(null);
+  const emptyDocForm = {
+    bloco: 'obra' as OpuraCnoDocumentBloco,
+    tipo_documento: '',
+    titulo: '',
+    referente_a: '',
+    numero: '',
+    data_emissao: '',
+    data_validade: '',
+    obrigatorio: false,
+    notas: ''
+  };
+  const [docForm, setDocForm] = React.useState(emptyDocForm);
 
   // Estados do formulário de cadastro
   const [cnoForm, setCnoForm] = React.useState({
@@ -123,11 +160,15 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
           art_rrt: reg.art_rrt || ''
         });
 
-        // Declarações DCTFWeb dependem de um CNO cadastrado
+        // Declarações DCTFWeb e checklist documental dependem de um CNO cadastrado
         const dctf = await cnoService.listDctfweb(reg.id);
         setDctfwebList(dctf);
+
+        const docs = await cnoService.listDocuments(reg.id);
+        setCnoDocuments(docs);
       } else {
         setDctfwebList([]);
+        setCnoDocuments([]);
       }
 
       const sims = await cnoService.listSimulations(projId);
@@ -170,7 +211,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
       setActiveSimResult(result);
     } catch (err) {
       console.error('[OpuraCnoModule] Erro ao rodar simulação:', err);
-      alert('Erro ao rodar simulação. Verifique as configurações do CUB.');
+      notify('Erro ao rodar simulação. Verifique as configurações do CUB.', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -197,12 +238,12 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
       });
       
       setSimulations(prev => [newSim, ...prev]);
-      alert('Simulação salva com sucesso!');
+      notify('Simulação salva com sucesso!');
       // Atualizar o score após salvar nova simulação ativa
       await cnoService.recalculateComplianceScore(selectedProjectId).then(setScore);
     } catch (err) {
       console.error('[OpuraCnoModule] Erro ao salvar simulação:', err);
-      alert('Erro ao salvar simulação.');
+      notify('Erro ao salvar simulação.', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -248,11 +289,11 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
         });
       }
       setRegistration(result);
-      alert('Cadastro de CNO salvo com sucesso!');
+      notify('Cadastro de CNO salvo com sucesso!');
       await cnoService.recalculateComplianceScore(selectedProjectId).then(setScore);
     } catch (err) {
       console.error('[OpuraCnoModule] Erro ao salvar CNO:', err);
-      alert('Erro ao salvar CNO.');
+      notify('Erro ao salvar CNO.', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -261,19 +302,19 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
   // Varredura Fiscal (Scanner de deduções de notas)
   const handleScanInvoices = async () => {
     if (!selectedProjectId || !registration?.id) {
-      alert('É necessário cadastrar o CNO antes de rodar a varredura fiscal.');
+      notify('É necessário cadastrar o CNO antes de rodar a varredura fiscal.', 'error');
       return;
     }
     setActionLoading(true);
     try {
       const added = await cnoService.scanAndAddMaterialDeductions(selectedProjectId, registration.id);
-      alert(`${added.length} novos abatimentos fiscais identificados e adicionados.`);
+      notify(`${added.length} novos abatimentos fiscais identificados e adicionados.`);
       // Atualizar lista e recalcular score
       await cnoService.listDeductions(selectedProjectId).then(setDeductions);
       await cnoService.recalculateComplianceScore(selectedProjectId).then(setScore);
     } catch (err) {
       console.error('[OpuraCnoModule] Erro na varredura fiscal:', err);
-      alert('Erro ao rodar varredura de NF-e.');
+      notify('Erro ao rodar varredura de NF-e.', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -282,11 +323,11 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
   // Adicionar declaração DCTFWeb / DARF
   const handleAddDctfweb = async () => {
     if (!registration?.id || !activeOrganizationId) {
-      alert('Cadastre o CNO antes de registrar uma DCTFWeb.');
+      notify('Cadastre o CNO antes de registrar uma DCTFWeb.', 'error');
       return;
     }
     if (!dctfForm.declaration_number || !dctfForm.principal_amount) {
-      alert('Informe o número do recibo e o valor principal.');
+      notify('Informe o número do recibo e o valor principal.', 'error');
       return;
     }
     setActionLoading(true);
@@ -311,7 +352,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
       setDctfForm({ declaration_number: '', transmission_date: '', principal_amount: '', fine_amount: '', interest_amount: '' });
     } catch (err) {
       console.error('[OpuraCnoModule] Erro ao adicionar DCTFWeb:', err);
-      alert('Erro ao registrar DCTFWeb.');
+      notify('Erro ao registrar DCTFWeb.', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -330,7 +371,157 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
       setDctfwebList(prev => prev.filter(d => d.id !== id));
     } catch (err) {
       console.error('[OpuraCnoModule] Erro ao remover DCTFWeb:', err);
-      alert('Erro ao remover declaração.');
+      notify('Erro ao remover declaração.', 'error');
+    }
+  };
+
+  // ─── Checklist documental (aba Dossiê Digital) ───────────────
+  const openNewDoc = (bloco: OpuraCnoDocumentBloco) => {
+    setEditingDoc(null);
+    setPendingFile(null);
+    setPendingLink(null);
+    const firstTipo = CNO_DOCUMENT_CATALOG.find(b => b.bloco === bloco)?.tipos[0];
+    setDocForm({
+      ...emptyDocForm,
+      bloco,
+      tipo_documento: firstTipo?.value || '',
+      titulo: firstTipo?.label || '',
+      obrigatorio: firstTipo?.obrigatorio || false
+    });
+    setDocSheetOpen(true);
+  };
+
+  const openEditDoc = (doc: OpuraCnoDocument) => {
+    setEditingDoc(doc);
+    setPendingFile(null);
+    setPendingLink(null);
+    setDocForm({
+      bloco: doc.bloco,
+      tipo_documento: doc.tipo_documento,
+      titulo: doc.titulo,
+      referente_a: doc.referente_a || '',
+      numero: doc.numero || '',
+      data_emissao: doc.data_emissao || '',
+      data_validade: doc.data_validade || '',
+      obrigatorio: doc.obrigatorio,
+      notas: doc.notas || ''
+    });
+    setDocSheetOpen(true);
+  };
+
+  // Ao trocar o tipo no select, sincroniza o título com o rótulo do catálogo
+  const handleTipoChange = (tipo: string) => {
+    const catalog = CNO_DOCUMENT_CATALOG.find(b => b.bloco === docForm.bloco);
+    const found = catalog?.tipos.find(t => t.value === tipo);
+    setDocForm(prev => ({
+      ...prev,
+      tipo_documento: tipo,
+      titulo: found?.label || prev.titulo,
+      obrigatorio: found?.obrigatorio || false
+    }));
+  };
+
+  const handleSaveDoc = async () => {
+    if (!registration?.id || !activeOrganizationId) return;
+    if (!docForm.tipo_documento || !docForm.titulo.trim()) {
+      notify('Selecione o tipo de documento e informe um título.', 'error');
+      return;
+    }
+    setDocBusy(true);
+    try {
+      const metadata = {
+        bloco: docForm.bloco,
+        tipo_documento: docForm.tipo_documento,
+        titulo: docForm.titulo.trim(),
+        referente_a: docForm.referente_a.trim() || null,
+        numero: docForm.numero.trim() || null,
+        data_emissao: docForm.data_emissao || null,
+        data_validade: docForm.data_validade || null,
+        obrigatorio: docForm.obrigatorio,
+        notas: docForm.notas.trim() || null
+      };
+
+      // 1. Cria ou atualiza a linha do checklist (metadados)
+      let saved = editingDoc
+        ? await cnoService.updateDocument(editingDoc.id, metadata)
+        : await cnoService.addDocument({
+            organization_id: activeOrganizationId,
+            cno_registration_id: registration.id,
+            ...metadata
+          });
+
+      // 2. Anexa o arquivo, se houver origem escolhida
+      if (pendingFile) {
+        saved = await cnoService.uploadAndAttach(saved, pendingFile, userEmail, selectedProjectId);
+      } else if (pendingLink) {
+        saved = await cnoService.linkExistingDocument(
+          saved.id,
+          pendingLink.id,
+          pendingLink.active_version?.storage_path || null
+        );
+      }
+
+      // 3. Atualiza a lista em memória
+      setCnoDocuments(prev => {
+        const exists = prev.some(d => d.id === saved.id);
+        return exists ? prev.map(d => (d.id === saved.id ? saved : d)) : [...prev, saved];
+      });
+      notify(editingDoc ? 'Documento atualizado.' : 'Documento adicionado ao checklist.');
+      setDocSheetOpen(false);
+    } catch (err) {
+      console.error('[OpuraCnoModule] Erro ao salvar documento do checklist:', err);
+      notify('Erro ao salvar documento.', 'error');
+    } finally {
+      setDocBusy(false);
+    }
+  };
+
+  const handleDownloadDoc = async (doc: OpuraCnoDocument) => {
+    if (!doc.storage_path) {
+      notify('Este item ainda não tem arquivo anexado.', 'error');
+      return;
+    }
+    try {
+      const url = await cnoService.getDownloadUrl(doc.storage_path);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      console.error('[OpuraCnoModule] Erro ao gerar link de download:', err);
+      notify('Erro ao abrir o documento.', 'error');
+    }
+  };
+
+  const handleDeleteDoc = async (doc: OpuraCnoDocument) => {
+    const ok = await confirm({
+      title: 'Remover documento do checklist?',
+      message: `"${doc.titulo}" será removido do checklist. O arquivo permanece no ÒPURA Docs.`,
+      variant: 'danger',
+      confirmLabel: 'Remover'
+    });
+    if (!ok) return;
+    try {
+      await cnoService.deleteDocument(doc.id);
+      setCnoDocuments(prev => prev.filter(d => d.id !== doc.id));
+    } catch (err) {
+      console.error('[OpuraCnoModule] Erro ao remover documento do checklist:', err);
+      notify('Erro ao remover documento.', 'error');
+    }
+  };
+
+  const handleDownloadDossie = async () => {
+    const anexados = cnoDocuments.filter(d => d.storage_path);
+    if (anexados.length === 0) {
+      notify('Nenhum documento anexado para baixar.', 'error');
+      return;
+    }
+    try {
+      for (const doc of anexados) {
+        const url = await cnoService.getDownloadUrl(doc.storage_path!);
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+      notify(`${anexados.length} documento(s) aberto(s) para download.`);
+    } catch (err) {
+      console.error('[OpuraCnoModule] Erro ao baixar dossiê:', err);
+      notify('Erro ao baixar o dossiê.', 'error');
     }
   };
 
@@ -493,9 +684,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     </div>
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-widest">Economia Estimada</p>
                     <h4 className="text-xl font-bold text-gray-800 mt-2">
-                      R$ {simulations.find(s => s.is_active) 
-                        ? `R$ ${simulations.find(s => s.is_active)?.economia_potencial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                        : '0,00'}
+                      R$ {(simulations.find(s => s.is_active)?.economia_potencial ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </h4>
                   </div>
                 </div>
@@ -1037,86 +1226,298 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
             )
           )}
 
-          {/* 6. ABA DOSSIÊ DIGITAL */}
+          {/* 6. ABA DOSSIÊ DIGITAL — Checklist documental de abertura do CNO */}
           {activeTab === 'dossie' && (
+            !registration?.id ? (
+              <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col items-center justify-center py-20 gap-3 text-center">
+                <FileText className="w-12 h-12 text-gray-300" />
+                <p className="text-sm font-semibold text-gray-400">Cadastre o CNO na aba "cadastro" antes de montar o checklist documental.</p>
+              </div>
+            ) : (
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
-              <div>
-                <h3 className="font-bold text-gray-800 text-lg">Dossiê Digital de Aferição</h3>
-                <p className="text-gray-400 text-xs">Pasta consolidada com todas as obrigações previdenciárias e fiscais para exportação e encerramento no SERO.</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 border border-gray-100 rounded-2xl flex items-center justify-between hover:border-indigo-100 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center">
-                      <FolderOpen className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h5 className="text-sm font-bold text-gray-800">Processo de CNO & Alvarás</h5>
-                      <p className="text-gray-400 text-xs">Alvará de Construção, ART/RRT e Matrícula vinculadas.</p>
-                    </div>
-                  </div>
-                  <button className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors">
-                    <Download className="w-4 h-4" />
-                  </button>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-bold text-gray-800 text-lg">Dossiê Digital — Documentação do CNO</h3>
+                  <p className="text-gray-400 text-xs">Documentos exigidos pela Receita Federal para abertura/regularização. Vincule do ÒPURA Docs ou envie o arquivo — tudo fica no GED.</p>
                 </div>
-
-                <div className="p-4 border border-gray-100 rounded-2xl flex items-center justify-between hover:border-indigo-100 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center">
-                      <FileText className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h5 className="text-sm font-bold text-gray-800">Eventos de eSocial (CLT próprio)</h5>
-                      <p className="text-gray-400 text-xs">Arquivos XML do evento S-2200 e fechamento S-1299.</p>
-                    </div>
-                  </div>
-                  <button className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors">
-                    <Download className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="p-4 border border-gray-100 rounded-2xl flex items-center justify-between hover:border-indigo-100 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center">
-                      <Calculator className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h5 className="text-sm font-bold text-gray-800">Medições & Retenções (Empreiteiras)</h5>
-                      <p className="text-gray-400 text-xs">Notas fiscais de serviço e comprovantes de retenções do INSS.</p>
-                    </div>
-                  </div>
-                  <button className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors">
-                    <Download className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="p-4 border border-gray-100 rounded-2xl flex items-center justify-between hover:border-indigo-100 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center">
-                      <FileText className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h5 className="text-sm font-bold text-gray-800">Notas Fiscais de Concreto (Deduções)</h5>
-                      <p className="text-gray-400 text-xs">XMLs das NF-es de concreto e massa usinadas abatidas.</p>
-                    </div>
-                  </div>
-                  <button className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors">
-                    <Download className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
                 <button
-                  onClick={() => alert('Exportando dossiê ZIP compactado...')}
-                  className="px-6 py-3 bg-indigo-600 text-white hover:bg-indigo-700 rounded-2xl font-black text-button uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20"
+                  onClick={handleDownloadDossie}
+                  className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 whitespace-nowrap self-start"
                 >
-                  Baixar Dossiê Completo (.zip)
+                  <Download className="w-[15px] h-[15px]" />
+                  Baixar dossiê
                 </button>
               </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {CNO_DOCUMENT_CATALOG.map(bloco => {
+                  const items = cnoDocuments.filter(d => d.bloco === bloco.bloco);
+                  return (
+                    <div key={bloco.bloco} className="border border-gray-100 rounded-2xl p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="bg-indigo-50 text-indigo-600 w-9 h-9 rounded-xl flex items-center justify-center shrink-0">
+                            <FolderOpen className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <h5 className="text-sm font-bold text-gray-800">{bloco.label}</h5>
+                            {bloco.descricao && <p className="text-gray-400 text-xs">{bloco.descricao}</p>}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => openNewDoc(bloco.bloco)}
+                          className="flex items-center gap-1 h-8 px-2.5 border border-gray-200 text-gray-600 rounded-[6px] hover:border-indigo-200 hover:text-indigo-600 text-xs font-medium transition-all shrink-0"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Adicionar
+                        </button>
+                      </div>
+
+                      {items.length > 0 ? (
+                        <div className="space-y-2">
+                          {items.map(doc => {
+                            const statusColor =
+                              doc.status === 'anexado' ? 'text-emerald-600'
+                              : doc.status === 'vencido' ? 'text-red-600'
+                              : doc.status === 'dispensado' ? 'text-gray-400'
+                              : 'text-amber-600';
+                            const statusLabel =
+                              doc.status === 'anexado' ? 'Anexado'
+                              : doc.status === 'vencido' ? 'Vencido'
+                              : doc.status === 'dispensado' ? 'Dispensado'
+                              : 'Pendente';
+                            return (
+                              <div key={doc.id} className="flex items-start justify-between gap-3 p-3 rounded-xl bg-gray-50/60 border border-gray-100">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-semibold text-gray-800 truncate">{doc.titulo}</span>
+                                    {doc.obrigatorio && <span className="text-xs font-medium text-indigo-600">Obrigatório</span>}
+                                    <span className={`text-xs font-medium ${statusColor}`}>{statusLabel}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400 flex-wrap">
+                                    {doc.referente_a && <span>Referente a: {doc.referente_a}</span>}
+                                    {doc.numero && <span>Nº {doc.numero}</span>}
+                                    {doc.data_validade && <span>Validade: {doc.data_validade.split('-').reverse().join('/')}</span>}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {doc.storage_path && (
+                                    <ActionIconButton kind="download" title="Baixar arquivo" onClick={() => handleDownloadDoc(doc)} />
+                                  )}
+                                  <ActionIconButton kind="edit" title="Editar" onClick={() => openEditDoc(doc)} />
+                                  <ActionIconButton kind="delete" title="Remover do checklist" onClick={() => handleDeleteDoc(doc)} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 py-2">Nenhum documento neste bloco ainda.</p>
+                      )}
+
+                      {bloco.bloco === 'representacao' && (
+                        <p className="text-[11px] text-gray-400 leading-relaxed border-t border-gray-100 pt-2">
+                          O termo de guarda não é necessário para pais que já constam no documento do menor. A identidade do representado é dispensada quando a procuração tem firma reconhecida.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Sheet — adicionar/editar documento do checklist (UI_PATTERNS §3) */}
+      <Sheet open={docSheetOpen} onClose={() => setDocSheetOpen(false)} size="lg">
+        <SheetHeader onClose={() => setDocSheetOpen(false)}>
+          <SheetTitle>{editingDoc ? 'Editar documento' : 'Adicionar documento'}</SheetTitle>
+          <SheetDescription>Checklist documental do CNO</SheetDescription>
+        </SheetHeader>
+        <SheetPanel className="px-6 py-5 space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-500">Bloco</label>
+            <select
+              value={docForm.bloco}
+              onChange={(e) => {
+                const bloco = e.target.value as OpuraCnoDocumentBloco;
+                const firstTipo = CNO_DOCUMENT_CATALOG.find(b => b.bloco === bloco)?.tipos[0];
+                setDocForm(prev => ({
+                  ...prev,
+                  bloco,
+                  tipo_documento: firstTipo?.value || '',
+                  titulo: firstTipo?.label || '',
+                  obrigatorio: firstTipo?.obrigatorio || false
+                }));
+              }}
+              className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm outline-none focus:border-indigo-500"
+            >
+              {CNO_DOCUMENT_CATALOG.map(b => (
+                <option key={b.bloco} value={b.bloco}>{b.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-500">Tipo de documento</label>
+            <select
+              value={docForm.tipo_documento}
+              onChange={(e) => handleTipoChange(e.target.value)}
+              className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm outline-none focus:border-indigo-500"
+            >
+              {CNO_DOCUMENT_CATALOG.find(b => b.bloco === docForm.bloco)?.tipos.map(t => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-500">Título</label>
+            <input
+              value={docForm.titulo}
+              onChange={(e) => setDocForm(prev => ({ ...prev, titulo: e.target.value }))}
+              className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm outline-none focus:border-indigo-500"
+              placeholder="Título do documento"
+            />
+          </div>
+
+          {(docForm.bloco === 'identificacao' || docForm.bloco === 'representacao') && (
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500">Referente a (pessoa / empresa)</label>
+              <input
+                value={docForm.referente_a}
+                onChange={(e) => setDocForm(prev => ({ ...prev, referente_a: e.target.value }))}
+                className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm outline-none focus:border-indigo-500"
+                placeholder="Ex: João da Silva / Construtora ABC Ltda."
+              />
             </div>
           )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500">Número</label>
+              <input
+                value={docForm.numero}
+                onChange={(e) => setDocForm(prev => ({ ...prev, numero: e.target.value }))}
+                className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm outline-none focus:border-indigo-500"
+                placeholder="Nº do documento"
+              />
+            </div>
+            <div className="flex items-end pb-1.5">
+              <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={docForm.obrigatorio}
+                  onChange={(e) => setDocForm(prev => ({ ...prev, obrigatorio: e.target.checked }))}
+                  className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                Obrigatório
+              </label>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500">Emissão</label>
+              <input
+                type="date"
+                value={docForm.data_emissao}
+                onChange={(e) => setDocForm(prev => ({ ...prev, data_emissao: e.target.value }))}
+                className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-500">Validade</label>
+              <input
+                type="date"
+                value={docForm.data_validade}
+                onChange={(e) => setDocForm(prev => ({ ...prev, data_validade: e.target.value }))}
+                className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm outline-none focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
+          {/* Origem do arquivo */}
+          <div className="space-y-2 border-t border-gray-100 pt-4">
+            <label className="text-xs font-semibold text-slate-500">Arquivo</label>
+            {editingDoc?.storage_path && !pendingFile && !pendingLink && (
+              <p className="flex items-center gap-2 text-xs text-emerald-600">
+                <Paperclip className="w-3.5 h-3.5" /> Já existe um arquivo anexado. Anexar outro substitui o vínculo.
+              </p>
+            )}
+
+            <div className="space-y-1.5">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                <Link2 className="w-3.5 h-3.5" /> Vincular do ÒPURA Docs
+              </p>
+              {pendingLink ? (
+                <div className="flex items-center justify-between gap-2 p-2 rounded-[6px] bg-indigo-50 border border-indigo-100">
+                  <span className="text-xs text-indigo-700 truncate">{pendingLink.nome}</span>
+                  <button onClick={() => setPendingLink(null)} className="text-xs text-indigo-600 hover:underline shrink-0">Trocar</button>
+                </div>
+              ) : (
+                activeOrganizationId && (
+                  <DocumentPicker
+                    organizationId={activeOrganizationId}
+                    excludeIntegrated
+                    storageKey="opuraCno:docPicker:search"
+                    onPick={(doc) => { setPendingLink(doc); setPendingFile(null); }}
+                  />
+                )
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                <UploadCloud className="w-3.5 h-3.5" /> Ou enviar um arquivo novo
+              </p>
+              <input
+                type="file"
+                onChange={(e) => { setPendingFile(e.target.files?.[0] || null); setPendingLink(null); }}
+                className="w-full text-xs text-gray-600 file:mr-3 file:h-8 file:px-3 file:rounded-[6px] file:border-0 file:bg-indigo-50 file:text-indigo-600 file:text-xs file:font-medium hover:file:bg-indigo-100 cursor-pointer"
+              />
+              {pendingFile && <p className="text-xs text-gray-500 truncate">{pendingFile.name}</p>}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-slate-500">Observações</label>
+            <textarea
+              value={docForm.notas}
+              onChange={(e) => setDocForm(prev => ({ ...prev, notas: e.target.value }))}
+              rows={2}
+              className="w-full px-3 py-2 border border-gray-200 rounded-[6px] text-sm outline-none focus:border-indigo-500 resize-none"
+              placeholder="Anotações internas (opcional)"
+            />
+          </div>
+        </SheetPanel>
+        <SheetFooter>
+          <button
+            onClick={() => setDocSheetOpen(false)}
+            className="h-9 px-3.5 border border-gray-200 text-gray-600 rounded-[6px] hover:bg-gray-50 text-[13px] font-medium transition-all"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSaveDoc}
+            disabled={docBusy}
+            className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+          >
+            {docBusy && <Loader2 className="w-4 h-4 animate-spin" />}
+            {editingDoc ? 'Salvar documento' : 'Adicionar documento'}
+          </button>
+        </SheetFooter>
+      </Sheet>
+
+      {/* Toast de notificação (§13) */}
+      {notification && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
+          notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {notification.message}
         </div>
       )}
     </div>

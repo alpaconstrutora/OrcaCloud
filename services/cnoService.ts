@@ -13,11 +13,33 @@ import {
   OpuraCnoComplianceScoreInsert,
   OpuraCnoComplianceScoreUpdate,
   OpuraCnoDctfweb,
-  OpuraCnoDctfwebInsert
+  OpuraCnoDctfwebInsert,
+  OpuraCnoDocument,
+  OpuraCnoDocumentInsert,
+  OpuraCnoDocumentUpdate
 } from '../types';
+import { documentService } from './documentService';
 
 const DCTFWEB_COLUMNS =
   'id, organization_id, cno_registration_id, declaration_number, transmission_date, principal_amount, fine_amount, interest_amount, total_amount, status, created_at, updated_at';
+
+const CNO_DOCUMENT_COLUMNS =
+  'id, organization_id, cno_registration_id, bloco, tipo_documento, titulo, referente_a, document_id, storage_path, numero, data_emissao, data_validade, status, obrigatorio, notas, created_at, updated_at';
+
+/**
+ * Deriva o status "vencido" a partir de data_validade sem cair no bug de fuso
+ * (UTC-3): compara só a parte YYYY-MM-DD, nunca `new Date('YYYY-MM-DD')`.
+ */
+function applyExpiryStatus(doc: OpuraCnoDocument): OpuraCnoDocument {
+  if (doc.status === 'anexado' && doc.data_validade) {
+    const hoje = new Date();
+    const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+    if (doc.data_validade < hojeStr) {
+      return { ...doc, status: 'vencido' };
+    }
+  }
+  return doc;
+}
 
 export const cnoService = {
   // ==========================================
@@ -656,5 +678,119 @@ export const cnoService = {
       console.error('[CnoService] Erro ao deletar DCTFWeb:', error);
       throw new Error(`Erro ao deletar DCTFWeb: ${error.message}`);
     }
+  },
+
+  // ==========================================
+  // 6. CHECKLIST DOCUMENTAL (opura_cno_documents)
+  //    Ponte para o ÒPURA Docs — não reimplementa upload/storage.
+  // ==========================================
+
+  async listDocuments(cnoRegistrationId: string): Promise<OpuraCnoDocument[]> {
+    const { data, error } = await supabase
+      .from('opura_cno_documents')
+      .select(CNO_DOCUMENT_COLUMNS)
+      .eq('cno_registration_id', cnoRegistrationId)
+      .order('bloco', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('[CnoService] Erro ao listar documentos do CNO:', error);
+      throw new Error(`Erro ao listar documentos do CNO: ${error.message}`);
+    }
+
+    return ((data as OpuraCnoDocument[]) || []).map(applyExpiryStatus);
+  },
+
+  async addDocument(input: OpuraCnoDocumentInsert): Promise<OpuraCnoDocument> {
+    const { data, error } = await supabase
+      .from('opura_cno_documents')
+      .insert(input)
+      .select(CNO_DOCUMENT_COLUMNS)
+      .single();
+
+    if (error) {
+      console.error('[CnoService] Erro ao adicionar documento do CNO:', error);
+      throw new Error(`Erro ao adicionar documento do CNO: ${error.message}`);
+    }
+
+    return applyExpiryStatus(data as OpuraCnoDocument);
+  },
+
+  async updateDocument(id: string, patch: OpuraCnoDocumentUpdate): Promise<OpuraCnoDocument> {
+    const { data, error } = await supabase
+      .from('opura_cno_documents')
+      .update(patch)
+      .eq('id', id)
+      .select(CNO_DOCUMENT_COLUMNS)
+      .single();
+
+    if (error) {
+      console.error('[CnoService] Erro ao atualizar documento do CNO:', error);
+      throw new Error(`Erro ao atualizar documento do CNO: ${error.message}`);
+    }
+
+    return applyExpiryStatus(data as OpuraCnoDocument);
+  },
+
+  async deleteDocument(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_cno_documents')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('[CnoService] Erro ao deletar documento do CNO:', error);
+      throw new Error(`Erro ao deletar documento do CNO: ${error.message}`);
+    }
+  },
+
+  /** Vincula um documento já existente do ÒPURA Docs a um item do checklist. */
+  async linkExistingDocument(
+    cnoDocumentId: string,
+    documentId: string,
+    storagePath: string | null
+  ): Promise<OpuraCnoDocument> {
+    return this.updateDocument(cnoDocumentId, {
+      document_id: documentId,
+      storage_path: storagePath,
+      status: 'anexado'
+    });
+  },
+
+  /**
+   * Envia um arquivo novo direto pelo checklist. Não reimplementa upload:
+   * delega a documentService.uploadNewDocument (mesmo bucket opura-docs, mesmo
+   * versionamento e auditoria) já com project_id/categoria preenchidos, e grava
+   * o document_id/storage_path resultante no item do checklist.
+   */
+  async uploadAndAttach(
+    cnoDoc: OpuraCnoDocument,
+    file: File,
+    uploadedByEmail: string | undefined,
+    projectId: string | null
+  ): Promise<OpuraCnoDocument> {
+    const doc = await documentService.uploadNewDocument(
+      {
+        organization_id: cnoDoc.organization_id,
+        project_id: projectId || undefined,
+        nome: cnoDoc.titulo,
+        categoria: 'compliance',
+        tipo_documento: cnoDoc.tipo_documento,
+        status: 'ativo',
+        alerta_dias_antecedencia: 30,
+        tags: ['cno', 'previdencia', cnoDoc.bloco],
+        data_emissao: cnoDoc.data_emissao || undefined,
+        data_validade: cnoDoc.data_validade || undefined
+      },
+      file,
+      uploadedByEmail
+    );
+
+    return this.linkExistingDocument(cnoDoc.id, doc.id, doc.active_version?.storage_path || null);
+  },
+
+  /** URL assinada (TTL 15 min) — delega ao DMS. */
+  async getDownloadUrl(storagePath: string): Promise<string> {
+    return documentService.generateDownloadUrl(storagePath);
   }
 };

@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { processService } from '../services/processService';
-import { documentService } from '../services/documentService';
 import { taskService } from '../services/taskService';
 import type {
     ProcessTemplate, ProcessTemplateStep, ProcessInstance, ProcessInstanceWithSteps,
@@ -18,6 +17,7 @@ import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
 import { Sheet } from './ui/sheet';
 import { useConfirm } from './ui/confirm';
 import { formatDateBR as fmtDate } from './ui/Format';
+import { DocumentPicker } from './ui/DocumentPicker';
 
 // ─── rótulos ────────────────────────────────────────────────
 
@@ -179,41 +179,6 @@ function StartInstanceModal({ open, onClose, organizationId, userId, templates, 
                 <Button onClick={start} disabled={saving || !templateId}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Iniciar'}</Button>
             </ModalFooter>
         </Modal>
-    );
-}
-
-// ─── picker de documento (reusa documentService — não reimplementa DMS) ─
-
-function DocumentPicker({ organizationId, onPick }: { organizationId: string; onPick: (doc: OpuraDocument) => void }) {
-    const [search, setSearch] = useState('');
-    const [docs, setDocs] = useState<OpuraDocument[]>([]);
-    const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        setLoading(true);
-        documentService.listDocuments(organizationId, { search: search || undefined })
-            .then(setDocs).catch(() => setDocs([])).finally(() => setLoading(false));
-    }, [organizationId, search]);
-
-    return (
-        <div className="border border-gray-200 rounded-xl p-3">
-            <input value={search} onChange={e => setSearch(e.target.value)}
-                className="w-full h-8 px-2 rounded-lg border border-gray-200 text-xs mb-2" placeholder="Buscar documento no DMS..." />
-            {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-            ) : (
-                <div className="max-h-40 overflow-y-auto space-y-1">
-                    {docs.slice(0, 20).map(d => (
-                        <button key={d.id} onClick={() => onPick(d)}
-                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-blue-50 text-left text-xs">
-                            <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span className="truncate">{d.nome}</span>
-                        </button>
-                    ))}
-                    {docs.length === 0 && <p className="text-xs text-gray-400 px-2 py-1">Nenhum documento encontrado.</p>}
-                </div>
-            )}
-        </div>
     );
 }
 

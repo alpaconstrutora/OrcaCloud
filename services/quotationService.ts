@@ -126,6 +126,15 @@ export const quotationService = {
         return data;
     },
 
+    async deleteRequest(id: string) {
+        const { error } = await supabase
+            .from('quotation_requests')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
     async listResponses(requestId: string): Promise<QuotationResponse[]> {
         const { data, error } = await supabase
             .from('quotation_responses')

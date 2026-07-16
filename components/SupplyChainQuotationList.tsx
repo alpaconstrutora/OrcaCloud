@@ -1,11 +1,12 @@
 import React from 'react';
-import { Plus, FileText, Calendar, Clock, Search, RefreshCw, LayoutDashboard, Table2, ArrowRight } from 'lucide-react';
+import { Plus, FileText, Calendar, Clock, Search, RefreshCw, LayoutDashboard, Table2, ArrowRight, AlertCircle } from 'lucide-react';
 import { QuotationRequest } from '../types';
 import { quotationService } from '../services/quotationService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
+import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
@@ -53,6 +54,12 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplyChainQuotationFilters:viewMode', 'list');
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainQuotationColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplyChainQuotationFilters:advanced');
+    const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
 
     React.useEffect(() => {
         let cancelled = false;
@@ -79,6 +86,21 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
             console.error("Error loading quotations:", err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Concluída já gerou Pedido de Compra (selectWinner) — excluir a cotação nesse
+    // ponto deixaria o pedido órfão de sua origem.
+    const canDelete = (status: string) => status !== 'Concluída';
+
+    const handleDelete = async (id: string) => {
+        try {
+            await quotationService.deleteRequest(id);
+            await loadRequests();
+            notify('Cotação excluída com sucesso!');
+        } catch (err: any) {
+            console.error('Error deleting quotation:', err);
+            notify(`Erro ao excluir cotação: ${err.message || 'Erro desconhecido'}`, 'error');
         }
     };
 
@@ -283,6 +305,17 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                                         icon={<Table2 className="w-4 h-4" />}
                                                         onClick={(e) => { e.stopPropagation(); onViewComparison(req.id); }}
                                                     />
+                                                    <ActionIconButton
+                                                        kind="edit"
+                                                        title="Editar cotação"
+                                                        onClick={(e) => { e.stopPropagation(); onViewDetails(req.id); }}
+                                                    />
+                                                    <InlineDisclosureMenu
+                                                        showDelete
+                                                        onDelete={() => handleDelete(req.id)}
+                                                        deleteDisabled={!canDelete(req.status)}
+                                                        deleteDisabledTitle={!canDelete(req.status) ? `Cotação "${req.status}" não pode ser excluída` : undefined}
+                                                    />
                                                 </div>
                                             </td>
                                         )}
@@ -330,6 +363,17 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                             icon={<Table2 className="w-4 h-4" />}
                                             onClick={() => onViewComparison(req.id)}
                                         />
+                                        <ActionIconButton
+                                            kind="edit"
+                                            title="Editar cotação"
+                                            onClick={() => onViewDetails(req.id)}
+                                        />
+                                        <InlineDisclosureMenu
+                                            showDelete
+                                            onDelete={() => handleDelete(req.id)}
+                                            deleteDisabled={!canDelete(req.status)}
+                                            deleteDisabledTitle={!canDelete(req.status) ? `Cotação "${req.status}" não pode ser excluída` : undefined}
+                                        />
                                         <button
                                             onClick={() => onViewDetails(req.id)}
                                             className="flex items-center gap-1.5 h-9 px-3 bg-gray-50 text-gray-700 rounded-[6px] text-[13px] font-medium hover:bg-gray-100 transition-all active:scale-95"
@@ -353,6 +397,15 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                     >
                         Criar minha primeira cotação
                     </button>
+                </div>
+            )}
+
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
                 </div>
             )}
         </div>

@@ -465,7 +465,7 @@ const Layout: React.FC<LayoutProps> = ({
   const suprimentosViews = ['fluxo-p2p','supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
-  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-cashflow','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial', 'fpa-module'];
+  const financeiroViews = ['financial-dashboard','contas-a-receber','client-charges','financial-boletos','boletos-pagar','extrato-bancario','bank-reconciliation','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial', 'fpa-module'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const systemConfigViews = ['settings','master-data'];
@@ -501,7 +501,6 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'financial-dashboard', label: 'Dashboard financeiro', group: 'Financeiro', icon: DollarSign },
       { id: 'project-financial', label: 'Contas a pagar', group: 'Financeiro', icon: DollarSign },
       { id: 'contas-a-receber', label: 'Contas a receber', group: 'Financeiro', icon: TrendingUp },
-      { id: 'financial-cashflow', label: 'Fluxo de caixa', group: 'Financeiro', icon: LineChart },
       { id: 'sales', label: 'Vendas de ativos', group: 'Comercial', icon: Building2 },
       { id: 'empreendimentos', label: 'Empreendimentos', group: 'Comercial', icon: Building2 },
       { id: 'imovib', label: 'Estudos de viabilidade', group: 'Comercial', icon: BarChart3 },
@@ -1036,12 +1035,12 @@ const Layout: React.FC<LayoutProps> = ({
                     hasActiveChild={suprimentosViews.includes(activeView)}
                   >
                     <DropdownItem id="fluxo-p2p" label="Fluxo Integrado (P2P)" icon={Workflow} />
-                    <DropdownItem id="almoxarifado" label="Almoxarifado" icon={Warehouse} />
                     <DropdownItem id="plano-aquisicoes" label="Plano de Aquisições" icon={ClipboardList} />
                     <DropdownItem id="supplies-contracts" label="Contratos" icon={FileText} />
                     <DropdownItem id="supplies-quotations" label="Cotações" icon={FileText} />
                     <DropdownItem id="supplies-orders" label="Pedidos" icon={Package} />
                     <DropdownItem id="supplies-receipts" label="Recebimento" icon={Truck} />
+                    <DropdownItem id="almoxarifado" label="Almoxarifado" icon={Warehouse} />
                   </NavDropdown>
                 </>
               )}
@@ -1062,7 +1061,6 @@ const Layout: React.FC<LayoutProps> = ({
                       <>
                         <DropdownItem id="financial-dashboard" label="Dashboard" icon={LayoutDashboard} />
                         <DropdownItem id="fpa-module" label="FP&A" icon={Calculator} />
-                        <DropdownItem id="financial-cashflow" label="Fluxo de Caixa" icon={LineChart} />
                         <DropdownItem id="contas-a-receber" label="Contas a Receber" icon={TrendingUp} />
                         <DropdownItem id="financial-boletos" label="Boletos ao Cliente" icon={Receipt} />
                         <DropdownItem id="project-financial" label="Contas a Pagar" icon={DollarSign} />
@@ -1289,10 +1287,10 @@ const Layout: React.FC<LayoutProps> = ({
 
               <NavGroup label="Suprimentos" />
               <NavItem id="fluxo-p2p" icon={Workflow} label="Fluxo Integrado (P2P)" forceFull />
-              <NavItem id="almoxarifado" icon={Warehouse} label="Almoxarifado" forceFull />
               <NavItem id="plano-aquisicoes" icon={ClipboardList} label="Plano de Aquisições" forceFull />
               <NavItem id="supplies-orders" icon={Package} label="Pedidos" forceFull />
               <NavItem id="supplies-receipts" icon={Truck} label="Recebimento" forceFull />
+              <NavItem id="almoxarifado" icon={Warehouse} label="Almoxarifado" forceFull />
               <NavItem id="planning-list" icon={Calendar} label="Planejamento" forceFull />
               <NavItem id="projects" icon={FolderOpen} label="Orçamentos" forceFull />
               <NavItem id="reports" icon={FileText} label="Relatórios" forceFull />

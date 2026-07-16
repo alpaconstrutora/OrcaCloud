@@ -118,10 +118,13 @@ const Settings: React.FC = () => {
     };
 
     return (
-        <div className="max-w-4xl mx-auto p-6">
-            <h1 className="text-2xl font-bold text-gray-900 mb-6">Configurações do Sistema</h1>
+        <div className="space-y-6">
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Configurações do Sistema</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie todas as configurações de sistema, categorias, integrações e banco de dados.</p>
+            </div>
 
-            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full mb-6">
+            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                 <button
                     onClick={() => setActiveTab('geral')}
                     className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'geral' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}

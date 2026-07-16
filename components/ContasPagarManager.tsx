@@ -611,9 +611,8 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                         {/* Ver documento — botão-ícone padrão §9.2 */}
                                                         {inv.filePath && (
                                                             <a
-                                                                href={invoiceService.getInvoiceUrl(inv.filePath)}
-                                                                target="_blank"
-                                                                rel="noreferrer"
+                                                                href="#"
+                                                                onClick={(e) => { e.preventDefault(); invoiceService.openInvoice(inv.filePath); }}
                                                                 className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95"
                                                                 title="Ver documento"
                                                             >

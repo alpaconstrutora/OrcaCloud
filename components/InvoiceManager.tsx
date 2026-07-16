@@ -396,9 +396,8 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                                             {tableColumns.visibleColumns.includes('actions') && (
                                                 <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
                                                     <a
-                                                        href={invoiceService.getInvoiceUrl(invoice.filePath)}
-                                                        target="_blank"
-                                                        rel="noreferrer"
+                                                        href="#"
+                                                        onClick={(e) => { e.preventDefault(); invoiceService.openInvoice(invoice.filePath); }}
                                                         className="p-3 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm transition-all active:scale-95"
                                                         title="Visualizar"
                                                     >
@@ -459,9 +458,8 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
 
                                         <div className="flex items-center gap-2 pt-4 border-t border-gray-50">
                                             <a
-                                                href={invoiceService.getInvoiceUrl(invoice.filePath)}
-                                                target="_blank"
-                                                rel="noreferrer"
+                                                href="#"
+                                                onClick={(e) => { e.preventDefault(); invoiceService.openInvoice(invoice.filePath); }}
                                                 className="flex-1 flex items-center justify-center gap-2 py-3 bg-white border border-gray-100 rounded-xl text-xs font-black uppercase tracking-widest text-gray-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm transition-all"
                                             >
                                                 <Eye className="w-4 h-4" /> Visualizar

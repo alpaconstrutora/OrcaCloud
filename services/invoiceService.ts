@@ -114,14 +114,23 @@ export const invoiceService = {
     },
 
     /**
-     * Get a public URL for viewing the invoice.
+     * Bucket 'invoices' privado: gera URL assinada (15min). file_path guarda o PATH.
      */
-    getInvoiceUrl(filePath: string) {
-        const { data } = supabase.storage
+    async getInvoiceUrl(filePath: string): Promise<string> {
+        const { data, error } = await supabase.storage
             .from('invoices')
-            .getPublicUrl(filePath);
+            .createSignedUrl(filePath, 60 * 15);
+        if (error) throw error;
+        return data.signedUrl;
+    },
 
-        return data.publicUrl;
+    /** Resolve a signed URL e abre em nova aba (usado nos botões "Ver documento"). */
+    async openInvoice(filePath: string): Promise<void> {
+        try {
+            window.open(await this.getInvoiceUrl(filePath), '_blank', 'noopener,noreferrer');
+        } catch (e) {
+            console.error('[invoiceService] openInvoice:', e);
+        }
     },
 
     /**

@@ -1164,9 +1164,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                             </div>
                                         </div>
                                         <a
-                                            href={invoiceService.getInvoiceUrl(inv.filePath)}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
+                                            href="#"
+                                            onClick={(e) => { e.preventDefault(); invoiceService.openInvoice(inv.filePath); }}
                                             className="p-2 text-gray-400 hover:text-amber-600 hover:bg-white rounded-xl shadow-sm transition-all"
                                             title="Ver Documento"
                                         >

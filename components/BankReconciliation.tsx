@@ -2548,7 +2548,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             <LayoutGrid className="w-4 h-4" />
                         </button>
                     </div>
-                    <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase">{uniqueCategories.length} Categorias</span>
+                    <span className="text-sm font-semibold text-emerald-600">{uniqueCategories.length} Categorias</span>
                     <button
                         onClick={handleSyncCategories}
                         disabled={isLoading}
@@ -3260,27 +3260,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         ))}
                     </select>
 
-                    <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[6px] border border-gray-100">
-                        <button
-                            onClick={() => setFlowFilter('ALL')}
-                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'ALL' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                        >
-                            Tudo
-                        </button>
-                        <button
-                            onClick={() => setFlowFilter('INCOME')}
-                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'INCOME' ? 'bg-emerald-500 text-white' : 'text-emerald-600/60 hover:text-emerald-600'}`}
-                        >
-                            Receitas
-                        </button>
-                        <button
-                            onClick={() => setFlowFilter('EXPENSE')}
-                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'EXPENSE' ? 'bg-red-500 text-white' : 'text-red-400 hover:text-red-500'}`}
-                        >
-                            Despesas
-                        </button>
-                    </div>
-
                     {/* Filtro de competência — ano isolado (ano todo) ou ano+mês */}
                     <div className="flex items-center gap-1.5 h-9 bg-indigo-50 px-2.5 rounded-[6px] border border-indigo-100">
                         <span className="text-xs font-medium text-indigo-400">Competência</span>
@@ -3389,27 +3368,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             <Zap className="w-4 h-4" />
                         </button>
                     )}
-
-                    {/* Botão primário — variante compacta (guia §17) */}
-                    <button
-                        onClick={() => setShowImportDrawer(true)}
-                        disabled={isImporting}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isImporting ? (
-                            <>
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full" />
-                                <span>{importingMessage || 'Importando...'}</span>
-                            </>
-                        ) : (
-                            <>
-                                <Upload className="w-[15px] h-[15px]" />
-                                <span>Importar extrato</span>
-                            </>
-                        )}
-                    </button>
                 </div>
+            </div>
 
+            {/* Toolbar acoplada — abas de visão + filtro Tudo/Receitas/Despesas + ação primária (guia §5.2/§19) */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
                 {/* Barra de abas local — escala compacta (guia §19). flex-wrap em vez de
                     overflow-x-auto: com 9 abas, rolagem horizontal (mesmo sem scrollbar
                     visível) corta texto no meio sem nenhum indício de que há mais abas —
@@ -3480,6 +3443,48 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'prolabore' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         Pró-labore
+                    </button>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[6px] border border-gray-100">
+                        <button
+                            onClick={() => setFlowFilter('ALL')}
+                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'ALL' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            Tudo
+                        </button>
+                        <button
+                            onClick={() => setFlowFilter('INCOME')}
+                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'INCOME' ? 'bg-emerald-500 text-white' : 'text-emerald-600/60 hover:text-emerald-600'}`}
+                        >
+                            Receitas
+                        </button>
+                        <button
+                            onClick={() => setFlowFilter('EXPENSE')}
+                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'EXPENSE' ? 'bg-red-500 text-white' : 'text-red-400 hover:text-red-500'}`}
+                        >
+                            Despesas
+                        </button>
+                    </div>
+
+                    {/* Botão primário — variante compacta (guia §17) */}
+                    <button
+                        onClick={() => setShowImportDrawer(true)}
+                        disabled={isImporting}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isImporting ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full" />
+                                <span>{importingMessage || 'Importando...'}</span>
+                            </>
+                        ) : (
+                            <>
+                                <Upload className="w-[15px] h-[15px]" />
+                                <span>Importar extrato</span>
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
@@ -3838,7 +3843,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     <LayoutGrid className="w-4 h-4" />
                                 </button>
                             </div>
-                            <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase">{matches.length} Vínculos</span>
+                            <span className="text-sm font-semibold text-emerald-600">{matches.length} Vínculos</span>
                         </div>
                     </div>
 
@@ -4950,9 +4955,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     setSelectedInternalTxIds(new Set([...selectedInternalTxIds, ...sortedInternalTransactions.map(tx => tx.id)]));
                                                 }
                                             }}
-                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-black uppercase transition-all ${
+                                            className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-[13px] font-medium transition-all ${
                                                 sortedInternalTransactions.length > 0 && sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id))
-                                                    ? 'bg-emerald-600 text-white shadow-lg'
+                                                    ? 'bg-emerald-600 text-white'
                                                     : 'bg-white text-emerald-600 border border-emerald-100 hover:bg-emerald-50'
                                             }`}
                                         >
@@ -5077,9 +5082,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     <button
                                         onClick={handleSyncAllData}
                                         disabled={isLoading}
-                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black uppercase border transition-all ${
-                                            isLoading 
-                                                ? 'bg-blue-50 text-blue-300 border-blue-100 animate-pulse' 
+                                        className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-[13px] font-medium border transition-all ${
+                                            isLoading
+                                                ? 'bg-blue-50 text-blue-300 border-blue-100 animate-pulse'
                                                 : 'bg-white text-blue-600 border-blue-100 hover:bg-blue-50'
                                         }`}
                                         title="Sincronizar nomes de Clientes/Fornecedores dos Projetos"
@@ -5090,7 +5095,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
                                     <button 
                                         onClick={() => setShowInternalTxModal(true)}
-                                        className="text-xs font-black text-emerald-600 hover:text-emerald-700 transition-colors uppercase flex items-center gap-1 bg-white border border-emerald-100 px-3 py-1.5 rounded-full hover:bg-emerald-50"
+                                        className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-[13px] font-medium text-emerald-600 bg-white border border-emerald-100 hover:bg-emerald-50 transition-colors"
                                     >
                                         <Plus className="w-3 h-3" />
                                         Novo

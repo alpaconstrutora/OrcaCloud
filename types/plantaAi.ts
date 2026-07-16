@@ -108,6 +108,8 @@ export interface PlantScenario {
   construction_score?: number;
   general_score?: number;
   selected: boolean;
+  /** Última materialização de plant_floors/plant_units a partir da geometria deste cenário. */
+  materialized_at?: string | null;
   created_at: string;
   updated_at: string;
   validations?: Omit<PlantValidation, 'id' | 'created_at' | 'scenario_id'>[];
@@ -127,6 +129,16 @@ export interface PlantFloor {
   updated_at: string;
 }
 
+/** Geometria da unidade materializada — em metros, relativa à pegada do prédio.
+ *  Mesma origem do UnitCell de components/planta_ai/plantaGeometry.ts (fonte única do 2D/3D). */
+export interface PlantUnitGeometry {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+}
+
 export interface PlantUnit {
   id: string;
   floor_id: string;
@@ -140,9 +152,25 @@ export interface PlantUnit {
   gross_area?: number;
   has_balcony?: boolean;
   has_suite?: boolean;
-  geometry_json?: any;
+  geometry_json?: PlantUnitGeometry | null;
   created_at: string;
   updated_at: string;
+}
+
+export type PlantFloorInsert = Omit<PlantFloor, 'id' | 'created_at' | 'updated_at'>;
+export type PlantUnitInsert = Omit<PlantUnit, 'id' | 'created_at' | 'updated_at'>;
+
+/** Resultado da materialização de um cenário em plant_floors/plant_units. */
+export interface MaterializeReport {
+  scenarioId: string;
+  floorsCreated: number;
+  floorsUpdated: number;
+  unitsCreated: number;
+  unitsUpdated: number;
+  /** Pavimentos/unidades removidos por o cenário ter encolhido desde a última materialização. */
+  floorsRemoved: number;
+  unitsRemoved: number;
+  warnings: string[];
 }
 
 export interface PlantValidation {

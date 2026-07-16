@@ -125,8 +125,20 @@ export class PlantaAiEngine {
       
       // Atualizando métricas com base no envelope ajustado
       const adjustedPrivateArea = adjustedBuiltArea / (1 + commonAreaRatio);
-      const actualUnits = Math.max(1, Math.floor(adjustedPrivateArea / avgUnitArea));
-      const actualUnitsPerFloor = Math.max(1, Math.round(actualUnits / floorsCount));
+
+      // Quantas unidades do tamanho-alvo cabem na área que o envelope permite.
+      const unitsThatFit = Math.max(1, Math.floor(adjustedPrivateArea / avgUnitArea));
+
+      // A GRADE é a verdade física do prédio: floorsCount andares × N unidades por andar.
+      // O total tem que ser derivado dela, não calculado em paralelo — antes gravávamos
+      // total_units=38 junto com 6 andares × 6 un/andar (=36), números que não fecham e que
+      // nenhum prédio realiza (6,33 unidades por andar não existe). Quem consome isso depois
+      // — planta 2D/3D, materialização, Empreendimento — precisa de um número só.
+      // `floor` (não `round`): arredondar para cima estouraria o envelope construtivo.
+      const actualUnitsPerFloor = Math.max(1, Math.floor(unitsThatFit / floorsCount));
+      const actualUnits = actualUnitsPerFloor * floorsCount;
+      // Áreas continuam vindo do envelope: a mesma metragem é fatiada entre menos unidades,
+      // então cada uma fica um pouco maior que o alvo do briefing — o terreno é o limite real.
       // Estimativas
       const estimatedVgv = adjustedPrivateArea * 12000; // Mock: R$ 12k/m²
       const estimatedCost = adjustedBuiltArea * 4500;  // Mock: R$ 4.5k/m²

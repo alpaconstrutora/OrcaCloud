@@ -6,10 +6,11 @@
 import React from 'react';
 import {
   Loader2, RefreshCw, ShoppingBag, BarChart3, Building2, ArrowLeftRight,
-  CheckCircle2, AlertTriangle, ArrowRight, Link2Off, Clock, Upload,
+  CheckCircle2, AlertTriangle, ArrowRight, Link2Off, Clock, Upload, Ruler,
 } from 'lucide-react';
 import { empreendimentoService, CommercialDivergenceSummary, EmpreendimentoWriteBackReport } from '../../services/empreendimentoService';
-import { Empreendimento, EmpreendimentoSyncReport } from '../../types';
+import { plantaEmpreendimentoSync } from '../../services/plantaEmpreendimentoSync';
+import { Empreendimento, EmpreendimentoSyncReport, PlantaAiSyncReport, PlantaAiWriteBackReport } from '../../types';
 import { useConfirm } from '../ui/confirm';
 
 interface Props {
@@ -37,10 +38,18 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
   const [writeBackError, setWriteBackError] = React.useState<string | null>(null);
   const [writingBack, setWritingBack] = React.useState(false);
 
+  // Planta IA (vínculo direto)
+  const [plantaReport, setPlantaReport] = React.useState<PlantaAiSyncReport | null>(null);
+  const [plantaError, setPlantaError] = React.useState<string | null>(null);
+  const [plantaWriteBack, setPlantaWriteBack] = React.useState<PlantaAiWriteBackReport[] | null>(null);
+  const [plantaSyncing, setPlantaSyncing] = React.useState(false);
+  const [plantaWritingBack, setPlantaWritingBack] = React.useState(false);
+
   const load = React.useCallback(async () => {
     setLoading(true);
     setStudyError(null);
     setWriteBackError(null);
+    setPlantaError(null);
     const tasks: Promise<void>[] = [];
 
     // Viabilidade — só roda o dry-run se houver estudo vinculado
@@ -60,6 +69,23 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
       setWriteBackReport(null);
     }
 
+    // Planta IA — só roda o dry-run se houver estudo de arquitetura vinculado
+    if (e.planta_ai_study_id) {
+      tasks.push(
+        plantaEmpreendimentoSync.previewSync(e.id)
+          .then(r => setPlantaReport(r))
+          .catch(err => { setPlantaError(err.message); setPlantaReport(null); })
+      );
+      tasks.push(
+        plantaEmpreendimentoSync.previewWriteBack(e.id)
+          .then(r => setPlantaWriteBack(r))
+          .catch(() => setPlantaWriteBack(null))
+      );
+    } else {
+      setPlantaReport(null);
+      setPlantaWriteBack(null);
+    }
+
     // Comercial
     tasks.push(
       empreendimentoService.getCommercialDivergenceSummary(e.id, organizationId)
@@ -69,7 +95,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
 
     await Promise.all(tasks);
     setLoading(false);
-  }, [e.id, e.imovib_study_id, organizationId]);
+  }, [e.id, e.imovib_study_id, e.planta_ai_study_id, organizationId]);
 
   React.useEffect(() => { load(); }, [load]);
 
@@ -93,6 +119,50 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
     }
   };
 
+  const handlePlantaSync = async () => {
+    if (!plantaReport) return;
+    const total = plantaReport.towersCreated + plantaReport.towersUpdated
+      + plantaReport.unitsCreated + plantaReport.unitsUpdated;
+    if (total === 0) return;
+    const ok = await confirm({
+      title: 'Sincronizar do Planta IA?',
+      message: `Serão criadas/atualizadas ${plantaReport.towersCreated + plantaReport.towersUpdated} torre(s) e ${plantaReport.unitsCreated + plantaReport.unitsUpdated} unidade(s) a partir do cenário escolhido no estudo de arquitetura.\n\nSó dados estruturais (nome, pavimento, áreas, dormitórios) são sincronizados — preço e status de venda das unidades já existentes não são tocados.`,
+      confirmLabel: 'Sincronizar',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setPlantaSyncing(true);
+    try {
+      await plantaEmpreendimentoSync.syncToEmpreendimento(e.id);
+      await load();
+    } catch (err: any) {
+      setPlantaError(err.message);
+    } finally {
+      setPlantaSyncing(false);
+    }
+  };
+
+  const handlePlantaWriteBack = async () => {
+    const changes = (plantaWriteBack || []).reduce((s, r) => s + r.changes.length, 0);
+    if (!plantaWriteBack || changes === 0) return;
+    const ok = await confirm({
+      title: 'Enviar ao Estudo de Arquitetura?',
+      message: `${changes} agregado(s) do cenário serão recalculados a partir das torres/unidades reais (pavimentos, unidades por andar, total de unidades e áreas).\n\nVGV, custo estimado e status de venda nunca são propagados — o cenário permanece uma simulação independente do realizado.`,
+      confirmLabel: 'Enviar',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setPlantaWritingBack(true);
+    try {
+      await plantaEmpreendimentoSync.writeBackToPlantaScenario(e.id);
+      await load();
+    } catch (err: any) {
+      setPlantaError(err.message);
+    } finally {
+      setPlantaWritingBack(false);
+    }
+  };
+
   // Divergências de Viabilidade = itens que o sync criaria/atualizaria
   const studyDiverge = studyReport
     ? studyReport.towersCreated + studyReport.towersUpdated + studyReport.unitsCreated + studyReport.unitsUpdated
@@ -104,6 +174,15 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
   const commDiverge = comm
     ? comm.statusDiverge + comm.priceDiverge + comm.orphans + comm.unmappable
     : 0;
+
+  const plantaDiverge = plantaReport
+    ? plantaReport.towersCreated + plantaReport.towersUpdated + plantaReport.unitsCreated + plantaReport.unitsUpdated
+    : 0;
+  const plantaOrphans = plantaReport
+    ? plantaReport.orphanTowers.length + plantaReport.orphanUnits.length
+    : 0;
+  const plantaChanges = (plantaWriteBack || []).reduce((s, r) => s + r.changes.length, 0);
+  const plantaUnitsWithoutOrigin = (plantaWriteBack || []).reduce((s, r) => s + r.unitsWithoutPlantaOrigin, 0);
 
   if (loading) return (
     <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>
@@ -125,8 +204,38 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
           </button>
         </div>
 
+        {/* Topologia em estrela: o Empreendimento é o hub e tem 3 raios independentes.
+            O Planta IA fala DIRETO com o hub (ponte 20270209000000) — antes só chegava aqui
+            via Imovib, em 2 saltos. */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-3 items-stretch">
-          {/* Viabilidade */}
+          {/* Linha 1 — Arquitetura, acima do hub */}
+          <div className="hidden md:block" />
+          <div className="hidden md:block" />
+          <VertexCard
+            icon={Ruler}
+            tint="indigo"
+            title="Arquitetura"
+            subtitle="Planta IA"
+            linked={!!e.planta_ai_study_id}
+            unlinkedLabel="Nenhum estudo vinculado"
+            error={plantaError}
+            divergences={plantaDiverge}
+            extraOrphans={plantaOrphans}
+            footer={plantaReport ? `${plantaReport.scenarioUnits} unidade(s) no cenário` : null}
+          />
+          <div className="hidden md:block" />
+          <div className="hidden md:block" />
+
+          {/* Seta vertical hub ↕ arquitetura */}
+          <div className="hidden md:block" />
+          <div className="hidden md:block" />
+          <div className="hidden md:flex items-center justify-center text-gray-300 py-1">
+            <ArrowLeftRight className="w-5 h-5 rotate-90" />
+          </div>
+          <div className="hidden md:block" />
+          <div className="hidden md:block" />
+
+          {/* Linha 2 — Viabilidade ↔ HUB ↔ Comercial */}
           <VertexCard
             icon={BarChart3}
             tint="violet"
@@ -223,6 +332,58 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
           ) : null}
         </RelationCard>
 
+        {/* Arquitetura ↔ Empreendimento (ponte direta, sem passar pelo Imovib) */}
+        <RelationCard
+          title="Arquitetura ↔ Empreendimento"
+          icon={Ruler}
+          tint="indigo"
+        >
+          {!e.planta_ai_study_id ? (
+            <EmptyHint icon={Link2Off} text="Este empreendimento não está vinculado a um estudo de arquitetura (Planta IA). Vincule pelo botão Editar." />
+          ) : plantaError ? (
+            <div className="text-xs text-rose-600 font-medium flex items-start gap-1.5">
+              <AlertTriangle className="w-4 h-4 shrink-0" /> {plantaError}
+            </div>
+          ) : plantaReport ? (
+            <>
+              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 pt-1">Do Cenário para o Empreendimento</p>
+              <DiffRow label="Torres a criar" value={plantaReport.towersCreated} />
+              <DiffRow label="Torres a atualizar" value={plantaReport.towersUpdated} />
+              <DiffRow label="Unidades a criar" value={plantaReport.unitsCreated} />
+              <DiffRow label="Unidades a atualizar" value={plantaReport.unitsUpdated} />
+              {plantaOrphans > 0 && <DiffRow label="Itens órfãos (mantidos)" value={plantaOrphans} warn />}
+              {plantaReport.warnings.map((w, i) => (
+                <p key={i} className="text-[10px] text-amber-600 font-medium flex items-start gap-1.5 leading-relaxed pt-1">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" /> {w}
+                </p>
+              ))}
+              <button
+                onClick={handlePlantaSync}
+                disabled={plantaSyncing || plantaDiverge === 0}
+                className="mt-2 w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2"
+              >
+                {plantaSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                {plantaDiverge === 0 ? 'Nada a sincronizar' : 'Sincronizar do Cenário'}
+              </button>
+
+              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 pt-3 border-t border-gray-100 mt-1">Do Empreendimento para o Cenário</p>
+              <DiffRow label="Agregados a recalcular" value={plantaChanges} warn={plantaChanges > 0} />
+              <DiffRow label="Sem origem no Planta IA" value={plantaUnitsWithoutOrigin} muted />
+              <button
+                onClick={handlePlantaWriteBack}
+                disabled={plantaWritingBack || plantaChanges === 0}
+                className="mt-2 w-full px-4 py-2.5 bg-white hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-700 border border-indigo-200 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2"
+              >
+                {plantaWritingBack ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {plantaChanges === 0 ? 'Nada a enviar' : 'Enviar ao Cenário'}
+              </button>
+              <p className="text-[9px] text-gray-400 font-medium leading-relaxed pt-1">
+                Envia pavimentos, unidades por andar, total de unidades e áreas. VGV, custo e status de venda nunca voltam ao cenário.
+              </p>
+            </>
+          ) : null}
+        </RelationCard>
+
         {/* Empreendimento ↔ Comercial */}
         <RelationCard
           title="Empreendimento ↔ Venda de Ativos"
@@ -268,6 +429,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
 const TINTS: Record<string, { bg: string; text: string; ring: string }> = {
   violet:  { bg: 'bg-violet-50',  text: 'text-violet-600',  ring: 'border-violet-100' },
   emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', ring: 'border-emerald-100' },
+  indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-600',  ring: 'border-indigo-100' },
 };
 
 const VertexCard: React.FC<{

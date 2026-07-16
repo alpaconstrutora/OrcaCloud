@@ -5,9 +5,11 @@ import Button from '../ui/Button';
 import CityStateSelect from '../CityStateSelect';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { imovibService } from '../../services/imovibService';
+import { supabase } from '../../lib/supabase';
 import {
   Empreendimento, EmpreendimentoStatus, EmpreendimentoTipo, EmpreendimentoInsert, ImovibStudy,
 } from '../../types';
+import { PlantStudy } from '../../types/plantaAi';
 
 interface Props {
   organizationId: string;
@@ -35,12 +37,14 @@ const TIPO_OPTIONS: { value: EmpreendimentoTipo; label: string }[] = [
 export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, onClose, onSaved }) => {
   const [saving, setSaving] = React.useState(false);
   const [studies, setStudies] = React.useState<ImovibStudy[]>([]);
+  const [plantStudies, setPlantStudies] = React.useState<PlantStudy[]>([]);
   const [form, setForm] = React.useState({
     name: editing?.name ?? '',
     code: editing?.code ?? '',
     status: (editing?.status ?? 'PLANEJAMENTO') as EmpreendimentoStatus,
     tipo: (editing?.tipo ?? '') as EmpreendimentoTipo | '',
     imovib_study_id: editing?.imovib_study_id ?? '',
+    planta_ai_study_id: editing?.planta_ai_study_id ?? '',
     matricula: editing?.matricula ?? '',
     construtora: editing?.construtora ?? '',
     responsavel_tecnico: editing?.responsavel_tecnico ?? '',
@@ -71,6 +75,13 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
 
   React.useEffect(() => {
     imovibService.getStudies(organizationId).then(setStudies).catch(() => setStudies([]));
+    // Estudos de arquitetura (Planta IA) — vínculo direto, independente do Imovib.
+    supabase
+      .from('plant_studies')
+      .select('id, organization_id, name, status, created_at, updated_at')
+      .eq('organization_id', organizationId)
+      .order('name')
+      .then(({ data }) => setPlantStudies((data || []) as PlantStudy[]));
   }, [organizationId]);
 
   const set = (k: keyof typeof form, v: string) => setForm(prev => ({ ...prev, [k]: v }));
@@ -87,6 +98,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
         status: form.status,
         tipo: form.tipo || null,
         imovib_study_id: form.imovib_study_id || null,
+        planta_ai_study_id: form.planta_ai_study_id || null,
         matricula: form.matricula || undefined,
         construtora: form.construtora || undefined,
         responsavel_tecnico: form.responsavel_tecnico || undefined,
@@ -170,6 +182,16 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
                 <option value="">— Sem vínculo —</option>
                 {studies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelCls}>Estudo de Arquitetura (Planta IA)</label>
+              <select className={inputCls} value={form.planta_ai_study_id} onChange={e => set('planta_ai_study_id', e.target.value)}>
+                <option value="">— Sem vínculo —</option>
+                {plantStudies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              <p className="text-[10px] text-gray-400 font-medium mt-1">
+                Vínculo direto, independente do Imovib. Habilita o sync de torres/unidades a partir do cenário selecionado.
+              </p>
             </div>
           </div>
 

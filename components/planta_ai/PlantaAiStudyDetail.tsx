@@ -4,6 +4,9 @@ import { PlantStudy, PlantScenario } from '../../types/plantaAi';
 import { ArrowLeft } from 'lucide-react';
 import { PlantaAiEngine } from '../../services/plantaAiEngine';
 import { PlantaAiIntegration } from '../../services/plantaAiIntegration';
+import { plantaAiMaterializeService } from '../../services/plantaAiMaterializeService';
+import { PlantBriefing } from '../../types/plantaAi';
+import { useConfirm } from '../ui/confirm';
 import TerrainForm from './forms/TerrainForm';
 import UrbanRulesForm from './forms/UrbanRulesForm';
 import BriefingForm from './forms/BriefingForm';
@@ -25,6 +28,9 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
   const [selectedScenarioForView, setSelectedScenarioForView] = useState<PlantScenario | null>(null);
   const [terrain, setTerrain] = useState<PlantTerrain | null>(null);
   const [rules, setRules] = useState<PlantUrbanRuleset | null>(null);
+  const [briefing, setBriefing] = useState<PlantBriefing | null>(null);
+  const [materializingId, setMaterializingId] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   useEffect(() => {
     fetchStudy();
@@ -37,6 +43,8 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
     if (tData) setTerrain(tData as PlantTerrain);
     const { data: rData } = await supabase.from('plant_urban_rulesets').select('*').eq('study_id', studyId).single();
     if (rData) setRules(rData as PlantUrbanRuleset);
+    const { data: bData } = await supabase.from('plant_briefings').select('*').eq('study_id', studyId).maybeSingle();
+    if (bData) setBriefing(bData as PlantBriefing);
   }
 
   async function fetchStudy() {
@@ -117,9 +125,59 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
     }
   }
 
+  /**
+   * Marca o cenário como o escolhido do estudo. Até então isso só acontecia como efeito
+   * colateral de "Testar Viabilidade" (sendToViabilidade), o que obrigava a passar pelo Imovib
+   * para poder levar um cenário ao Empreendimento — justamente o acoplamento que a ponte direta
+   * elimina. (O booleano plant_scenarios.selected existe na tabela mas nada no app o escreve;
+   * a escolha vive em plant_studies.selected_scenario_id.)
+   */
+  async function chooseScenario(scenarioId: string) {
+    const { error } = await supabase
+      .from('plant_studies')
+      .update({ selected_scenario_id: scenarioId, status: 'Cenário selecionado' })
+      .eq('id', studyId);
+    if (error) { alert('Erro ao escolher cenário: ' + error.message); return; }
+    fetchStudy();
+  }
+
+  /**
+   * Persiste plant_floors/plant_units a partir da geometria do cenário. É o pré-requisito da
+   * ponte com o módulo Empreendimentos: sem unidades materializadas não há o que espelhar
+   * (a grade do 2D/3D só existia em memória).
+   */
+  async function materialize(scenario: PlantScenario) {
+    if (!terrain || !rules) {
+      alert('Preencha Terreno e Regras antes de materializar as unidades.');
+      return;
+    }
+    setMaterializingId(scenario.id);
+    try {
+      const r = await plantaAiMaterializeService.materializeScenario(scenario, terrain, rules, briefing);
+      const parts = [
+        `${r.floorsCreated + r.floorsUpdated} pavimento(s)`,
+        `${r.unitsCreated + r.unitsUpdated} unidade(s)`,
+      ];
+      if (r.unitsRemoved || r.floorsRemoved) parts.push(`${r.unitsRemoved} unidade(s) e ${r.floorsRemoved} pavimento(s) obsoletos removidos`);
+      alert(`Materializado: ${parts.join(', ')}.` + (r.warnings.length ? `\n\n${r.warnings.join('\n')}` : ''));
+      fetchScenarios();
+    } catch (err: any) {
+      alert('Erro ao materializar: ' + err.message);
+    } finally {
+      setMaterializingId(null);
+    }
+  }
+
   async function publishToCommercial(scenarioId: string) {
-    if (!confirm("Isso criará o Empreendimento Final no Comercial com todas as unidades. Deseja continuar?")) return;
-    
+    const ok = await confirm({
+      title: 'Publicar no Comercial?',
+      message: 'Isso criará o prédio e todas as unidades no módulo Comercial (Venda de Ativos), além da oportunidade de investimento.',
+      confirmLabel: 'Publicar',
+      variant: 'warning',
+    });
+    if (!ok) return;
+
+
     const res = await PlantaAiIntegration.publishToCommercialInventory(studyId, scenarioId);
     
     if (res.success) {
@@ -237,12 +295,42 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
                               Testar Viabilidade
                             </button>
                         </div>
-                        <button 
-                          onClick={() => publishToCommercial(sc.id)}
-                          className="w-full mt-2 py-1.5 text-sm bg-green-600 text-white font-medium rounded hover:bg-green-700 transition-colors"
-                          title="Gerar Prédio e Unidades no Módulo Comercial"
+                        {/* Escolher = define plant_studies.selected_scenario_id, que é o que a
+                            ponte com Empreendimentos lê para saber qual cenário virou torre. */}
+                        {sc.id === study.selected_scenario_id ? (
+                          <span className="w-full mt-2 py-1.5 text-sm text-center text-green-700 bg-green-100 font-medium rounded">
+                            ✓ Cenário escolhido
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => chooseScenario(sc.id)}
+                            className="w-full mt-2 py-1.5 text-sm bg-white text-gray-700 border border-gray-300 font-medium rounded hover:bg-gray-50 transition-colors"
+                            title="Definir como o cenário escolhido deste estudo"
+                          >
+                            Escolher este cenário
+                          </button>
+                        )}
+                        {/* Materializar = persistir plant_floors/plant_units a partir da grade
+                            do 2D/3D. Pré-requisito do sync com o módulo Empreendimentos. */}
+                        <button
+                          onClick={() => materialize(sc)}
+                          disabled={materializingId === sc.id}
+                          className="w-full mt-2 py-1.5 text-sm bg-indigo-600 text-white font-medium rounded hover:bg-indigo-700 disabled:bg-gray-400 transition-colors"
+                          title="Persistir os pavimentos e unidades deste cenário para uso no módulo Empreendimentos"
                         >
-                          Lançar Empreendimento
+                          {materializingId === sc.id ? 'Materializando...' : sc.materialized_at ? 'Rematerializar unidades' : 'Materializar unidades'}
+                        </button>
+                        {sc.materialized_at && (
+                          <p className="text-[10px] text-gray-400 text-center -mt-1">
+                            Materializado em {new Date(sc.materialized_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                          </p>
+                        )}
+                        <button
+                          onClick={() => publishToCommercial(sc.id)}
+                          className="w-full py-1.5 text-sm bg-green-600 text-white font-medium rounded hover:bg-green-700 transition-colors"
+                          title="Gerar Prédio e Unidades no Módulo Comercial (Venda de Ativos)"
+                        >
+                          Publicar no Comercial
                         </button>
                       </div>
                     </div>

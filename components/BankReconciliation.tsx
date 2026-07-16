@@ -4098,8 +4098,19 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     <div className={activeView === 'statement' ? "grid grid-cols-1 gap-8 min-h-[500px]" : "grid grid-cols-1 lg:grid-cols-2 gap-8 min-h-[500px]"}>
                     {/* Left: Bank Statement */}
                     <div className="space-y-4">
+                        {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — só na
+                            aba Extrato (activeView === 'statement'); a aba Pendentes (grid-cols-2,
+                            estilo antigo rounded-[2.5rem]) não é tocada — o wrapper vira Fragment
+                            nesse caso, sem alterar o layout existente. */}
+                        {(() => {
+                            const StatementCardWrapper: React.ElementType = activeView === 'statement' ? 'div' : React.Fragment;
+                            const wrapperProps = activeView === 'statement'
+                                ? { className: 'bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden' }
+                                : {};
+                            return (
+                        <StatementCardWrapper {...wrapperProps}>
                         <div className={activeView === 'statement'
-                            ? "flex flex-col md:flex-row gap-2.5 items-center"
+                            ? "flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white"
                             : "flex justify-between items-center px-4"}>
                             {activeView !== 'statement' && (
                             <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
@@ -4281,13 +4292,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         <p className="mt-2 text-gray-500">Carregando extrato...</p>
                                     </div>
                                 ) : bankTransactions.length === 0 ? (
-                                    <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+                                    <div className="text-center py-12">
                                         <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                         <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum extrato importado</h3>
                                         <p className="text-sm text-gray-500">Importe um arquivo OFX, CSV, CNAB ou Excel (XLSX) para começar.</p>
                                     </div>
                                 ) : (
-                                    <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
+                                    <div>
                                         <div className="overflow-auto max-h-[70vh]">
                                         <table ref={statementTableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: statementTableTotalWidth }}>
                                             <colgroup>
@@ -4908,6 +4919,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 </div>
                             )}
                         </div>
+                        </StatementCardWrapper>
+                            );
+                        })()}
                     </div>
 
                     {activeView === 'pending' && (

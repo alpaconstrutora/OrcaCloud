@@ -1,7 +1,24 @@
 import React from 'react';
 import { complianceService } from '../services/complianceService';
 import { companyService } from '../services/companyService';
-import { ComplianceChecklist, ComplianceRule, Company } from '../types';
+import { ttsService } from '../services/ttsService';
+import { useConfirm } from './ui/confirm';
+import { ComplianceChecklist, ComplianceRule, Company, TtsCalculationResult } from '../types';
+
+// Competência atual (1º dia do mês) e dias restantes até o fim do ciclo mensal.
+function currentReferenceMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+}
+function diasAteFimDoMes(): number {
+  const now = new Date();
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return Math.max(lastDay - now.getDate(), 0);
+}
+
+function formatMoney(v: number): string {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
 
 interface ComplianceDashboardProps {
   organizationId: string;
@@ -17,45 +34,62 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>('');
   const [checklists, setChecklists] = React.useState<any[]>([]);
   const [rules, setRules] = React.useState<ComplianceRule[]>([]);
-  const [interestadualPct, setInterestadualPct] = React.useState(32.4); // Simulado via ERP
-  const [diasRestantes, setDiasRestantes] = React.useState(12);
+  // interestadualPct = null → ainda não há lançamentos de saída para a competência.
+  // Nunca exibimos um número fictício: sem dados, a UI mostra "sem lançamentos".
+  const [interestadualPct, setInterestadualPct] = React.useState<number | null>(null);
+  const [ttsResult, setTtsResult] = React.useState<TtsCalculationResult | null>(null);
+  const [minShare, setMinShare] = React.useState(30);
+  const [diasRestantes] = React.useState(diasAteFimDoMes());
   const [score, setScore] = React.useState(85);
+  const [backfilling, setBackfilling] = React.useState(false);
+  const [backfillMsg, setBackfillMsg] = React.useState<string | null>(null);
+  const confirm = useConfirm();
+
+  // Carrega checklists + apuração TTS real de uma filial e recalcula o score.
+  const loadCompanyData = React.useCallback(
+    async (companyId: string) => {
+      const [checkData, tts] = await Promise.all([
+        complianceService.listChecklists(organizationId, companyId),
+        ttsService.apurarComCalculo(organizationId, companyId, currentReferenceMonth()),
+      ]);
+      setChecklists(checkData);
+
+      const pct = tts.resultado ? tts.resultado.pct_interestadual : null;
+      setInterestadualPct(pct);
+      setTtsResult(tts.resultado);
+      if (tts.resultado) setMinShare(tts.resultado.min_interstate_share);
+
+      // Score: 50% checklists conformes + 30% métrica interestadual + 20% docs em dia.
+      // Sem dados de apuração, a parcela interestadual entra neutra (não penaliza nem infla).
+      const conformes = checkData.filter((c) => c.status === 'conforme').length;
+      const pctConformes = checkData.length > 0 ? Math.round((conformes / checkData.length) * 100) : 0;
+      const interestadualScore =
+        pct === null ? 100 : pct >= minShare ? 100 : (pct / minShare) * 100;
+      setScore(Math.round(pctConformes * 0.5 + interestadualScore * 0.3 + 100 * 0.2));
+    },
+    [organizationId, minShare]
+  );
 
   const fetchData = React.useCallback(async () => {
     try {
       setLoading(true);
-      // Listar empresas vinculadas à organização
       const comps = await companyService.list(organizationId);
       setCompanies(comps);
+
+      const rulesData = await complianceService.listRules(organizationId);
+      setRules(rulesData);
 
       if (comps.length > 0) {
         const defaultComp = comps[0].id;
         setSelectedCompanyId(defaultComp);
-        
-        const [checkData, rulesData] = await Promise.all([
-          complianceService.listChecklists(organizationId, defaultComp),
-          complianceService.listRules(organizationId)
-        ]);
-        setChecklists(checkData);
-        setRules(rulesData);
-
-        // Calcular score de compliance básico baseado em checklists conformes
-        if (checkData.length > 0) {
-          const conformes = checkData.filter(c => c.status === 'conforme').length;
-          const pctConformes = Math.round((conformes / checkData.length) * 100);
-          
-          // Peso: 50% checklists, 30% métrica interestadual, 20% documentos em dia
-          const interestadualScore = interestadualPct >= 30.0 ? 100 : (interestadualPct / 30.0) * 100;
-          const finalScore = Math.round((pctConformes * 0.5) + (interestadualScore * 0.3) + (100 * 0.2));
-          setScore(finalScore);
-        }
+        await loadCompanyData(defaultComp);
       }
     } catch (error) {
       console.error('Erro ao carregar dados do compliance:', error);
     } finally {
       setLoading(false);
     }
-  }, [organizationId, interestadualPct]);
+  }, [organizationId, loadCompanyData]);
 
   React.useEffect(() => {
     fetchData();
@@ -65,21 +99,47 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
     setSelectedCompanyId(companyId);
     try {
       setLoading(true);
-      const checkData = await complianceService.listChecklists(organizationId, companyId);
-      setChecklists(checkData);
-
-      // Recalcular score
-      if (checkData.length > 0) {
-        const conformes = checkData.filter(c => c.status === 'conforme').length;
-        const pctConformes = Math.round((conformes / checkData.length) * 100);
-        const interestadualScore = interestadualPct >= 30.0 ? 100 : (interestadualPct / 30.0) * 100;
-        const finalScore = Math.round((pctConformes * 0.5) + (interestadualScore * 0.3) + (100 * 0.2));
-        setScore(finalScore);
-      }
+      await loadCompanyData(companyId);
     } catch (error) {
       console.error('Erro ao atualizar empresa:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Importa movimentos de ICMS a partir das NF-e já ingeridas no Fiscal.
+  const handleBackfill = async () => {
+    const ok = await confirm({
+      title: 'Importar movimentos das NF-e?',
+      message:
+        'Vamos gerar a apuração de ICMS a partir das NF-e já ingeridas no módulo Fiscal ' +
+        '(direção e escopo pelo CFOP; filial pelo CNPJ). É idempotente — importações ' +
+        'anteriores da mesma origem são substituídas, não duplicadas.',
+      confirmLabel: 'Importar',
+    });
+    if (!ok) return;
+
+    try {
+      setBackfilling(true);
+      setBackfillMsg(null);
+      const r = await ttsService.backfillFromNfe(organizationId);
+      const partes = [
+        `${r.movements_created} movimento(s) de ${r.invoices_applied}/${r.invoices_scanned} NF-e`,
+      ];
+      if (r.skipped_no_company > 0) partes.push(`${r.skipped_no_company} item(ns) sem filial (CNPJ não cadastrado)`);
+      if (r.skipped_no_cfop > 0) partes.push(`${r.skipped_no_cfop} sem CFOP`);
+      if (r.skipped_exterior > 0) partes.push(`${r.skipped_exterior} de exterior`);
+      setBackfillMsg(
+        r.movements_created === 0
+          ? `Nenhum movimento gerado. ${partes.slice(1).join(' · ') || 'Não há NF-e com CFOP/filial compatível.'}`
+          : `Importado: ${partes.join(' · ')}.`
+      );
+      if (selectedCompanyId) await loadCompanyData(selectedCompanyId);
+    } catch (error) {
+      console.error('Erro no backfill de NF-e:', error);
+      setBackfillMsg(`Erro ao importar: ${error instanceof Error ? error.message : 'desconhecido'}`);
+    } finally {
+      setBackfilling(false);
     }
   };
 
@@ -123,6 +183,15 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
           </select>
 
           <button
+            onClick={handleBackfill}
+            disabled={backfilling}
+            className="h-9 px-3 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center gap-2 text-xs font-bold text-slate-700 active:scale-95 transition-transform hover:bg-slate-50 disabled:opacity-50"
+            title="Gerar apuração a partir das NF-e já ingeridas no Fiscal"
+          >
+            {backfilling ? '⏳ Importando...' : '📥 Importar das NF-e'}
+          </button>
+
+          <button
             onClick={fetchData}
             className="w-9 h-9 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center justify-center text-button active:scale-95 transition-transform hover:bg-slate-50"
             title="Sincronizar"
@@ -131,6 +200,14 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Resultado do backfill */}
+      {backfillMsg && (
+        <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl flex items-start justify-between gap-3">
+          <p className="text-xs font-medium text-slate-600">{backfillMsg}</p>
+          <button onClick={() => setBackfillMsg(null)} className="text-slate-400 hover:text-slate-600 text-xs shrink-0">✕</button>
+        </div>
+      )}
 
       {/* Grid Principal - Score & Indicador TTS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -169,29 +246,49 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-xs font-black uppercase tracking-widest text-slate-400">Saídas Interestaduais (TTS)</span>
             <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-600">
-              Meta Mínima 30%
+              Meta Mínima {minShare}%
             </span>
           </div>
 
-          <div className="flex items-baseline gap-2">
-            <span className={`text-5xl font-black tracking-tight ${
-              interestadualPct >= 30.0 ? 'text-slate-800' : 'text-rose-600'
-            }`}>{interestadualPct}%</span>
-            <span className="text-xs font-bold text-slate-400">acumulado</span>
-          </div>
+          {interestadualPct === null ? (
+            <div className="flex items-baseline gap-2">
+              <span className="text-5xl font-black tracking-tight text-slate-300">—</span>
+              <span className="text-xs font-bold text-slate-400">sem lançamentos</span>
+            </div>
+          ) : (
+            <div className="flex items-baseline gap-2">
+              <span className={`text-5xl font-black tracking-tight ${
+                interestadualPct >= minShare ? 'text-slate-800' : 'text-rose-600'
+              }`}>{interestadualPct}%</span>
+              <span className="text-xs font-bold text-slate-400">apurado no mês</span>
+            </div>
+          )}
 
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>Ciclo: Restam <b>{diasRestantes} dias</b></span>
-            <span className={interestadualPct >= 30.0 ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
-              {interestadualPct >= 30.0 ? '✓ Elegível' : '⚠ Risco de perda'}
-            </span>
-          </div>
-          <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
-            <div 
-              className={`h-full ${interestadualPct >= 30.0 ? 'bg-emerald-500' : 'bg-rose-500'}`}
-              style={{ width: `${Math.min((interestadualPct / 40) * 100, 100)}%` }}
-            />
-          </div>
+          {interestadualPct === null ? (
+            <div className="text-xs text-slate-500">
+              Registre saídas do mês na apuração para acompanhar a elegibilidade do benefício.
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span>Ciclo: Restam <b>{diasRestantes} dias</b></span>
+                <span className={interestadualPct >= minShare ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold'}>
+                  {interestadualPct >= minShare ? '✓ Elegível' : '⚠ Risco de perda'}
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${interestadualPct >= minShare ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                  style={{ width: `${Math.min((interestadualPct / (minShare + 10)) * 100, 100)}%` }}
+                />
+              </div>
+              {ttsResult && ttsResult.economia > 0 && (
+                <div className="text-xs text-slate-500 pt-1 border-t border-slate-100">
+                  Economia estimada no mês: <b className="text-emerald-600">{formatMoney(ttsResult.economia)}</b>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* Resumo de Checklists */}
@@ -225,14 +322,14 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
         </div>
       </div>
 
-      {/* Alertas Urgentes */}
-      {interestadualPct < 35.0 && (
+      {/* Alertas Urgentes — só quando há apuração real abaixo da margem de segurança */}
+      {interestadualPct !== null && interestadualPct < minShare + 5 && (
         <div className="bg-amber-50 border border-amber-200/80 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
           <span className="text-xl">⚠️</span>
           <div>
             <h4 className="text-xs font-black uppercase text-amber-800 tracking-wider">Aviso de Risco Regulatória (TTS)</h4>
             <p className="text-xs font-medium text-amber-700 mt-0.5">
-              O percentual interestadual de vendas da filial ({interestadualPct}%) está próximo da margem mínima permitida (30%). É altamente recomendado direcionar as próximas expedições para fora de Minas Gerais nos próximos {diasRestantes} dias para blindar o benefício.
+              O percentual interestadual de vendas da filial ({interestadualPct}%) está próximo da margem mínima permitida ({minShare}%). É altamente recomendado direcionar as próximas expedições para fora de Minas Gerais nos próximos {diasRestantes} dias para blindar o benefício.
             </p>
           </div>
         </div>

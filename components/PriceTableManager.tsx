@@ -32,6 +32,7 @@ const UNIT_STATUS_LABEL: Record<string, string> = {
     RENTED: 'Alugado',
     WAITING_PAYMENT: 'Aguardando pagamento',
     BLOCKED: 'Bloqueado',
+    EXCHANGED: 'Permutado',
 };
 const UNIT_STATUS_COLOR: Record<string, string> = {
     AVAILABLE: 'text-emerald-700',
@@ -40,6 +41,7 @@ const UNIT_STATUS_COLOR: Record<string, string> = {
     RENTED: 'text-blue-700',
     WAITING_PAYMENT: 'text-amber-700',
     BLOCKED: 'text-gray-600',
+    EXCHANGED: 'text-violet-700',
 };
 
 // §8 Status Badge — texto simples colorido, sem pílula/fundo/uppercase

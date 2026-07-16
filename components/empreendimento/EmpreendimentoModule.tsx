@@ -1,8 +1,10 @@
 // components/empreendimento/EmpreendimentoModule.tsx
 import React from 'react';
-import { Plus, Loader2, Building2, Search, ArrowRight } from 'lucide-react';
-import Button from '../ui/Button';
+import { Plus, Building2, Search, RefreshCw } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
+import { KpiCard } from '../ui/KpiCard';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
+import { useConfirm } from '../ui/confirm';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { Empreendimento, EmpreendimentoStatus } from '../../types';
 import EmpreendimentoForm from './EmpreendimentoForm';
@@ -21,13 +23,21 @@ const STATUS_LABELS: Record<EmpreendimentoStatus, string> = {
   ENCERRADO: 'Encerrado',
 };
 
-const STATUS_STYLE: Record<EmpreendimentoStatus, string> = {
-  PLANEJAMENTO: 'bg-gray-500/10 text-gray-600',
-  LANCAMENTO: 'bg-amber-500/10 text-amber-600',
-  EM_OBRAS: 'bg-blue-500/10 text-blue-600',
-  ENTREGUE: 'bg-emerald-500/10 text-emerald-600',
-  ENCERRADO: 'bg-slate-500/10 text-slate-600',
+// Texto colorido, sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
+  PLANEJAMENTO: 'text-gray-600',
+  LANCAMENTO: 'text-amber-600',
+  EM_OBRAS: 'text-blue-600',
+  ENTREGUE: 'text-emerald-600',
+  ENCERRADO: 'text-slate-500',
 };
+
+const COLUMNS: ColumnConfig[] = [
+  { key: 'name', label: 'Empreendimento', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'vgv', label: 'VGV Total', sortable: true },
+  { key: 'actions', label: 'Ações', sortable: false },
+];
 
 export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, onChangeView }) => {
   const isWriteDisabled = !activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS';
@@ -35,10 +45,12 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
 
   const [items, setItems] = React.useState<Empreendimento[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [search, setSearch] = React.useState('');
+  const [search, setSearch] = usePersistedState<string>('empreendimentoList:search', '');
+  const tableColumns = useTableColumns(COLUMNS, 'empreendimentoListColumns');
   const [selected, setSelected] = React.useState<Empreendimento | null>(null);
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Empreendimento | null>(null);
+  const confirm = useConfirm();
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -63,7 +75,13 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
 
   const handleDelete = async (e: React.MouseEvent, item: Empreendimento) => {
     e.stopPropagation();
-    if (!window.confirm(`Excluir o empreendimento "${item.name}"? Torres, unidades e áreas comuns serão removidos.`)) return;
+    const ok = await confirm({
+      title: `Excluir "${item.name}"?`,
+      message: 'Torres, unidades e áreas comuns serão removidos. Essa ação não pode ser desfeita.',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
     try {
       await empreendimentoService.remove(item.id);
       setItems(prev => prev.filter(i => i.id !== item.id));
@@ -72,11 +90,42 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
     }
   };
 
-  const filtered = items.filter(i =>
-    i.name.toLowerCase().includes(search.toLowerCase()) ||
-    (i.code || '').toLowerCase().includes(search.toLowerCase()) ||
-    (i.spe_razao_social || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const kpis = React.useMemo(() => {
+    const emObras = items.filter(i => i.status === 'EM_OBRAS').length;
+    const vgvTotal = items.reduce((sum, i) => sum + (i.vgv_total || 0), 0);
+    return { total: items.length, emObras, vgvTotal };
+  }, [items]);
+
+  const filtered = React.useMemo(() => {
+    const result = items.filter(i =>
+      i.name.toLowerCase().includes(search.toLowerCase()) ||
+      (i.code || '').toLowerCase().includes(search.toLowerCase()) ||
+      (i.spe_razao_social || '').toLowerCase().includes(search.toLowerCase())
+    );
+
+    return result.sort((a, b) => {
+      if (tableColumns.sortColumn) {
+        switch (tableColumns.sortColumn) {
+          case 'name':
+            return tableColumns.sortDirection === 'asc'
+              ? a.name.localeCompare(b.name)
+              : b.name.localeCompare(a.name);
+          case 'status':
+            return tableColumns.sortDirection === 'asc'
+              ? STATUS_LABELS[a.status].localeCompare(STATUS_LABELS[b.status])
+              : STATUS_LABELS[b.status].localeCompare(STATUS_LABELS[a.status]);
+          case 'vgv':
+            return tableColumns.sortDirection === 'asc'
+              ? (a.vgv_total || 0) - (b.vgv_total || 0)
+              : (b.vgv_total || 0) - (a.vgv_total || 0);
+          default:
+            return 0;
+        }
+      }
+      // Sem coluna clicada, ordenação default é nome A-Z (§6.4: sem dropdown redundante).
+      return a.name.localeCompare(b.name);
+    });
+  }, [items, search, tableColumns.sortColumn, tableColumns.sortDirection]);
 
   // ── Detalhe ────────────────────────────────────────────────────────────────
   if (selected) {
@@ -110,8 +159,10 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   // ── Lista ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+      {/* Header — card com breadcrumb (linguagem visual própria deste módulo,
+          documentada como exceção ao cabeçalho flat em ui_ux_standard_guide.md
+          §20); radius migrado pra escala compacta (§16) */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-gray-400">
             <span>Comercial</span><span>/</span><span className="text-gray-600 font-bold">Incorporação</span>
@@ -120,81 +171,149 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
             <Building2 className="w-6 h-6 text-blue-600" /> Empreendimentos
           </h1>
         </div>
-        <Button
+        {/* Botão primário — variante compacta (§17), não o componente Button
+            compartilhado (BASE dele ainda é font-black uppercase tracking-widest
+            rounded-xl, estilo pesado deprecado) */}
+        <button
           onClick={() => { setEditing(null); setIsFormOpen(true); }}
           disabled={isWriteDisabled}
           title={isWriteDisabled ? 'Selecione uma organização específica' : 'Novo empreendimento'}
-          size="lg"
-          className="shadow-xl shadow-blue-900/10"
+          className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
         >
-          <Plus className="w-4 h-4" /> Novo Empreendimento
-        </Button>
+          <Plus className="w-[15px] h-[15px]" /> Novo empreendimento
+        </button>
       </div>
 
-      {/* Busca */}
-      <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
-        <div className="relative bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 flex items-center gap-2 max-w-md">
-          <Search className="w-4 h-4 text-gray-400" />
+      {/* KPIs — mesmo nível de importância (contagem × contagem × soma financeira), grade simétrica (§4.2) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <KpiCard shadow={false} label="Total de Empreendimentos" value={kpis.total} icon={<Building2 className="w-5 h-5" />} color="blue" />
+        <KpiCard shadow={false} label="Em Obras" value={kpis.emObras} icon={<Building2 className="w-5 h-5" />} color="amber" />
+        <KpiCard shadow={false} label="VGV Total" value={`R$ ${kpis.vgvTotal.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} icon={<Building2 className="w-5 h-5" />} color="emerald" />
+      </div>
+
+      {/* Toolbar — variante desaninhada (§5.1): já há KPI cards acima dando contexto */}
+      <div className="flex flex-col md:flex-row gap-2.5 items-center">
+        <div className="flex-1 relative w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Pesquisar por nome, código ou SPE..."
-            className="bg-transparent border-none outline-none text-sm w-full font-medium"
+            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+          />
+        </div>
+
+        <button
+          onClick={load}
+          className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+          title="Atualizar"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
+
+        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+        {/* Sem toggle grid/lista: esta tela só tem visualização em tabela (§5, nota) */}
+        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+          <ColumnConfigButton
+            columns={COLUMNS.filter(c => c.key !== 'actions')}
+            visibleColumns={tableColumns.visibleColumns}
+            showColumnConfig={tableColumns.showColumnConfig}
+            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+            onToggleColumn={tableColumns.toggleColumn}
+            onReset={tableColumns.resetColumns}
           />
         </div>
       </div>
 
       {/* Conteúdo */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          <p className="text-xs font-black uppercase tracking-widest text-gray-400">Carregando empreendimentos...</p>
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-500">Carregando empreendimentos...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white py-16 text-center text-gray-400 rounded-3xl border border-gray-100">
-          <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="font-semibold text-sm">Nenhum empreendimento cadastrado.</p>
-          {isWriteDisabled && <p className="text-xs mt-1">Selecione uma organização específica para cadastrar.</p>}
+        <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+          <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum empreendimento encontrado</h3>
+          <p className="text-sm text-gray-500">
+            {search ? 'Tente ajustar sua busca.' : isWriteDisabled ? 'Selecione uma organização específica para cadastrar.' : 'Cadastre seu primeiro empreendimento no botão acima.'}
+          </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map(item => (
-            <div
-              key={item.id}
-              onClick={() => setSelected(item)}
-              className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all cursor-pointer flex flex-col justify-between group"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Building2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-gray-800 text-sm group-hover:text-blue-600 transition-colors">{item.name}</h4>
-                    <p className="text-gray-400 text-xs font-semibold">{item.code || item.spe_razao_social || '—'}</p>
-                  </div>
-                </div>
-                <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${STATUS_STYLE[item.status]}`}>
-                  {STATUS_LABELS[item.status]}
-                </span>
-              </div>
-
-              <div className="flex items-end justify-between mt-5 border-t border-gray-50 pt-3 text-xs">
-                <div>
-                  <span className="text-gray-400 block text-[9px] font-bold uppercase tracking-wider">VGV Total</span>
-                  <span className="font-bold text-gray-700">
-                    {item.vgv_total != null ? `R$ ${item.vgv_total.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}` : '—'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <ActionIconButton kind="delete" size="sm" onClick={(e) => handleDelete(e, item)} />
-                  <span className="flex items-center gap-1.5 text-blue-500 font-bold text-xs uppercase tracking-wider">
-                    Abrir <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                  {tableColumns.visibleColumns.includes('name') && (
+                    <SortableHeader colKey="name" label="Empreendimento" uppercase={false}
+                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                      onSort={tableColumns.handleColumnSort}
+                      className="px-6 py-2 border-r border-gray-100" />
+                  )}
+                  {tableColumns.visibleColumns.includes('status') && (
+                    <SortableHeader colKey="status" label="Status" uppercase={false}
+                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                      onSort={tableColumns.handleColumnSort}
+                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                  )}
+                  {tableColumns.visibleColumns.includes('vgv') && (
+                    <SortableHeader colKey="vgv" label="VGV total" uppercase={false}
+                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                      onSort={tableColumns.handleColumnSort}
+                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                  )}
+                  {tableColumns.visibleColumns.includes('actions') && (
+                    <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filtered.map(item => (
+                  <tr
+                    key={item.id}
+                    onClick={() => setSelected(item)}
+                    className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                  >
+                    {tableColumns.visibleColumns.includes('name') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                            <Building2 className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-normal text-gray-900 truncate">{item.name}</p>
+                            <p className="text-sm font-normal text-gray-400 truncate">{item.code || item.spe_razao_social || '—'}</p>
+                          </div>
+                        </div>
+                      </td>
+                    )}
+                    {tableColumns.visibleColumns.includes('status') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                        <span className={`text-sm font-normal ${STATUS_TEXT_COLOR[item.status]}`}>
+                          {STATUS_LABELS[item.status]}
+                        </span>
+                      </td>
+                    )}
+                    {tableColumns.visibleColumns.includes('vgv') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
+                        {item.vgv_total != null ? `R$ ${item.vgv_total.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}` : '—'}
+                      </td>
+                    )}
+                    {tableColumns.visibleColumns.includes('actions') && (
+                      <td className="px-6 py-2.5 text-right">
+                        {/* Abrir = clique na linha (ação dominante, §9.1). Ações restantes: só Excluir. */}
+                        <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
+                          <ActionIconButton kind="delete" onClick={(e) => handleDelete(e, item)} />
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

@@ -401,6 +401,9 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                 <th className="py-3 px-4">Torre</th>
                 <th className="py-3 px-4">Pav.</th>
                 <th className="py-3 px-4">Área Priv.</th>
+                <th className="py-3 px-4">Dormitórios</th>
+                <th className="py-3 px-4">Vagas</th>
+                <th className="py-3 px-4">Banheiros</th>
                 <th className="py-3 px-4">Preço</th>
                 <th className="py-3 px-4">Status (Empr.)</th>
                 <th className="py-3 px-4">Status (Comercial)</th>
@@ -422,6 +425,9 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                     <td className="py-3 px-4 text-gray-500">{u._tower_name}</td>
                     <td className="py-3 px-4 text-gray-500">{u.floor ?? '—'}</td>
                     <td className="py-3 px-4 text-gray-500">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>
+                    <td className="py-3 px-4 text-gray-500">{u.bedrooms ?? '—'}</td>
+                    <td className="py-3 px-4 text-gray-500">{u.parking_spaces ?? '—'}</td>
+                    <td className="py-3 px-4 text-gray-500">{u.bathrooms ?? '—'}</td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-1.5">
                         <span className="text-gray-700 font-semibold">{u.price != null ? fmt(u.price) : '—'}</span>

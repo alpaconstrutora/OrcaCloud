@@ -5,6 +5,7 @@ import { quotationService } from '../services/quotationService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { KpiCard } from './ui/KpiCard';
+import ActionIconButton from './ui/ActionIconButton';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
@@ -276,13 +277,12 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                                     >
                                                         Ver Detalhes
                                                     </button>
-                                                    <button
+                                                    <ActionIconButton
+                                                        kind="view"
+                                                        title="Ver mapa comparativo"
+                                                        icon={<Table2 className="w-4 h-4" />}
                                                         onClick={(e) => { e.stopPropagation(); onViewComparison(req.id); }}
-                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                        title="Ver Mapa Comparativo"
-                                                    >
-                                                        <Table2 className="w-4 h-4" />
-                                                    </button>
+                                                    />
                                                 </div>
                                             </td>
                                         )}
@@ -293,46 +293,46 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                         </div>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredRequests.map(req => (
                             <div
                                 key={req.id}
-                                className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all group overflow-hidden relative cursor-pointer"
+                                className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm hover:shadow-md transition-all group overflow-hidden relative cursor-pointer"
                                 onClick={() => onViewDetails(req.id)}
                             >
-                                <div className="flex justify-between items-start mb-6">
-                                    <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-all">
-                                        <FileText className="w-6 h-6" />
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="p-2.5 bg-blue-50 text-blue-600 rounded-[6px] group-hover:bg-blue-600 group-hover:text-white transition-all">
+                                        <FileText className="w-5 h-5" />
                                     </div>
                                     <StatusBadge status={req.status} />
                                 </div>
 
-                                <h3 className="text-lg font-black text-gray-900 mb-1">
+                                <h3 className="text-sm font-bold text-gray-900 mb-1">
                                     #{req.number}
                                 </h3>
-                                <p className="text-sm font-bold text-gray-900 mb-1">{req.title}</p>
-                                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-6">
+                                <p className="text-sm font-normal text-gray-700 mb-1">{req.title}</p>
+                                <p className="text-xs text-gray-400 font-medium mb-4">
                                     Obra: {req.projectName}
                                 </p>
 
-                                <div className="flex items-center justify-between pt-6 border-t border-gray-50">
+                                <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                                     <div className="flex flex-col">
-                                        <p className="text-xs text-gray-400 font-black uppercase tracking-widest mb-1">Prazo Final</p>
-                                        <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
+                                        <p className="text-xs text-gray-400 font-medium mb-1">Prazo final</p>
+                                        <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700">
                                             <Calendar className="w-3.5 h-3.5 text-indigo-500" />
                                             {new Date(req.deadline + 'T12:00:00').toLocaleDateString('pt-BR')}
                                         </div>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onViewComparison(req.id); }}
-                                            className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-sm font-bold uppercase hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95"
-                                        >
-                                            <Table2 className="w-3.5 h-3.5" /> Mapa
-                                        </button>
+                                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                        <ActionIconButton
+                                            kind="view"
+                                            title="Ver mapa comparativo"
+                                            icon={<Table2 className="w-4 h-4" />}
+                                            onClick={() => onViewComparison(req.id)}
+                                        />
                                         <button
                                             onClick={() => onViewDetails(req.id)}
-                                            className="flex items-center gap-2 bg-gray-50 text-gray-900 px-4 py-2 rounded-xl text-sm font-bold uppercase hover:bg-gray-200 transition-all shadow-sm active:scale-95"
+                                            className="flex items-center gap-1.5 h-9 px-3 bg-gray-50 text-gray-700 rounded-[6px] text-[13px] font-medium hover:bg-gray-100 transition-all active:scale-95"
                                         >
                                             Detalhes <ArrowRight className="w-3.5 h-3.5" />
                                         </button>

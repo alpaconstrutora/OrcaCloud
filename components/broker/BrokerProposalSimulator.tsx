@@ -147,8 +147,9 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
     };
 
     const isBlocked = policy?.overall === 'BLOCKED';
-    // Fluxo de venda exige um plano ativo selecionado; locacao nao.
-    const planOk = isRental || !!selectedPlanId;
+    // Plano e' opt-in por predio: so' exige selecao SE o predio tiver plano ativo.
+    // Sem plano configurado, mantem o envio livre (nao regride quem nao adotou o PV).
+    const planOk = isRental || plans.length === 0 || !!selectedPlanId;
     const canProceedBuyer = buyerName.length >= 3 && buyerCpf.length >= 14;
     const canProceedPayment = simulation.remainingPct >= 0 && planOk && !isBlocked;
     const canSubmit = canProceedBuyer && canProceedPayment;

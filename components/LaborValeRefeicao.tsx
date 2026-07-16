@@ -1,10 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import {
-    UtensilsCrossed, Plus, Check, RefreshCw, Settings,
-    CalendarDays, Calculator, ChevronDown, Loader2, AlertCircle,
-    CheckCheck, X, Edit2, Save, Calendar, FileText
+    UtensilsCrossed, Plus, Check, Settings,
+    CalendarDays, Calculator, Loader2, AlertCircle,
+    CheckCheck, X, Edit2, Save, FileText, Search, Wallet, Users, TrendingDown, TrendingUp,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { KpiCard } from './ui/KpiCard';
+import { useConfirm } from './ui/confirm';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vrService, VrRegra, VrFeriado, VrCalculo } from '../services/vrService';
 import { laborService, Employee } from '../services/laborService';
@@ -12,8 +15,8 @@ import { supabase } from '../lib/supabase';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-300 transition-all';
-const labelCls = 'text-[10px] font-black text-slate-500 uppercase tracking-widest';
+const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-300 transition-all';
+const labelCls = 'text-xs font-semibold text-slate-500';
 
 function mesLabel(iso: string) {
     const [y, m] = iso.split('-');
@@ -26,12 +29,30 @@ function primeiroDiaMes(year: number, month: number) {
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
+// Texto simples colorido — sem pílula/fundo/uppercase (guia §8).
 const STATUS_CFG = {
-    rascunho:  { label: 'Rascunho',  color: 'text-slate-600',   bg: 'bg-slate-100' },
-    aprovado:  { label: 'Aprovado',  color: 'text-emerald-700', bg: 'bg-emerald-100' },
-    pago:      { label: 'Pago',      color: 'text-blue-700',    bg: 'bg-blue-100' },
-    cancelado: { label: 'Cancelado', color: 'text-rose-700',    bg: 'bg-rose-100' },
+    rascunho:  { label: 'Rascunho',  color: 'text-slate-600' },
+    aprovado:  { label: 'Aprovado',  color: 'text-emerald-700' },
+    pago:      { label: 'Pago',      color: 'text-blue-700' },
+    cancelado: { label: 'Cancelado', color: 'text-rose-700' },
 } as const;
+
+function useToast() {
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
+    const Toast = () => notification ? (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+            notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {notification.message}
+        </div>
+    ) : null;
+    return { notify, Toast };
+}
 
 // ─── Modal de Regra ───────────────────────────────────────────────────────────
 
@@ -94,13 +115,13 @@ const RegraModal: React.FC<RegraModalProps> = ({ regra, orgId, projects, onClose
 
     return (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
                 <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                    <h2 className="text-lg font-black text-slate-900">{regra?.id ? 'Editar Regra' : 'Nova Regra de VR'}</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X className="w-4 h-4 text-slate-500" /></button>
+                    <h3 className="text-lg font-black text-slate-900">{regra?.id ? 'Editar regra' : 'Nova regra de VR'}</h3>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-[6px] transition-colors"><X className="w-4 h-4 text-slate-500" /></button>
                 </div>
                 <div className="p-6 space-y-4">
-                    {err && <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm font-medium flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{err}</div>}
+                    {err && <div className="p-3 bg-rose-50 border border-rose-200 rounded-[6px] text-rose-700 text-sm font-medium flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{err}</div>}
 
                     <div className="space-y-1.5">
                         <label className={labelCls}>Nome da regra</label>
@@ -151,14 +172,14 @@ const RegraModal: React.FC<RegraModalProps> = ({ regra, orgId, projects, onClose
                         </div>
                     </div>
 
-                    <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
+                    <div className="bg-slate-50 rounded-[10px] p-4 space-y-3">
                         <p className={`${labelCls} mb-2`}>Dias que geram benefício</p>
                         <Toggle label="Sábados trabalhados" field="gera_sabado" />
                         <Toggle label="Domingos trabalhados" field="gera_domingo" />
                         <Toggle label="Feriados trabalhados" field="gera_feriado" />
                     </div>
 
-                    <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
+                    <div className="bg-slate-50 rounded-[10px] p-4 space-y-3">
                         <p className={`${labelCls} mb-2`}>Desconta benefício em caso de</p>
                         <Toggle label="Faltas" field="desconta_falta" />
                         <Toggle label="Férias" field="desconta_ferias" />
@@ -166,10 +187,10 @@ const RegraModal: React.FC<RegraModalProps> = ({ regra, orgId, projects, onClose
                     </div>
                 </div>
                 <div className="p-6 border-t border-slate-100 flex gap-3 justify-end">
-                    <button onClick={onClose} className="px-4 py-2 text-slate-600 font-bold text-sm rounded-xl hover:bg-slate-100 transition-colors">Cancelar</button>
-                    <button onClick={handleSave} disabled={saving} className="px-5 py-2 bg-orange-500 text-white font-bold text-sm rounded-xl hover:bg-orange-600 transition-colors flex items-center gap-2 disabled:opacity-50">
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                        Salvar Regra
+                    <button onClick={onClose} className="h-9 px-4 text-slate-600 font-medium text-sm rounded-[6px] hover:bg-slate-100 transition-colors">Cancelar</button>
+                    <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-500 text-white font-medium text-[13px] rounded-[6px] hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-50">
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-[15px] h-[15px]" />}
+                        Salvar regra
                     </button>
                 </div>
             </div>
@@ -181,6 +202,8 @@ const RegraModal: React.FC<RegraModalProps> = ({ regra, orgId, projects, onClose
 
 const AbaRegras: React.FC<{ orgId: string; projects: { id: string; name: string }[] }> = ({ orgId, projects }) => {
     const qc = useQueryClient();
+    const confirm = useConfirm();
+    const { notify, Toast } = useToast();
     const { data: regras = [], isLoading } = useQuery({
         queryKey: ['vr_regras', orgId],
         queryFn: () => vrService.listRegras(orgId),
@@ -189,68 +212,82 @@ const AbaRegras: React.FC<{ orgId: string; projects: { id: string; name: string 
 
     const del = useMutation({
         mutationFn: (id: string) => vrService.deleteRegra(id),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['vr_regras', orgId] }),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: ['vr_regras', orgId] }); notify('Regra excluída.'); },
+        onError: () => notify('Erro ao excluir regra.', 'error'),
     });
 
-    if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div>;
+    const handleDelete = async (r: VrRegra) => {
+        const ok = await confirm({
+            title: 'Excluir regra?',
+            message: `A regra "${r.nome}" será removida permanentemente.`,
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (ok) del.mutate(r.id);
+    };
 
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">Regras de Benefício</h3>
+                    <h3 className="text-sm font-black text-slate-900">Regras de benefício</h3>
                     <p className="text-xs text-slate-500 mt-0.5">Defina valor diário, tipo e critérios de elegibilidade por grupo</p>
                 </div>
                 <button
                     onClick={() => setModal({})}
-                    className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-bold rounded-xl hover:bg-orange-600 transition-colors shadow-lg shadow-orange-500/20"
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-500 text-white text-[13px] font-medium rounded-[6px] hover:bg-orange-600 transition-all active:scale-95"
                 >
-                    <Plus className="w-4 h-4" /> Nova Regra
+                    <Plus className="w-[15px] h-[15px]" /> Nova regra
                 </button>
             </div>
 
-            {regras.length === 0 && (
-                <div className="text-center py-16 text-slate-400">
-                    <UtensilsCrossed className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p className="font-bold text-sm">Nenhuma regra cadastrada</p>
-                    <p className="text-xs mt-1">Crie uma regra para começar a calcular o vale refeição</p>
+            {isLoading ? (
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                    <p className="mt-2 text-gray-500">Carregando...</p>
+                </div>
+            ) : regras.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                    <UtensilsCrossed className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma regra cadastrada</h3>
+                    <p className="text-sm text-gray-500">Crie uma regra para começar a calcular o vale refeição.</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {regras.map(r => (
+                        <div key={r.id} className="bg-white border border-slate-100 rounded-[10px] p-5 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex items-start justify-between mb-3">
+                                <div>
+                                    <h4 className="text-sm font-black text-slate-900">{r.nome}</h4>
+                                    <span className="text-xs font-medium text-orange-600">{r.tipo === 'refeicao' ? 'Refeição' : r.tipo === 'alimentacao' ? 'Alimentação' : 'Ambos'}</span>
+                                </div>
+                                <div className={`w-2.5 h-2.5 rounded-full mt-1 ${r.ativo ? 'bg-emerald-500' : 'bg-slate-300'}`} title={r.ativo ? 'Ativa' : 'Inativa'} />
+                            </div>
+
+                            <div className="text-3xl font-black text-slate-900 mb-1">
+                                R$ {r.valor_diario.toFixed(2).replace('.', ',')}
+                                <span className="text-xs font-medium text-slate-400 ml-1">/ dia</span>
+                            </div>
+                            {r.desconto_folha_pct > 0 && (
+                                <p className="text-xs text-slate-500 mb-3">{r.desconto_folha_pct}% desconto em folha</p>
+                            )}
+
+                            <div className="flex flex-wrap gap-1 mb-4">
+                                {r.gera_sabado && <span className="text-xs bg-blue-50 text-blue-600 font-medium px-2 py-0.5 rounded-full">Sábado</span>}
+                                {r.gera_feriado && <span className="text-xs bg-purple-50 text-purple-600 font-medium px-2 py-0.5 rounded-full">Feriado</span>}
+                                {!r.desconta_falta && <span className="text-xs bg-amber-50 text-amber-600 font-medium px-2 py-0.5 rounded-full">Falta OK</span>}
+                            </div>
+
+                            <div className="flex gap-2">
+                                <button onClick={() => setModal(r)} className="flex-1 h-9 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-[6px] transition-colors flex items-center justify-center gap-1.5">
+                                    <Edit2 className="w-3.5 h-3.5" /> Editar
+                                </button>
+                                <ActionIconButton kind="delete" onClick={() => handleDelete(r)} />
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {regras.map(r => (
-                    <div key={r.id} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex items-start justify-between mb-3">
-                            <div>
-                                <h4 className="text-sm font-black text-slate-900">{r.nome}</h4>
-                                <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full capitalize">{r.tipo === 'refeicao' ? 'Refeição' : r.tipo === 'alimentacao' ? 'Alimentação' : 'Ambos'}</span>
-                            </div>
-                            <div className={`w-2.5 h-2.5 rounded-full mt-1 ${r.ativo ? 'bg-emerald-500' : 'bg-slate-300'}`} title={r.ativo ? 'Ativa' : 'Inativa'} />
-                        </div>
-
-                        <div className="text-3xl font-black text-slate-900 mb-1">
-                            R$ {r.valor_diario.toFixed(2).replace('.', ',')}
-                            <span className="text-xs font-medium text-slate-400 ml-1">/ dia</span>
-                        </div>
-                        {r.desconto_folha_pct > 0 && (
-                            <p className="text-xs text-slate-500 mb-3">{r.desconto_folha_pct}% desconto em folha</p>
-                        )}
-
-                        <div className="flex flex-wrap gap-1 mb-4">
-                            {r.gera_sabado && <span className="text-xs bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded-full">Sábado</span>}
-                            {r.gera_feriado && <span className="text-xs bg-purple-50 text-purple-600 font-bold px-2 py-0.5 rounded-full">Feriado</span>}
-                            {!r.desconta_falta && <span className="text-xs bg-amber-50 text-amber-600 font-bold px-2 py-0.5 rounded-full">Falta OK</span>}
-                        </div>
-
-                        <div className="flex gap-2">
-                            <button onClick={() => setModal(r)} className="flex-1 px-3 py-1.5 text-button font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                                <Edit2 className="w-3.5 h-3.5" /> Editar
-                            </button>
-                            <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir esta regra?')) del.mutate(r.id); }} />
-                        </div>
-                    </div>
-                ))}
-            </div>
 
             {modal !== false && (
                 <RegraModal
@@ -258,17 +295,20 @@ const AbaRegras: React.FC<{ orgId: string; projects: { id: string; name: string 
                     orgId={orgId}
                     projects={projects}
                     onClose={() => setModal(false)}
-                    onSaved={() => { setModal(false); qc.invalidateQueries({ queryKey: ['vr_regras', orgId] }); }}
+                    onSaved={() => { setModal(false); qc.invalidateQueries({ queryKey: ['vr_regras', orgId] }); notify(modal && (modal as VrRegra).id ? 'Regra atualizada.' : 'Regra criada.'); }}
                 />
             )}
+            <Toast />
         </div>
     );
 };
 
-// ─── Aba Calendário ───────────────────────────────────────────────────────────
+// ─── Aba Calendário (Feriados) ─────────────────────────────────────────────────
 
 const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name: string }[]; projects: { id: string; name: string }[] }> = ({ orgId, organizations, projects }) => {
     const qc = useQueryClient();
+    const confirm = useConfirm();
+    const { notify, Toast } = useToast();
     const anoAtual = new Date().getFullYear();
     const [ano, setAno] = useState(anoAtual);
 
@@ -282,8 +322,19 @@ const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name
 
     const del = useMutation({
         mutationFn: (id: string) => vrService.deleteFeriado(id),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['vr_feriados', orgId, ano] }),
+        onSuccess: () => { qc.invalidateQueries({ queryKey: ['vr_feriados', orgId, ano] }); notify('Feriado excluído.'); },
+        onError: () => notify('Erro ao excluir feriado.', 'error'),
     });
+
+    const handleDelete = async (f: VrFeriado) => {
+        const ok = await confirm({
+            title: 'Excluir feriado?',
+            message: `"${f.descricao}" será removido do calendário.`,
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (ok) del.mutate(f.id);
+    };
 
     const handleAdd = async () => {
         if (!form.data || !form.descricao.trim()) return;
@@ -305,37 +356,39 @@ const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name
             }
             setForm({ data: '', descricao: '', escopo: 'municipal', project_id: '' });
             qc.invalidateQueries({ queryKey: ['vr_feriados', orgId, ano] });
+            notify('Feriado adicionado.');
         } catch (e: any) {
-            alert('Erro ao adicionar feriado: ' + (e.message ?? e));
+            notify('Erro ao adicionar feriado: ' + (e.message ?? e), 'error');
         } finally {
             setSaving(false);
         }
     };
 
+    // Texto simples colorido — sem pílula/fundo/uppercase (guia §8).
     const escopoCfg = {
-        nacional:  { label: 'Nacional',  color: 'text-blue-700',   bg: 'bg-blue-50' },
-        estadual:  { label: 'Estadual',  color: 'text-purple-700', bg: 'bg-purple-50' },
-        municipal: { label: 'Municipal', color: 'text-teal-700',   bg: 'bg-teal-50' },
-        obra:      { label: 'Obra',      color: 'text-orange-700', bg: 'bg-orange-50' },
+        nacional:  { label: 'Nacional',  color: 'text-blue-700' },
+        estadual:  { label: 'Estadual',  color: 'text-purple-700' },
+        municipal: { label: 'Municipal', color: 'text-teal-700' },
+        obra:      { label: 'Obra',      color: 'text-orange-700' },
     };
 
     return (
         <div className="space-y-5">
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">Feriados e Dias Não Úteis</h3>
+                    <h3 className="text-sm font-black text-slate-900">Feriados e dias não úteis</h3>
                     <p className="text-xs text-slate-500 mt-0.5">Cadastre feriados nacionais, estaduais, municipais ou específicos por obra</p>
                 </div>
-                <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
-                    <button onClick={() => setAno(a => a - 1)} className="px-3 py-1.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-white transition-colors">‹</button>
-                    <span className="px-3 py-1.5 text-sm font-black text-slate-900">{ano}</span>
-                    <button onClick={() => setAno(a => a + 1)} className="px-3 py-1.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-white transition-colors">›</button>
+                <div className="flex items-center gap-1 bg-slate-100 rounded-[10px] p-1">
+                    <button onClick={() => setAno(a => a - 1)} className="h-8 px-3 rounded-[6px] text-sm font-medium text-slate-600 hover:bg-white transition-colors">‹</button>
+                    <span className="px-3 text-sm font-black text-slate-900">{ano}</span>
+                    <button onClick={() => setAno(a => a + 1)} className="h-8 px-3 rounded-[6px] text-sm font-medium text-slate-600 hover:bg-white transition-colors">›</button>
                 </div>
             </div>
 
             {/* Form add feriado */}
-            <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4">
-                <p className="text-xs font-black text-orange-700 uppercase tracking-widest mb-3">Adicionar Feriado</p>
+            <div className="bg-orange-50 border border-orange-100 rounded-[10px] p-4">
+                <p className="text-xs font-semibold text-orange-700 mb-3">Adicionar feriado</p>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <div className="space-y-1">
                         <label className={labelCls}>Data</label>
@@ -363,8 +416,8 @@ const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name
                     </div>
                 </div>
                 <div className="flex justify-end mt-3">
-                    <button onClick={handleAdd} disabled={saving || !form.data || !form.descricao.trim()} className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-bold rounded-xl hover:bg-orange-600 transition-colors disabled:opacity-40">
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    <button onClick={handleAdd} disabled={saving || !form.data || !form.descricao.trim()} className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-500 text-white text-[13px] font-medium rounded-[6px] hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-40">
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-[15px] h-[15px]" />}
                         Adicionar
                     </button>
                 </div>
@@ -372,11 +425,13 @@ const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name
 
             {/* Lista agrupada por mês */}
             {isLoading ? (
-                <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div>
+                <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                </div>
             ) : feriados.length === 0 ? (
-                <div className="text-center py-12 text-slate-400">
-                    <CalendarDays className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm font-bold">Nenhum feriado cadastrado para {ano}</p>
+                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                    <CalendarDays className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum feriado cadastrado para {ano}</h3>
                 </div>
             ) : (
                 <div className="space-y-3">
@@ -384,23 +439,23 @@ const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name
                         const doMes = feriados.filter(f => new Date(f.data + 'T12:00:00').getMonth() === mi);
                         if (doMes.length === 0) return null;
                         return (
-                            <div key={mi} className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
+                            <div key={mi} className="bg-white border border-slate-100 rounded-[10px] overflow-hidden">
                                 <div className="bg-slate-50 px-4 py-2 border-b border-slate-100">
-                                    <span className="text-xs font-black text-slate-700 uppercase tracking-widest">{mes}/{ano}</span>
+                                    <span className="text-xs font-semibold text-slate-600">{mes}/{ano}</span>
                                 </div>
                                 {doMes.map(f => {
                                     const ec = escopoCfg[f.escopo];
                                     return (
-                                        <div key={f.id} className="flex items-center px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
+                                        <div key={f.id} className="flex items-center px-4 py-2.5 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
                                             <div className="w-10 text-center">
                                                 <span className="text-lg font-black text-slate-900">{new Date(f.data + 'T12:00:00').getDate()}</span>
                                             </div>
                                             <div className="flex-1 ml-4">
-                                                <p className="text-sm font-bold text-slate-800">{f.descricao}</p>
+                                                <p className="text-sm font-normal text-slate-800">{f.descricao}</p>
                                                 {f.project_id && <p className="text-xs text-slate-400">{projects.find(p => p.id === f.project_id)?.name}</p>}
                                             </div>
-                                            <span className={`text-xs font-black px-2 py-1 rounded-full ${ec.bg} ${ec.color}`}>{ec.label}</span>
-                                            <ActionIconButton kind="delete" size="sm" className="ml-3" onClick={() => del.mutate(f.id)} />
+                                            <span className={`text-sm font-normal ${ec.color}`}>{ec.label}</span>
+                                            <ActionIconButton kind="delete" className="ml-3" onClick={() => handleDelete(f)} />
                                         </div>
                                     );
                                 })}
@@ -409,19 +464,38 @@ const AbaCalendario: React.FC<{ orgId: string; organizations: { id: string; name
                     })}
                 </div>
             )}
+            <Toast />
         </div>
     );
 };
 
 // ─── Aba Cálculo Mensal ───────────────────────────────────────────────────────
 
+const CALCULO_COLUMNS: ColumnConfig[] = [
+    { key: 'employee', label: 'Colaborador', sortable: true },
+    { key: 'project', label: 'Obra', sortable: true },
+    { key: 'dias_uteis', label: 'Dias úteis', sortable: true },
+    { key: 'faltas', label: 'Faltas', sortable: true },
+    { key: 'ferias', label: 'Férias', sortable: true },
+    { key: 'afastamento', label: 'Afastam.', sortable: true },
+    { key: 'elegiveis', label: 'Elegíveis', sortable: true },
+    { key: 'valor_dia', label: 'Valor/dia', sortable: true },
+    { key: 'bruto', label: 'Bruto', sortable: true },
+    { key: 'desconto', label: 'Desconto', sortable: true },
+    { key: 'liquido', label: 'Líquido', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'actions', label: 'Ações', sortable: false },
+];
+
 const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { id: string; name: string }[] }> = ({ orgId, employees, projects }) => {
     const qc = useQueryClient();
+    const { notify, Toast } = useToast();
     const hoje = new Date();
     const [ano, setAno] = useState(hoje.getFullYear());
     const [mes, setMes] = useState(hoje.getMonth());
     const mesIso = primeiroDiaMes(ano, mes);
 
+    const [search, setSearch] = usePersistedState('vrCalculo:search', '');
     const [selectedRegra, setSelectedRegra] = useState('');
     const [selectedProject, setSelectedProject] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -429,6 +503,7 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
     const [editMotivo, setEditMotivo] = useState('');
     const [editDias, setEditDias] = useState(0);
     const [gerandoAll, setGerandoAll] = useState(false);
+    const tableColumns = useTableColumns(CALCULO_COLUMNS, 'vrCalculoColumns');
 
     const { data: regras = [] } = useQuery({ queryKey: ['vr_regras', orgId], queryFn: () => vrService.listRegras(orgId) });
     const { data: feriados = [] } = useQuery({ queryKey: ['vr_feriados', orgId, ano], queryFn: () => vrService.listFeriados(orgId, ano) });
@@ -438,8 +513,31 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
     });
 
     const feriadosSet = useMemo(() => new Set(feriados.map(f => f.data)), [feriados]);
-
     const regra = useMemo(() => regras.find(r => r.id === selectedRegra), [regras, selectedRegra]);
+
+    const filtered = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        const base = !term ? calculos : calculos.filter(c => (c.employee_name || '').toLowerCase().includes(term) || (c.project_name || '').toLowerCase().includes(term));
+        if (!tableColumns.sortColumn) return base;
+        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+        return [...base].sort((a, b) => {
+            switch (tableColumns.sortColumn) {
+                case 'employee': return dir * (a.employee_name || '').localeCompare(b.employee_name || '');
+                case 'project': return dir * (a.project_name || '').localeCompare(b.project_name || '');
+                case 'dias_uteis': return dir * (a.dias_uteis - b.dias_uteis);
+                case 'faltas': return dir * ((a.dias_faltas || 0) - (b.dias_faltas || 0));
+                case 'ferias': return dir * ((a.dias_ferias || 0) - (b.dias_ferias || 0));
+                case 'afastamento': return dir * ((a.dias_afastamento || 0) - (b.dias_afastamento || 0));
+                case 'elegiveis': return dir * (a.dias_elegiveis - b.dias_elegiveis);
+                case 'valor_dia': return dir * (a.valor_diario - b.valor_diario);
+                case 'bruto': return dir * (a.valor_bruto - b.valor_bruto);
+                case 'desconto': return dir * (a.desconto_folha - b.desconto_folha);
+                case 'liquido': return dir * (a.valor_liquido - b.valor_liquido);
+                case 'status': return dir * a.status.localeCompare(b.status);
+                default: return 0;
+            }
+        });
+    }, [calculos, search, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const toggleSel = (id: string) => {
         setSelectedIds(prev => {
@@ -450,16 +548,16 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
     };
 
     const toggleAll = () => {
-        const rascunhos = calculos.filter(c => c.status === 'rascunho').map(c => c.id);
+        const rascunhos = filtered.filter(c => c.status === 'rascunho').map(c => c.id);
         if (selectedIds.size === rascunhos.length) setSelectedIds(new Set());
         else setSelectedIds(new Set(rascunhos));
     };
 
     const handleGerarTodos = async () => {
-        if (!orgId || orgId === 'all') { alert('Selecione uma organização específica no topo do módulo antes de gerar o cálculo.'); return; }
-        if (!regra) { alert('Selecione uma regra antes de gerar o cálculo'); return; }
+        if (!orgId || orgId === 'all') { notify('Selecione uma organização específica no topo do módulo antes de gerar o cálculo.', 'error'); return; }
+        if (!regra) { notify('Selecione uma regra antes de gerar o cálculo.', 'error'); return; }
         const ativos = employees.filter(e => e.status === 'ATIVO');
-        if (ativos.length === 0) { alert('Nenhum colaborador ativo'); return; }
+        if (ativos.length === 0) { notify('Nenhum colaborador ativo.', 'error'); return; }
 
         setGerandoAll(true);
         try {
@@ -491,8 +589,9 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
                 });
             }
             await refetch();
+            notify('Cálculo gerado com sucesso.');
         } catch (e: any) {
-            alert('Erro ao gerar: ' + e.message);
+            notify('Erro ao gerar: ' + e.message, 'error');
         } finally {
             setGerandoAll(false);
         }
@@ -504,8 +603,9 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
             await vrService.aprovarLote(Array.from(selectedIds));
             setSelectedIds(new Set());
             refetch();
+            notify('Selecionados aprovados.');
         } catch (e: any) {
-            alert('Erro: ' + e.message);
+            notify('Erro: ' + e.message, 'error');
         }
     };
 
@@ -515,187 +615,275 @@ const AbaCalculo: React.FC<{ orgId: string; employees: Employee[]; projects: { i
             await vrService.ajustarCalculo(editId, 'dias_elegiveis', editDias, editMotivo);
             setEditId(null);
             refetch();
+            notify('Ajuste salvo.');
         } catch (e: any) {
-            alert('Erro: ' + e.message);
+            notify('Erro: ' + e.message, 'error');
         }
     };
 
-    const rascunhos = calculos.filter(c => c.status === 'rascunho');
+    const rascunhos = filtered.filter(c => c.status === 'rascunho');
     const aprovadosOuPagos = calculos.filter(c => c.status === 'aprovado' || c.status === 'pago');
     const totalLiquido = aprovadosOuPagos.reduce((s, c) => s + c.valor_liquido, 0);
+    const totalBruto = calculos.reduce((s, c) => s + c.valor_bruto, 0);
+    const mediaDias = calculos.length ? (calculos.reduce((s, c) => s + c.dias_elegiveis, 0) / calculos.length) : 0;
 
     return (
         <div className="space-y-5">
-            {/* Controles */}
+            {/* Navegação de mês + geração */}
             <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
-                    <button onClick={() => { if (mes === 0) { setMes(11); setAno(a => a - 1); } else setMes(m => m - 1); }} className="px-3 py-1.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-white transition-colors">‹</button>
-                    <span className="px-3 py-1.5 text-sm font-black text-slate-900 min-w-[120px] text-center">{MESES[mes]}/{ano}</span>
-                    <button onClick={() => { if (mes === 11) { setMes(0); setAno(a => a + 1); } else setMes(m => m + 1); }} className="px-3 py-1.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-white transition-colors">›</button>
+                <div className="flex items-center gap-1 bg-slate-100 rounded-[10px] p-1">
+                    <button onClick={() => { if (mes === 0) { setMes(11); setAno(a => a - 1); } else setMes(m => m - 1); }} className="h-8 px-3 rounded-[6px] text-sm font-medium text-slate-600 hover:bg-white transition-colors">‹</button>
+                    <span className="px-3 text-sm font-black text-slate-900 min-w-[120px] text-center">{MESES[mes]}/{ano}</span>
+                    <button onClick={() => { if (mes === 11) { setMes(0); setAno(a => a + 1); } else setMes(m => m + 1); }} className="h-8 px-3 rounded-[6px] text-sm font-medium text-slate-600 hover:bg-white transition-colors">›</button>
                 </div>
-                <select className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium outline-none" value={selectedRegra} onChange={e => setSelectedRegra(e.target.value)}>
+                <select className="h-9 px-3 bg-white border border-slate-200 rounded-[6px] text-sm font-medium outline-none" value={selectedRegra} onChange={e => setSelectedRegra(e.target.value)}>
                     <option value="">Selecionar regra...</option>
                     {regras.map(r => <option key={r.id} value={r.id}>{r.nome} — R$ {r.valor_diario.toFixed(2)}/dia</option>)}
                 </select>
-                <select className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium outline-none" value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
+                <select className="h-9 px-3 bg-white border border-slate-200 rounded-[6px] text-sm font-medium outline-none" value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
                     <option value="">Todas as obras</option>
                     {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
                 <button
                     onClick={handleGerarTodos}
                     disabled={gerandoAll || !selectedRegra}
-                    className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm font-bold rounded-xl hover:bg-orange-600 transition-colors disabled:opacity-40 shadow-lg shadow-orange-500/20 ml-auto"
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-500 text-white text-[13px] font-medium rounded-[6px] hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-40 ml-auto"
                 >
-                    {gerandoAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
-                    Gerar / Recalcular
+                    {gerandoAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-[15px] h-[15px]" />}
+                    Gerar / recalcular
                 </button>
             </div>
 
             {/* KPIs */}
             {calculos.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {[
-                        { label: 'Colaboradores', value: calculos.length.toString(), color: 'text-slate-700' },
-                        { label: 'Dias elegíveis (média)', value: calculos.length ? (calculos.reduce((s, c) => s + c.dias_elegiveis, 0) / calculos.length).toFixed(1) : '—', color: 'text-orange-700' },
-                        { label: 'Total bruto', value: `R$ ${calculos.reduce((s, c) => s + c.valor_bruto, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-blue-700' },
-                        { label: 'Total líquido (aprovados)', value: `R$ ${totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-emerald-700' },
-                    ].map(k => (
-                        <div key={k.label} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{k.label}</p>
-                            <p className={`text-xl font-black mt-1 ${k.color}`}>{k.value}</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <KpiCard label="Colaboradores" value={`${calculos.length}`} icon={<Users className="w-5 h-5" />} color="gray" />
+                    <KpiCard label="Dias Elegíveis (Média)" value={mediaDias.toFixed(1)} icon={<CalendarDays className="w-5 h-5" />} color="orange" />
+                    <KpiCard label="Total Bruto" value={`R$ ${totalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Wallet className="w-5 h-5" />} color="blue" />
+                    <KpiCard label="Total Líquido (Aprovados)" value={`R$ ${totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<CheckCheck className="w-5 h-5" />} color="emerald" />
+                </div>
+            )}
+
+            {/* Toolbar acoplada à tabela (§5.2) */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar colaborador ou obra..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                            />
                         </div>
-                    ))}
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={CALCULO_COLUMNS.filter(c => c.key !== 'actions')}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                        </div>
+                    </div>
                 </div>
-            )}
 
-            {/* Ações em lote */}
-            {selectedIds.size > 0 && (
-                <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 flex items-center gap-3">
-                    <span className="text-sm font-bold text-orange-800">{selectedIds.size} selecionado(s)</span>
-                    <button onClick={handleAprovarLote} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-button font-bold rounded-xl hover:bg-emerald-700 transition-colors">
-                        <CheckCheck className="w-3.5 h-3.5" /> Aprovar selecionados
-                    </button>
-                    <button onClick={() => setSelectedIds(new Set())} className="text-button font-bold text-orange-600 hover:text-orange-800 ml-auto">Limpar</button>
-                </div>
-            )}
-
-            {/* Tabela */}
-            {isLoading ? (
-                <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div>
-            ) : calculos.length === 0 ? (
-                <div className="text-center py-16 text-slate-400">
-                    <Calculator className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p className="font-bold text-sm">Nenhum cálculo para {MESES[mes]}/{ano}</p>
-                    <p className="text-xs mt-1">Selecione uma regra e clique em "Gerar / Recalcular"</p>
-                </div>
-            ) : (
-                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                {isLoading ? (
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                        <p className="mt-2 text-gray-500">Carregando...</p>
+                    </div>
+                ) : filtered.length === 0 ? (
+                    <div className="text-center py-12">
+                        <Calculator className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum cálculo para {MESES[mes]}/{ano}</h3>
+                        <p className="text-sm text-gray-500">Selecione uma regra e clique em "Gerar / recalcular".</p>
+                    </div>
+                ) : (
+                    <div className="overflow-auto max-h-[70vh]">
+                        <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-slate-50 border-b border-slate-100">
-                                    <th className="pl-4 pr-2 py-3 text-left">
-                                        <input type="checkbox" onChange={toggleAll} checked={rascunhos.length > 0 && selectedIds.size === rascunhos.length} className="rounded" />
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                        <input type="checkbox" onChange={toggleAll} checked={rascunhos.length > 0 && selectedIds.size === rascunhos.length} className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer" />
                                     </th>
-                                    {['Colaborador','Obra','Dias Úteis','Faltas','Férias','Afastan.','Elegíveis','Valor/Dia','Bruto','Desconto','Líquido','Status',''].map(h => (
-                                        <th key={h} className="px-3 py-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
-                                    ))}
+                                    {tableColumns.visibleColumns.includes('employee') && (
+                                        <SortableHeader label="Colaborador" colKey="employee" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('project') && (
+                                        <SortableHeader label="Obra" colKey="project" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('dias_uteis') && (
+                                        <SortableHeader label="Dias úteis" colKey="dias_uteis" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-center" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('faltas') && (
+                                        <SortableHeader label="Faltas" colKey="faltas" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-center" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('ferias') && (
+                                        <SortableHeader label="Férias" colKey="ferias" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-center" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('afastamento') && (
+                                        <SortableHeader label="Afastam." colKey="afastamento" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-center" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('elegiveis') && (
+                                        <SortableHeader label="Elegíveis" colKey="elegiveis" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-center" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('valor_dia') && (
+                                        <SortableHeader label="Valor/dia" colKey="valor_dia" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('bruto') && (
+                                        <SortableHeader label="Bruto" colKey="bruto" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('desconto') && (
+                                        <SortableHeader label="Desconto" colKey="desconto" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('liquido') && (
+                                        <SortableHeader label="Líquido" colKey="liquido" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('status') && (
+                                        <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('actions') && (
+                                        <th className="px-3 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
+                                    )}
                                 </tr>
                             </thead>
-                            <tbody>
-                                {calculos.map(c => {
+                            <tbody className="divide-y divide-gray-200">
+                                {filtered.map(c => {
                                     const st = STATUS_CFG[c.status];
                                     const isEdit = editId === c.id;
                                     return (
-                                        <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                            <td className="pl-4 pr-2 py-3">
+                                        <tr key={c.id} className="hover:bg-orange-50/40 transition-colors">
+                                            <td className="px-4 py-2.5 border-r border-gray-100 text-center">
                                                 {c.status === 'rascunho' && (
-                                                    <input type="checkbox" checked={selectedIds.has(c.id)} onChange={() => toggleSel(c.id)} className="rounded" />
+                                                    <input type="checkbox" checked={selectedIds.has(c.id)} onChange={() => toggleSel(c.id)} className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer" />
                                                 )}
                                             </td>
-                                            <td className="px-3 py-3 font-bold text-slate-900 whitespace-nowrap">{c.employee_name}</td>
-                                            <td className="px-3 py-3 text-slate-500 text-table-body whitespace-nowrap">{c.project_name || '—'}</td>
-                                            <td className="px-3 py-3 text-center font-bold text-slate-700">{c.dias_uteis}</td>
-                                            <td className="px-3 py-3 text-center font-bold text-rose-600">{c.dias_faltas || '—'}</td>
-                                            <td className="px-3 py-3 text-center font-bold text-indigo-600">{c.dias_ferias || '—'}</td>
-                                            <td className="px-3 py-3 text-center font-bold text-amber-600">{c.dias_afastamento || '—'}</td>
-                                            <td className="px-3 py-3 text-center">
-                                                {isEdit ? (
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        className="w-16 px-2 py-1 border border-orange-300 rounded-lg text-center text-sm font-bold"
-                                                        value={editDias}
-                                                        onChange={e => setEditDias(parseInt(e.target.value) || 0)}
-                                                    />
-                                                ) : (
-                                                    <span className="font-black text-emerald-700">{c.dias_elegiveis}</span>
-                                                )}
-                                            </td>
-                                            <td className="px-3 py-3 text-right font-bold text-slate-600 whitespace-nowrap">R$ {c.valor_diario.toFixed(2)}</td>
-                                            <td className="px-3 py-3 text-right font-bold text-slate-700 whitespace-nowrap">R$ {c.valor_bruto.toFixed(2)}</td>
-                                            <td className="px-3 py-3 text-right text-rose-600 font-bold whitespace-nowrap">{c.desconto_folha > 0 ? `- R$ ${c.desconto_folha.toFixed(2)}` : '—'}</td>
-                                            <td className="px-3 py-3 text-right font-black text-emerald-700 whitespace-nowrap">R$ {c.valor_liquido.toFixed(2)}</td>
-                                            <td className="px-3 py-3">
-                                                <span className={`text-xs font-black px-2 py-1 rounded-full whitespace-nowrap ${st.bg} ${st.color}`}>{st.label}</span>
-                                            </td>
-                                            <td className="px-3 py-3">
-                                                {c.status === 'rascunho' && !isEdit && (
-                                                    <div className="flex items-center gap-1">
-                                                        <button
-                                                            onClick={() => { setEditId(c.id); setEditDias(c.dias_elegiveis); setEditMotivo(''); }}
-                                                            className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
-                                                            title="Ajustar dias elegíveis"
-                                                        >
-                                                            <Edit2 className="w-3.5 h-3.5" />
-                                                        </button>
-                                                        <button
-                                                            onClick={async () => { await vrService.aprovarLote([c.id]); refetch(); }}
-                                                            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                                                            title="Aprovar"
-                                                        >
-                                                            <Check className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </div>
-                                                )}
-                                                {isEdit && (
-                                                    <div className="space-y-1">
+                                            {tableColumns.visibleColumns.includes('employee') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-900 whitespace-nowrap">{c.employee_name}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('project') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-500 whitespace-nowrap">{c.project_name || '—'}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('dias_uteis') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-gray-700">{c.dias_uteis}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('faltas') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-rose-600">{c.dias_faltas || '—'}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('ferias') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-indigo-600">{c.dias_ferias || '—'}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('afastamento') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-amber-600">{c.dias_afastamento || '—'}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('elegiveis') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-center">
+                                                    {isEdit ? (
                                                         <input
-                                                            className="w-36 px-2 py-1 border border-slate-200 rounded-lg text-form-input"
-                                                            placeholder="Motivo do ajuste*"
-                                                            value={editMotivo}
-                                                            onChange={e => setEditMotivo(e.target.value)}
+                                                            type="number"
+                                                            min="0"
+                                                            className="w-16 px-2 py-1 border border-orange-300 rounded-[6px] text-center text-sm font-normal"
+                                                            value={editDias}
+                                                            onChange={e => setEditDias(parseInt(e.target.value) || 0)}
                                                         />
-                                                        <div className="flex gap-1">
-                                                            <button onClick={handleAjuste} disabled={!editMotivo.trim()} className="flex-1 px-2 py-1 bg-emerald-500 text-white text-button font-bold rounded-lg disabled:opacity-40">
-                                                                <Save className="w-3 h-3 mx-auto" />
+                                                    ) : (
+                                                        <span className="text-sm font-normal text-emerald-700">{c.dias_elegiveis}</span>
+                                                    )}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('valor_dia') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-700 whitespace-nowrap">R$ {c.valor_diario.toFixed(2)}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('bruto') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800 whitespace-nowrap">R$ {c.valor_bruto.toFixed(2)}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('desconto') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-rose-600 whitespace-nowrap">{c.desconto_folha > 0 ? `- R$ ${c.desconto_folha.toFixed(2)}` : '—'}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('liquido') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-emerald-700 whitespace-nowrap">R$ {c.valor_liquido.toFixed(2)}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('status') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal">
+                                                    <span className={st.color}>{st.label}</span>
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('actions') && (
+                                                <td className="px-3 py-2.5 text-right">
+                                                    {c.status === 'rascunho' && !isEdit && (
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            <ActionIconButton kind="edit" title="Ajustar dias elegíveis" onClick={() => { setEditId(c.id); setEditDias(c.dias_elegiveis); setEditMotivo(''); }} />
+                                                            <ActionIconButton kind="edit" icon={<Check className="w-4 h-4" />} title="Aprovar" onClick={async () => { await vrService.aprovarLote([c.id]); refetch(); notify('Aprovado.'); }} />
+                                                        </div>
+                                                    )}
+                                                    {isEdit && (
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            <input
+                                                                className="w-32 h-8 px-2 border border-gray-200 rounded-[6px] text-xs"
+                                                                placeholder="Motivo do ajuste*"
+                                                                value={editMotivo}
+                                                                onChange={e => setEditMotivo(e.target.value)}
+                                                            />
+                                                            <button onClick={handleAjuste} disabled={!editMotivo.trim()} className="h-8 w-8 flex items-center justify-center bg-emerald-500 text-white rounded-[6px] disabled:opacity-40">
+                                                                <Save className="w-3.5 h-3.5" />
                                                             </button>
-                                                            <button onClick={() => setEditId(null)} className="px-2 py-1 bg-slate-100 text-slate-600 text-button rounded-lg">
-                                                                <X className="w-3 h-3" />
+                                                            <button onClick={() => setEditId(null)} className="h-8 w-8 flex items-center justify-center bg-gray-100 text-gray-600 rounded-[6px]">
+                                                                <X className="w-3.5 h-3.5" />
                                                             </button>
                                                         </div>
-                                                    </div>
-                                                )}
-                                            </td>
+                                                    )}
+                                                </td>
+                                            )}
                                         </tr>
                                     );
                                 })}
                             </tbody>
                         </table>
                     </div>
+                )}
+            </div>
+
+            {/* Barra de ações em lote (fixa, §10) */}
+            {selectedIds.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-orange-600 text-white rounded-2xl shadow-lg shadow-orange-900/20">
+                    <span className="text-sm font-bold whitespace-nowrap">{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}</span>
+                    <button onClick={handleAprovarLote} className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-orange-700 text-[13px] font-medium rounded-[6px] hover:bg-orange-50 transition-all active:scale-95">
+                        <CheckCheck className="w-[15px] h-[15px]" /> Aprovar selecionados
+                    </button>
+                    <button onClick={() => setSelectedIds(new Set())} className="h-9 px-3 text-sm font-medium text-white/80 hover:text-white">
+                        Limpar
+                    </button>
                 </div>
             )}
+            <Toast />
         </div>
     );
 };
 
 // ─── Aba Aprovados ────────────────────────────────────────────────────────────
 
+const APROVADOS_COLUMNS: ColumnConfig[] = [
+    { key: 'employee', label: 'Colaborador', sortable: true },
+    { key: 'project', label: 'Obra', sortable: true },
+    { key: 'elegiveis', label: 'Elegíveis', sortable: true },
+    { key: 'valor_dia', label: 'Valor/dia', sortable: true },
+    { key: 'bruto', label: 'Bruto', sortable: true },
+    { key: 'desconto', label: 'Desconto', sortable: true },
+    { key: 'liquido', label: 'Líquido', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+];
+
 const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
     const hoje = new Date();
     const [ano, setAno] = useState(hoje.getFullYear());
     const [mes, setMes] = useState(hoje.getMonth());
     const mesIso = primeiroDiaMes(ano, mes);
+    const [search, setSearch] = usePersistedState('vrAprovados:search', '');
+    const tableColumns = useTableColumns(APROVADOS_COLUMNS, 'vrAprovadosColumns');
 
     const { data: calculos = [], isLoading } = useQuery({
         queryKey: ['vr_calculos', orgId, mesIso],
@@ -706,6 +894,27 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
         () => calculos.filter(c => c.status === 'aprovado' || c.status === 'pago'),
         [calculos]
     );
+
+    const filtered = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        const base = !term ? aprovados : aprovados.filter(c => (c.employee_name || '').toLowerCase().includes(term) || (c.project_name || '').toLowerCase().includes(term));
+        if (!tableColumns.sortColumn) return base;
+        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+        return [...base].sort((a, b) => {
+            switch (tableColumns.sortColumn) {
+                case 'employee': return dir * (a.employee_name || '').localeCompare(b.employee_name || '');
+                case 'project': return dir * (a.project_name || '').localeCompare(b.project_name || '');
+                case 'elegiveis': return dir * (a.dias_elegiveis - b.dias_elegiveis);
+                case 'valor_dia': return dir * (a.valor_diario - b.valor_diario);
+                case 'bruto': return dir * (a.valor_bruto - b.valor_bruto);
+                case 'desconto': return dir * (a.desconto_folha - b.desconto_folha);
+                case 'liquido': return dir * (a.valor_liquido - b.valor_liquido);
+                case 'status': return dir * a.status.localeCompare(b.status);
+                default: return 0;
+            }
+        });
+    }, [aprovados, search, tableColumns.sortColumn, tableColumns.sortDirection]);
+
     const totalLiquido = aprovados.reduce((s, c) => s + c.valor_liquido, 0);
     const totalBruto = aprovados.reduce((s, c) => s + c.valor_bruto, 0);
     const totalDesconto = aprovados.reduce((s, c) => s + c.desconto_folha, 0);
@@ -714,81 +923,142 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
         <div className="space-y-5">
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">Aprovados</h3>
+                    <h3 className="text-sm font-black text-slate-900">Aprovados</h3>
                     <p className="text-xs text-slate-500 mt-0.5">Relação de colaboradores com benefício aprovado e valor total do lote</p>
                 </div>
-                <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
-                    <button onClick={() => { if (mes === 0) { setMes(11); setAno(a => a - 1); } else setMes(m => m - 1); }} className="px-3 py-1.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-white transition-colors">‹</button>
-                    <span className="px-3 py-1.5 text-sm font-black text-slate-900 min-w-[120px] text-center">{MESES[mes]}/{ano}</span>
-                    <button onClick={() => { if (mes === 11) { setMes(0); setAno(a => a + 1); } else setMes(m => m + 1); }} className="px-3 py-1.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-white transition-colors">›</button>
+                <div className="flex items-center gap-1 bg-slate-100 rounded-[10px] p-1">
+                    <button onClick={() => { if (mes === 0) { setMes(11); setAno(a => a - 1); } else setMes(m => m - 1); }} className="h-8 px-3 rounded-[6px] text-sm font-medium text-slate-600 hover:bg-white transition-colors">‹</button>
+                    <span className="px-3 text-sm font-black text-slate-900 min-w-[120px] text-center">{MESES[mes]}/{ano}</span>
+                    <button onClick={() => { if (mes === 11) { setMes(0); setAno(a => a + 1); } else setMes(m => m + 1); }} className="h-8 px-3 rounded-[6px] text-sm font-medium text-slate-600 hover:bg-white transition-colors">›</button>
                 </div>
             </div>
 
             {aprovados.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {[
-                        { label: 'Colaboradores aprovados', value: aprovados.length.toString(), color: 'text-slate-700' },
-                        { label: 'Total bruto', value: `R$ ${totalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-blue-700' },
-                        { label: 'Total descontos', value: `R$ ${totalDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-rose-700' },
-                        { label: 'Total líquido', value: `R$ ${totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-emerald-700' },
-                    ].map(k => (
-                        <div key={k.label} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
-                            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{k.label}</p>
-                            <p className={`text-xl font-black mt-1 ${k.color}`}>{k.value}</p>
-                        </div>
-                    ))}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <KpiCard label="Colaboradores Aprovados" value={`${aprovados.length}`} icon={<Users className="w-5 h-5" />} color="gray" />
+                    <KpiCard label="Total Bruto" value={`R$ ${totalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<TrendingUp className="w-5 h-5" />} color="blue" />
+                    <KpiCard label="Total Descontos" value={`R$ ${totalDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<TrendingDown className="w-5 h-5" />} color="rose" />
+                    <KpiCard label="Total Líquido" value={`R$ ${totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Wallet className="w-5 h-5" />} color="emerald" />
                 </div>
             )}
 
-            {isLoading ? (
-                <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div>
-            ) : aprovados.length === 0 ? (
-                <div className="text-center py-16 text-slate-400">
-                    <CheckCheck className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p className="font-bold text-sm">Nenhum benefício aprovado em {MESES[mes]}/{ano}</p>
-                    <p className="text-xs mt-1">Aprove os cálculos na aba "Cálculo Mensal" para vê-los aqui</p>
+            {/* Toolbar acoplada à tabela (§5.2) */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar colaborador ou obra..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                            />
+                        </div>
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={APROVADOS_COLUMNS}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                        </div>
+                    </div>
                 </div>
-            ) : (
-                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+
+                {isLoading ? (
+                    <div className="text-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                        <p className="mt-2 text-gray-500">Carregando...</p>
+                    </div>
+                ) : filtered.length === 0 ? (
+                    <div className="text-center py-12">
+                        <CheckCheck className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum benefício aprovado em {MESES[mes]}/{ano}</h3>
+                        <p className="text-sm text-gray-500">Aprove os cálculos na aba "Cálculo Mensal" para vê-los aqui.</p>
+                    </div>
+                ) : (
+                    <div className="overflow-auto max-h-[70vh]">
+                        <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-slate-50 border-b border-slate-100">
-                                    {['Colaborador','Obra','Elegíveis','Valor/Dia','Bruto','Desconto','Líquido','Status'].map(h => (
-                                        <th key={h} className="px-3 py-3 text-left text-xs font-black text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
-                                    ))}
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {tableColumns.visibleColumns.includes('employee') && (
+                                        <SortableHeader label="Colaborador" colKey="employee" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('project') && (
+                                        <SortableHeader label="Obra" colKey="project" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('elegiveis') && (
+                                        <SortableHeader label="Elegíveis" colKey="elegiveis" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-center" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('valor_dia') && (
+                                        <SortableHeader label="Valor/dia" colKey="valor_dia" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('bruto') && (
+                                        <SortableHeader label="Bruto" colKey="bruto" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('desconto') && (
+                                        <SortableHeader label="Desconto" colKey="desconto" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('liquido') && (
+                                        <SortableHeader label="Líquido" colKey="liquido" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-3 py-2 border-r border-gray-100 text-right" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('status') && (
+                                        <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2" />
+                                    )}
                                 </tr>
                             </thead>
-                            <tbody>
-                                {aprovados.map(c => {
+                            <tbody className="divide-y divide-gray-200">
+                                {filtered.map(c => {
                                     const st = STATUS_CFG[c.status];
                                     return (
-                                        <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-3 py-3 font-bold text-slate-900 whitespace-nowrap">{c.employee_name}</td>
-                                            <td className="px-3 py-3 text-slate-500 text-table-body whitespace-nowrap">{c.project_name || '—'}</td>
-                                            <td className="px-3 py-3 text-center font-black text-emerald-700">{c.dias_elegiveis}</td>
-                                            <td className="px-3 py-3 text-right font-bold text-slate-600 whitespace-nowrap">R$ {c.valor_diario.toFixed(2)}</td>
-                                            <td className="px-3 py-3 text-right font-bold text-slate-700 whitespace-nowrap">R$ {c.valor_bruto.toFixed(2)}</td>
-                                            <td className="px-3 py-3 text-right text-rose-600 font-bold whitespace-nowrap">{c.desconto_folha > 0 ? `- R$ ${c.desconto_folha.toFixed(2)}` : '—'}</td>
-                                            <td className="px-3 py-3 text-right font-black text-emerald-700 whitespace-nowrap">R$ {c.valor_liquido.toFixed(2)}</td>
-                                            <td className="px-3 py-3">
-                                                <span className={`text-xs font-black px-2 py-1 rounded-full whitespace-nowrap ${st.bg} ${st.color}`}>{st.label}</span>
-                                            </td>
+                                        <tr key={c.id} className="hover:bg-orange-50/40 transition-colors">
+                                            {tableColumns.visibleColumns.includes('employee') && (
+                                                <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-900 whitespace-nowrap">{c.employee_name}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('project') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-500 whitespace-nowrap">{c.project_name || '—'}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('elegiveis') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-emerald-700">{c.dias_elegiveis}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('valor_dia') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-700 whitespace-nowrap">R$ {c.valor_diario.toFixed(2)}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('bruto') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800 whitespace-nowrap">R$ {c.valor_bruto.toFixed(2)}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('desconto') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-rose-600 whitespace-nowrap">{c.desconto_folha > 0 ? `- R$ ${c.desconto_folha.toFixed(2)}` : '—'}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('liquido') && (
+                                                <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-emerald-700 whitespace-nowrap">R$ {c.valor_liquido.toFixed(2)}</td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('status') && (
+                                                <td className="px-4 py-2.5 text-sm font-normal">
+                                                    <span className={st.color}>{st.label}</span>
+                                                </td>
+                                            )}
                                         </tr>
                                     );
                                 })}
                             </tbody>
                             <tfoot>
-                                <tr className="bg-slate-50 border-t-2 border-slate-200">
-                                    <td colSpan={6} className="px-3 py-3 text-right font-black text-slate-700 uppercase text-xs tracking-wider">Total do lote</td>
-                                    <td className="px-3 py-3 text-right font-black text-emerald-700 whitespace-nowrap">R$ {totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                    <td />
+                                <tr className="bg-gray-50 border-t-2 border-gray-200">
+                                    <td colSpan={tableColumns.visibleColumns.filter(k => k !== 'liquido' && k !== 'status').length} className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500">Total do lote</td>
+                                    {tableColumns.visibleColumns.includes('liquido') && (
+                                        <td className="px-3 py-2.5 text-right text-sm font-semibold text-emerald-700 whitespace-nowrap">R$ {totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('status') && <td></td>}
                                 </tr>
                             </tfoot>
                         </table>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 };
@@ -796,65 +1066,86 @@ const AbaAprovados: React.FC<{ orgId: string }> = ({ orgId }) => {
 // ─── Aba Histórico ────────────────────────────────────────────────────────────
 
 const AbaHistorico: React.FC<{ orgId: string }> = ({ orgId }) => {
+    const [search, setSearch] = usePersistedState('vrHistorico:search', '');
     const { data: calculos = [], isLoading } = useQuery({
         queryKey: ['vr_calculos_hist', orgId],
         queryFn: () => vrService.listCalculos(orgId),
     });
 
+    const filtrados = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        return !term ? calculos : calculos.filter(c => (c.employee_name || '').toLowerCase().includes(term));
+    }, [calculos, search]);
+
     const porMes = useMemo(() => {
         const map: Record<string, VrCalculo[]> = {};
-        calculos.forEach(c => {
+        filtrados.forEach(c => {
             if (!map[c.mes_referencia]) map[c.mes_referencia] = [];
             map[c.mes_referencia].push(c);
         });
         return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
-    }, [calculos]);
-
-    if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-orange-500" /></div>;
+    }, [filtrados]);
 
     return (
         <div className="space-y-4">
-            <div>
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wide">Histórico de Cálculos</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Todos os cálculos mensais registrados</p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                    <h3 className="text-sm font-black text-slate-900">Histórico de cálculos</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Todos os cálculos mensais registrados</p>
+                </div>
+                <div className="relative w-full md:w-72">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="Buscar colaborador..."
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                    />
+                </div>
             </div>
 
-            {porMes.length === 0 && (
-                <div className="text-center py-16 text-slate-400">
-                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm font-bold">Nenhum histórico encontrado</p>
+            {isLoading ? (
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                    <p className="mt-2 text-gray-500">Carregando...</p>
                 </div>
-            )}
-
-            {porMes.map(([mesIso, items]) => {
-                const total = items.reduce((s, c) => s + c.valor_liquido, 0);
-                const aprovados = items.filter(c => c.status === 'aprovado' || c.status === 'pago').length;
-                return (
-                    <div key={mesIso} className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
-                        <div className="bg-slate-50 px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-                            <span className="text-sm font-black text-slate-900">{mesLabel(mesIso)}</span>
-                            <div className="flex items-center gap-4 text-xs">
-                                <span className="text-slate-500">{items.length} colaboradores</span>
-                                <span className="text-emerald-600 font-bold">{aprovados} aprovados</span>
-                                <span className="font-black text-slate-900">R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            ) : porMes.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                    <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum histórico encontrado</h3>
+                </div>
+            ) : (
+                porMes.map(([mesIso, items]) => {
+                    const total = items.reduce((s, c) => s + c.valor_liquido, 0);
+                    const aprovados = items.filter(c => c.status === 'aprovado' || c.status === 'pago').length;
+                    return (
+                        <div key={mesIso} className="bg-white border border-slate-100 rounded-[10px] shadow-sm overflow-hidden">
+                            <div className="bg-slate-50 px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                                <span className="text-sm font-black text-slate-900 capitalize">{mesLabel(mesIso)}</span>
+                                <div className="flex items-center gap-4 text-xs">
+                                    <span className="text-slate-500">{items.length} colaboradores</span>
+                                    <span className="text-emerald-600 font-medium">{aprovados} aprovados</span>
+                                    <span className="font-semibold text-slate-900">R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                </div>
+                            </div>
+                            <div className="divide-y divide-slate-50">
+                                {items.map(c => {
+                                    const st = STATUS_CFG[c.status];
+                                    return (
+                                        <div key={c.id} className="flex items-center px-5 py-2.5 text-sm hover:bg-slate-50/50 transition-colors">
+                                            <span className="flex-1 font-normal text-slate-800">{c.employee_name}</span>
+                                            <span className="text-slate-400 text-xs mr-4">{c.dias_elegiveis} dias elegíveis</span>
+                                            <span className="font-medium text-emerald-700 mr-4">R$ {c.valor_liquido.toFixed(2)}</span>
+                                            <span className={`text-sm font-normal ${st.color}`}>{st.label}</span>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
-                        <div className="divide-y divide-slate-50">
-                            {items.map(c => {
-                                const st = STATUS_CFG[c.status];
-                                return (
-                                    <div key={c.id} className="flex items-center px-5 py-3 text-sm hover:bg-slate-50/50 transition-colors">
-                                        <span className="flex-1 font-bold text-slate-800">{c.employee_name}</span>
-                                        <span className="text-slate-400 text-xs mr-4">{c.dias_elegiveis} dias elegíveis</span>
-                                        <span className="font-black text-emerald-700 mr-4">R$ {c.valor_liquido.toFixed(2)}</span>
-                                        <span className={`text-xs font-black px-2 py-1 rounded-full ${st.bg} ${st.color}`}>{st.label}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                );
-            })}
+                    );
+                })
+            )}
         </div>
     );
 };
@@ -879,28 +1170,23 @@ const TABS: { id: VrTab; label: string; icon: React.ElementType }[] = [
 ];
 
 const LaborValeRefeicao: React.FC<LaborValeRefeicaoProps> = ({ orgId, organizations, employees, projects }) => {
-    const [tab, setTab] = useState<VrTab>('calculo');
+    const [tab, setTab] = usePersistedState<VrTab>('laborValeRefeicao:tab', 'calculo');
 
     return (
-        <div className="space-y-5">
-            {/* Header */}
-            <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-orange-500 rounded-xl shadow-lg shadow-orange-500/30">
-                    <UtensilsCrossed className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                    <h2 className="text-xl font-black text-slate-900 tracking-tight">Vale Refeição / Alimentação</h2>
-                    <p className="text-xs text-slate-400 font-medium">Cálculo automático por dias elegíveis trabalhados</p>
-                </div>
+        <div className="space-y-6">
+            {/* Cabeçalho de tela (§20) */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Vale Refeição / Alimentação</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Cálculo automático mensal por dias elegíveis trabalhados.</p>
             </div>
 
-            {/* Tabs */}
-            <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
+            {/* Abas */}
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-[10px] w-fit overflow-x-auto">
                 {TABS.map(t => (
                     <button
                         key={t.id}
                         onClick={() => setTab(t.id)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${tab === t.id ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        className={`flex items-center gap-2 h-9 px-3.5 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${tab === t.id ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     >
                         <t.icon className="w-4 h-4" />
                         {t.label}

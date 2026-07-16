@@ -1,15 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, Edit3, UserMinus, UserCheck, Building2, Briefcase, DollarSign, Clock, ChevronDown, ChevronUp, Trash2, Share2 } from 'lucide-react';
+import { Search, UserMinus, UserCheck, Building2, Briefcase, AlertCircle, Users, Wallet, Share2 } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
 import LaborEmployeeSharing from './LaborEmployeeSharing';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import { formatMoney } from './ui/Format';
+import { KpiCard } from './ui/KpiCard';
+import ActionIconButton from './ui/ActionIconButton';
+import { useConfirm } from './ui/confirm';
 
 const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Colaborador', sortable: true },
     { key: 'role', label: 'Função', sortable: true },
-    { key: 'organization', label: 'Organização', sortable: false },
+    { key: 'organization', label: 'Organização', sortable: true },
     { key: 'contract', label: 'Vínculo', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'salary', label: 'Salário Base', sortable: true },
@@ -29,18 +32,22 @@ interface LaborEmployeeListProps {
 const CONTRACT_LABELS: Record<ContractType, string> = {
     CLT: 'CLT', PJ: 'PJ', DIARISTA: 'Diarista', EMPREITEIRO: 'Empreiteiro', ESTAGIARIO: 'Estágio'
 };
+// Texto simples colorido — sem pílula/fundo/uppercase (guia §8).
 const CONTRACT_COLORS: Record<ContractType, string> = {
-    CLT: 'bg-blue-100 text-blue-700',
-    PJ: 'bg-purple-100 text-purple-700',
-    DIARISTA: 'bg-amber-100 text-amber-700',
-    EMPREITEIRO: 'bg-orange-100 text-orange-700',
-    ESTAGIARIO: 'bg-teal-100 text-teal-700',
+    CLT: 'text-blue-700',
+    PJ: 'text-purple-700',
+    DIARISTA: 'text-amber-700',
+    EMPREITEIRO: 'text-orange-700',
+    ESTAGIARIO: 'text-teal-700',
+};
+const STATUS_LABELS: Record<EmployeeStatus, string> = {
+    ATIVO: 'Ativo', INATIVO: 'Inativo', AFASTADO: 'Afastado', DESLIGADO: 'Desligado',
 };
 const STATUS_COLORS: Record<EmployeeStatus, string> = {
-    ATIVO: 'bg-emerald-100 text-emerald-700',
-    INATIVO: 'bg-slate-100 text-slate-500',
-    AFASTADO: 'bg-amber-100 text-amber-700',
-    DESLIGADO: 'bg-red-100 text-red-700',
+    ATIVO: 'text-emerald-700',
+    INATIVO: 'text-slate-500',
+    AFASTADO: 'text-amber-700',
+    DESLIGADO: 'text-red-600',
 };
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa
@@ -77,8 +84,17 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
     const [sortBy, setSortBy] = usePersistedState<'name' | 'cost'>('laborEmployeeListFilters:sortBy', 'name');
     const [sortDir, setSortDir] = usePersistedState<'asc' | 'desc'>('laborEmployeeListFilters:sortDir', 'asc');
     const [sharingEmployee, setSharingEmployee] = useState<Employee | null>(null);
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const tableColumns = useTableColumns(LABOR_EMPLOYEE_COLUMNS, 'laborEmployeeListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'laborEmployeeListFilters:advanced');
+    const confirm = useConfirm();
+
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
+
+    const orgName = (id: string) => organizations.find(o => o.id === id)?.name || 'Desconhecida';
 
     const filtered = useMemo(() => applyFilterRules(
         employees
@@ -94,6 +110,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                 switch (tableColumns.sortColumn) {
                     case 'name': return dir * a.name.localeCompare(b.name);
                     case 'role': return dir * a.role.localeCompare(b.role);
+                    case 'organization': return dir * orgName(a.org_id).localeCompare(orgName(b.org_id));
                     case 'contract': return dir * a.contract_type.localeCompare(b.contract_type);
                     case 'status': return dir * a.status.localeCompare(b.status);
                     case 'salary': return dir * ((a.base_salary || 0) - (b.base_salary || 0));
@@ -105,276 +122,283 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
             if (sortBy === 'name') cmp = a.name.localeCompare(b.name);
             else cmp = (a.daily_cost || 0) - (b.daily_cost || 0);
             return sortDir === 'asc' ? cmp : -cmp;
-        }), [employees, filterStatus, filterContract, search, advancedFilters.rules, sortBy, sortDir, tableColumns.sortColumn, tableColumns.sortDirection]);
+        }), [employees, organizations, filterStatus, filterContract, search, advancedFilters.rules, sortBy, sortDir, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const handleToggleStatus = async (emp: Employee) => {
         try {
             const newStatus: EmployeeStatus = emp.status === 'ATIVO' ? 'INATIVO' : 'ATIVO';
             await laborService.updateEmployee(emp.id, { status: newStatus });
             onRefresh();
+            notify(newStatus === 'ATIVO' ? 'Colaborador reativado.' : 'Colaborador inativado.');
         } catch (err) {
-            alert('Erro ao alterar status do colaborador.');
+            notify('Erro ao alterar status do colaborador.', 'error');
         }
     };
-    
+
     const handleDeleteEmployee = async (emp: Employee) => {
-        if (!confirm(`Deseja realmente excluir permanentemente o colaborador ${emp.name}? Esta ação não pode ser desfeita e pode falhar se houver registros vinculados.`)) return;
+        const ok = await confirm({
+            title: 'Excluir colaborador?',
+            message: `Deseja realmente excluir permanentemente "${emp.name}"? Esta ação não pode ser desfeita e pode falhar se houver registros vinculados.`,
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
         try {
             await laborService.removeEmployee(emp.id);
             onRefresh();
+            notify('Colaborador excluído.');
         } catch (err: any) {
             console.error('Erro ao excluir colaborador:', err);
             if (err.code === '23503') {
-                alert('Não é possível excluir este colaborador pois existem registros vinculados (pontos, alocações, etc). Considere inativá-lo em vez de excluir.');
+                notify('Não é possível excluir: existem registros vinculados (pontos, alocações, etc). Considere inativar.', 'error');
             } else {
-                alert('Erro ao excluir colaborador: ' + (err.message || 'Tente novamente'));
+                notify('Erro ao excluir colaborador: ' + (err.message || 'Tente novamente'), 'error');
             }
         }
     };
 
-    const handleSort = (col: 'name' | 'cost') => {
-        if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-        else { setSortBy(col); setSortDir('asc'); }
-    };
-
-    const SortIcon = ({ col }: { col: 'name' | 'cost' }) => sortBy === col
-        ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)
-        : <ChevronDown className="w-3 h-3 opacity-30" />;
+    const activeCount = employees.filter(e => e.status === 'ATIVO').length;
+    const totalDailyCost = employees.filter(e => e.status === 'ATIVO').reduce((s, e) => s + (e.daily_cost || 0), 0);
+    const contractCounts = employees.reduce((acc, e) => { acc[e.contract_type] = (acc[e.contract_type] || 0) + 1; return acc; }, {} as Record<string, number>);
+    const topContract = Object.entries(contractCounts).sort((a, b) => b[1] - a[1])[0];
 
     return (
-        <>
-        <div className="space-y-4">
-            {/* Filters */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-wrap items-center gap-3">
-                <div className="relative flex-1 min-w-[180px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                        placeholder="Buscar colaborador ou função..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-100 transition-all"
-                    />
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                    <Filter className="w-4 h-4 text-slate-400" />
-                    {(['ATIVO', 'INATIVO', 'AFASTADO', 'ALL'] as const).map(s => (
-                        <button
-                            key={s}
-                            onClick={() => setFilterStatus(s)}
-                            className={`px-3 py-1.5 rounded-lg text-form-input font-bold transition-all ${filterStatus === s ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                        >
-                            {s === 'ALL' ? 'Todos' : s.charAt(0) + s.slice(1).toLowerCase()}
-                        </button>
-                    ))}
-                    <select
-                        value={filterContract}
-                        onChange={e => setFilterContract(e.target.value as any)}
-                        className="px-3 py-1.5 rounded-lg text-button font-bold bg-slate-100 text-slate-600 outline-none"
-                    >
-                        <option value="ALL">Todos os vínculos</option>
-                        {Object.entries(CONTRACT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                    </select>
-                </div>
-                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-                <ColumnConfigButton
-                    columns={LABOR_EMPLOYEE_COLUMNS.filter(c => c.key !== 'organization' || organizations.length > 1)}
-                    visibleColumns={tableColumns.visibleColumns}
-                    showColumnConfig={tableColumns.showColumnConfig}
-                    onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                    onToggleColumn={tableColumns.toggleColumn}
-                    onReset={tableColumns.resetColumns}
-                />
+        <div className="space-y-6">
+            {/* KPIs */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <KpiCard label="Colaboradores" value={`${employees.length}`} sub={`${activeCount} ativos`} icon={<Users className="w-5 h-5" />} color="indigo" />
+                <KpiCard label="Ativos" value={`${activeCount}`} icon={<UserCheck className="w-5 h-5" />} color="emerald" />
+                <KpiCard label="Custo Diário (Ativos)" value={formatMoney(totalDailyCost)} icon={<Wallet className="w-5 h-5" />} color="rose" />
+                <KpiCard label="Vínculo Predominante" value={topContract ? CONTRACT_LABELS[topContract[0] as ContractType] : '—'} sub={topContract ? `${topContract[1]} colaboradores` : undefined} icon={<Briefcase className="w-5 h-5" />} color="blue" />
             </div>
 
-            {/* Table */}
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                <table className="w-full">
-                    <thead className="bg-slate-50/80 border-b border-slate-100">
-                        <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                            {tableColumns.visibleColumns.includes('name') && (
-                                <SortableHeader label="Colaborador" colKey="name" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-4 text-left" />
-                            )}
-                            {tableColumns.visibleColumns.includes('role') && (
-                                <SortableHeader label="Função" colKey="role" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-4 text-left" />
-                            )}
-                            {organizations.length > 1 && tableColumns.visibleColumns.includes('organization') && (
-                                <SortableHeader label="Organização" colKey="organization" sortable={false} className="px-4 py-4 text-left" />
-                            )}
-                            {tableColumns.visibleColumns.includes('contract') && (
-                                <SortableHeader label="Vínculo" colKey="contract" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-4 text-left" />
-                            )}
-                            {tableColumns.visibleColumns.includes('status') && (
-                                <SortableHeader label="Status" colKey="status" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-4 text-left" />
-                            )}
-                            {tableColumns.visibleColumns.includes('salary') && (
-                                <SortableHeader label="Salário Base" colKey="salary" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-4 text-right" />
-                            )}
-                            {tableColumns.visibleColumns.includes('cost') && (
-                                <SortableHeader label="Custo/Dia" colKey="cost" sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-4 text-right" />
-                            )}
-                            {tableColumns.visibleColumns.includes('actions') && (
-                                <SortableHeader label="Ações" colKey="actions" sortable={false} className="px-6 py-4 text-right" />
-                            )}
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                        {filtered.length === 0 && (
-                            <tr>
-                                <td colSpan={tableColumns.visibleColumns.length} className="px-6 py-16 text-center text-slate-400">
-                                    <div className="flex flex-col items-center gap-2">
-                                        <Briefcase className="w-10 h-10 opacity-20" />
-                                        <p className="font-medium">Nenhum colaborador encontrado</p>
-                                        <p className="text-xs">Cadastre o primeiro colaborador usando o botão "Novo Colaborador"</p>
-                                    </div>
-                                </td>
-                            </tr>
-                        )}
-                        {filtered.map(emp => (
-                            <tr key={emp.id} className="group hover:bg-slate-50/50 transition-all">
+            {/* Toolbar acoplada à tabela (§5.2) */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                placeholder="Buscar colaborador, função ou CPF..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {(['ATIVO', 'INATIVO', 'AFASTADO', 'ALL'] as const).map(s => (
+                                <button
+                                    key={s}
+                                    onClick={() => setFilterStatus(s)}
+                                    className={`h-9 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${filterStatus === s ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                                >
+                                    {s === 'ALL' ? 'Todos' : s.charAt(0) + s.slice(1).toLowerCase()}
+                                </button>
+                            ))}
+                            <select
+                                value={filterContract}
+                                onChange={e => setFilterContract(e.target.value as any)}
+                                className="h-9 px-3 rounded-[6px] text-sm font-medium bg-gray-100 text-gray-600 outline-none border border-transparent"
+                            >
+                                <option value="ALL">Todos os vínculos</option>
+                                {Object.entries(CONTRACT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                            </select>
+                        </div>
+
+                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={LABOR_EMPLOYEE_COLUMNS.filter(c => c.key !== 'organization' || organizations.length > 1)}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                        </div>
+                    </div>
+
+                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                </div>
+
+                {/* Tabela */}
+                <div className="overflow-auto max-h-[70vh]">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 {tableColumns.visibleColumns.includes('name') && (
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-black text-sm shadow-sm">
-                                                {emp.name.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-1.5">
-                                                    <p className="text-sm font-bold text-slate-900">{emp.name}</p>
-                                                    {(emp.shared_orgs?.length ?? 0) > 0 && (
-                                                        <span
-                                                            title={`Disponível em ${emp.shared_orgs!.length} organização${emp.shared_orgs!.length > 1 ? 'ões' : ''} adicional${emp.shared_orgs!.length > 1 ? 'is' : ''}`}
-                                                            className="flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-100 text-violet-600 rounded-full text-[9px] font-black"
-                                                        >
-                                                            <Share2 className="w-2.5 h-2.5" />
-                                                            {emp.shared_orgs!.length}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {emp.cpf && <p className="text-xs text-slate-400">{emp.cpf}</p>}
-                                            </div>
-                                        </div>
-                                    </td>
+                                    <SortableHeader label="Colaborador" colKey="name" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 )}
                                 {tableColumns.visibleColumns.includes('role') && (
-                                    <td className="px-4 py-4">
-                                        <span className="text-xs font-bold text-slate-600">{emp.role}</span>
-                                    </td>
+                                    <SortableHeader label="Função" colKey="role" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
                                 )}
                                 {organizations.length > 1 && tableColumns.visibleColumns.includes('organization') && (
-                                    <td className="px-4 py-4">
-                                        <div className="flex items-center gap-1.5 min-w-[120px]">
-                                            <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                            <span className="text-xs font-bold text-slate-500 truncate" title={organizations.find(o => o.id === emp.org_id)?.name || 'Desconhecida'}>
-                                                {organizations.find(o => o.id === emp.org_id)?.name || 'Desconhecida'}
-                                            </span>
-                                        </div>
-                                    </td>
+                                    <SortableHeader label="Organização" colKey="organization" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
                                 )}
                                 {tableColumns.visibleColumns.includes('contract') && (
-                                    <td className="px-4 py-4">
-                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-black ${CONTRACT_COLORS[emp.contract_type]}`}>
-                                            {CONTRACT_LABELS[emp.contract_type]}
-                                        </span>
-                                    </td>
+                                    <SortableHeader label="Vínculo" colKey="contract" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
                                 )}
                                 {tableColumns.visibleColumns.includes('status') && (
-                                    <td className="px-4 py-4">
-                                        <span className={`px-2.5 py-1 rounded-lg text-xs font-black ${STATUS_COLORS[emp.status]}`}>
-                                            {emp.status}
-                                        </span>
-                                    </td>
+                                    <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
                                 )}
                                 {tableColumns.visibleColumns.includes('salary') && (
-                                    <td className="px-4 py-4 text-right">
-                                        {emp.base_salary > 0 ? (
-                                            <span className="text-xs font-black text-slate-900">
-                                                {formatMoney(emp.base_salary)}
-                                            </span>
-                                        ) : (
-                                            <span className="text-xs text-slate-300 font-bold">—</span>
-                                        )}
-                                    </td>
+                                    <SortableHeader label="Salário base" colKey="salary" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100 text-right" />
                                 )}
                                 {tableColumns.visibleColumns.includes('cost') && (
-                                    <td className="px-4 py-4 text-right">
-                                        <div className="flex items-center justify-end gap-1">
-                                            <DollarSign className="w-3 h-3 text-slate-400" />
-                                            <span className="text-xs font-black text-slate-900">
-                                                {(emp.daily_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                            </span>
-                                        </div>
-                                        {emp.hourly_cost > 0 && (
-                                            <div className="flex items-center justify-end gap-1 mt-0.5">
-                                                <Clock className="w-3 h-3 text-slate-300" />
-                                                <span className="text-xs text-slate-400">
-                                                    {(emp.hourly_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/h
-                                                </span>
-                                            </div>
-                                        )}
-                                    </td>
+                                    <SortableHeader label="Custo/dia" colKey="cost" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100 text-right" />
                                 )}
                                 {tableColumns.visibleColumns.includes('actions') && (
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center justify-end gap-2">
-                                            <button
-                                                onClick={() => onEdit(emp)}
-                                                className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
-                                                title="Editar"
-                                            >
-                                                <Edit3 className="w-3.5 h-3.5" />
-                                            </button>
-                                            {organizations.length > 1 && (
-                                                <button
-                                                    onClick={() => setSharingEmployee(emp)}
-                                                    className={`p-1.5 rounded-lg transition-colors ${(emp.shared_orgs?.length ?? 0) > 0 ? 'bg-violet-100 text-violet-600 hover:bg-violet-200' : 'bg-slate-50 text-slate-400 hover:bg-violet-50 hover:text-violet-600'}`}
-                                                    title="Disponibilizar para outras organizações"
-                                                >
-                                                    <Share2 className="w-3.5 h-3.5" />
-                                                </button>
-                                            )}
-                                            <button
-                                                onClick={() => handleToggleStatus(emp)}
-                                                className={`p-1.5 rounded-lg transition-colors ${emp.status === 'ATIVO' ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
-                                                title={emp.status === 'ATIVO' ? 'Inativar' : 'Reativar'}
-                                            >
-                                                {emp.status === 'ATIVO' ? <UserMinus className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteEmployee(emp)}
-                                                className="p-1.5 bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors"
-                                                title="Excluir Permanentemente"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                    </td>
+                                    <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                                 )}
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {filtered.length === 0 && (
+                                <tr>
+                                    <td colSpan={tableColumns.visibleColumns.length} className="px-6 py-16 text-center text-gray-400">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <Briefcase className="w-12 h-12 text-gray-300 mb-2" />
+                                            <h3 className="text-lg font-bold text-gray-900">Nenhum colaborador encontrado</h3>
+                                            <p className="text-sm text-gray-500">Cadastre o primeiro colaborador usando o botão "Novo Colaborador".</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+                            {filtered.map(emp => (
+                                <tr key={emp.id} className="hover:bg-blue-50/50 transition-colors group">
+                                    {tableColumns.visibleColumns.includes('name') && (
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-semibold text-xs shrink-0">
+                                                    {emp.name.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <p className="text-sm font-normal text-gray-900 truncate">{emp.name}</p>
+                                                        {(emp.shared_orgs?.length ?? 0) > 0 && (
+                                                            <span
+                                                                title={`Disponível em ${emp.shared_orgs!.length} organização${emp.shared_orgs!.length > 1 ? 'ões' : ''} adicional${emp.shared_orgs!.length > 1 ? 'is' : ''}`}
+                                                                className="flex items-center gap-0.5 text-violet-600 text-xs shrink-0"
+                                                            >
+                                                                <Share2 className="w-3 h-3" />
+                                                                {emp.shared_orgs!.length}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {emp.cpf && <p className="text-xs text-gray-400">{emp.cpf}</p>}
+                                                </div>
+                                            </div>
+                                        </td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('role') && (
+                                        <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                            {emp.role}
+                                        </td>
+                                    )}
+                                    {organizations.length > 1 && tableColumns.visibleColumns.includes('organization') && (
+                                        <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                            <div className="flex items-center gap-1.5 min-w-[120px]">
+                                                <Building2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                                <span className="truncate" title={orgName(emp.org_id)}>{orgName(emp.org_id)}</span>
+                                            </div>
+                                        </td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('contract') && (
+                                        <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0">
+                                            <span className={`text-sm font-normal ${CONTRACT_COLORS[emp.contract_type]}`}>
+                                                {CONTRACT_LABELS[emp.contract_type]}
+                                            </span>
+                                        </td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('status') && (
+                                        <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0">
+                                            <span className={`text-sm font-normal ${STATUS_COLORS[emp.status]}`}>
+                                                {STATUS_LABELS[emp.status]}
+                                            </span>
+                                        </td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('salary') && (
+                                        <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
+                                            {emp.base_salary > 0 ? (
+                                                <span className="text-sm font-medium text-gray-800">{formatMoney(emp.base_salary)}</span>
+                                            ) : (
+                                                <span className="text-sm font-normal text-gray-400">—</span>
+                                            )}
+                                        </td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('cost') && (
+                                        <td className="px-4 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
+                                            <span className="text-sm font-medium text-gray-800">
+                                                {(emp.daily_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            </span>
+                                            {emp.hourly_cost > 0 && (
+                                                <p className="text-xs font-normal text-gray-400">
+                                                    {(emp.hourly_cost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/h
+                                                </p>
+                                            )}
+                                        </td>
+                                    )}
+                                    {tableColumns.visibleColumns.includes('actions') && (
+                                        <td className="px-6 py-2.5 text-right">
+                                            <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                <ActionIconButton kind="edit" onClick={() => onEdit(emp)} />
+                                                {organizations.length > 1 && (
+                                                    <ActionIconButton
+                                                        kind="share"
+                                                        title="Disponibilizar para outras organizações"
+                                                        tone={(emp.shared_orgs?.length ?? 0) > 0 ? 'attention' : 'neutral'}
+                                                        onClick={() => setSharingEmployee(emp)}
+                                                    />
+                                                )}
+                                                <ActionIconButton
+                                                    kind={emp.status === 'ATIVO' ? 'delete' : 'view'}
+                                                    icon={emp.status === 'ATIVO' ? <UserMinus className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                                                    title={emp.status === 'ATIVO' ? 'Inativar' : 'Reativar'}
+                                                    tone={emp.status === 'ATIVO' ? 'danger' : 'neutral'}
+                                                    onClick={() => handleToggleStatus(emp)}
+                                                />
+                                                <ActionIconButton kind="delete" title="Excluir permanentemente" onClick={() => handleDeleteEmployee(emp)} />
+                                            </div>
+                                        </td>
+                                    )}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
                 {filtered.length > 0 && (
-                    <div className="px-6 py-3 bg-slate-50/80 border-t border-slate-100 text-xs text-slate-400 font-bold uppercase tracking-widest flex items-center justify-between">
-                        <span>{filtered.length} colaboradores</span>
+                    <div className="px-6 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-400 font-medium flex items-center justify-between">
+                        <span>{filtered.length} colaborador{filtered.length !== 1 ? 'es' : ''}</span>
                         <span className="flex items-center gap-1">
                             <Building2 className="w-3 h-3" />
-                            {employees.filter(e => e.status === 'ATIVO').length} ativos
+                            {activeCount} ativos
                         </span>
                     </div>
                 )}
             </div>
-        </div>
 
-        {sharingEmployee && (
-            <LaborEmployeeSharing
-                employee={sharingEmployee}
-                organizations={organizations}
-                currentUserEmail={currentUserEmail}
-                onClose={() => setSharingEmployee(null)}
-                onSaved={() => { setSharingEmployee(null); onRefresh(); }}
-            />
-        )}
-        </>
+            {sharingEmployee && (
+                <LaborEmployeeSharing
+                    employee={sharingEmployee}
+                    organizations={organizations}
+                    currentUserEmail={currentUserEmail}
+                    onClose={() => setSharingEmployee(null)}
+                    onSaved={() => { setSharingEmployee(null); onRefresh(); }}
+                />
+            )}
+
+            {/* Toast */}
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
+                </div>
+            )}
+        </div>
     );
 };
 

@@ -8,6 +8,8 @@ import PayrollRunList from './PayrollRunList';
 import PayrollRunDetail from './PayrollRunDetail';
 import PayrollEventModal from './PayrollEventModal';
 import PaystubModal from './PaystubModal';
+import { usePersistedState } from './ui/TableUtils';
+import { useConfirm } from './ui/confirm';
 
 // ── Local types ────────────────────────────────────────────────────────────────
 interface OrganizationItem {
@@ -36,16 +38,24 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
     const [resultsLoading, setResultsLoading] = useState(false);
     const [selectedRun, setSelectedRun] = useState<PayrollRun | null>(null);
 
-    // ── Filter state ──────────────────────────────────────────────────────────
-    const [typeFilter, setTypeFilter]   = useState<string>('all');
-    const [monthFilter, setMonthFilter] = useState<string>('all');
-    const [yearFilter, setYearFilter]   = useState<string>(new Date().getFullYear().toString());
-    const [localOrgId, setLocalOrgId]   = useState<string>('');
+    // ── Filter state (F2: sobrevive a navegação/reload) ─────────────────────────
+    const [typeFilter, setTypeFilter]   = usePersistedState<string>('payrollRunList:type', 'all');
+    const [monthFilter, setMonthFilter] = usePersistedState<string>('payrollRunList:month', 'all');
+    const [yearFilter, setYearFilter]   = usePersistedState<string>('payrollRunList:year', new Date().getFullYear().toString());
+    const [localOrgId, setLocalOrgId]   = usePersistedState<string>('payrollRunList:localOrg', '');
+    const [search, setSearch]           = usePersistedState<string>('payrollRunList:search', '');
 
     // ── Modal state ───────────────────────────────────────────────────────────
     const [showNewRunModal, setShowNewRunModal] = useState(false);
     const [showEventModal, setShowEventModal]   = useState<{ employeeId: string; employeeName: string } | null>(null);
     const [showPaystub, setShowPaystub]         = useState<{ runId: string; employeeId: string } | null>(null);
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const confirm = useConfirm();
+
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
 
     // ── Effects ───────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -136,9 +146,10 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
             }
             setShowNewRunModal(false);
             loadRuns();
+            notify('Folha criada com sucesso.');
         } catch (err) {
             console.error(err);
-            alert('Erro ao criar folha. Verifique os dados.');
+            notify('Erro ao criar folha. Verifique os dados.', 'error');
         } finally {
             setExecuting(false);
         }
@@ -191,10 +202,10 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
             payrollService.syncPayrollToFinance(selectedRun.id).catch(syncErr => {
                 console.error('[LaborPayroll] Erro na sincronização financeira:', syncErr);
             });
-            alert('Folha fechada! Os lançamentos financeiros serão sincronizados em instantes.');
+            notify('Folha fechada! Os lançamentos financeiros serão sincronizados em instantes.');
         } catch (err) {
             console.error(err);
-            alert('Erro ao fechar folha.');
+            notify('Erro ao fechar folha.', 'error');
         } finally {
             setExecuting(false);
         }
@@ -202,16 +213,23 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
 
     const handleReopenRun = async () => {
         if (!selectedRun) return;
-        if (!confirm('Deseja reabrir esta folha para edições?')) return;
+        const ok = await confirm({
+            title: 'Reabrir folha?',
+            message: 'A folha voltará para rascunho e poderá ser editada novamente.',
+            variant: 'warning',
+            confirmLabel: 'Reabrir',
+        });
+        if (!ok) return;
         try {
             setExecuting(true);
             await payrollService.updateRunStatus(selectedRun.id, 'RASCUNHO');
             const updated = await payrollService.getRun(selectedRun.id);
             setSelectedRun(updated);
             loadRuns();
+            notify('Folha reaberta para edição.');
         } catch (err) {
             console.error(err);
-            alert('Erro ao reabrir folha. Tente novamente.');
+            notify('Erro ao reabrir folha. Tente novamente.', 'error');
         } finally {
             setExecuting(false);
         }
@@ -219,7 +237,13 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
 
     const handleReprocessRun = async () => {
         if (!selectedRun) return;
-        if (!confirm('Isso irá recalcular todos os valores desta folha. Os lançamentos manuais serão mantidos. Deseja continuar?')) return;
+        const ok = await confirm({
+            title: 'Reprocessar folha?',
+            message: 'Isso irá recalcular todos os valores desta folha. Os lançamentos manuais serão mantidos.',
+            variant: 'warning',
+            confirmLabel: 'Reprocessar',
+        });
+        if (!ok) return;
         try {
             setExecuting(true);
             const updatedRun = await payrollEngine.runPayroll(
@@ -232,24 +256,31 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
             );
             setSelectedRun(updatedRun);
             await loadResults(updatedRun.id);
-            alert('Folha reprocessada com sucesso!');
+            notify('Folha reprocessada com sucesso.');
         } catch (err) {
             console.error(err);
-            alert('Erro ao reprocessar a folha de pagamento.');
+            notify('Erro ao reprocessar a folha de pagamento.', 'error');
         } finally {
             setExecuting(false);
         }
     };
 
     const handleDeleteRun = async (id: string) => {
-        if (!confirm('Deseja realmente excluir este ciclo de folha? Todos os dados processados e eventos serão removidos permanentemente.')) return;
+        const ok = await confirm({
+            title: 'Excluir ciclo de folha?',
+            message: 'Todos os dados processados e eventos deste ciclo serão removidos permanentemente. Esta ação não pode ser desfeita.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
         try {
             await payrollService.deleteRun(id);
             setSelectedRun(null);
             loadRuns();
+            notify('Folha excluída.');
         } catch (err) {
             console.error(err);
-            alert('Erro ao excluir folha.');
+            notify('Erro ao excluir folha.', 'error');
         }
     };
 
@@ -259,10 +290,10 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
             const copy = await payrollService.duplicateRun(id);
             await payrollEngine.runPayroll(orgId, copy.start_date, copy.end_date, copy.type, copy.subtype);
             loadRuns();
-            alert('Folha duplicada com sucesso!');
+            notify('Folha duplicada com sucesso.');
         } catch (err) {
             console.error(err);
-            alert('Erro ao duplicar folha.');
+            notify('Erro ao duplicar folha.', 'error');
         } finally {
             setExecuting(false);
         }
@@ -275,9 +306,9 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
 
     // ── Render ────────────────────────────────────────────────────────────────
     if (loading) return (
-        <div className="flex flex-col items-center justify-center p-20 space-y-4">
-            <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
-            <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Carregando Histórico...</p>
+        <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+            <p className="mt-2 text-gray-500">Carregando histórico...</p>
         </div>
     );
 
@@ -316,11 +347,13 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                     monthFilter={monthFilter}
                     yearFilter={yearFilter}
                     localOrgId={localOrgId}
+                    search={search}
                     runTotals={runTotals}
                     onTypeFilter={setTypeFilter}
                     onMonthFilter={setMonthFilter}
                     onYearFilter={setYearFilter}
                     onLocalOrgId={setLocalOrgId}
+                    onSearch={setSearch}
                     onSelectRun={handleSelectRun}
                     onDeleteRun={handleDeleteRun}
                     onDuplicateRun={handleDuplicateRun}
@@ -337,11 +370,11 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                             <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
                                 <Loader2 className="w-8 h-8" />
                             </div>
-                            <h3 className="text-xl font-black text-slate-900 uppercase">Novo Ciclo de Folha</h3>
+                            <h3 className="text-xl font-black text-slate-900">Novo ciclo de folha</h3>
                         </div>
                         <div className="space-y-4">
                             <div className="space-y-2">
-                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Tipo de Folha</label>
+                                <label className="text-xs font-semibold text-slate-500">Tipo de folha</label>
                                 <select
                                     id="payroll_type"
                                     className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
@@ -358,7 +391,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                                 </select>
                             </div>
                             <div id="payroll_subtype_container" className="space-y-2" style={{ display: 'none' }}>
-                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Parcela (13º)</label>
+                                <label className="text-xs font-semibold text-slate-500">Parcela (13º)</label>
                                 <select id="payroll_subtype" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500">
                                     <option value="1_parcela">1ª Parcela (50%)</option>
                                     <option value="2_parcela">2ª Parcela (Integral com desc.)</option>
@@ -366,12 +399,12 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Início do Período</label>
+                                    <label className="text-xs font-semibold text-slate-500">Início do período</label>
                                     <input id="payroll_start" type="date" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                                         defaultValue={new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]} />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Fim do Período</label>
+                                    <label className="text-xs font-semibold text-slate-500">Fim do período</label>
                                     <input id="payroll_end" type="date" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                                         defaultValue={new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]} />
                                 </div>
@@ -380,7 +413,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
 
                         {(!orgId || orgId === 'all') && (
                             <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
-                                <p className="text-xs font-black text-indigo-700 uppercase tracking-widest leading-relaxed text-center">
+                                <p className="text-xs font-semibold text-indigo-700 leading-relaxed text-center">
                                     O sistema identificará automaticamente as empresas com funcionários ativos e gerará as folhas individuais em lote.
                                 </p>
                             </div>
@@ -434,6 +467,16 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId }) => {
                     employeeId={showPaystub.employeeId}
                     onClose={() => setShowPaystub(null)}
                 />
+            )}
+
+            {/* Toast */}
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
+                </div>
             )}
         </div>
     );

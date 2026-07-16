@@ -2,9 +2,12 @@ import React, { useState, useRef } from 'react';
 import {
     CalendarDays, Plus, Check, X, Clock, AlertTriangle, ChevronDown,
     Loader2, Search, FileText, RotateCcw, Umbrella, Stethoscope,
-    Baby, ShieldAlert, Ban, HelpCircle, Upload, Eye
+    Baby, ShieldAlert, Ban, HelpCircle, Upload,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { KpiCard } from './ui/KpiCard';
+import { useConfirm } from './ui/confirm';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     laborService, Employee,
@@ -13,10 +16,11 @@ import {
 } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
-import Button from './ui/Button';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Texto simples colorido — sem pílula/fundo/uppercase (guia §8). `bg` mantido
+// só para o ícone do card de solicitação (decorativo, não é badge de status).
 const TIPO_CONFIG: Record<AbsenceTipo, { label: string; color: string; bg: string; icon: React.ElementType }> = {
     FERIAS:               { label: 'Férias',             color: 'text-indigo-700',  bg: 'bg-indigo-100',  icon: Umbrella },
     ATESTADO:             { label: 'Atestado',           color: 'text-teal-700',    bg: 'bg-teal-100',    icon: Stethoscope },
@@ -29,18 +33,24 @@ const TIPO_CONFIG: Record<AbsenceTipo, { label: string; color: string; bg: strin
     OUTROS:               { label: 'Outros',             color: 'text-slate-700',   bg: 'bg-slate-100',   icon: HelpCircle },
 };
 
-const STATUS_CONFIG: Record<AbsenceStatus, { label: string; color: string; bg: string }> = {
-    SOLICITADO: { label: 'Solicitado', color: 'text-amber-700',  bg: 'bg-amber-100' },
-    APROVADO:   { label: 'Aprovado',   color: 'text-emerald-700',bg: 'bg-emerald-100' },
-    REJEITADO:  { label: 'Rejeitado',  color: 'text-rose-700',   bg: 'bg-rose-100' },
-    CANCELADO:  { label: 'Cancelado',  color: 'text-slate-500',  bg: 'bg-slate-100' },
+const STATUS_CONFIG: Record<AbsenceStatus, { label: string; color: string }> = {
+    SOLICITADO: { label: 'Solicitado', color: 'text-amber-700' },
+    APROVADO:   { label: 'Aprovado',   color: 'text-emerald-700' },
+    REJEITADO:  { label: 'Rejeitado',  color: 'text-rose-700' },
+    CANCELADO:  { label: 'Cancelado',  color: 'text-slate-500' },
 };
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
+const BALANCE_STATUS_COLORS: Record<string, string> = {
+    ABERTO:  'text-emerald-700',
+    PARCIAL: 'text-amber-700',
+    GOZADO:  'text-slate-500',
+};
+
+const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-semibold text-slate-500">{label}</label>
         {children}
     </div>
 );
@@ -52,7 +62,24 @@ function calcDias(inicio: string, fim: string): number {
     return Math.round((d2.getTime() - d1.getTime()) / 86400000) + 1;
 }
 
-// ── Modal de Ausência ────────────────────────────────────────────────────────
+function useToast() {
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
+    const Toast = () => notification ? (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+            notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+            <AlertCircleIcon />
+            {notification.message}
+        </div>
+    ) : null;
+    return { notify, Toast };
+}
+
+const AlertCircleIcon = () => <AlertTriangle className="w-4 h-4 shrink-0" />;
 
 // ── CLT Vacation validation ──────────────────────────────────────────────────
 // CLT art. 130, 134, 135, 143
@@ -122,9 +149,10 @@ interface AbsenceFormProps {
     existingAbsences?: Absence[];
     onClose: () => void;
     onSaved: () => void;
+    notify: (message: string, type?: 'success' | 'error') => void;
 }
 
-const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBalances, existingAbsences = [], onClose, onSaved }) => {
+const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBalances, existingAbsences = [], onClose, onSaved, notify }) => {
     const [saving, setSaving] = useState(false);
     const [form, setForm] = useState<Partial<Absence>>({
         org_id: orgId,
@@ -161,19 +189,19 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
     const cltWarnings = cltIssues.filter(i => i.severity === 'warning');
 
     const handleSave = async () => {
-        if (!form.employee_id) { alert('Selecione um colaborador.'); return; }
-        if (!form.data_inicio || !form.data_fim) { alert('Preencha as datas.'); return; }
+        if (!form.employee_id) { notify('Selecione um colaborador.', 'error'); return; }
+        if (!form.data_inicio || !form.data_fim) { notify('Preencha as datas.', 'error'); return; }
         if (new Date(form.data_fim!) < new Date(form.data_inicio!)) {
-            alert('Data fim deve ser igual ou posterior à data início.');
+            notify('Data fim deve ser igual ou posterior à data início.', 'error');
             return;
         }
         if (form.tipo === 'FERIAS' && !form.vacation_period_start) {
-            alert('Selecione o período aquisitivo para as férias.');
+            notify('Selecione o período aquisitivo para as férias.', 'error');
             return;
         }
         // Bloqueia erros CLT críticos
         if (form.tipo === 'FERIAS' && cltErrors.length > 0) {
-            alert('Não é possível registrar:\n\n' + cltErrors.map(e => '• ' + e.msg).join('\n'));
+            notify('Não é possível registrar: ' + cltErrors.map(e => e.msg).join(' '), 'error');
             return;
         }
         setSaving(true);
@@ -190,7 +218,7 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
             }
             onSaved();
         } catch (err: any) {
-            alert('Erro ao registrar: ' + (err.message || 'Tente novamente.'));
+            notify('Erro ao registrar: ' + (err.message || 'Tente novamente.'), 'error');
         } finally {
             setSaving(false);
         }
@@ -198,13 +226,13 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
                 <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-600 to-indigo-700">
                     <div>
-                        <h2 className="text-lg font-black text-white">Nova Ausência / Afastamento</h2>
+                        <h3 className="text-lg font-black text-white">Nova ausência / afastamento</h3>
                         <p className="text-indigo-200 text-xs mt-0.5">Férias, atestados, licenças e outros</p>
                     </div>
-                    <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors"><X className="w-5 h-5" /></button>
+                    <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-[6px] text-white transition-colors"><X className="w-5 h-5" /></button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -233,9 +261,9 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
 
                     {/* Período aquisitivo (apenas férias) */}
                     {form.tipo === 'FERIAS' && form.employee_id && (
-                        <InputGroup label="Período Aquisitivo *">
+                        <InputGroup label="Período aquisitivo *">
                             {employeeBalances.length === 0 ? (
-                                <div className="p-3 bg-amber-50 rounded-xl border border-amber-100 text-xs font-bold text-amber-700">
+                                <div className="p-3 bg-amber-50 rounded-[6px] border border-amber-100 text-xs font-medium text-amber-700">
                                     Nenhum saldo de férias disponível para este colaborador. Crie um período na aba Saldos.
                                 </div>
                             ) : (
@@ -259,18 +287,18 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
                     )}
 
                     <div className="grid grid-cols-2 gap-4">
-                        <InputGroup label="Data Início *">
+                        <InputGroup label="Data início *">
                             <input type="date" value={form.data_inicio} onChange={e => set('data_inicio', e.target.value)} className={inputCls} />
                         </InputGroup>
-                        <InputGroup label="Data Fim *">
+                        <InputGroup label="Data fim *">
                             <input type="date" value={form.data_fim} onChange={e => set('data_fim', e.target.value)} className={inputCls} />
                         </InputGroup>
                     </div>
 
                     {dias > 0 && (
-                        <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100 flex items-center gap-2">
+                        <div className="p-3 bg-indigo-50 rounded-[6px] border border-indigo-100 flex items-center gap-2">
                             <CalendarDays className="w-4 h-4 text-indigo-600 shrink-0" />
-                            <span className="text-xs font-black text-indigo-800">{dias} dia{dias !== 1 ? 's' : ''} de afastamento</span>
+                            <span className="text-xs font-semibold text-indigo-800">{dias} dia{dias !== 1 ? 's' : ''} de afastamento</span>
                             {form.tipo === 'FERIAS' && selectedBalance && (
                                 <span className="text-xs text-slate-500 ml-auto">Saldo disponível: <strong>{selectedBalance.dias_restantes}d</strong></span>
                             )}
@@ -279,8 +307,8 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
 
                     {/* Validações CLT — erros */}
                     {cltErrors.length > 0 && (
-                        <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-1">
-                            <p className="text-xs font-black text-rose-700 uppercase tracking-widest flex items-center gap-1">
+                        <div className="p-3 bg-rose-50 border border-rose-200 rounded-[6px] space-y-1">
+                            <p className="text-xs font-semibold text-rose-700 flex items-center gap-1">
                                 <AlertTriangle className="w-3 h-3" /> Violação CLT — não pode prosseguir
                             </p>
                             {cltErrors.map((e, i) => (
@@ -291,8 +319,8 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
 
                     {/* Validações CLT — avisos */}
                     {cltWarnings.length > 0 && (
-                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
-                            <p className="text-xs font-black text-amber-700 uppercase tracking-widest flex items-center gap-1">
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-[6px] space-y-1">
+                            <p className="text-xs font-semibold text-amber-700 flex items-center gap-1">
                                 <AlertTriangle className="w-3 h-3" /> Atenção CLT
                             </p>
                             {cltWarnings.map((w, i) => (
@@ -307,17 +335,17 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
 
                     {/* Upload atestado */}
                     <div className="space-y-1.5">
-                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">
-                            Atestado / Documento (opcional)
+                        <label className="text-xs font-semibold text-slate-500">
+                            Atestado / documento (opcional)
                         </label>
                         <div
                             onClick={() => fileRef.current?.click()}
-                            className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/30 transition-all"
+                            className="border-2 border-dashed border-slate-200 rounded-[10px] p-4 text-center cursor-pointer hover:border-indigo-300 hover:bg-indigo-50/30 transition-all"
                         >
                             {atestadoFile ? (
                                 <div className="flex items-center justify-center gap-2 text-indigo-700">
                                     <FileText className="w-4 h-4" />
-                                    <span className="text-xs font-bold">{atestadoFile.name}</span>
+                                    <span className="text-xs font-medium">{atestadoFile.name}</span>
                                     <button onClick={e => { e.stopPropagation(); setAtestadoFile(null); }} className="ml-2 text-slate-400 hover:text-rose-500">
                                         <X className="w-3.5 h-3.5" />
                                     </button>
@@ -334,8 +362,8 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
                 </div>
 
                 <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">
-                    <button onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-all">Cancelar</button>
-                    <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold text-sm shadow-lg disabled:opacity-50">
+                    <button onClick={onClose} className="h-9 px-4 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px] transition-all">Cancelar</button>
+                    <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 transition-all font-medium text-[13px] disabled:opacity-50">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                         {saving ? 'Registrando...' : 'Registrar'}
                     </button>
@@ -350,13 +378,13 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
 const RejectModal: React.FC<{ onConfirm: (reason: string) => void; onClose: () => void }> = ({ onConfirm, onClose }) => {
     const [reason, setReason] = useState('');
     return (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
-                <h3 className="text-sm font-black text-slate-900">Motivo da Rejeição</h3>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-[10px] shadow-xl w-full max-w-sm p-6 space-y-4">
+                <h3 className="text-sm font-black text-slate-900">Motivo da rejeição</h3>
                 <textarea value={reason} onChange={e => setReason(e.target.value)} className={inputCls + ' resize-none h-24'} placeholder="Descreva o motivo (opcional)..." />
                 <div className="flex gap-3 justify-end">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancelar</button>
-                    <button onClick={() => onConfirm(reason)} className="px-4 py-2 bg-rose-600 text-white rounded-xl text-sm font-bold hover:bg-rose-700">Confirmar Rejeição</button>
+                    <button onClick={onClose} className="h-9 px-4 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">Cancelar</button>
+                    <button onClick={() => onConfirm(reason)} className="h-9 px-4 bg-rose-600 text-white rounded-[6px] text-sm font-medium hover:bg-rose-700">Confirmar rejeição</button>
                 </div>
             </div>
         </div>
@@ -370,21 +398,22 @@ interface NewPeriodFormProps {
     employees: Employee[];
     onClose: () => void;
     onSaved: () => void;
+    notify: (message: string, type?: 'success' | 'error') => void;
 }
 
-const NewPeriodForm: React.FC<NewPeriodFormProps> = ({ orgId, employees, onClose, onSaved }) => {
+const NewPeriodForm: React.FC<NewPeriodFormProps> = ({ orgId, employees, onClose, onSaved, notify }) => {
     const [saving, setSaving] = useState(false);
     const [employeeId, setEmployeeId] = useState('');
     const [periodoInicio, setPeriodoInicio] = useState('');
 
     const handleSave = async () => {
-        if (!employeeId || !periodoInicio) { alert('Preencha todos os campos.'); return; }
+        if (!employeeId || !periodoInicio) { notify('Preencha todos os campos.', 'error'); return; }
         setSaving(true);
         try {
             await laborService.createVacationPeriod(employeeId, orgId, periodoInicio);
             onSaved();
         } catch (err: any) {
-            alert('Erro: ' + (err.message || 'Tente novamente.'));
+            notify('Erro: ' + (err.message || 'Tente novamente.'), 'error');
         } finally {
             setSaving(false);
         }
@@ -392,10 +421,10 @@ const NewPeriodForm: React.FC<NewPeriodFormProps> = ({ orgId, employees, onClose
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm flex flex-col overflow-hidden">
+            <div className="bg-white rounded-[10px] shadow-xl w-full max-w-sm flex flex-col overflow-hidden">
                 <div className="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-emerald-600 to-emerald-700">
-                    <h2 className="text-base font-black text-white">Novo Período Aquisitivo</h2>
-                    <button onClick={onClose} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white"><X className="w-4 h-4" /></button>
+                    <h3 className="text-base font-black text-white">Novo período aquisitivo</h3>
+                    <button onClick={onClose} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-[6px] text-white"><X className="w-4 h-4" /></button>
                 </div>
                 <div className="p-6 space-y-4">
                     <InputGroup label="Colaborador *">
@@ -407,16 +436,16 @@ const NewPeriodForm: React.FC<NewPeriodFormProps> = ({ orgId, employees, onClose
                             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                         </div>
                     </InputGroup>
-                    <InputGroup label="Início do Período Aquisitivo *">
+                    <InputGroup label="Início do período aquisitivo *">
                         <input type="date" value={periodoInicio} onChange={e => setPeriodoInicio(e.target.value)} className={inputCls} />
                     </InputGroup>
                     <p className="text-xs text-slate-400">O período fim e o vencimento serão calculados automaticamente (+1 ano e +2 anos).</p>
                 </div>
                 <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50/50">
-                    <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl">Cancelar</button>
-                    <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-5 py-2 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 disabled:opacity-50">
+                    <button onClick={onClose} className="h-9 px-4 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">Cancelar</button>
+                    <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] font-medium text-[13px] hover:bg-emerald-700 disabled:opacity-50">
                         {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                        Criar Período
+                        Criar período
                     </button>
                 </div>
             </div>
@@ -434,16 +463,30 @@ interface LaborAbsencesProps {
 
 type AbsView = 'requests' | 'balances';
 
+const BALANCE_COLUMNS: ColumnConfig[] = [
+    { key: 'employee', label: 'Colaborador', sortable: true },
+    { key: 'periodo', label: 'Período aquisitivo', sortable: true },
+    { key: 'prazo', label: 'Prazo concessivo', sortable: true },
+    { key: 'direito', label: 'Direito', sortable: true },
+    { key: 'gozados', label: 'Gozados', sortable: true },
+    { key: 'vendidos', label: 'Vendidos', sortable: true },
+    { key: 'restantes', label: 'Restantes', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+];
+
 const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
     const qc = useQueryClient();
-    const [view, setView] = useState<AbsView>('requests');
-    const [search, setSearch] = useState('');
-    const [filterTipo, setFilterTipo] = useState<AbsenceTipo | ''>('');
-    const [filterStatus, setFilterStatus] = useState<AbsenceStatus | ''>('');
-    const [filterEmployee, setFilterEmployee] = useState('');
+    const confirm = useConfirm();
+    const { notify, Toast } = useToast();
+    const [view, setView] = usePersistedState<AbsView>('laborAbsences:view', 'requests');
+    const [search, setSearch] = usePersistedState('laborAbsences:search', '');
+    const [filterTipo, setFilterTipo] = usePersistedState<AbsenceTipo | ''>('laborAbsences:tipo', '');
+    const [filterStatus, setFilterStatus] = usePersistedState<AbsenceStatus | ''>('laborAbsences:status', '');
+    const [filterEmployee, setFilterEmployee] = usePersistedState('laborAbsences:employee', '');
     const [showForm, setShowForm] = useState(false);
     const [showNewPeriod, setShowNewPeriod] = useState(false);
     const [rejectTarget, setRejectTarget] = useState<string | null>(null);
+    const tableColumns = useTableColumns(BALANCE_COLUMNS, 'laborAbsencesBalanceColumns');
 
     const absencesKey = [...laborKeys.all, 'absences', orgId, filterTipo, filterStatus, filterEmployee];
     const balancesKey = [...laborKeys.all, 'vacationBalances', orgId, filterEmployee];
@@ -492,24 +535,38 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
 
     const approveMutation = useMutation({
         mutationFn: (id: string) => laborService.approveAbsence(id, 'gestor'),
-        onSuccess: invalidate,
+        onSuccess: () => { invalidate(); notify('Ausência aprovada.'); },
+        onError: () => notify('Erro ao aprovar.', 'error'),
     });
 
     const rejectMutation = useMutation({
         mutationFn: ({ id, reason }: { id: string; reason: string }) =>
             laborService.rejectAbsence(id, 'gestor', reason),
-        onSuccess: invalidate,
+        onSuccess: () => { invalidate(); notify('Ausência rejeitada.'); },
+        onError: () => notify('Erro ao rejeitar.', 'error'),
     });
 
     const cancelMutation = useMutation({
         mutationFn: (id: string) => laborService.cancelAbsence(id),
-        onSuccess: invalidate,
+        onSuccess: () => { invalidate(); notify('Ausência cancelada.'); },
+        onError: () => notify('Erro ao cancelar.', 'error'),
     });
 
     const deleteMutation = useMutation({
         mutationFn: (id: string) => laborService.deleteAbsence(id),
-        onSuccess: invalidate,
+        onSuccess: () => { invalidate(); notify('Registro excluído.'); },
+        onError: () => notify('Erro ao excluir.', 'error'),
     });
+
+    const handleCancel = async (absence: Absence) => {
+        const ok = await confirm({ title: 'Cancelar ausência?', message: 'Esta ausência aprovada será cancelada.', variant: 'warning', confirmLabel: 'Cancelar ausência' });
+        if (ok) cancelMutation.mutate(absence.id);
+    };
+
+    const handleDelete = async (absence: Absence) => {
+        const ok = await confirm({ title: 'Excluir registro?', message: 'Este registro será removido permanentemente.', variant: 'danger', confirmLabel: 'Excluir' });
+        if (ok) deleteMutation.mutate(absence.id);
+    };
 
     // KPIs
     const pending  = absences.filter(a => a.status === 'SOLICITADO').length;
@@ -522,18 +579,42 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
         (a.motivo || '').toLowerCase().includes(search.toLowerCase())
     );
 
-    const filteredBalances = balances.filter(b =>
+    const filteredBalancesBase = balances.filter(b =>
         !search || (b.employee_name || '').toLowerCase().includes(search.toLowerCase())
     );
 
+    const filteredBalances = React.useMemo(() => {
+        if (!tableColumns.sortColumn) return filteredBalancesBase;
+        const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
+        return [...filteredBalancesBase].sort((a, b) => {
+            switch (tableColumns.sortColumn) {
+                case 'employee': return dir * (a.employee_name || '').localeCompare(b.employee_name || '');
+                case 'periodo': return dir * a.periodo_inicio.localeCompare(b.periodo_inicio);
+                case 'prazo': return dir * (a.vencimento || '').localeCompare(b.vencimento || '');
+                case 'direito': return dir * (a.dias_direito - b.dias_direito);
+                case 'gozados': return dir * (a.dias_gozados - b.dias_gozados);
+                case 'vendidos': return dir * (a.dias_vendidos - b.dias_vendidos);
+                case 'restantes': return dir * ((a.dias_restantes || 0) - (b.dias_restantes || 0));
+                case 'status': return dir * a.status.localeCompare(b.status);
+                default: return 0;
+            }
+        });
+    }, [filteredBalancesBase, tableColumns.sortColumn, tableColumns.sortDirection]);
+
     return (
         <div className="space-y-6">
+            {/* Cabeçalho de tela (§20) */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Férias e ausências</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Solicitações, saldos e alertas de vencimento de férias.</p>
+            </div>
+
             {/* Alerta: férias disponíveis para agendar */}
             {vacationReady.length > 0 && (
-                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
+                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-[10px] flex items-start gap-3">
                     <Umbrella className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                     <div className="flex-1">
-                        <p className="text-xs font-black text-emerald-900 uppercase tracking-tight">
+                        <p className="text-xs font-semibold text-emerald-900">
                             {vacationReady.length} colaborador{vacationReady.length > 1 ? 'es' : ''} com férias disponíveis para agendar
                         </p>
                         <p className="text-xs text-emerald-700 mt-1">
@@ -542,7 +623,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                         </p>
                         <button
                             onClick={() => setView('balances')}
-                            className="mt-2 text-xs font-black text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
+                            className="mt-2 text-xs font-semibold text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
                         >
                             Ver saldos →
                         </button>
@@ -552,10 +633,10 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
 
             {/* Alerta de férias vencendo */}
             {vacationAlerts.length > 0 && (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-[10px] flex items-start gap-3">
                     <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                     <div>
-                        <p className="text-xs font-black text-amber-900 uppercase tracking-tight">
+                        <p className="text-xs font-semibold text-amber-900">
                             {vacationAlerts.length} período{vacationAlerts.length > 1 ? 's' : ''} de férias vencendo em 60 dias — risco de pagamento em dobro
                         </p>
                         <p className="text-xs text-amber-700 mt-1">
@@ -568,160 +649,165 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
 
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {[
-                    { label: 'Solicitações Pendentes', value: pending,    color: 'text-amber-700',   bg: 'bg-amber-50' },
-                    { label: 'Ausências Aprovadas',    value: approved,   color: 'text-emerald-700', bg: 'bg-emerald-50' },
-                    { label: 'Dias Afastados',         value: totalDaysOut, color: 'text-indigo-700', bg: 'bg-indigo-50' },
-                    { label: 'Disponíveis p/ Agendar',  value: vacationReady.length,  color: 'text-emerald-700', bg: 'bg-emerald-50' },
-            { label: 'Alertas de Vencimento',   value: vacationAlerts.length, color: 'text-rose-700', bg: 'bg-rose-50' },
-                ].map(({ label, value, color, bg }) => (
-                    <div key={label} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-                        <p className={`text-2xl font-black ${color} ${bg} px-2 py-0.5 rounded-lg inline-block`}>{value}</p>
-                    </div>
-                ))}
+                <KpiCard label="Solicitações Pendentes" value={`${pending}`} icon={<Clock className="w-5 h-5" />} color="amber" />
+                <KpiCard label="Ausências Aprovadas" value={`${approved}`} icon={<Check className="w-5 h-5" />} color="emerald" />
+                <KpiCard label="Dias Afastados" value={`${totalDaysOut}`} icon={<CalendarDays className="w-5 h-5" />} color="indigo" />
+                <KpiCard label="Disponíveis p/ Agendar" value={`${vacationReady.length}`} icon={<Umbrella className="w-5 h-5" />} color="emerald" />
+                <KpiCard label="Alertas de Vencimento" value={`${vacationAlerts.length}`} icon={<AlertTriangle className="w-5 h-5" />} color="rose" />
             </div>
 
-            {/* Controls */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
-                <div className="flex items-center gap-2 bg-slate-100 rounded-xl p-1">
-                    {([['requests', 'Solicitações', Clock], ['balances', 'Saldos de Férias', CalendarDays]] as const).map(([id, label, Icon]) => (
-                        <button
-                            key={id}
-                            onClick={() => setView(id)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-button font-black uppercase tracking-widest transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            <Icon className="w-3.5 h-3.5" />
-                            {label}
-                            {id === 'requests' && pending > 0 && (
-                                <span className="px-1.5 py-0.5 bg-amber-500 text-white text-[9px] font-black rounded-full">{pending}</span>
-                            )}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
+            {/* Abas + Toolbar acoplada (§5.2) */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+                    <div className="flex items-center gap-1 bg-slate-100 rounded-[10px] p-1 w-fit">
+                        {([['requests', 'Solicitações', Clock], ['balances', 'Saldo de Férias', CalendarDays]] as const).map(([id, label, Icon]) => (
+                            <button
+                                key={id}
+                                onClick={() => setView(id)}
+                                className={`flex items-center gap-2 h-8 px-3.5 rounded-[6px] text-sm font-medium transition-all ${view === id ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                <Icon className="w-3.5 h-3.5" />
+                                {label}
+                                {id === 'requests' && pending > 0 && (
+                                    <span className="px-1.5 py-0.5 bg-amber-500 text-white text-[9px] font-black rounded-full">{pending}</span>
+                                )}
+                            </button>
+                        ))}
                     </div>
 
-                    {view === 'requests' && (
-                        <>
-                            <div className="relative">
-                                <select value={filterTipo} onChange={e => setFilterTipo(e.target.value as AbsenceTipo | '')} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none appearance-none">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                placeholder="Buscar colaborador..."
+                                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                            />
+                        </div>
+
+                        {view === 'requests' && (
+                            <>
+                                <select value={filterTipo} onChange={e => setFilterTipo(e.target.value as AbsenceTipo | '')} className="h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium outline-none">
                                     <option value="">Todos os tipos</option>
                                     {(Object.entries(TIPO_CONFIG) as [AbsenceTipo, typeof TIPO_CONFIG[AbsenceTipo]][]).map(([k, v]) => (
                                         <option key={k} value={k}>{v.label}</option>
                                     ))}
                                 </select>
-                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
-                            </div>
-                            <div className="relative">
-                                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as AbsenceStatus | '')} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none appearance-none">
+                                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as AbsenceStatus | '')} className="h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium outline-none">
                                     <option value="">Todos os status</option>
                                     {(Object.entries(STATUS_CONFIG) as [AbsenceStatus, typeof STATUS_CONFIG[AbsenceStatus]][]).map(([k, v]) => (
                                         <option key={k} value={k}>{v.label}</option>
                                     ))}
                                 </select>
-                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
-                            </div>
-                        </>
-                    )}
+                            </>
+                        )}
 
-                    <div className="relative">
-                        <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none appearance-none">
+                        <select value={filterEmployee} onChange={e => setFilterEmployee(e.target.value)} className="h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium outline-none">
                             <option value="">Todos</option>
                             {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                         </select>
-                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+
+                        {view === 'balances' && (
+                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                <ColumnConfigButton
+                                    columns={BALANCE_COLUMNS}
+                                    visibleColumns={tableColumns.visibleColumns}
+                                    showColumnConfig={tableColumns.showColumnConfig}
+                                    onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                    onToggleColumn={tableColumns.toggleColumn}
+                                    onReset={tableColumns.resetColumns}
+                                />
+                            </div>
+                        )}
+
+                        <button
+                            onClick={() => view === 'requests' ? setShowForm(true) : setShowNewPeriod(true)}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 transition-all font-medium text-[13px] active:scale-95 shrink-0"
+                        >
+                            <Plus className="w-[15px] h-[15px]" />
+                            {view === 'requests' ? 'Nova ausência' : 'Novo período'}
+                        </button>
                     </div>
-
-                    <button
-                        onClick={() => view === 'requests' ? setShowForm(true) : setShowNewPeriod(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold text-button shadow-md"
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                        {view === 'requests' ? 'Nova Ausência' : 'Novo Período'}
-                    </button>
                 </div>
-            </div>
 
-            {/* Solicitações */}
-            {view === 'requests' && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                    {loadingAbs ? (
-                        <div className="flex items-center justify-center py-16"><Loader2 className="w-7 h-7 text-indigo-500 animate-spin" /></div>
+                {/* Solicitações */}
+                {view === 'requests' && (
+                    loadingAbs ? (
+                        <div className="text-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                            <p className="mt-2 text-gray-500">Carregando...</p>
+                        </div>
                     ) : filteredAbsences.length === 0 ? (
-                        <div className="text-center py-16">
-                            <CalendarDays className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                            <p className="text-sm font-black text-slate-400">Nenhuma ausência registrada</p>
+                        <div className="text-center py-12">
+                            <CalendarDays className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma ausência registrada</h3>
                         </div>
                     ) : (
-                        <div className="divide-y divide-slate-50">
+                        <div className="divide-y divide-gray-100">
                             {filteredAbsences.map(absence => {
                                 const tipo = TIPO_CONFIG[absence.tipo];
                                 const status = STATUS_CONFIG[absence.status];
                                 const TipoIcon = tipo.icon;
                                 return (
-                                    <div key={absence.id} className="p-4 hover:bg-slate-50/50 transition-colors">
+                                    <div key={absence.id} className="p-4 hover:bg-gray-50/50 transition-colors">
                                         <div className="flex items-start gap-4">
-                                            <div className={`p-2.5 rounded-xl ${tipo.bg} shrink-0`}>
+                                            <div className={`p-2.5 rounded-[10px] ${tipo.bg} shrink-0`}>
                                                 <TipoIcon className={`w-4 h-4 ${tipo.color}`} />
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-3 flex-wrap">
-                                                    <span className="text-sm font-black text-slate-900">{absence.employee_name || '—'}</span>
-                                                    <span className={`px-2 py-0.5 rounded-lg text-xs font-black ${tipo.bg} ${tipo.color}`}>{tipo.label}</span>
-                                                    <span className={`px-2 py-0.5 rounded-full text-xs font-black ${status.bg} ${status.color}`}>{status.label}</span>
+                                                    <span className="text-sm font-normal text-gray-900">{absence.employee_name || '—'}</span>
+                                                    <span className={`text-sm font-normal ${tipo.color}`}>{tipo.label}</span>
+                                                    <span className={`text-sm font-normal ${status.color}`}>{status.label}</span>
                                                 </div>
                                                 <div className="flex items-center gap-4 mt-1 flex-wrap">
-                                                    <span className="text-xs text-slate-500 font-medium">
+                                                    <span className="text-xs text-gray-500 font-medium">
                                                         {absence.data_inicio} → {absence.data_fim}
                                                     </span>
-                                                    <span className="text-xs font-black text-slate-700">{absence.dias}d</span>
+                                                    <span className="text-xs font-medium text-gray-700">{absence.dias}d</span>
                                                     {absence.motivo && (
-                                                        <span className="text-xs text-slate-400 truncate max-w-[200px]">{absence.motivo}</span>
+                                                        <span className="text-xs text-gray-400 truncate max-w-[200px]">{absence.motivo}</span>
                                                     )}
                                                     {absence.atestado_url && (
-                                                        <span className="flex items-center gap-1 text-xs text-indigo-600 font-bold">
+                                                        <span className="flex items-center gap-1 text-xs text-indigo-600 font-medium">
                                                             <FileText className="w-3 h-3" /> Atestado
                                                         </span>
                                                     )}
                                                 </div>
                                                 {absence.rejection_reason && (
-                                                    <p className="text-xs text-rose-600 font-bold mt-1">Motivo: {absence.rejection_reason}</p>
+                                                    <p className="text-xs text-rose-600 font-medium mt-1">Motivo: {absence.rejection_reason}</p>
                                                 )}
                                             </div>
                                             {/* Ações */}
-                                            <div className="flex items-center gap-2 shrink-0">
+                                            <div className="flex items-center gap-1.5 shrink-0">
                                                 {absence.status === 'SOLICITADO' && (
                                                     <>
-                                                        <button
+                                                        <ActionIconButton
+                                                            kind="edit"
+                                                            icon={<Check className="w-4 h-4" />}
+                                                            title="Aprovar"
                                                             onClick={() => approveMutation.mutate(absence.id)}
                                                             disabled={approveMutation.isPending}
-                                                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-black transition-all"
-                                                        >
-                                                            <Check className="w-3 h-3" /> Aprovar
-                                                        </button>
-                                                        <button
+                                                        />
+                                                        <ActionIconButton
+                                                            kind="delete"
+                                                            icon={<X className="w-4 h-4" />}
+                                                            title="Rejeitar"
                                                             onClick={() => setRejectTarget(absence.id)}
-                                                            className="flex items-center gap-1 px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded-lg text-xs font-black transition-all"
-                                                        >
-                                                            <X className="w-3 h-3" /> Rejeitar
-                                                        </button>
+                                                        />
                                                     </>
                                                 )}
                                                 {absence.status === 'APROVADO' && (
-                                                    <button
-                                                        onClick={() => { if (confirm('Cancelar esta ausência?')) cancelMutation.mutate(absence.id); }}
-                                                        className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-black transition-all"
-                                                    >
-                                                        <RotateCcw className="w-3 h-3" /> Cancelar
-                                                    </button>
+                                                    <ActionIconButton
+                                                        kind="edit"
+                                                        icon={<RotateCcw className="w-4 h-4" />}
+                                                        title="Cancelar"
+                                                        onClick={() => handleCancel(absence)}
+                                                    />
                                                 )}
                                                 {(absence.status === 'REJEITADO' || absence.status === 'CANCELADO') && (
-                                                    <ActionIconButton kind="delete" size="sm" onClick={() => { if (confirm('Excluir este registro?')) deleteMutation.mutate(absence.id); }} />
+                                                    <ActionIconButton kind="delete" onClick={() => handleDelete(absence)} />
                                                 )}
                                             </div>
                                         </div>
@@ -729,90 +815,121 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                                 );
                             })}
                         </div>
-                    )}
-                </div>
-            )}
+                    )
+                )}
 
-            {/* Saldos de Férias */}
-            {view === 'balances' && (
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                    {loadingBal ? (
-                        <div className="flex items-center justify-center py-16"><Loader2 className="w-7 h-7 text-indigo-500 animate-spin" /></div>
+                {/* Saldos de Férias */}
+                {view === 'balances' && (
+                    loadingBal ? (
+                        <div className="text-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+                            <p className="mt-2 text-gray-500">Carregando...</p>
+                        </div>
                     ) : filteredBalances.length === 0 ? (
-                        <div className="text-center py-16">
-                            <Umbrella className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                            <p className="text-sm font-black text-slate-400">Nenhum saldo de férias cadastrado</p>
-                            <p className="text-xs text-slate-400 mt-1">Crie períodos aquisitivos para os colaboradores.</p>
+                        <div className="text-center py-12">
+                            <Umbrella className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum saldo de férias cadastrado</h3>
+                            <p className="text-sm text-gray-500">Crie períodos aquisitivos para os colaboradores.</p>
                         </div>
                     ) : (
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-slate-100 bg-slate-50/50">
-                                    {['Colaborador', 'Período Aquisitivo', 'Prazo Concessivo', 'Direito', 'Gozados', 'Vendidos', 'Restantes', 'Status'].map(h => (
-                                        <th key={h} className="text-left px-4 py-3 text-xs font-black text-slate-400 uppercase tracking-widest">{h}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredBalances.map(bal => {
-                                    const today = new Date().toISOString().split('T')[0];
-                                    const vencendo = bal.vencimento && bal.vencimento <= new Date(Date.now() + 60 * 86400000).toISOString().split('T')[0];
-                                    const vencido  = bal.vencimento && bal.vencimento < today;
-                                    return (
-                                        <tr key={bal.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-4 py-3 text-sm font-bold text-slate-900">{bal.employee_name}</td>
-                                            <td className="px-4 py-3 text-table-body text-slate-600 font-medium">{bal.periodo_inicio} → {bal.periodo_fim}</td>
-                                            <td className="px-4 py-3 min-w-[180px]">
-                                                {(() => {
-                                                    // Barra de progresso do período concessivo
-                                                    // concessivo = periodo_fim → vencimento (12 meses)
-                                                    const start = new Date(bal.periodo_fim).getTime();
-                                                    const end   = new Date(bal.vencimento!).getTime();
-                                                    const now   = Date.now();
-                                                    const pct   = Math.min(100, Math.max(0, Math.round((now - start) / (end - start) * 100)));
-                                                    const barColor = vencido ? 'bg-rose-500' : vencendo ? 'bg-amber-400' : pct > 50 ? 'bg-indigo-400' : 'bg-emerald-400';
-                                                    const daysLeft = Math.ceil((end - now) / 86400000);
-                                                    return (
-                                                        <div className="space-y-1">
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <span className={`text-xs font-black ${vencido ? 'text-rose-700' : vencendo ? 'text-amber-700' : 'text-slate-600'}`}>
-                                                                    {vencido ? '⚠ Vencido' : vencendo ? `⏰ ${daysLeft}d restantes` : `${daysLeft}d restantes`}
-                                                                </span>
-                                                                <span className="text-xs text-slate-400">{bal.vencimento}</span>
-                                                            </div>
-                                                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                                <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </td>
-                                            <td className="px-4 py-3 text-sm font-black text-slate-700">{bal.dias_direito}d</td>
-                                            <td className="px-4 py-3 text-sm font-black text-indigo-700">{bal.dias_gozados}d</td>
-                                            <td className="px-4 py-3 text-sm font-medium text-slate-500">{bal.dias_vendidos}d</td>
-                                            <td className="px-4 py-3">
-                                                <span className={`text-sm font-black px-2 py-0.5 rounded-lg ${(bal.dias_restantes || 0) > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                                                    {bal.dias_restantes}d
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-black ${
-                                                    bal.status === 'ABERTO'  ? 'bg-emerald-100 text-emerald-700' :
-                                                    bal.status === 'PARCIAL' ? 'bg-amber-100 text-amber-700' :
-                                                    bal.status === 'GOZADO'  ? 'bg-slate-100 text-slate-500' :
-                                                    'bg-rose-100 text-rose-700'
-                                                }`}>
-                                                    {bal.status}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-            )}
+                        <div className="overflow-auto max-h-[70vh]">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        {tableColumns.visibleColumns.includes('employee') && (
+                                            <SortableHeader label="Colaborador" colKey="employee" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                        )}
+                                        {tableColumns.visibleColumns.includes('periodo') && (
+                                            <SortableHeader label="Período aquisitivo" colKey="periodo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                        )}
+                                        {tableColumns.visibleColumns.includes('prazo') && (
+                                            <SortableHeader label="Prazo concessivo" colKey="prazo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100 min-w-[180px]" />
+                                        )}
+                                        {tableColumns.visibleColumns.includes('direito') && (
+                                            <SortableHeader label="Direito" colKey="direito" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                        )}
+                                        {tableColumns.visibleColumns.includes('gozados') && (
+                                            <SortableHeader label="Gozados" colKey="gozados" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                        )}
+                                        {tableColumns.visibleColumns.includes('vendidos') && (
+                                            <SortableHeader label="Vendidos" colKey="vendidos" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                        )}
+                                        {tableColumns.visibleColumns.includes('restantes') && (
+                                            <SortableHeader label="Restantes" colKey="restantes" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2 border-r border-gray-100" />
+                                        )}
+                                        {tableColumns.visibleColumns.includes('status') && (
+                                            <SortableHeader label="Status" colKey="status" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-4 py-2" />
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {filteredBalances.map(bal => {
+                                        const today = new Date().toISOString().split('T')[0];
+                                        const vencendo = bal.vencimento && bal.vencimento <= new Date(Date.now() + 60 * 86400000).toISOString().split('T')[0];
+                                        const vencido  = bal.vencimento && bal.vencimento < today;
+                                        return (
+                                            <tr key={bal.id} className="hover:bg-blue-50/50 transition-colors">
+                                                {tableColumns.visibleColumns.includes('employee') && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-900">{bal.employee_name}</td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('periodo') && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">{bal.periodo_inicio} → {bal.periodo_fim}</td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('prazo') && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100 min-w-[180px]">
+                                                        {(() => {
+                                                            // Barra de progresso do período concessivo
+                                                            // concessivo = periodo_fim → vencimento (12 meses)
+                                                            const start = new Date(bal.periodo_fim).getTime();
+                                                            const end   = new Date(bal.vencimento!).getTime();
+                                                            const now   = Date.now();
+                                                            const pct   = Math.min(100, Math.max(0, Math.round((now - start) / (end - start) * 100)));
+                                                            const barColor = vencido ? 'bg-rose-500' : vencendo ? 'bg-amber-400' : pct > 50 ? 'bg-indigo-400' : 'bg-emerald-400';
+                                                            const daysLeft = Math.ceil((end - now) / 86400000);
+                                                            return (
+                                                                <div className="space-y-1">
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <span className={`text-xs font-medium ${vencido ? 'text-rose-700' : vencendo ? 'text-amber-700' : 'text-gray-600'}`}>
+                                                                            {vencido ? '⚠ Vencido' : vencendo ? `⏰ ${daysLeft}d restantes` : `${daysLeft}d restantes`}
+                                                                        </span>
+                                                                        <span className="text-xs text-gray-400">{bal.vencimento}</span>
+                                                                    </div>
+                                                                    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                                                        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('direito') && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{bal.dias_direito}d</td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('gozados') && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-indigo-600">{bal.dias_gozados}d</td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('vendidos') && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-500">{bal.dias_vendidos}d</td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('restantes') && (
+                                                    <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal">
+                                                        <span className={(bal.dias_restantes || 0) > 0 ? 'text-emerald-700' : 'text-gray-500'}>{bal.dias_restantes}d</span>
+                                                    </td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('status') && (
+                                                    <td className="px-4 py-2.5 text-sm font-normal">
+                                                        <span className={BALANCE_STATUS_COLORS[bal.status] ?? 'text-rose-700'}>{bal.status}</span>
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )
+                )}
+            </div>
 
             {/* Modais */}
             {showForm && (
@@ -822,7 +939,8 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                     vacationBalances={balances}
                     existingAbsences={absences}
                     onClose={() => setShowForm(false)}
-                    onSaved={() => { setShowForm(false); invalidate(); }}
+                    onSaved={() => { setShowForm(false); invalidate(); notify('Ausência registrada.'); }}
+                    notify={notify}
                 />
             )}
             {showNewPeriod && (
@@ -830,7 +948,8 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                     orgId={orgId}
                     employees={employees}
                     onClose={() => setShowNewPeriod(false)}
-                    onSaved={() => { setShowNewPeriod(false); invalidate(); }}
+                    onSaved={() => { setShowNewPeriod(false); invalidate(); notify('Período aquisitivo criado.'); }}
+                    notify={notify}
                 />
             )}
             {rejectTarget && (
@@ -839,6 +958,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees }) => {
                     onClose={() => setRejectTarget(null)}
                 />
             )}
+            <Toast />
         </div>
     );
 };

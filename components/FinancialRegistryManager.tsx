@@ -217,9 +217,11 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                 <KpiCard shadow={false} size="sm" label="Total de Registros" value={totalItems} icon={<Hash className="w-4 h-4" />} color="blue" />
             </div>
 
-            <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                {/* Toolbar §5.1 (escala compacta §16), mesma decisão já aplicada no resto do módulo Organização */}
-                <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                {/* Toolbar §5.2 (variante acoplada à tabela, escala compacta §16) — toolbar e
+                    conteúdo dividem um único card; a única linha visível entre os dois é o
+                    border-b abaixo, sem duas bordas concêntricas. */}
+                <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
                     <div className="flex-1 relative w-full">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input

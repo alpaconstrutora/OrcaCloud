@@ -269,9 +269,11 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                 <KpiCard shadow={false} size="sm" label="Sem Obra Vinculada" value={kpis.semObra} icon={<TrendingUp className="w-4 h-4" />} color="gray" />
             </div>
 
-            {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — mesma decisão do
-                ClientList.tsx: KPI cards e botão primário já são compactos por padrão (§4.2/§17),
-                então a tela inteira migra pra não misturar escala de radius. */}
+            {/* Toolbar §5.2 (variante acoplada à tabela, escala compacta §16) — toolbar e
+                conteúdo dividem um único card; a única linha visível entre os dois é o
+                border-b abaixo, sem duas bordas concêntricas. */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-gray-100 bg-white">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -344,6 +346,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                     Novo investidor
                 </button>
             </div>
+            </div>
 
             {isLoading ? (
                 <div className="text-center py-12">
@@ -351,7 +354,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                     <p className="mt-2 text-gray-500">Carregando...</p>
                 </div>
             ) : filteredInvestors.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                <div className="text-center py-12">
                     <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum investidor encontrado</h3>
                     <p className="text-sm text-gray-500">
@@ -360,7 +363,6 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                 </div>
             ) : (
                 viewMode === 'list' ? (
-                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                         <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             {/* thead em sentence case (§6.2) — obrigatório porque a tela adotou a escala
@@ -487,9 +489,8 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                             </tbody>
                         </table>
                         </div>
-                    </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
                         {filteredInvestors.map(investor => (
                             <div
                                 key={investor.id}
@@ -593,6 +594,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                     </div>
                 )
             )}
+            </div>
 
             <InvestorModal
                 isOpen={isModalOpen}

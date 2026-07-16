@@ -340,9 +340,11 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 <KpiCard shadow={false} size="sm" label="Serviços" value={kpis.servicos} icon={<Wrench className="w-4 h-4" />} color="amber" />
             </div>
 
-            {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — escolhida porque
-                já há KPI cards acima dando contexto, e para não misturar escala de radius com
-                o botão primário (§17) e os KpiCard sm/lg (§4.2), que já são compactos por padrão. */}
+            {/* Toolbar §5.2 (variante acoplada à tabela, escala compacta §16) — toolbar e
+                conteúdo dividem um único card; a única linha visível entre os dois é o
+                border-b abaixo, sem duas bordas concêntricas. */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-gray-100 bg-white">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -428,6 +430,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                     Novo cliente
                 </button>
             </div>
+            </div>
 
             {isLoading ? (
                 <div className="text-center py-12">
@@ -435,7 +438,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                     <p className="mt-2 text-gray-500">Carregando...</p>
                 </div>
             ) : filteredClients.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                <div className="text-center py-12">
                     <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum cliente encontrado</h3>
                     <p className="text-sm text-gray-500">
@@ -444,7 +447,6 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 </div>
             ) : (
                 viewMode === 'list' ? (
-                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                         <div className="overflow-x-auto">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
@@ -648,9 +650,8 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                             </tbody>
                         </table>
                         </div>
-                    </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
                         {filteredClients.map(client => (
                             <div
                                 key={client.id}
@@ -785,6 +786,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 )
             )
             }
+            </div>
 
             {/* Token Modal */}
             {tokenModal && (

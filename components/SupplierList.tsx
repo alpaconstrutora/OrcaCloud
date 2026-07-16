@@ -307,6 +307,11 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 <KpiCard shadow={false} size="sm" label="Categorias" value={kpis.categorias} icon={<Tag className="w-4 h-4" />} color="amber" />
             </div>
 
+            {/* Toolbar §5.2 (variante acoplada à tabela, escala compacta §16) — toolbar e
+                conteúdo dividem um único card; a única linha visível entre os dois é o
+                border-b abaixo, sem duas bordas concêntricas. */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-gray-100 bg-white">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -402,13 +407,13 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     Novo fornecedor
                 </button>
             </div>
+            </div>
 
             {isLoading ? (
                 <div className="flex justify-center items-center py-20">
                     <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                 </div>
             ) : viewMode === 'list' ? (
-                <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                     <div className="overflow-auto max-h-[70vh]">
                         <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
@@ -595,9 +600,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                             </tbody>
                         </table>
                     </div>
-                </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
                     {filteredSuppliers.length > 0 ? (
                         filteredSuppliers.map(supplier => (
                             <div
@@ -652,7 +656,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                             </div>
                         ))
                     ) : (
-                        <div className="col-span-full py-20 text-center bg-white rounded-[10px] border border-gray-100">
+                        <div className="col-span-full py-20 text-center">
                             <div className="flex flex-col items-center justify-center space-y-4 max-w-xs mx-auto">
                                 <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center">
                                     <Truck className="w-10 h-10 text-blue-200" />
@@ -666,6 +670,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                     )}
                 </div>
             )}
+            </div>
 
             {selectedIds.size > 0 && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">

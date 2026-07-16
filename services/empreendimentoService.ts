@@ -11,7 +11,7 @@ import {
     ImovibStudy, ImovibUnit, ImovibUnitInstance,
 } from '../types';
 import {
-    mapCommercialToEmpr, UNMAPPABLE_COMMERCIAL_STATUSES,
+    mapCommercialToEmpr, mapEmprToCommercial, UNMAPPABLE_COMMERCIAL_STATUSES,
     mapPositionToCommercial, mapViewToCommercial, mapSunToCommercial,
 } from '../utils/empreendimentoComercial';
 
@@ -30,6 +30,20 @@ export interface CommercialDivergenceSummary {
 export interface EmpreendimentoWriteBackReport {
     instancesUpdated: number;   // instâncias com nome/pav./área/posição/orientação atualizados
     unitsWithoutInstance: number; // unidades sem imovib_instance_id — não elegíveis (nunca geradas por instância)
+}
+
+// Resultado de Empreendimento → Comercial (publicação em lote).
+export interface CommercialPublishReport {
+    published: number;
+    alreadyPublished: number;
+}
+
+// Resultado de Comercial → Empreendimento (status de venda de volta).
+export interface CommercialPullReport {
+    statusUpdated: number;
+    /** Unidades em Locado/Manutenção: sem equivalente em UnitStatus, nunca alteradas. */
+    skippedUnmappable: number;
+    unlinked: number;
 }
 
 // Traduz status da instância Imovib (com acento) para o enum do empreendimento.
@@ -324,6 +338,106 @@ export const empreendimentoService = {
             if (u.price != null && Math.abs((snap.price ?? 0) - u.price) > 0.01) summary.priceDiverge++;
         }
         return summary;
+    },
+
+    // ── Empreendimento ⇄ Comercial em lote ────────────────────────────────────
+    // Extraídos de EspelhoVendasTab (eram funções locais do componente, com window.confirm
+    // e alert embutidos) para que o Centro de Sincronização também possa dispará-los. A
+    // confirmação e o aviso ficam na UI; aqui só a operação + relatório.
+
+    /** Empreendimento → Comercial: publica as unidades ainda não vinculadas. */
+    async publishAllToCommercial(
+        empreendimentoId: string,
+        organizationId: string,
+    ): Promise<CommercialPublishReport> {
+        const emp = await this.getById(empreendimentoId) as Empreendimento | null;
+        if (!emp) throw new Error('Empreendimento não encontrado.');
+
+        // Revalida no banco: o estado da tela pode estar obsoleto e recriaria properties
+        // duplicadas para unidades já publicadas.
+        const units = await this.listAllUnitsForEmpreendimento(empreendimentoId);
+        const unpublished = units.filter(u => !u.commercial_property_id);
+        if (!unpublished.length) {
+            return { published: 0, alreadyPublished: units.length };
+        }
+
+        const buildingId = await this.ensureCommercialBuilding(emp, organizationId);
+        const addressFields = buildCommercialAddressFields(emp);
+
+        for (const unit of unpublished) {
+            const prop = await commercialService.saveProperty({
+                organization_id: organizationId,
+                name: unit.name,
+                type: 'APARTMENT',
+                purpose: 'SALE',
+                parent_id: buildingId,
+                ...addressFields,
+                price: unit.price ?? 0,
+                private_area: unit.private_area,
+                common_area: unit.common_area,
+                total_area: unit.total_area,
+                status: mapEmprToCommercial(unit.status),
+                floor: unit.floor,
+                typology: unit.typology || undefined,
+                block: unit._tower_name,
+                project_id: unit._tower_project_id || undefined,
+                position_type: mapPositionToCommercial(unit.position_type),
+                view_type: mapViewToCommercial(unit.view_type),
+                sun_orientation: mapSunToCommercial(unit.sun_orientation),
+                specs: {
+                    parkingSpaces: unit.parking_spaces,
+                    bedrooms: unit.bedrooms,
+                    bathrooms: unit.bathrooms,
+                    ...(unit.floor_tipo ? { floorTipo: unit.floor_tipo } : {}),
+                },
+            } as any);
+            await this.updateUnit(unit.id, { commercial_property_id: prop.id });
+        }
+
+        return { published: unpublished.length, alreadyPublished: units.length - unpublished.length };
+    },
+
+    /**
+     * Comercial → Empreendimento: traz o status de venda das properties de volta às unidades.
+     * A venda acontece no Comercial (propostas/portal do corretor), então ali é a fonte do
+     * status. Locado/Manutenção não têm equivalente em UnitStatus e são pulados — nunca
+     * traduzir silenciosamente (ver mapCommercialToEmpr, que devolve null nesses casos).
+     */
+    async pullStatusFromCommercial(
+        empreendimentoId: string,
+        organizationId: string,
+    ): Promise<CommercialPullReport> {
+        const units = await this.listAllUnitsForEmpreendimento(empreendimentoId);
+        const ids = units.map(u => u.commercial_property_id).filter(Boolean) as string[];
+        const report: CommercialPullReport = { statusUpdated: 0, skippedUnmappable: 0, unlinked: 0 };
+        if (!ids.length) {
+            report.unlinked = units.length;
+            return report;
+        }
+
+        const { data, error } = await supabase
+            .from('commercial_properties')
+            .select('id, status')
+            .eq('organization_id', organizationId)
+            .in('id', ids);
+        if (error) throw new Error(`Falha ao ler o Comercial: ${error.message}`);
+        const snaps: Record<string, string> = {};
+        (data || []).forEach((p: any) => { snaps[p.id] = p.status; });
+
+        const updates: Promise<unknown>[] = [];
+        for (const u of units) {
+            if (!u.commercial_property_id) { report.unlinked++; continue; }
+            const status = snaps[u.commercial_property_id];
+            if (!status) continue; // property sumiu — órfã, tratada no Espelho de Vendas
+            if (UNMAPPABLE_COMMERCIAL_STATUSES.has(status)) { report.skippedUnmappable++; continue; }
+            const mapped = mapCommercialToEmpr(status);
+            if (mapped && mapped !== u.status) {
+                updates.push(this.updateUnit(u.id, { status: mapped }));
+                report.statusUpdated++;
+            }
+        }
+        await Promise.all(updates);
+        return report;
     },
 
     // ── Edifício-pai no Comercial (agrupa as unidades publicadas) ─────────────

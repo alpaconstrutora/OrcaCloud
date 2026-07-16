@@ -12,6 +12,7 @@ import { empreendimentoService, buildCommercialAddressFields } from '../../servi
 import { commercialService } from '../../services/commercialService';
 import { Empreendimento, EmpreendimentoUnit, UnitStatus } from '../../types';
 import Button from '../ui/Button';
+import { useConfirm } from '../ui/confirm';
 import {
   UNMAPPABLE_COMMERCIAL_STATUSES, mapCommercialToEmpr, mapEmprToCommercial,
   UNIT_STATUS_LABEL, UNIT_STATUS_STYLE, COMM_STATUS_LABEL, COMM_STATUS_STYLE,
@@ -40,6 +41,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
   // Sempre o org do próprio empreendimento — nunca o seletor global (que pode estar
   // em "Todas as Organizações" = string vazia, causando "invalid input syntax for type uuid").
   const organizationId = e.organization_id;
+  const confirm = useConfirm();
   const [units, setUnits] = React.useState<UnitWithTower[]>([]);
   const [commSnaps, setCommSnaps] = React.useState<Record<string, CommercialSnap>>({});
   const [loading, setLoading] = React.useState(true);
@@ -135,7 +137,11 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
 
   // Reagrupa unidades já publicadas que estão soltas (sem parent_id) sob o edifício-pai.
   const handleRegroup = async () => {
-    if (!window.confirm('Agrupar todas as unidades publicadas sob o edifício do empreendimento no Comercial?')) return;
+    if (!await confirm({
+      title: 'Agrupar unidades no Comercial?',
+      message: 'Todas as unidades publicadas serão reagrupadas sob o edifício do empreendimento no Comercial.',
+      confirmLabel: 'Agrupar',
+    })) return;
     setRegrouping(true);
     try {
       const buildingId = await empreendimentoService.ensureCommercialBuilding(e, organizationId);
@@ -148,7 +154,12 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
   };
 
   const handleUnlink = async (unit: UnitWithTower) => {
-    if (!window.confirm(`Desvincular "${unit.name}" do Comercial? O imóvel no Comercial não será excluído.`)) return;
+    if (!await confirm({
+      title: `Desvincular "${unit.name}"?`,
+      message: 'O vínculo com o Comercial será removido. O imóvel no Comercial NÃO será excluído.',
+      confirmLabel: 'Desvincular',
+      variant: 'warning',
+    })) return;
     setBusyId(unit.id);
     try {
       await empreendimentoService.updateUnit(unit.id, { commercial_property_id: null });
@@ -163,7 +174,12 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
   const handleClearOrphans = async () => {
     const orphanUnits = units.filter(u => u.commercial_property_id && orphanIds.has(u.commercial_property_id));
     if (!orphanUnits.length) return;
-    if (!window.confirm(`${orphanUnits.length} unidade(s) apontam para imóveis que não existem mais no Comercial. Desvincular?`)) return;
+    if (!await confirm({
+      title: 'Limpar vínculos órfãos?',
+      message: `${orphanUnits.length} unidade(s) apontam para imóveis que não existem mais no Comercial. O vínculo será removido.`,
+      confirmLabel: 'Desvincular',
+      variant: 'warning',
+    })) return;
     setBusyId('__orphans__');
     try {
       await Promise.all(orphanUnits.map(u => empreendimentoService.updateUnit(u.id, { commercial_property_id: null })));
@@ -173,28 +189,27 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
     } finally { setBusyId(null); }
   };
 
-  // Sincroniza status: Comercial → Empreendimento para todas as unidades vinculadas.
-  // Pula RENTED/MAINTENANCE: não têm equivalente em UnitStatus — avisa ao final.
+  // Sincroniza status: Comercial → Empreendimento. A operação vive no service
+  // (empreendimentoService.pullStatusFromCommercial) porque o Centro de Sincronização
+  // também a dispara; aqui fica só a confirmação e o aviso.
   const handleSyncFromCommercial = async () => {
     const linked = units.filter(u => u.commercial_property_id && commSnaps[u.commercial_property_id!]);
     if (!linked.length) { alert('Nenhuma unidade vinculada ao Comercial.'); return; }
     const skipped = linked.filter(u => UNMAPPABLE_COMMERCIAL_STATUSES.has(commSnaps[u.commercial_property_id!].status));
-    const syncable = linked.filter(u => !UNMAPPABLE_COMMERCIAL_STATUSES.has(commSnaps[u.commercial_property_id!].status));
-    let msg = `Sincronizar status de ${syncable.length} unidade(s) a partir do Comercial?`;
-    if (skipped.length) msg += `\n\n⚠ ${skipped.length} unidade(s) com status Locado/Manutenção não serão alteradas (sem equivalente no Empreendimento).`;
-    if (!window.confirm(msg)) return;
+    const syncable = linked.length - skipped.length;
+    if (!await confirm({
+      title: 'Trazer status do Comercial?',
+      message: `O status de venda de ${syncable} unidade(s) será atualizado a partir do Comercial.`
+        + (skipped.length ? `\n\n⚠ ${skipped.length} unidade(s) com status Locado/Manutenção não serão alteradas (sem equivalente no Empreendimento).` : ''),
+      confirmLabel: 'Trazer',
+      variant: 'warning',
+    })) return;
     setSyncingAll(true);
     try {
-      await Promise.all(syncable.map(u => {
-        const snap = commSnaps[u.commercial_property_id!];
-        const newStatus = mapCommercialToEmpr(snap.status);
-        return newStatus && newStatus !== u.status
-          ? empreendimentoService.updateUnit(u.id, { status: newStatus })
-          : Promise.resolve();
-      }));
+      const r = await empreendimentoService.pullStatusFromCommercial(e.id, organizationId);
       await load();
-      if (skipped.length) {
-        alert(`✓ ${syncable.length} unidade(s) sincronizadas.\n⚠ ${skipped.length} pulada(s): status Locado ou Manutenção não existe no Empreendimento — ajuste manualmente.`);
+      if (r.skippedUnmappable) {
+        alert(`✓ ${r.statusUpdated} unidade(s) sincronizadas.\n⚠ ${r.skippedUnmappable} pulada(s): status Locado ou Manutenção não existe no Empreendimento — ajuste manualmente.`);
       }
     } catch (err: any) {
       alert(`Erro ao sincronizar: ${err.message}`);
@@ -209,7 +224,12 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
     const linked = units.filter(u => u.commercial_property_id && commSnaps[u.commercial_property_id!]);
     const addressFields = buildCommercialAddressFields(e);
     if (!linked.length && !e.commercial_building_id) { alert('Nenhuma unidade publicada no Comercial.'); return; }
-    if (!window.confirm(`Atualizar endereço de ${linked.length} imóvel(eis) + edifício-pai no Comercial para:\n"${addressFields.address}"`)) return;
+    if (!await confirm({
+      title: 'Atualizar endereço no Comercial?',
+      message: `${linked.length} imóvel(eis) + o edifício-pai passarão a usar:\n"${addressFields.address}"`,
+      confirmLabel: 'Atualizar',
+      variant: 'warning',
+    })) return;
     setSyncingAddress(true);
     try {
       const ids = [
@@ -227,52 +247,23 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
   const handlePublishAll = async () => {
     const localUnpublished = units.filter(u => !u.commercial_property_id);
     if (!localUnpublished.length) { alert('Todas as unidades já estão publicadas no Comercial.'); return; }
-    if (!window.confirm(`Publicar ${localUnpublished.length} unidades no Comercial?`)) return;
+    if (!await confirm({
+      title: 'Publicar no Comercial?',
+      message: `${localUnpublished.length} unidade(s) serão criadas no Comercial (Venda de Ativos), agrupadas sob o edifício do empreendimento.`,
+      confirmLabel: 'Publicar',
+      variant: 'warning',
+    })) return;
     setPublishingAll(true);
     try {
-      // Revalida no banco antes de criar — o estado local (units) pode estar obsoleto,
-      // o que criaria properties duplicadas para unidades já publicadas.
-      const freshUnits = await empreendimentoService.listAllUnitsForEmpreendimento(e.id);
-      const unpublished = freshUnits.filter(u => !u.commercial_property_id);
-      if (!unpublished.length) {
-        await load();
+      // A publicação em lote vive no service (revalida no banco antes de criar, para não
+      // duplicar properties de unidades já publicadas) — o Centro de Sincronização usa a mesma.
+      const r = await empreendimentoService.publishAllToCommercial(e.id, organizationId);
+      await load();
+      if (!r.published) {
         alert('Todas as unidades já estão publicadas no Comercial — a lista foi atualizada.');
         return;
       }
-
-      const buildingId = await empreendimentoService.ensureCommercialBuilding(e, organizationId);
-      const addressFields = buildCommercialAddressFields(e);
-      for (const unit of unpublished) {
-        const prop = await commercialService.saveProperty({
-          organization_id: organizationId,
-          name: unit.name,
-          type: 'APARTMENT',
-          purpose: 'SALE',
-          parent_id: buildingId,
-          ...addressFields,
-          price: unit.price ?? 0,
-          private_area: unit.private_area,
-          common_area: unit.common_area,
-          total_area: unit.total_area,
-          status: mapEmprToCommercial(unit.status),
-          floor: unit.floor,
-          typology: unit.typology || undefined,
-          block: unit._tower_name,
-          project_id: unit._tower_project_id || undefined,
-          position_type: mapPositionToCommercial(unit.position_type),
-          view_type: mapViewToCommercial(unit.view_type),
-          sun_orientation: mapSunToCommercial(unit.sun_orientation),
-          specs: {
-            parkingSpaces: unit.parking_spaces,
-            bedrooms: unit.bedrooms,
-            bathrooms: unit.bathrooms,
-            ...(unit.floor_tipo ? { floorTipo: unit.floor_tipo } : {}),
-          },
-        } as any);
-        await empreendimentoService.updateUnit(unit.id, { commercial_property_id: prop.id });
-      }
-      await load();
-      alert(`✓ ${unpublished.length} unidade${unpublished.length > 1 ? 's' : ''} publicada${unpublished.length > 1 ? 's' : ''} no Comercial com sucesso.`);
+      alert(`✓ ${r.published} unidade${r.published > 1 ? 's' : ''} publicada${r.published > 1 ? 's' : ''} no Comercial com sucesso.`);
     } catch (err: any) {
       alert(`Erro ao publicar: ${err.message}`);
     } finally { setPublishingAll(false); }

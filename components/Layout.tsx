@@ -1064,7 +1064,7 @@ const Layout: React.FC<LayoutProps> = ({
                         <DropdownItem id="contas-a-receber" label="Contas a Receber" icon={TrendingUp} />
                         <DropdownItem id="financial-boletos" label="Boletos ao Cliente" icon={Receipt} />
                         <DropdownItem id="project-financial" label="Contas a Pagar" icon={DollarSign} />
-                        <DropdownItem id="boletos-pagar" label="Boletos a Pagar" icon={Banknote} />
+                        <DropdownItem id="boletos-pagar" label="Captura de Boletos" icon={Banknote} />
                         <DropdownItem id="extrato-bancario" label="Extrato Bancário" icon={FileText} />
                         <DropdownItem id="bank-reconciliation" label="Conciliação Bancária" icon={ArrowRightLeft} />
                         <DropdownItem id="financial-calendar" label="Calendário" icon={Calendar} />

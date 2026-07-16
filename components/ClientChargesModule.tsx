@@ -7,7 +7,7 @@ import { clientChargeService } from '../services/clientChargeService';
 import type { ClientCharge } from '../services/clientChargeService';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import KpiCard from './ui/KpiCard';
-import { usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
 
 // Asaas status → rótulo + cor. Padrão guia seção 8 — texto simples, sem pílula.
@@ -41,6 +41,16 @@ const FILTERS: { id: StatusFilter; label: string }[] = [
     { id: 'CANCELLED', label: 'Canceladas' },
 ];
 
+const CHARGES_COLUMNS: ColumnConfig[] = [
+    { key: 'party_name',  label: 'Cliente',     sortable: true },
+    { key: 'description', label: 'Descrição',   sortable: true },
+    { key: 'billing_type', label: 'Tipo',       sortable: true },
+    { key: 'due_date',    label: 'Vencimento',  sortable: true },
+    { key: 'value',       label: 'Valor',       sortable: true },
+    { key: 'status',      label: 'Status',      sortable: true },
+    { key: 'actions',     label: 'Ações',       sortable: false },
+];
+
 // ─── main ────────────────────────────────────────────────────
 
 interface Props {
@@ -61,6 +71,7 @@ export default function ClientChargesModule({ organizationId }: Props) {
     const [resentId, setResentId]       = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkLoading, setBulkLoading] = useState(false);
+    const tableColumns = useTableColumns(CHARGES_COLUMNS, 'clientChargesModuleColumns');
 
     // Toast de Notificação — Seção 13 do guia
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -97,12 +108,33 @@ export default function ClientChargesModule({ organizationId }: Props) {
                 (c.asaas_payment_id ?? '').toLowerCase().includes(q),
             );
         }
+        if (tableColumns.sortColumn) {
+            r = [...r].sort((a, b) => {
+                let va: string | number, vb: string | number;
+                switch (tableColumns.sortColumn) {
+                    case 'party_name':   va = (a.party_name ?? '').toLowerCase();   vb = (b.party_name ?? '').toLowerCase();   break;
+                    case 'description':  va = (a.description ?? '').toLowerCase();  vb = (b.description ?? '').toLowerCase();  break;
+                    case 'billing_type': va = a.billing_type ?? '';                 vb = b.billing_type ?? '';                 break;
+                    case 'due_date':     va = a.due_date ?? '';                     vb = b.due_date ?? '';                     break;
+                    case 'value':        va = a.value ?? 0;                         vb = b.value ?? 0;                         break;
+                    case 'status':       va = a.status;                             vb = b.status;                             break;
+                    default:             return 0;
+                }
+                if (va < vb) return tableColumns.sortDirection === 'asc' ? -1 : 1;
+                if (va > vb) return tableColumns.sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
         return r;
-    }, [rows, filter, search]);
+    }, [rows, filter, search, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     /** Mesmo critério do handleCancel: precisa estar ativa e vinculada a um recebível. */
     const isSelectable = (c: ClientCharge) => c.status !== 'CANCELLED' && !PAID.includes(c.status) && !!c.transaction_id;
     const selectableVisible = useMemo(() => filtered.filter(isSelectable), [filtered]);
+    const selectableIndexById = useMemo(
+        () => new Map(selectableVisible.map((c, i) => [c.id, i])),
+        [selectableVisible],
+    );
     const selectedVisible = useMemo(
         () => selectableVisible.filter(c => selectedIds.has(c.id)),
         [selectableVisible, selectedIds],
@@ -116,6 +148,20 @@ export default function ClientChargesModule({ organizationId }: Props) {
             next.has(id) ? next.delete(id) : next.add(id);
             return next;
         });
+    }
+
+    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
+
+    /** §10.1 — Shift+clique seleciona o intervalo entre a última linha marcada e a atual. */
+    function handleRowCheck(id: string, index: number, shiftKey: boolean) {
+        if (shiftKey && lastCheckedIndex !== null) {
+            const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
+            const rangeIds = selectableVisible.slice(start, end + 1).map(c => c.id);
+            setSelectedIds(prev => new Set([...prev, ...rangeIds]));
+        } else {
+            toggleRow(id);
+            setLastCheckedIndex(index);
+        }
     }
     function toggleAllVisible() {
         setSelectedIds(prev => {
@@ -301,10 +347,24 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                 );
                             })}
                         </div>
+
+                        {/* Separador entre grupo "filtrar" e grupo "visualizar" (§5.1) */}
+                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={CHARGES_COLUMNS.filter(c => c.key !== 'actions')}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                        </div>
                     </div>
                 </div>
                 {error && (
-                    <div className="m-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold">{error}</div>
+                    <div className="m-4 p-4 bg-red-50 border border-red-200 rounded-[10px] text-sm text-red-700 font-semibold">{error}</div>
                 )}
                 {loading ? (
                     <div className="text-center py-12">
@@ -318,11 +378,11 @@ export default function ClientChargesModule({ organizationId }: Props) {
                         <p className="text-sm text-gray-500">Emita boletos/PIX em Contas a Receber</p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
+                    <div className="overflow-auto max-h-[70vh]">
                         <table className="w-full text-left border-collapse">
-                            {/* thead em sentence case (§6.2) — escala compacta */}
+                            {/* thead sentence case (§6.2) — escala compacta, sticky (§6.5) */}
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                     <th className="w-10 px-6 py-2 text-center border-r border-gray-100">
                                         <input
                                             type="checkbox"
@@ -333,10 +393,39 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                             title="Selecionar todas (canceláveis)"
                                         />
                                     </th>
-                                    {['Cliente', 'Descrição', 'Tipo', 'Vencimento', 'Valor', 'Status'].map(h => (
-                                        <th key={h} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-left">{h}</th>
-                                    ))}
-                                    <th className="px-6 py-2 text-left text-table-header font-semibold text-gray-500">Ações</th>
+                                    {tableColumns.visibleColumns.includes('party_name') && (
+                                        <SortableHeader label="Cliente" colKey="party_name"
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('description') && (
+                                        <SortableHeader label="Descrição" colKey="description"
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('billing_type') && (
+                                        <SortableHeader label="Tipo" colKey="billing_type"
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('due_date') && (
+                                        <SortableHeader label="Vencimento" colKey="due_date"
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('value') && (
+                                        <SortableHeader label="Valor" colKey="value"
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('status') && (
+                                        <SortableHeader label="Status" colKey="status"
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 text-left" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('actions') && (
+                                        <th className="px-6 py-2 text-left text-table-header font-semibold text-gray-500">Ações</th>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 bg-white">
@@ -351,50 +440,65 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                                     {isSelectable(c) ? (
                                                         <input
                                                             type="checkbox"
+                                                            title="Dica: segure Shift e clique para selecionar um intervalo"
                                                             className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                             checked={selectedIds.has(c.id)}
-                                                            onChange={() => toggleRow(c.id)}
+                                                            onChange={e => handleRowCheck(c.id, selectableIndexById.get(c.id) ?? 0, (e.nativeEvent as MouseEvent).shiftKey)}
                                                         />
                                                     ) : null}
                                                 </td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-900 max-w-[160px] truncate">{c.party_name ?? '—'}</td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 max-w-[200px] truncate">{c.description ?? '—'}</td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{c.billing_type === 'PIX' ? 'PIX' : c.billing_type === 'UNDEFINED' ? 'Boleto+PIX' : 'Boleto'}</td>
-                                                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal whitespace-nowrap ${isOverdue ? 'text-red-600' : 'text-gray-700'}`}>{fmtDate(c.due_date)}</td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 whitespace-nowrap">{fmt(c.value)}</td>
-                                                <td className="px-6 py-2.5 border-r border-gray-100">
-                                                    <StatusBadge status={c.status} />
-                                                </td>
+                                                {tableColumns.visibleColumns.includes('party_name') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-900 max-w-[160px] truncate">{c.party_name ?? '—'}</td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('description') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 max-w-[200px] truncate">{c.description ?? '—'}</td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('billing_type') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{c.billing_type === 'PIX' ? 'PIX' : c.billing_type === 'UNDEFINED' ? 'Boleto+PIX' : 'Boleto'}</td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('due_date') && (
+                                                    <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal whitespace-nowrap ${isOverdue ? 'text-red-600' : 'text-gray-700'}`}>{fmtDate(c.due_date)}</td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('value') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 whitespace-nowrap">{fmt(c.value)}</td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('status') && (
+                                                    <td className="px-6 py-2.5 border-r border-gray-100">
+                                                        <StatusBadge status={c.status} />
+                                                    </td>
+                                                )}
+                                                {tableColumns.visibleColumns.includes('actions') && (
                                                 <td className="px-6 py-2.5">
                                                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                         {(c.bank_slip_url || c.invoice_url || c.pix_payload) && (
                                                             <button onClick={() => setExpanded(expanded === c.id ? null : c.id)}
-                                                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1">
+                                                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all flex items-center gap-1">
                                                                 {expanded === c.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />} Links
                                                             </button>
                                                         )}
                                                         {active && (
                                                             <button onClick={() => handleCancel(c)} disabled={cancelling === c.id}
-                                                                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all flex items-center gap-1 text-sm font-medium">
+                                                                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-[6px] transition-all flex items-center gap-1 text-sm font-medium">
                                                                 {cancelling === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Slash className="w-3.5 h-3.5" />} Cancelar
                                                             </button>
                                                         )}
                                                     </div>
                                                 </td>
+                                                )}
                                             </tr>
                                             {expanded === c.id && (
                                                 <tr className="bg-gray-50/60 border-b border-gray-100">
-                                                    <td colSpan={8} className="px-6 py-4">
+                                                    <td colSpan={1 + tableColumns.visibleColumns.length} className="px-6 py-4">
                                                         <div className="flex flex-wrap gap-3">
                                                             {c.bank_slip_url && (
                                                                 <a href={c.bank_slip_url} target="_blank" rel="noreferrer"
-                                                                    className="flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-lg text-xs font-bold text-blue-700 transition-colors">
+                                                                    className="flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded-[6px] text-xs font-bold text-blue-700 transition-colors">
                                                                     <FileText className="w-3.5 h-3.5" /> Boleto (PDF) <ExternalLink className="w-3 h-3" />
                                                                 </a>
                                                             )}
                                                             {c.billing_type !== 'PIX' && !PAID.includes(c.status) && c.status !== 'CANCELLED' && c.asaas_payment_id && (
                                                                 <button onClick={() => handleResend(c)} disabled={resending === c.id}
-                                                                    className="flex items-center gap-2 px-3 py-2 bg-violet-50 hover:bg-violet-100 rounded-lg text-xs font-bold text-violet-700 transition-colors disabled:opacity-50">
+                                                                    className="flex items-center gap-2 px-3 py-2 bg-violet-50 hover:bg-violet-100 rounded-[6px] text-xs font-bold text-violet-700 transition-colors disabled:opacity-50">
                                                                     {resending === c.id
                                                                         ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                                                         : resentId === c.id
@@ -405,13 +509,13 @@ export default function ClientChargesModule({ organizationId }: Props) {
                                                             )}
                                                             {c.invoice_url && (
                                                                 <a href={c.invoice_url} target="_blank" rel="noreferrer"
-                                                                    className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold text-gray-700 transition-colors">
+                                                                    className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-[6px] text-xs font-bold text-gray-700 transition-colors">
                                                                     <ExternalLink className="w-3.5 h-3.5" /> Página de pagamento
                                                                 </a>
                                                             )}
                                                             {c.pix_payload && (
                                                                 <button onClick={() => copyPix(c)}
-                                                                    className="flex items-center gap-2 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 rounded-lg text-xs font-bold text-emerald-700 transition-colors">
+                                                                    className="flex items-center gap-2 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 rounded-[6px] text-xs font-bold text-emerald-700 transition-colors">
                                                                     <QrCode className="w-3.5 h-3.5" /> {copiedId === c.id ? 'Copiado!' : 'Copiar PIX'} <Copy className="w-3 h-3" />
                                                                 </button>
                                                             )}

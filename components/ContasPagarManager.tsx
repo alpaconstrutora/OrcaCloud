@@ -353,9 +353,11 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                         />
                     </div>
 
-                    {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — escolhida porque
-                        já há KPI cards acima dando contexto, mesmo critério de ClientList.tsx. */}
-                    <div className="flex flex-col gap-2.5">
+                    {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
+                        conteúdo dividem um único card (border/rounded/shadow só no container
+                        pai); a costura visível entre os dois é o border-b da toolbar. */}
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="flex flex-col gap-2.5 p-4 border-b border-gray-100 bg-white">
                         <div className="flex flex-col md:flex-row gap-2.5 items-center">
                             <div className="flex-1 relative w-full">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -456,8 +458,9 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                         )}
                     </div>
 
-                    {/* Tabela */}
-                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                    {/* Tabela — sem bg/border/rounded/overflow-hidden próprios: já está
+                        dentro do card acoplado toolbar+conteúdo (§5.2, ver abertura acima) */}
+                    <div>
                         {loading ? (
                             <div className="text-center py-12">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
@@ -673,6 +676,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                             </table>
                             </div>
                         )}
+                    </div>
                     </div>
 
             {/* Barra de ações em lote — fixa no rodapé, paleta azul (ui_ux_standard_guide.md §10) */}

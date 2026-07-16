@@ -597,8 +597,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                         <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.totalValue)} icon={<Home className="w-4 h-4" />} color="amber" />
                     </div>
 
-                    {/* Filters — §5.1 (variante desaninhada, escala compacta §16) */}
-                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                    {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
+                        conteúdo dividem um único card (border/rounded/shadow só no container
+                        pai); a costura visível entre os dois é o border-b da toolbar. */}
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
                         <div className="flex-1 relative w-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
@@ -623,7 +626,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                         </div>
                     </div>
 
-                    {/* Property Display */}
+                    {/* Property Display — sem bg/border/rounded próprios: já está dentro do
+                        card acoplado toolbar+conteúdo (ver abertura acima) */}
                     {loading ? (
                         <div className="text-center py-12">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -632,7 +636,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     ) : filteredProperties.length > 0 ? (
                         <>
                             {viewMode === 'grid' && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 p-4">
                                     {filteredProperties.map((property) => (
                                         <PropertyCard
                                             key={property.id}
@@ -653,8 +657,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             )}
 
                             {viewMode === 'list' && (
-                                <div className="bg-white border border-gray-100 rounded-[10px] overflow-hidden">
-                                    <div className="overflow-x-auto">
+                                <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
                                         {/* thead em sentence case (§6.2) — escala compacta */}
                                         <thead>
@@ -759,13 +762,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                             ))}
                                         </tbody>
                                     </table>
-                                    </div>
                                 </div>
                             )}
 
 
                             {viewMode === 'tower' && (
-                                <PropertyUnitMap 
+                                <div className="p-4">
+                                <PropertyUnitMap
                                     units={properties.filter(p => String(p.parent_id).toLowerCase() === String(selectedBuildingId).toLowerCase())}
                                     parentProperty={properties.find(p => p.id === selectedBuildingId)}
                                     deals={deals}
@@ -787,10 +790,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                         setIsDealModalOpen(true);
                                     }}
                                 />
+                                </div>
                             )}
                         </>
                     ) : (
-                        <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                        <div className="text-center py-12">
                             <Home className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                             <h3 className="text-lg font-bold text-gray-900 mb-2">
                                 {searchTerm ? 'Nenhum resultado encontrado' : 'Nenhum imóvel cadastrado'}
@@ -808,6 +812,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             </button>
                         </div>
                     )}
+                    </div>
 
                     {/* Barra de ações em lote (§10) */}
                     {selectedProperties.length > 0 && (

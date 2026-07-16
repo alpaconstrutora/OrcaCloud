@@ -242,8 +242,12 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 <KpiCard shadow={false} size="sm" label="Pendentes de Medição" value={stats.pendingMeasurements} icon={<Clock className="w-4 h-4" />} color="amber" />
             </div>
 
-            {/* Filters — §5.1 (variante desaninhada, escala compacta §16) */}
-            <div className="flex flex-col md:flex-row gap-2.5 items-center">
+            {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
+                conteúdo dividem um único card (border/rounded/shadow só no container pai);
+                a costura visível entre os dois é o border-b da toolbar. Componente
+                compartilhado (Suprimentos/Locação/Serviços/Vendas via prop domain/direction). */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -335,9 +339,10 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                 </button>
             </div>
 
-            {/* Content List */}
+            {/* Content List — sem bg/border/rounded próprios: já está dentro do card
+                acoplado toolbar+conteúdo (ver abertura acima) */}
             {filteredContracts.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                <div className="text-center py-12">
                     <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum contrato encontrado</h3>
                     <p className="text-sm text-gray-500 mb-6">Não há contratos registrados para este projeto ainda.</p>
@@ -346,7 +351,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     </button>
                 </div>
             ) : viewMode === 'grid' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
                     {filteredContracts.map((contract) => (
                         <div
                             key={contract.id}
@@ -402,8 +407,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     ))}
                 </div>
             ) : (
-                <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                    <div className="overflow-x-auto">
+                <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             {/* thead em sentence case (§6.2) — escala compacta; uppercase={false} porque
                                 SortableHeader força uppercase internamente por padrão. */}
@@ -486,8 +490,8 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                             </tbody>
                         </table>
                     </div>
-                </div>
             )}
+            </div>
         </div>
     );
 };

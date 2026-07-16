@@ -156,7 +156,7 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                    <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Novo Recebível</h2>
+                    <h2 className="font-black text-slate-800 text-lg">Novo Recebível</h2>
                     <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
                         <X className="w-4 h-4 text-gray-500" />
                     </button>
@@ -164,7 +164,7 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
                 <div className="p-6 space-y-4">
                     {err && <p className="text-xs text-red-600 font-semibold bg-red-50 rounded-lg p-3">{err}</p>}
                     <div>
-                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Cliente / Parte</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Cliente / Parte</label>
                         <input
                             type="text"
                             list="contas-receber-clientes"
@@ -178,7 +178,7 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
                         </datalist>
                     </div>
                     <div>
-                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Descrição *</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Descrição *</label>
                         <input
                             type="text"
                             placeholder="Descrição do recebível"
@@ -189,7 +189,7 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Valor (R$) *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Valor (R$) *</label>
                             <input
                                 type="number"
                                 placeholder="0,00"
@@ -201,7 +201,7 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Vencimento *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Vencimento *</label>
                             <input
                                 type="date"
                                 value={form.due_date}
@@ -211,7 +211,7 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
                         </div>
                     </div>
                     <div>
-                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Categoria</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Categoria</label>
                         <input
                             type="text"
                             placeholder="Ex: Medição, Parcela, Locação..."
@@ -355,7 +355,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                    <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Emitir Cobrança</h2>
+                    <h2 className="font-black text-slate-800 text-lg">Emitir Cobrança</h2>
                     <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
                         <X className="w-4 h-4 text-gray-500" />
                     </button>
@@ -379,7 +379,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                     {!result && (
                         <>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-2">Forma de cobrança</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-2">Forma de cobrança</label>
                                 <div className="grid grid-cols-3 gap-2">
                                     {([
                                         { v: 'BOLETO' as BillingType, label: 'Boleto', icon: FileText },
@@ -404,7 +404,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
 
                             {/* Multa, juros e desconto */}
                             <div>
-                                <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-2">Encargos por atraso</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-2">Encargos por atraso</label>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <span className="text-xs text-gray-400 font-bold">Multa (%)</span>
@@ -421,7 +421,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-2">Desconto p/ pagamento antecipado</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-2">Desconto p/ pagamento antecipado</label>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <span className="text-xs text-gray-400 font-bold">Desconto (%)</span>
@@ -491,7 +491,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                         {err && <p className="text-xs text-red-600 font-semibold bg-red-50 rounded-lg p-3">{err}</p>}
                                         <div className="grid grid-cols-2 gap-3">
                                             <div>
-                                                <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Valor (R$)</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1">Valor (R$)</label>
                                                 <input
                                                     type="number" min={0} step="0.01"
                                                     value={editAmount}
@@ -500,7 +500,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Vencimento</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1">Vencimento</label>
                                                 <input
                                                     type="date"
                                                     value={editDue}
@@ -510,7 +510,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Descrição</label>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Descrição</label>
                                             <input
                                                 type="text"
                                                 value={editDesc}
@@ -519,7 +519,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1">Forma de cobrança</label>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Forma de cobrança</label>
                                             <div className="grid grid-cols-3 gap-2">
                                                 {([
                                                     { v: 'BOLETO' as BillingType, label: 'Boleto', icon: FileText },
@@ -810,86 +810,47 @@ export default function ContasReceberManager({ organizationId, organizations, on
     const STATUS_OPTIONS: StatusFilter[] = ['all','PREVISTO','EMITIDO','ENVIADO','RECEBIDO','PARCIAL','VENCIDO','RENEGOCIADO'];
 
     return (
-        <div className="h-full flex flex-col bg-gray-50">
-            {/* Header */}
-            <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-green-600 flex items-center justify-center">
-                            <TrendingUp className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-lg font-bold text-gray-900">Contas a Receber</h1>
-                            <p className="text-xs text-gray-500">Recebíveis de contratos, medições e parcelamentos</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {organizations && organizations.length > 1 && (
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm">
-                                <Building2 className="w-3.5 h-3.5 text-gray-400" />
-                                <select
-                                    value={selectedOrgId}
-                                    onChange={e => handleOrgChange(e.target.value)}
-                                    className="bg-transparent outline-none text-gray-700 font-medium pr-5 cursor-pointer"
-                                >
-                                    <option value="ALL">Todas as Organizações</option>
-                                    {organizations.map(o => (
-                                        <option key={o.id} value={o.id}>{o.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-                        <button
-                            onClick={() => setShowNovo(true)}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-green-600 hover:bg-green-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
-                        >
-                            <Plus className="w-[15px] h-[15px]" /> Novo
-                        </button>
-                        <button
-                            onClick={load}
-                            className="h-9 w-9 flex items-center justify-center hover:bg-gray-100 rounded-[6px] transition-colors"
-                            title="Atualizar"
-                        >
-                            <RefreshCw className="w-4 h-4 text-gray-500" />
-                        </button>
-                    </div>
-                </div>
-
-                {/* KPI summary - fora do header, no padrão global */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                    <KpiCard
-                        label="A Receber"
-                        value={fmt(summary.aReceber)}
-                        sub={`${rows.filter(r => !['CANCELADO','RECEBIDO'].includes(r.effective_status)).length} títulos em aberto`}
-                        icon={<DollarSign className="w-5 h-5" />}
-                        color="blue"
-                        onClick={() => setStatusFilter('all')}
-                    />
-                    <KpiCard
-                        label="Vencidos"
-                        value={fmt(summary.vencidos)}
-                        sub={`${rows.filter(r => r.effective_status === 'VENCIDO').length} títulos vencidos`}
-                        icon={<AlertTriangle className="w-5 h-5" />}
-                        color={summary.vencidos > 0 ? 'red' : 'gray'}
-                        onClick={() => setStatusFilter('VENCIDO')}
-                    />
-                    <KpiCard
-                        label="Recebido (mês)"
-                        value={fmt(summary.recebidoMes)}
-                        sub={`${rows.filter(r => r.effective_status === 'RECEBIDO').length} títulos quitados`}
-                        icon={<Check className="w-5 h-5" />}
-                        color="emerald"
-                        onClick={() => setStatusFilter('RECEBIDO')}
-                    />
-                </div>
+        <div className="space-y-6">
+            {/* Cabeçalho de tela — §20 (flat, sem banda/logo; a sidebar já dá o contexto — §18) */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Contas a Receber</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Recebíveis de contratos, medições e parcelamentos.</p>
             </div>
 
-            {/* Inadimplência */}
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <KpiCard
+                    label="A Receber"
+                    value={fmt(summary.aReceber)}
+                    sub={`${rows.filter(r => !['CANCELADO','RECEBIDO'].includes(r.effective_status)).length} títulos em aberto`}
+                    icon={<DollarSign className="w-5 h-5" />}
+                    color="blue"
+                    onClick={() => setStatusFilter('all')}
+                />
+                <KpiCard
+                    label="Vencidos"
+                    value={fmt(summary.vencidos)}
+                    sub={`${rows.filter(r => r.effective_status === 'VENCIDO').length} títulos vencidos`}
+                    icon={<AlertTriangle className="w-5 h-5" />}
+                    color={summary.vencidos > 0 ? 'red' : 'gray'}
+                    onClick={() => setStatusFilter('VENCIDO')}
+                />
+                <KpiCard
+                    label="Recebido (mês)"
+                    value={fmt(summary.recebidoMes)}
+                    sub={`${rows.filter(r => r.effective_status === 'RECEBIDO').length} títulos quitados`}
+                    icon={<Check className="w-5 h-5" />}
+                    color="emerald"
+                    onClick={() => setStatusFilter('RECEBIDO')}
+                />
+            </div>
+
+            {/* Inadimplência — bloco flat com radius compacto (§16), fora do card acoplado */}
             {inadimplencia.length > 0 && (
-                <div className="bg-red-50 border-b border-red-100 px-6 py-3 flex-shrink-0">
+                <div className="bg-red-50 border border-red-100 rounded-[10px] px-4 py-3">
                     <button
                         onClick={() => setShowInad(v => !v)}
-                        className="flex items-center gap-2 text-button font-black text-red-700 uppercase tracking-widest"
+                        className="flex items-center gap-2 text-xs font-semibold text-red-700"
                     >
                         <AlertCircle className="w-3.5 h-3.5" />
                         Inadimplência
@@ -898,9 +859,9 @@ export default function ContasReceberManager({ organizationId, organizations, on
                     {showInad && (
                         <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {inadimplencia.map(f => (
-                                <div key={f.faixa} className="bg-white rounded-lg p-2 border border-red-100">
-                                    <p className="text-xs text-red-500 font-bold uppercase">{f.faixa}</p>
-                                    <p className="text-sm font-black text-red-700">{fmt(f.valor)}</p>
+                                <div key={f.faixa} className="bg-white rounded-[6px] p-2 border border-red-100">
+                                    <p className="text-xs text-red-500 font-semibold">{f.faixa}</p>
+                                    <p className="text-sm font-bold text-red-700">{fmt(f.valor)}</p>
                                     <p className="text-xs text-red-400">{f.count} título{f.count !== 1 ? 's' : ''}</p>
                                 </div>
                             ))}
@@ -909,82 +870,307 @@ export default function ContasReceberManager({ organizationId, organizations, on
                 </div>
             )}
 
-            {/* Toolbar */}
-            <div className="bg-white border-b border-gray-100 px-6 py-3 flex-shrink-0">
-                <div className="flex items-center gap-3 flex-wrap">
-                    <div className="relative flex-1 min-w-[180px]">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Buscar por cliente, descrição ou obra..."
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+            {/* Toolbar acoplada à tabela (§5.2) — toolbar e tabela dividem um único card;
+                a costura visível entre elas é o border-b da toolbar. */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="flex flex-col gap-2.5 p-4 border-b border-gray-100 bg-white">
+                    <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                        <div className="flex-1 relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar por cliente, descrição ou obra..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                className="w-full h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                            {search && (
+                                <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Status pills — filtro rápido, não ordenação (§6.4) */}
+                        <div className="flex items-center h-9 gap-1 overflow-x-auto">
+                            {STATUS_OPTIONS.map(s => (
+                                <button
+                                    key={s}
+                                    onClick={() => setStatusFilter(s)}
+                                    className={`h-9 px-3 rounded-[6px] text-xs font-semibold transition-all whitespace-nowrap ${
+                                        statusFilter === s
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    }`}
+                                >
+                                    {s === 'all' ? 'Todos' : STATUS_LABEL[s]}
+                                </button>
+                            ))}
+                        </div>
+
+                        <button
+                            onClick={() => setShowFilters(v => !v)}
+                            className={`h-9 flex items-center gap-1.5 px-3 rounded-[6px] text-sm font-medium border transition-all whitespace-nowrap ${showFilters ? 'border-blue-400 text-blue-700 bg-blue-50' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            <Filter className="w-3.5 h-3.5" /> Filtros
+                        </button>
+
+                        <div className="flex items-center h-9">
+                            <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                        </div>
+
+                        {/* Org selector — só quando há mais de uma organização */}
+                        {organizations && organizations.length > 1 && (
+                            <div className="relative flex items-center h-9">
+                                <Building2 className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                <select
+                                    value={selectedOrgId}
+                                    onChange={e => handleOrgChange(e.target.value)}
+                                    className="h-9 pl-9 pr-7 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all appearance-none"
+                                >
+                                    <option value="ALL">Todas as Organizações</option>
+                                    {organizations.map(o => (
+                                        <option key={o.id} value={o.id}>{o.name}</option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2" />
+                            </div>
+                        )}
+
+                        <button
+                            onClick={load}
+                            className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0"
+                            title="Atualizar"
+                        >
+                            <RefreshCw className="w-4 h-4" />
+                        </button>
+
+                        {/* Separador entre grupo "filtrar" e grupo "visualizar/ações" (§5.1) */}
+                        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                        {/* Agrupador ColumnConfig — sem viewMode nesta tela (não há grid/lista) */}
+                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                                columns={RECEBER_COLUMNS.filter(c => c.key !== 'actions')}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                        </div>
+
+                        {/* Novo — CTA compacto §17 (verde = accent semântico "recebível" do módulo) */}
+                        <button
+                            onClick={() => setShowNovo(true)}
+                            className="h-9 flex items-center gap-1.5 px-3.5 bg-green-600 hover:bg-green-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                        >
+                            <Plus className="w-[15px] h-[15px]" /> Novo
+                        </button>
                     </div>
 
-                    {/* Status tabs */}
-                    <div className="flex items-center gap-1 overflow-x-auto">
-                        {STATUS_OPTIONS.map(s => (
-                            <button
-                                key={s}
-                                onClick={() => setStatusFilter(s)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider whitespace-nowrap transition-all ${
-                                    statusFilter === s
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                                }`}
-                            >
-                                {s === 'all' ? 'Todos' : STATUS_LABEL[s]}
-                            </button>
-                        ))}
-                    </div>
-
-                    <button
-                        onClick={() => setShowFilters(v => !v)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-bold border transition-all ${showFilters ? 'border-blue-400 text-blue-700 bg-blue-50' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        <Filter className="w-3.5 h-3.5" /> Filtros
-                    </button>
-                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-                    {/* Agrupador ColumnConfig — sem viewMode nesta tela (não há grid/lista) */}
-                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-                        <ColumnConfigButton
-                            columns={RECEBER_COLUMNS.filter(c => c.key !== 'actions')}
-                            visibleColumns={tableColumns.visibleColumns}
-                            showColumnConfig={tableColumns.showColumnConfig}
-                            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                            onToggleColumn={tableColumns.toggleColumn}
-                            onReset={tableColumns.resetColumns}
-                        />
-                    </div>
+                    {showFilters && (
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500 font-semibold">Venc. de</span>
+                                <input type="date" value={dueFrom} onChange={e => setDueFrom(e.target.value)}
+                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500 font-semibold">até</span>
+                                <input type="date" value={dueTo} onChange={e => setDueTo(e.target.value)}
+                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+                            </div>
+                            {(dueFrom || dueTo) && (
+                                <button onClick={() => { setDueFrom(''); setDueTo(''); }}
+                                    className="text-sm text-blue-600 font-medium hover:underline flex items-center gap-1">
+                                    <X className="w-3 h-3" /> Limpar datas
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
 
-                {showFilters && (
-                    <div className="flex items-center gap-3 mt-3 flex-wrap">
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500 font-semibold">Venc. de</span>
-                            <input type="date" value={dueFrom} onChange={e => setDueFrom(e.target.value)}
-                                className="border border-gray-200 rounded-lg px-2 py-1.5 text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                {/* Conteúdo — tabela sem bg/border/rounded próprios (já dentro do card acoplado §5.2) */}
+                <div>
+                    {error && (
+                        <div className="m-4 p-4 bg-red-50 border border-red-200 rounded-[10px] text-sm text-red-700 font-semibold">{error}</div>
+                    )}
+                    {loading ? (
+                        <div className="text-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                            <p className="mt-2 text-gray-500 text-sm">Carregando recebíveis...</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-500 font-semibold">até</span>
-                            <input type="date" value={dueTo} onChange={e => setDueTo(e.target.value)}
-                                className="border border-gray-200 rounded-lg px-2 py-1.5 text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    ) : sorted.length === 0 ? (
+                        <div className="text-center py-12">
+                            <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum recebível encontrado</h3>
+                            <p className="text-sm text-gray-500">Ajuste os filtros ou crie um novo lançamento.</p>
                         </div>
-                        {(dueFrom || dueTo) && (
-                            <button onClick={() => { setDueFrom(''); setDueTo(''); }}
-                                className="text-button text-blue-600 font-bold hover:underline flex items-center gap-1">
-                                <X className="w-3 h-3" /> Limpar datas
-                            </button>
-                        )}
-                    </div>
-                )}
+                    ) : (
+                        <div className="overflow-auto max-h-[70vh]">
+                        <table className="w-full text-sm text-left border-collapse">
+                            {/* thead sentence case (§6.2) — uppercase={false} porque SortableHeader
+                                força uppercase internamente por padrão. */}
+                            <thead>
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <th className="w-10 px-4 py-2 text-center">
+                                        <input
+                                            type="checkbox"
+                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                            checked={allVisibleSelected}
+                                            disabled={selectableVisible.length === 0}
+                                            onChange={toggleAllVisible}
+                                            title="Selecionar todos (não recebidos)"
+                                        />
+                                    </th>
+                                    {tableColumns.visibleColumns.includes('party_name') && (
+                                        <SortableHeader label="Cliente / Parte" colKey="party_name" uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('description') && (
+                                        <SortableHeader label="Descrição" colKey="description" uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('project_name') && (
+                                        <SortableHeader label="Obra" colKey="project_name" uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('due_date') && (
+                                        <SortableHeader label="Vencimento" colKey="due_date" uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('amount') && (
+                                        <SortableHeader label="Valor" colKey="amount" uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('status') && (
+                                        <SortableHeader label="Status" colKey="status" uppercase={false}
+                                            sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                                            onSort={tableColumns.handleColumnSort} className="px-4 py-2 text-left whitespace-nowrap" />
+                                    )}
+                                    {tableColumns.visibleColumns.includes('actions') && (
+                                        <th className="px-4 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                    )}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {sorted.map(r => {
+                                    const isVencido = r.effective_status === 'VENCIDO';
+                                    const isRecebido = r.effective_status === 'RECEBIDO';
+                                    return (
+                                        <tr key={r.id} className={`hover:bg-blue-50/50 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
+                                            <td className="w-10 px-4 py-2.5 text-center">
+                                                {isSelectable(r) ? (
+                                                    <input
+                                                        type="checkbox"
+                                                        title="Dica: segure Shift e clique para selecionar um intervalo"
+                                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                        checked={selectedIds.has(r.id)}
+                                                        onChange={e => handleRowCheck(r.id, selectableIndexById.get(r.id) ?? 0, (e.nativeEvent as MouseEvent).shiftKey)}
+                                                    />
+                                                ) : null}
+                                            </td>
+                                            {tableColumns.visibleColumns.includes('party_name') && (
+                                                <td className="px-4 py-2.5 text-sm font-normal text-gray-900 max-w-[160px] truncate">
+                                                    {r.party_name ?? <span className="text-gray-400 italic">—</span>}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('description') && (
+                                                <td className="px-4 py-2.5 text-sm font-normal text-gray-700 max-w-[200px] truncate">
+                                                    {r.description ?? '—'}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('project_name') && (
+                                                <td className="px-4 py-2.5 text-sm font-normal text-gray-600 max-w-[140px] truncate">
+                                                    {r.project_name ?? '—'}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('due_date') && (
+                                                <td className={`px-4 py-2.5 text-sm font-normal whitespace-nowrap ${isVencido ? 'text-red-600' : 'text-gray-600'}`}>
+                                                    {fmtDate(r.due_date)}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('amount') && (
+                                                <td className="px-4 py-2.5 text-sm font-medium text-gray-900 whitespace-nowrap">
+                                                    {fmt(r.amount)}
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('status') && (
+                                                <td className="px-4 py-2.5">
+                                                    <StatusBadge status={r.effective_status} />
+                                                </td>
+                                            )}
+                                            {tableColumns.visibleColumns.includes('actions') && (
+                                            <td className="px-4 py-2.5">
+                                                <div className="flex items-center gap-1.5">
+                                                    {!isRecebido && (
+                                                        <button
+                                                            onClick={() => handleBaixa(r)}
+                                                            className="text-green-700 hover:text-green-800 text-sm font-medium p-1.5 hover:bg-green-50 rounded-[6px] transition-all flex items-center gap-1"
+                                                        >
+                                                            <Check className="w-3.5 h-3.5" /> Baixar
+                                                        </button>
+                                                    )}
+                                                    {!isRecebido && (
+                                                        charges[r.id] ? (
+                                                            <button
+                                                                onClick={() => setEmitindo(r)}
+                                                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all flex items-center gap-1"
+                                                                title="Ver cobrança emitida"
+                                                            >
+                                                                <FileText className="w-3.5 h-3.5" /> Cobrança
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => setEmitindo(r)}
+                                                                className="text-violet-700 hover:text-violet-800 text-sm font-medium p-1.5 hover:bg-violet-50 rounded-[6px] transition-all flex items-center gap-1"
+                                                                title="Emitir boleto/PIX via Asaas"
+                                                            >
+                                                                <FileText className="w-3.5 h-3.5" /> Emitir
+                                                            </button>
+                                                        )
+                                                    )}
+                                                    {!isRecebido && (
+                                                        <select
+                                                            value={r.business_status}
+                                                            disabled={changingStatus === r.id}
+                                                            onChange={e => handleChangeStatus(r.id, e.target.value)}
+                                                            className="text-sm font-normal border border-gray-200 rounded-[6px] px-2 py-1 bg-white focus:outline-none cursor-pointer"
+                                                        >
+                                                            {(['PREVISTO','EMITIDO','ENVIADO','PARCIAL','RENEGOCIADO','CANCELADO'] as const).map(s => (
+                                                                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                                                            ))}
+                                                        </select>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            )}
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                        </div>
+                    )}
+
+                    {/* Contagem — rodapé dentro do card acoplado */}
+                    {!loading && sorted.length > 0 && (
+                        <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400">
+                            {sorted.length} título{sorted.length !== 1 ? 's' : ''}
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {/* Barra de ação em massa (F3) — §10: fixa no rodapé, fora do fluxo normal da lista */}
+            {/* Barra de ação em massa (F3) — §10: fixa no rodapé, paleta azul */}
             {selectedVisible.length > 0 && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-green-600 text-white rounded-2xl shadow-lg shadow-green-900/20">
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
                     <span className="flex-1 text-sm font-bold whitespace-nowrap">
                         {selectedVisible.length} selecionado{selectedVisible.length !== 1 ? 's' : ''}
                         <span className="ml-2 font-normal opacity-75">· {fmt(selectedTotal)}</span>
@@ -999,185 +1185,11 @@ export default function ContasReceberManager({ organizationId, organizations, on
                     </button>
                     <button
                         onClick={clearSelection}
-                        className="flex items-center gap-2 px-3 py-2 bg-green-500 rounded-xl font-bold text-sm hover:bg-green-400 transition-colors"
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-sm hover:bg-blue-400 transition-colors"
                     >
                         <X className="w-3.5 h-3.5" />
                         Desmarcar
                     </button>
-                </div>
-            )}
-
-            {/* Table */}
-            <div className="flex-1 overflow-auto">
-                {error && (
-                    <div className="m-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-semibold">{error}</div>
-                )}
-                {loading ? (
-                    <div className="text-center py-12">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                        <p className="mt-2 text-gray-500">Carregando recebíveis...</p>
-                    </div>
-                ) : sorted.length === 0 ? (
-                    <div className="text-center py-12 bg-white rounded-[2.5rem] shadow-sm border border-gray-100 mx-6">
-                        <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum recebível encontrado</h3>
-                        <p className="text-sm text-gray-500">Ajuste os filtros ou crie um novo lançamento.</p>
-                    </div>
-                ) : (
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-100 sticky top-0 z-10">
-                            <tr>
-                                <th className="w-10 px-4 py-3 text-center">
-                                    <input
-                                        type="checkbox"
-                                        className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer disabled:opacity-40"
-                                        checked={allVisibleSelected}
-                                        disabled={selectableVisible.length === 0}
-                                        onChange={toggleAllVisible}
-                                        title="Selecionar todos (não recebidos)"
-                                    />
-                                </th>
-                                {tableColumns.visibleColumns.includes('party_name') && (
-                                    <SortableHeader label="Cliente / Parte" colKey="party_name"
-                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort} className="px-4 py-3 text-left whitespace-nowrap" />
-                                )}
-                                {tableColumns.visibleColumns.includes('description') && (
-                                    <SortableHeader label="Descrição" colKey="description"
-                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort} className="px-4 py-3 text-left whitespace-nowrap" />
-                                )}
-                                {tableColumns.visibleColumns.includes('project_name') && (
-                                    <SortableHeader label="Obra" colKey="project_name"
-                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort} className="px-4 py-3 text-left whitespace-nowrap" />
-                                )}
-                                {tableColumns.visibleColumns.includes('due_date') && (
-                                    <SortableHeader label="Vencimento" colKey="due_date"
-                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort} className="px-4 py-3 text-left whitespace-nowrap" />
-                                )}
-                                {tableColumns.visibleColumns.includes('amount') && (
-                                    <SortableHeader label="Valor" colKey="amount"
-                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort} className="px-4 py-3 text-left whitespace-nowrap" />
-                                )}
-                                {tableColumns.visibleColumns.includes('status') && (
-                                    <SortableHeader label="Status" colKey="status"
-                                        sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
-                                        onSort={tableColumns.handleColumnSort} className="px-4 py-3 text-left whitespace-nowrap" />
-                                )}
-                                {tableColumns.visibleColumns.includes('actions') && (
-                                    <th className="px-4 py-3 text-right">Ações</th>
-                                )}
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {sorted.map(r => {
-                                const isVencido = r.effective_status === 'VENCIDO';
-                                const isRecebido = r.effective_status === 'RECEBIDO';
-                                return (
-                                    <tr key={r.id} className={`hover:bg-gray-50 transition-colors ${selectedIds.has(r.id) ? 'bg-green-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
-                                        <td className="w-10 px-4 py-3 text-center">
-                                            {isSelectable(r) ? (
-                                                <input
-                                                    type="checkbox"
-                                                    title="Dica: segure Shift e clique para selecionar um intervalo"
-                                                    className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
-                                                    checked={selectedIds.has(r.id)}
-                                                    onChange={e => handleRowCheck(r.id, selectableIndexById.get(r.id) ?? 0, (e.nativeEvent as MouseEvent).shiftKey)}
-                                                />
-                                            ) : null}
-                                        </td>
-                                        {tableColumns.visibleColumns.includes('party_name') && (
-                                            <td className="px-4 py-3 text-sm font-normal text-gray-900 max-w-[160px] truncate">
-                                                {r.party_name ?? <span className="text-gray-400 italic">—</span>}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('description') && (
-                                            <td className="px-4 py-3 text-sm font-normal text-gray-700 max-w-[200px] truncate">
-                                                {r.description ?? '—'}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('project_name') && (
-                                            <td className="px-4 py-3 text-sm font-normal text-gray-600 max-w-[140px] truncate">
-                                                {r.project_name ?? '—'}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('due_date') && (
-                                            <td className={`px-4 py-3 text-sm font-normal whitespace-nowrap ${isVencido ? 'text-red-600' : 'text-gray-600'}`}>
-                                                {fmtDate(r.due_date)}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('amount') && (
-                                            <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">
-                                                {fmt(r.amount)}
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('status') && (
-                                            <td className="px-4 py-3">
-                                                <StatusBadge status={r.effective_status} />
-                                            </td>
-                                        )}
-                                        {tableColumns.visibleColumns.includes('actions') && (
-                                        <td className="px-4 py-3">
-                                            <div className="flex items-center gap-2">
-                                                {!isRecebido && (
-                                                    <button
-                                                        onClick={() => handleBaixa(r)}
-                                                        className="text-green-700 hover:text-green-800 text-sm font-medium p-1.5 hover:bg-green-50 rounded-lg transition-all flex items-center gap-1"
-                                                    >
-                                                        <Check className="w-3.5 h-3.5" /> Baixar
-                                                    </button>
-                                                )}
-                                                {!isRecebido && (
-                                                    charges[r.id] ? (
-                                                        <button
-                                                            onClick={() => setEmitindo(r)}
-                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1"
-                                                            title="Ver cobrança emitida"
-                                                        >
-                                                            <FileText className="w-3.5 h-3.5" /> Cobrança
-                                                        </button>
-                                                    ) : (
-                                                        <button
-                                                            onClick={() => setEmitindo(r)}
-                                                            className="text-violet-700 hover:text-violet-800 text-sm font-medium p-1.5 hover:bg-violet-50 rounded-lg transition-all flex items-center gap-1"
-                                                            title="Emitir boleto/PIX via Asaas"
-                                                        >
-                                                            <FileText className="w-3.5 h-3.5" /> Emitir
-                                                        </button>
-                                                    )
-                                                )}
-                                                {!isRecebido && (
-                                                    <select
-                                                        value={r.business_status}
-                                                        disabled={changingStatus === r.id}
-                                                        onChange={e => handleChangeStatus(r.id, e.target.value)}
-                                                        className="text-sm font-normal border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none cursor-pointer"
-                                                    >
-                                                        {(['PREVISTO','EMITIDO','ENVIADO','PARCIAL','RENEGOCIADO','CANCELADO'] as const).map(s => (
-                                                            <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-                                                        ))}
-                                                    </select>
-                                                )}
-                                            </div>
-                                        </td>
-                                        )}
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-
-            {/* Footer count */}
-            {!loading && (
-                <div className="bg-white border-t border-gray-100 px-6 py-2 flex-shrink-0">
-                    <p className="text-xs text-gray-400">
-                        {sorted.length} título{sorted.length !== 1 ? 's' : ''}
-                    </p>
                 </div>
             )}
 

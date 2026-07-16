@@ -444,6 +444,7 @@ const Layout: React.FC<LayoutProps> = ({
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [isPortalsOpen, setIsPortalsOpen] = React.useState(false);
   const [isVendasOpen, setIsVendasOpen] = React.useState(false);
+  const [isDesenvolvimentoImobOpen, setIsDesenvolvimentoImobOpen] = React.useState(false);
   const [isInteligenciaNegociosOpen, setIsInteligenciaNegociosOpen] = React.useState(false);
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
   const [commandQuery, setCommandQuery] = React.useState('');
@@ -1077,30 +1078,42 @@ const Layout: React.FC<LayoutProps> = ({
                 </>
               )}
 
-              {(mod.crm || mod.incorporacao || isDev) && (
+              {(mod.crm || isDev) && (
                 <>
                   <NavDropdown
                     label="Comercial"
                     icon={TrendingUp}
                     isOpen={isVendasOpen}
                     onToggle={() => setIsVendasOpen(o => !o)}
-                    hasActiveChild={['gestao-vendas','sales','rentals','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations','imovib','empreendimentos','planta-ai'].includes(activeView)}
+                    hasActiveChild={['gestao-vendas','sales','rentals','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations'].includes(activeView)}
                   >
-                    {(mod.crm || isDev) && (
-                      <>
-                        <DropdownItem id="sales" label="Vendas de Ativos" icon={Building2} />
-                        <DropdownItem id="rentals" label="Locações" icon={Building2} />
-                        <DropdownItem id="service-contracts" label="Contratos de Serviço" icon={FileText} />
-                        <DropdownItem id="services-commercial" label="CRM Serviços" icon={Briefcase} />
-                      </>
-                    )}
-                    {(mod.incorporacao || isDev) && (
-                      <>
-                        <DropdownItem id="empreendimentos" label="Empreendimentos" icon={Building2} />
-                        <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
-                        <DropdownItem id="planta-ai" label="ÒPURA Planta AI" icon={Brain} />
-                      </>
-                    )}
+                    <DropdownItem id="sales" label="Vendas de Ativos" icon={Building2} />
+                    <DropdownItem id="rentals" label="Locações" icon={Building2} />
+                    <DropdownItem id="service-contracts" label="Contratos de Serviço" icon={FileText} />
+                    <DropdownItem id="services-commercial" label="CRM Serviços" icon={Briefcase} />
+                  </NavDropdown>
+                </>
+              )}
+
+              {(mod.incorporacao || isDev) && (
+                <>
+                  <NavDropdown
+                    label="Desenvolvimento Imobiliário"
+                    icon={Building2}
+                    isOpen={isDesenvolvimentoImobOpen}
+                    onToggle={() => setIsDesenvolvimentoImobOpen(o => !o)}
+                    hasActiveChild={['opportunities','opura-market','planta-ai','imovib','empreendimentos','area-engine','investor-portal'].includes(activeView)}
+                  >
+                    <DropdownGroupLabel label="Desenvolvimento de Negócios" />
+                    <DropdownItem id="opportunities" label="Oportunidades" icon={Building2} />
+                    <DropdownItem id="opura-market" label="Inteligência de Mercado" icon={Search} />
+                    <DropdownItem id="planta-ai" label="Estudo de Massa (Planta AI)" icon={Brain} />
+                    <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
+
+                    <DropdownGroupLabel label="Incorporação Imobiliária" />
+                    <DropdownItem id="empreendimentos" label="Empreendimentos" icon={Building2} />
+                    <DropdownItem id="area-engine" label="Áreas NBR 12721" icon={FileSpreadsheet} />
+                    <DropdownItem id="investor-portal" label="Portal do Investidor / SPE" icon={TrendingUp} />
                   </NavDropdown>
                 </>
               )}

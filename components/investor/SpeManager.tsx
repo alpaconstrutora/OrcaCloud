@@ -5,10 +5,12 @@ import { speService, SpeEntity, SpePartner } from '../../services/speService';
 import { investorService, Investor } from '../../services/investorService';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
+import CapitalCallPanel from './CapitalCallPanel';
 
 interface Props {
     organizationId: string;
     isAdmin?: boolean;
+    userEmail?: string;
 }
 
 const emptyEntity = (orgId: string): Omit<SpeEntity, 'id' | 'created_at'> => ({
@@ -18,7 +20,7 @@ const emptyEntity = (orgId: string): Omit<SpeEntity, 'id' | 'created_at'> => ({
     capital_social: 0,
 });
 
-const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
+const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => {
     const [entities, setEntities] = React.useState<SpeEntity[]>([]);
     const [investors, setInvestors] = React.useState<Investor[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -318,6 +320,16 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin }) => {
                                                     <Plus className="w-4 h-4" /> Sócio
                                                 </Button>
                                             </div>
+                                        )}
+
+                                        {pts.length > 0 && (
+                                            <CapitalCallPanel
+                                                organizationId={organizationId}
+                                                speEntityId={entity.id!}
+                                                partners={pts}
+                                                isAdmin={isAdmin}
+                                                userEmail={userEmail}
+                                            />
                                         )}
                                     </div>
                                 )}

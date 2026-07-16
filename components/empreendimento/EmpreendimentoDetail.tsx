@@ -1,6 +1,6 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag, Map, Loader2, ArrowLeftRight } from 'lucide-react';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag, Map, Loader2, ArrowLeftRight, ScrollText } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus, ImovibStudy } from '../../types';
 import TowerEditor from './TowerEditor';
 import CommonAreaEditor from './CommonAreaEditor';
@@ -10,6 +10,9 @@ import { SyncCenterTab } from './SyncCenterTab';
 import ImovibRegulatoryMapTab from '../ImovibRegulatoryMapTab';
 import ImovibBlocksTypologyTab from '../ImovibBlocksTypologyTab';
 import { imovibService } from '../../services/imovibService';
+import { empreendimentoService } from '../../services/empreendimentoService';
+import { areaEngineService } from '../../services/areaEngineService';
+import { generateIncorporationMemorialDraftPdf } from '../../services/incorporationMemorialService';
 import Button from '../ui/Button';
 
 interface Props {
@@ -46,6 +49,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
   const [linkedStudy, setLinkedStudy] = React.useState<ImovibStudy | null>(null);
   const [isLoadingLinkedStudy, setIsLoadingLinkedStudy] = React.useState(false);
   const [linkedStudyError, setLinkedStudyError] = React.useState<string | null>(null);
+  const [generatingMemorial, setGeneratingMemorial] = React.useState(false);
 
   const terrenoCidade = [e.terreno_city, e.terreno_state].filter(Boolean).join(' - ');
   const terrenoLinha = [e.terreno_street, e.terreno_number].filter(Boolean).join(', ');
@@ -75,6 +79,38 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       loadLinkedStudy();
     }
   }, [tab, loadLinkedStudy]);
+
+  const handleGenerateMemorial = async () => {
+    setGeneratingMemorial(true);
+    try {
+      const [towers, project] = await Promise.all([
+        empreendimentoService.listTowers(e.id),
+        areaEngineService.getProjectByEmpreendimento(e.id, organizationId),
+      ]);
+      let version = null as Awaited<ReturnType<typeof areaEngineService.getVersion>>;
+      let quadroI: Awaited<ReturnType<typeof areaEngineService.listQuadroI>> = [];
+      let quadroII: Awaited<ReturnType<typeof areaEngineService.listQuadroII>> = [];
+      let fractions: Awaited<ReturnType<typeof areaEngineService.listFractions>> = [];
+      if (project) {
+        const versions = await areaEngineService.listVersions(project.id);
+        const latest = versions.find(v => v.status === 'locked') ?? versions[0] ?? null;
+        if (latest) {
+          version = latest;
+          [quadroI, quadroII, fractions] = await Promise.all([
+            areaEngineService.listQuadroI(latest.id),
+            areaEngineService.listQuadroII(latest.id),
+            areaEngineService.listFractions(latest.id),
+          ]);
+        }
+      }
+      generateIncorporationMemorialDraftPdf({ empreendimento: e, towers, version, quadroI, quadroII, fractions });
+    } catch (err) {
+      console.error('[EmpreendimentoDetail] erro ao gerar minuta do memorial:', err);
+      alert('Erro ao gerar a minuta do memorial. Tente novamente.');
+    } finally {
+      setGeneratingMemorial(false);
+    }
+  };
 
   const tabs: { id: Tab; label: string; icon: any }[] = [
     { id: 'visao', label: 'Visão Geral', icon: FileText },
@@ -126,6 +162,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
                 <BarChart3 className="w-4 h-4" /> Ver Estudo
               </button>
             )}
+            <Button variant="ghost" onClick={handleGenerateMemorial} disabled={generatingMemorial}>
+              <ScrollText className="w-4 h-4" /> {generatingMemorial ? 'Gerando...' : 'Minuta do Memorial'}
+            </Button>
             <Button onClick={onEdit}>
               <Edit className="w-4 h-4" /> Editar
             </Button>

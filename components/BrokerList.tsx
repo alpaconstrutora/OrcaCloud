@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Mail, Phone, Trash2, Search, Loader2, LayoutDashboard, Table2, Link2, Copy, Check, RefreshCw, X, LayoutGrid } from 'lucide-react';
+import { User, Mail, Phone, Search, Loader2, LayoutDashboard, Table2, Link2, Copy, Check, RefreshCw, X, UserCheck, UserX } from 'lucide-react';
 import { BrokerProfile } from '../types';
 import { brokerService } from '../services/brokerService';
 import { brokerPortalService, BrokerPortalToken } from '../services/brokerPortalService';
@@ -7,10 +7,16 @@ import BrokerModal from './BrokerModal';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
+import { KpiCard } from './ui/KpiCard';
+import ActionIconButton from './ui/ActionIconButton';
+import { useConfirm } from './ui/confirm';
+import { useServicesToast } from './services/useServicestoast';
+import ServicesToast from './services/ServicesToast';
 
 const BROKER_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Corretor', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
+    // Contato = e-mail + telefone combinados — sem valor único óbvio pra ordenar (guide §6.3).
     { key: 'contact', label: 'Contato', sortable: false },
     { key: 'creci', label: 'CRECI', sortable: true },
     { key: 'agency', label: 'Imobiliária', sortable: true },
@@ -27,6 +33,13 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
         { value: 'active', label: 'Ativo' }, { value: 'inactive', label: 'Inativo' },
     ] },
 ];
+
+// Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+const StatusLabel: React.FC<{ active: boolean }> = ({ active }) => (
+    <span className={`text-sm font-normal ${active ? 'text-emerald-700' : 'text-gray-400'}`}>
+        {active ? 'Ativo' : 'Inativo'}
+    </span>
+);
 
 function getAdvancedFilterValue(b: BrokerProfile, key: string): unknown {
     switch (key) {
@@ -53,7 +66,6 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('brokerListFilters:search', '');
     const [statusFilter, setStatusFilter] = usePersistedState<'all' | 'active' | 'inactive'>('brokerListFilters:status', 'all');
-    const [sortBy, setSortBy] = usePersistedState('brokerListFilters:sortBy', 'name-asc');
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('brokerListFilters:viewMode', 'list');
 
     const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -63,6 +75,9 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
     const [tokenModal, setTokenModal] = React.useState<{ broker: BrokerProfile; token: BrokerPortalToken | null } | null>(null);
     const [tokenLoading, setTokenLoading] = React.useState(false);
     const [tokenCopied, setTokenCopied] = React.useState(false);
+
+    const confirm = useConfirm();
+    const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
 
     React.useEffect(() => { loadData(); }, [orgId]);
 
@@ -79,12 +94,20 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
     };
 
     const handleDelete = async (id: string, name: string) => {
-        if (!confirm(`Excluir o corretor "${name}"?`)) return;
+        const ok = await confirm({
+            title: 'Excluir corretor?',
+            message: `Tem certeza que deseja excluir o corretor "${name}"? Essa ação não pode ser desfeita.`,
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
         try {
             await brokerService.deleteProfile(id);
             setBrokers(prev => prev.filter(b => b.id !== id));
+            showToast('Corretor excluído com sucesso.', 'success');
         } catch (err) {
             console.error(err);
+            showToast('Erro ao excluir o corretor.', 'error');
         }
     };
 
@@ -95,7 +118,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
 
     const handleSave = async (data: Partial<BrokerProfile>) => {
         if (!orgId) {
-            throw new Error('Nenhuma organiza��o selecionada para cadastrar o corretor.');
+            throw new Error('Nenhuma organização selecionada para cadastrar o corretor.');
         }
 
         await brokerService.saveProfile({
@@ -104,6 +127,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
         });
         setIsModalOpen(false);
         loadData();
+        showToast('Corretor salvo com sucesso!', 'success');
     };
 
     // ── Token helpers ────────────────────────────────────────────────────────────
@@ -142,7 +166,14 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
     };
 
     const handleRevokeToken = async () => {
-        if (!tokenModal || !confirm('Revogar acesso deste corretor ao portal?')) return;
+        if (!tokenModal) return;
+        const ok = await confirm({
+            title: 'Revogar acesso ao portal?',
+            message: 'O corretor perderá o acesso ao portal através deste link.',
+            variant: 'warning',
+            confirmLabel: 'Revogar',
+        });
+        if (!ok) return;
         setTokenLoading(true);
         try {
             await brokerPortalService.revokeToken(tokenModal.broker.id);
@@ -170,7 +201,6 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
         result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
 
         return result.sort((a, b) => {
-                // TableUtils sort takes priority over dropdown sort
                 if (tableColumns.sortColumn) {
                     const col = tableColumns.sortColumn;
                     const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
@@ -179,184 +209,188 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                     if (col === 'creci') return (a.creci || '').localeCompare(b.creci || '') * dir;
                     if (col === 'agency') return (a.agency_name || '').localeCompare(b.agency_name || '') * dir;
                 }
-                if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
-                if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
-                if (sortBy === 'recent') return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
-                return 0;
+                // Sem coluna clicada, ordenação default é nome A-Z (guide §6.4).
+                return a.name.localeCompare(b.name);
             });
-    }, [brokers, searchTerm, statusFilter, sortBy, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [brokers, searchTerm, statusFilter, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    const kpis = React.useMemo(() => ({
+        total: brokers.length,
+        active: brokers.filter(b => b.is_active).length,
+        inactive: brokers.filter(b => !b.is_active).length,
+    }), [brokers]);
 
     const ActionBar = ({ broker }: { broker: BrokerProfile }) => (
         <div className="flex items-center gap-1.5">
             {onSelectBroker && (
-                <button
+                <ActionIconButton
+                    kind="view"
+                    title="Acessar portal"
+                    icon={<LayoutDashboard className="w-4 h-4" />}
                     onClick={() => onSelectBroker(broker)}
-                    className="p-2 text-indigo-500 hover:text-white hover:bg-indigo-500 rounded-lg transition-all"
-                    title="Acessar Portal"
-                >
-                    <LayoutDashboard className="w-4 h-4" />
-                </button>
+                />
             )}
-            <button
+            <ActionIconButton
+                kind="share"
+                title="Link de acesso ao portal"
+                icon={<Link2 className="w-4 h-4" />}
                 onClick={() => openTokenModal(broker)}
-                className="p-2 text-emerald-600 hover:text-white hover:bg-emerald-600 rounded-lg transition-all"
-                title="Link de Acesso ao Portal"
-            >
-                <Link2 className="w-4 h-4" />
-            </button>
+            />
+            <ActionIconButton kind="edit" onClick={() => handleOpenModal(broker)} />
+            <ActionIconButton kind="delete" onClick={() => handleDelete(broker.id, broker.name)} />
         </div>
     );
 
     return (
         <div className="space-y-6 p-6">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Meus Corretores</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua equipe de corretores e acesso ao portal.</p>
-                </div>
-                <div className="px-5 py-3 bg-amber-50 text-amber-700 border border-amber-100 rounded-[1.25rem] text-xs font-black uppercase tracking-widest">
-                    Cadastre em Minha Organização &gt; Fornecedores &gt; Corretor Imobiliário
-                </div>
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Meus Corretores</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua equipe de corretores e acesso ao portal. Cadastre em Minha Organização &gt; Fornecedores &gt; Corretor Imobiliário.</p>
             </div>
 
-            {/* Barra de filtros */}
-            <div className="bg-white p-5 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <KpiCard shadow={false} size="lg" className="col-span-2" label="Total de Corretores" value={kpis.total} icon={<User className="w-4 h-4" />} color="blue" />
+                <KpiCard shadow={false} size="sm" label="Ativos" value={kpis.active} icon={<UserCheck className="w-4 h-4" />} color="emerald" />
+                <KpiCard shadow={false} size="sm" label="Inativos" value={kpis.inactive} icon={<UserX className="w-4 h-4" />} color="gray" />
+            </div>
+
+            {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — já há KPI cards acima dando contexto. */}
+            <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
-                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
                         placeholder="Buscar por nome, e-mail ou CRECI..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
-                        className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-transparent rounded-[1.5rem] text-sm font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                 </div>
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Filtrar:</span>
-                    <select
-                        value={statusFilter}
-                        onChange={e => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
-                        className="text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-[1.25rem] px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-sans"
-                    >
-                        <option value="all">Todos</option>
-                        <option value="active">Ativos</option>
-                        <option value="inactive">Inativos</option>
-                    </select>
+
+                <select
+                    value={statusFilter}
+                    onChange={e => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
+                    className="h-9 text-sm font-normal text-gray-700 bg-white border border-gray-200 rounded-[6px] px-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                    <option value="all">Todos</option>
+                    <option value="active">Ativos</option>
+                    <option value="inactive">Inativos</option>
+                </select>
+
+                {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (guide §6.4) */}
+                <div className="flex items-center h-9">
+                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                 </div>
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Ordenar:</span>
-                    <select
-                        value={sortBy}
-                        onChange={e => setSortBy(e.target.value)}
-                        className="text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-[1.25rem] px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-sans"
-                    >
-                        <option value="name-asc">Nome (A-Z)</option>
-                        <option value="name-desc">Nome (Z-A)</option>
-                        <option value="recent">Mais Recentes</option>
-                    </select>
-                </div>
-                <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
+
+                <button
+                    onClick={loadData}
+                    className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                    title="Atualizar"
+                >
+                    <RefreshCw className="w-4 h-4" />
+                </button>
+
+                <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                    {viewMode === 'list' && (
+                        <>
+                            <ColumnConfigButton
+                                columns={BROKER_COLUMNS}
+                                visibleColumns={tableColumns.visibleColumns}
+                                showColumnConfig={tableColumns.showColumnConfig}
+                                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                                onToggleColumn={tableColumns.toggleColumn}
+                                onReset={tableColumns.resetColumns}
+                            />
+                            <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
+                        </>
+                    )}
                     <button
                         onClick={() => setViewMode('grid')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}
-                        title="Blocos"
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                        title="Visualização em blocos"
                     >
-                        <LayoutGrid className="w-5 h-5" />
+                        <LayoutDashboard className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
-                        className={`p-2.5 rounded-xl transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}
-                        title="Linhas"
+                        className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                        title="Visualização em linhas"
                     >
-                        <Table2 className="w-5 h-5" />
+                        <Table2 className="w-4 h-4" />
                     </button>
                 </div>
-                <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
-                {viewMode === 'list' && (
-                    <ColumnConfigButton
-                        columns={BROKER_COLUMNS}
-                        visibleColumns={tableColumns.visibleColumns}
-                        showColumnConfig={tableColumns.showColumnConfig}
-                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-                        onToggleColumn={tableColumns.toggleColumn}
-                        onReset={tableColumns.resetColumns}
-                    />
-                )}
             </div>
 
-            {/* Conteúdo */}
             {isLoading ? (
-                <div className="flex justify-center items-center py-20">
-                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-500">Carregando...</p>
                 </div>
             ) : filtered.length === 0 ? (
-                <div className="text-center py-20 bg-white rounded-[2.5rem] border border-gray-200 border-dashed">
-                    <User className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <h3 className="text-lg font-bold text-gray-900">Nenhum corretor encontrado</h3>
-                    <p className="text-gray-500 font-medium">
+                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                    <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum corretor encontrado</h3>
+                    <p className="text-sm text-gray-500">
                         {searchTerm ? 'Tente buscar por outro termo.' : 'Cadastre seu primeiro corretor no botão acima.'}
                     </p>
                 </div>
             ) : viewMode === 'list' ? (
-                <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50 border-b border-gray-200">
-                            <tr>
+                <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                    <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader força uppercase internamente por padrão. */}
+                        <thead>
+                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 {tableColumns.visibleColumns.includes('name') && (
-                                    <SortableHeader label="Corretor" colKey="name" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                    <SortableHeader label="Corretor" colKey="name" uppercase={false} sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 )}
                                 {tableColumns.visibleColumns.includes('status') && (
-                                    <SortableHeader label="Status" colKey="status" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                    <SortableHeader label="Status" colKey="status" uppercase={false} sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 )}
                                 {tableColumns.visibleColumns.includes('contact') && (
-                                    <SortableHeader label="Contato" colKey="contact" sortable={false} className="px-6 py-5" />
+                                    <SortableHeader label="Contato" colKey="contact" uppercase={false} sortable={false} className="px-6 py-2 border-r border-gray-100" />
                                 )}
                                 {tableColumns.visibleColumns.includes('creci') && (
-                                    <SortableHeader label="CRECI" colKey="creci" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                    <SortableHeader label="CRECI" colKey="creci" uppercase={false} sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 )}
                                 {tableColumns.visibleColumns.includes('agency') && (
-                                    <SortableHeader label="Imobiliária" colKey="agency" sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-5" />
+                                    <SortableHeader label="Imobiliária" colKey="agency" uppercase={false} sortable={true} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />
                                 )}
-                                <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-[0.2em] text-right">Ações</th>
+                                <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-gray-200">
                             {filtered.map(broker => (
-                                <tr key={broker.id} className="hover:bg-gray-50 transition-colors group">
+                                <tr key={broker.id} className="hover:bg-blue-50/50 transition-colors group">
                                     {tableColumns.visibleColumns.includes('name') && (
-                                        <td className="px-6 py-4">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 flex-shrink-0">
-                                                    <User className="w-5 h-5" />
+                                                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                                                    <User className="w-4 h-4" />
                                                 </div>
-                                                <span className="text-sm font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
-                                                    {broker.name}
-                                                </span>
+                                                <span className="text-sm font-normal text-gray-900">{broker.name}</span>
                                             </div>
                                         </td>
                                     )}
                                     {tableColumns.visibleColumns.includes('status') && (
-                                        <td className="px-6 py-4">
-                                            <span className={`text-xs font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${broker.is_active
-                                                ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                                : 'bg-gray-100 text-gray-400 border-gray-200'}`}>
-                                                {broker.is_active ? 'Ativo' : 'Inativo'}
-                                            </span>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                            <StatusLabel active={broker.is_active} />
                                         </td>
                                     )}
                                     {tableColumns.visibleColumns.includes('contact') && (
-                                        <td className="px-6 py-4">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                             <div className="space-y-1">
                                                 {broker.email && (
-                                                    <div className="flex items-center text-xs text-gray-600">
-                                                        <Mail className="w-3 h-3 mr-1.5 text-blue-500 flex-shrink-0" />
+                                                    <div className="flex items-center text-sm font-normal text-gray-600">
+                                                        <Mail className="w-3.5 h-3.5 mr-1.5 text-blue-500 shrink-0" />
                                                         {broker.email}
                                                     </div>
                                                 )}
                                                 {broker.phone && (
-                                                    <div className="flex items-center text-xs text-gray-600">
-                                                        <Phone className="w-3 h-3 mr-1.5 flex-shrink-0" />
+                                                    <div className="flex items-center text-sm font-normal text-gray-600">
+                                                        <Phone className="w-3.5 h-3.5 mr-1.5 text-gray-400 shrink-0" />
                                                         {broker.phone}
                                                     </div>
                                                 )}
@@ -364,17 +398,17 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                         </td>
                                     )}
                                     {tableColumns.visibleColumns.includes('creci') && (
-                                        <td className="px-6 py-4">
-                                            <span className="text-sm text-gray-600 font-medium">{broker.creci || '-'}</span>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                            {broker.creci || '-'}
                                         </td>
                                     )}
                                     {tableColumns.visibleColumns.includes('agency') && (
-                                        <td className="px-6 py-4">
-                                            <span className="text-sm text-gray-600">{broker.agency_name || '-'}</span>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                            {broker.agency_name || '-'}
                                         </td>
                                     )}
-                                    <td className="px-6 py-4">
-                                        <div className="flex justify-end">
+                                    <td className="px-6 py-2.5 text-right">
+                                        <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
                                             <ActionBar broker={broker} />
                                         </div>
                                     </td>
@@ -382,12 +416,12 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                             ))}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             ) : (
-                /* Grid view */
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filtered.map(broker => (
-                        <div key={broker.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:border-blue-300 hover:shadow-md transition-all group flex flex-col">
+                        <div key={broker.id} className="bg-white rounded-[10px] border border-gray-100 hover:border-blue-300 hover:shadow-md transition-all group flex flex-col overflow-hidden">
                             <div className="p-6 flex-1">
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="flex items-center gap-3">
@@ -396,9 +430,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                         </div>
                                         <div>
                                             <h3 className="text-base font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{broker.name}</h3>
-                                            <span className={`text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${broker.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
-                                                {broker.is_active ? 'Ativo' : 'Inativo'}
-                                            </span>
+                                            <StatusLabel active={broker.is_active} />
                                         </div>
                                     </div>
                                 </div>
@@ -406,13 +438,13 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                 <div className="space-y-2.5 pt-4 border-t border-gray-50">
                                     {broker.email && (
                                         <div className="flex items-center text-sm text-gray-600 font-medium">
-                                            <Mail className="w-4 h-4 mr-2 text-blue-500 flex-shrink-0" />
+                                            <Mail className="w-4 h-4 mr-2 text-blue-500 shrink-0" />
                                             <span className="truncate">{broker.email}</span>
                                         </div>
                                     )}
                                     {broker.phone && (
                                         <div className="flex items-center text-sm text-gray-600 font-medium">
-                                            <Phone className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
+                                            <Phone className="w-4 h-4 mr-2 text-gray-400 shrink-0" />
                                             {broker.phone}
                                         </div>
                                     )}
@@ -435,7 +467,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                 </div>
                             </div>
 
-                            <div className="px-6 py-4 bg-gray-50/50 rounded-b-[2rem] border-t border-gray-100 flex justify-end gap-1">
+                            <div className="px-6 py-4 bg-gray-50/50 rounded-b-[10px] border-t border-gray-100 flex justify-end gap-1.5">
                                 <ActionBar broker={broker} />
                             </div>
                         </div>
@@ -502,7 +534,7 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                                         className="flex items-center justify-center gap-2 px-4 py-3 border border-red-100 text-red-400 rounded-2xl text-button font-black uppercase tracking-widest hover:border-red-300 hover:text-red-600 transition-all"
                                         title="Revogar acesso"
                                     >
-                                        <Trash2 className="w-4 h-4" />
+                                        <UserX className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
@@ -525,6 +557,8 @@ const BrokerList: React.FC<BrokerListProps> = ({ organizationId, onSelectBroker 
                     </div>
                 </div>
             )}
+
+            <ServicesToast toasts={toasts} onDismiss={dismissToast} />
         </div>
     );
 };

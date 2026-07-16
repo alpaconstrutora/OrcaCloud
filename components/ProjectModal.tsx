@@ -648,7 +648,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
             ? 'flex-1 overflow-y-auto space-y-6 p-6 md:p-10'
             : 'flex-1 overflow-y-auto space-y-6 p-12'
           }>
-            <div className={mode === 'edit' ? 'max-w-3xl mx-auto space-y-6' : 'contents'}>
+            <div className={mode === 'edit' ? 'max-w-5xl mx-auto space-y-6' : 'contents'}>
 
             {initialClassification === 'OBRA' ? (
               <div className="space-y-6 animate-in fade-in duration-300">

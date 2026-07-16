@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { Supplier, SupplierCnaeActivity, SupplierPartner, SupplierStateRegistration } from '../types';
 import { isRealEstateBrokerCategory, REAL_ESTATE_BROKER_CATEGORY } from '../constants/supplierCategories';
+import { assertDocumentNotDuplicated } from './documentDuplicateCheck';
 
 const CNPJA_COLUMNS = 'cnpj_status, cnpj_status_date, cnpj_updated_at, cnpj_founded_at, cnpj_legal_nature, cnpj_company_size, cnpj_main_activity_code, cnpj_main_activity_text, cnpj_side_activities, cnpj_partners, cnpj_simples_optant, cnpj_simples_since, cnpj_simei_optant, cnpj_simei_since, cnpj_state_registrations';
 const SUPPLIER_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}`;
@@ -354,6 +355,8 @@ export const supplierService = {
     },
 
     addSupplier: async (supplier: Omit<Supplier, 'id' | 'created_at'>): Promise<Supplier> => {
+        await assertDocumentNotDuplicated('supplier', supplier.document);
+
         const payload: Record<string, unknown> = {
             ...supplier,
             email: normalizeEmail(supplier.email) || null,
@@ -392,6 +395,10 @@ export const supplierService = {
     },
 
     updateSupplier: async (id: string, updates: Partial<Supplier>): Promise<Supplier> => {
+        if (updates.document !== undefined) {
+            await assertDocumentNotDuplicated('supplier', updates.document, id);
+        }
+
         const payload = {
             ...updates,
             ...(updates.email !== undefined ? { email: normalizeEmail(updates.email) || null } : {}),

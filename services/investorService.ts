@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { sinapiService } from './sinapiService';
+import { assertDocumentNotDuplicated } from './documentDuplicateCheck';
 
 // Mapeamento NBR 12721 (padrão R8N, Tabela 5) → códigos SINAPI
 // Atualizar conforme novas versões da tabela NBR ou revisões SINAPI.
@@ -89,6 +90,10 @@ export const investorService = {
             ...(investor.email !== undefined && { email: investor.email?.trim() || null }),
         };
         if (investor.id) {
+            if (payload.document !== undefined) {
+                await assertDocumentNotDuplicated('investor', payload.document as string, investor.id);
+            }
+
             // Strip immutable fields from update payload
             const { id, created_at, ...updatePayload } = payload;
             const { data, error } = await supabase
@@ -101,6 +106,8 @@ export const investorService = {
             if (error) throw error;
             return data as Investor;
         } else {
+            await assertDocumentNotDuplicated('investor', payload.document as string);
+
             // Código sequencial 001/002/003... único por organização (§ui_ux_standard_guide.md).
             if (!payload.code) {
                 const { data: nextCode } = await supabase.rpc('get_next_investor_code', { p_org_id: investor.organization_id ?? null });

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { Client } from '../types';
+import { assertDocumentNotDuplicated } from './documentDuplicateCheck';
 
 type DbClientRow = Record<string, unknown>;
 
@@ -94,6 +95,10 @@ export const clientService = {
         delete payload.updated_at;
 
         if (clientId) {
+            if (payload.document !== undefined) {
+                await assertDocumentNotDuplicated('client', payload.document as string, clientId);
+            }
+
             const { data, error } = await supabase
                 .from('clients')
                 .update(payload)
@@ -107,6 +112,8 @@ export const clientService = {
             }
             return mapToFrontendClient(data);
         } else {
+            await assertDocumentNotDuplicated('client', payload.document as string);
+
             // Código sequencial 001/002/003... único por organização (§ui_ux_standard_guide.md).
             if (!payload.code) {
                 const { data: nextCode } = await supabase.rpc('get_next_client_code', { p_org_id: (client.organization_id as string) ?? null });

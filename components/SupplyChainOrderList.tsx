@@ -400,8 +400,11 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                 );
             })()}
 
-            {/* Filters — §5.1 (variante desaninhada, escala compacta §16), igual a ClientList.tsx */}
-            <div className="flex flex-col md:flex-row gap-2.5 items-center">
+            {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
+                conteúdo dividem um único card (border/rounded/shadow só no container
+                pai); a costura visível entre os dois é o border-b da toolbar. */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -500,7 +503,8 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                 </div>
             )}
 
-            {/* List */}
+            {/* List — sem bg/border/rounded próprios: já está dentro do card acoplado
+                toolbar+conteúdo (ver abertura acima) */}
             {loading ? (
                 <div className="text-center py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -508,7 +512,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                 </div>
             ) : filteredOrders.length > 0 ? (
                 viewMode === 'list' ? (
-                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                    <div>
                         <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             {/* thead em sentence case (§6.2) — escala compacta; uppercase={false} porque
@@ -669,7 +673,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                         </div>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
                         {filteredOrders.map(order => (
                             <div
                                 key={order.id}
@@ -771,7 +775,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     </div>
                 )
             ) : (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                <div className="text-center py-12">
                     <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum pedido encontrado</h3>
                     <p className="text-sm text-gray-500 mb-6">Comece criando um novo pedido de compra para suas obras.</p>
@@ -783,6 +787,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     </button>
                 </div>
             )}
+            </div>
         </div>
 
         {/* Notification toast */}

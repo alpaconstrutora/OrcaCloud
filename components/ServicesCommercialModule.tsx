@@ -5,9 +5,11 @@ import ServicesOpportunityDetail from './services/ServicesOpportunityDetail';
 import ServicesVisit from './services/ServicesVisit';
 import ServicesBudget from './services/ServicesBudget';
 import ServicesProposal from './services/ServicesProposal';
-import ServicesContracts from './services/ServicesContracts';
 import ContractDetailView from './ContractDetailView';
 
+// A listagem de contratos vive em Comercial › Contratos de Serviço
+// (ServiceContractsModule, motor `contracts`). Aqui só existe o detalhe de um
+// contrato aberto a partir da oportunidade que o gerou.
 export type ServicesView =
   | 'dashboard'
   | 'pipeline'
@@ -15,7 +17,6 @@ export type ServicesView =
   | 'visit'
   | 'budget'
   | 'proposal'
-  | 'contracts'
   | 'contract-detail';
 
 interface Props {
@@ -99,19 +100,11 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
             onBack={() => navigate('opportunity', selectedOpportunityId)}
           />
         ) : null;
-      case 'contracts':
-        return (
-          <ServicesContracts
-            organizationId={organizationId}
-            onNavigate={navigate}
-            onGoToContract={goToContract}
-          />
-        );
       case 'contract-detail':
         return selectedContractId ? (
           <ContractDetailView
             contractId={selectedContractId}
-            onBack={() => setView('contracts')}
+            onBack={() => setView(selectedOpportunityId ? 'opportunity' : 'pipeline')}
             budget={[]}
             organizationId={effectiveOrgId ?? ''}
           />
@@ -125,7 +118,7 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
     <div className="h-full flex flex-col">
       {/* Tab bar */}
       <div className="flex items-center gap-1 px-4 pt-3 pb-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-        {(['dashboard', 'pipeline', 'contracts'] as ServicesView[]).map(v => (
+        {(['dashboard', 'pipeline'] as ServicesView[]).map(v => (
           <button
             key={v}
             onClick={() => navigate(v)}
@@ -135,7 +128,7 @@ const ServicesCommercialModule: React.FC<Props> = ({ organizationId, onGoToProje
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
             }`}
           >
-            {v === 'dashboard' ? 'Dashboard' : v === 'pipeline' ? 'Pipeline' : 'Contratos'}
+            {v === 'dashboard' ? 'Dashboard' : 'Pipeline'}
           </button>
         ))}
         {selectedOpportunityId && ['opportunity', 'visit', 'budget', 'proposal'].includes(view) && (

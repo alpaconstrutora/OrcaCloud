@@ -75,9 +75,6 @@ const ServicesDashboard: React.FC<Props> = ({ organizationId, onNavigate }) => {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Comercial — Serviços</h2>
         <div className="flex gap-3">
-          <button onClick={() => onNavigate('contracts' as ServicesView)} className="text-sm text-gray-500 hover:text-blue-600">
-            Contratos →
-          </button>
           <button onClick={() => onNavigate('pipeline')} className="text-sm text-blue-600 hover:underline">
             Ver pipeline →
           </button>

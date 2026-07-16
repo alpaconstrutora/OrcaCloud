@@ -16,6 +16,9 @@
 -- as policies anon eram cruft; substituídas por multi-branch autenticado.
 --
 -- Path = "{supplier_id}/{ts}_{arquivo}" → foldername[1] = supplier_id.
+-- NOTA: `name` é qualificado como storage.objects.name porque suppliers E
+-- organization_members têm coluna `name` — sem qualificar, o `name` dentro do
+-- EXISTS liga às tabelas do subquery (erro 42702 "ambiguous" ou bind errado).
 -- Multi-branch (mesmo padrão do purchase_orders):
 --   • Interno: membro da org do fornecedor (suppliers.organization_id).
 --   • Fornecedor logado (InvoiceManager no SupplierDashboard): sobe/vê/limpa as
@@ -40,12 +43,12 @@ CREATE POLICY "invoices_select_org_or_supplier" ON storage.objects
       EXISTS (
         SELECT 1 FROM public.suppliers s
         JOIN public.organization_members om ON om.organization_id = s.organization_id
-        WHERE s.id::text = (storage.foldername(name))[1]
+        WHERE s.id::text = (storage.foldername(storage.objects.name))[1]
           AND om.email = auth.jwt() ->> 'email'
       )
       OR EXISTS (
         SELECT 1 FROM public.suppliers s
-        WHERE s.id::text = (storage.foldername(name))[1]
+        WHERE s.id::text = (storage.foldername(storage.objects.name))[1]
           AND lower(s.email) = lower(auth.jwt() ->> 'email')
       )
     )
@@ -59,12 +62,12 @@ CREATE POLICY "invoices_insert_org_or_supplier" ON storage.objects
       EXISTS (
         SELECT 1 FROM public.suppliers s
         JOIN public.organization_members om ON om.organization_id = s.organization_id
-        WHERE s.id::text = (storage.foldername(name))[1]
+        WHERE s.id::text = (storage.foldername(storage.objects.name))[1]
           AND om.email = auth.jwt() ->> 'email'
       )
       OR EXISTS (
         SELECT 1 FROM public.suppliers s
-        WHERE s.id::text = (storage.foldername(name))[1]
+        WHERE s.id::text = (storage.foldername(storage.objects.name))[1]
           AND lower(s.email) = lower(auth.jwt() ->> 'email')
       )
     )
@@ -78,12 +81,12 @@ CREATE POLICY "invoices_update_org_or_supplier" ON storage.objects
       EXISTS (
         SELECT 1 FROM public.suppliers s
         JOIN public.organization_members om ON om.organization_id = s.organization_id
-        WHERE s.id::text = (storage.foldername(name))[1]
+        WHERE s.id::text = (storage.foldername(storage.objects.name))[1]
           AND om.email = auth.jwt() ->> 'email'
       )
       OR EXISTS (
         SELECT 1 FROM public.suppliers s
-        WHERE s.id::text = (storage.foldername(name))[1]
+        WHERE s.id::text = (storage.foldername(storage.objects.name))[1]
           AND lower(s.email) = lower(auth.jwt() ->> 'email')
       )
     )
@@ -99,12 +102,12 @@ CREATE POLICY "invoices_delete_org_or_supplier" ON storage.objects
       EXISTS (
         SELECT 1 FROM public.suppliers s
         JOIN public.organization_members om ON om.organization_id = s.organization_id
-        WHERE s.id::text = (storage.foldername(name))[1]
+        WHERE s.id::text = (storage.foldername(storage.objects.name))[1]
           AND om.email = auth.jwt() ->> 'email'
       )
       OR EXISTS (
         SELECT 1 FROM public.suppliers s
-        WHERE s.id::text = (storage.foldername(name))[1]
+        WHERE s.id::text = (storage.foldername(storage.objects.name))[1]
           AND lower(s.email) = lower(auth.jwt() ->> 'email')
       )
     )

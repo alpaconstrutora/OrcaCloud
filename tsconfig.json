@@ -22,6 +22,12 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@react-three/fiber": [
+        "./types/react-three-stubs.d.ts"
+      ],
+      "@react-three/drei": [
+        "./types/react-three-stubs.d.ts"
       ]
     },
     "allowImportingTsExtensions": true,

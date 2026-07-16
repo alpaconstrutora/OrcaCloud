@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ZoomIn, ZoomOut, Maximize, Minimize, RotateCcw, Focus } from 'lucide-react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import { computeFloorLayout } from './plantaGeometry';
 
 interface Props {
   buildingWidth?: number;
@@ -18,18 +19,7 @@ interface Props {
   isFullscreen?: boolean;
 }
 
-const COLORS = [
-  '#fecaca', // red-200
-  '#bbf7d0', // green-200
-  '#bfdbfe', // blue-200
-  '#fef08a', // yellow-200
-  '#e9d5ff', // purple-200
-  '#fed7aa', // orange-200
-  '#a7f3d0', // emerald-200
-  '#fbcfe8', // pink-200
-];
-
-export default function FloorPlanCanvas2D({ 
+export default function FloorPlanCanvas2D({
   buildingWidth = 20, 
   buildingDepth = 30, 
   unitsPerFloor = 4, 
@@ -90,81 +80,50 @@ export default function FloorPlanCanvas2D({
   const offX = viewW / 2;
   const offY = viewH / 2;
 
-  // Grid Calculation
-  let cols = 1;
-  let rows = 1;
-
-  if (unitsPerFloor > 1) {
-    if (w >= h) {
-      cols = Math.ceil(unitsPerFloor / 2);
-      rows = 2;
-    } else {
-      rows = Math.ceil(unitsPerFloor / 2);
-      cols = 2;
-    }
-  }
+  // Layout paramétrico compartilhado com o viewer 3D (grade de unidades + núcleo)
+  const layout = computeFloorLayout(w, h, unitsPerFloor);
 
   // Draw units
-  const units: React.ReactNode[] = [];
-  let unitIndex = 0;
-  
-  const unitWidth = w / cols;
-  const unitHeight = h / rows;
-
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (unitIndex >= unitsPerFloor) break;
-      
-      const x = c * unitWidth;
-      const y = r * unitHeight;
-      const color = COLORS[unitIndex % COLORS.length];
-
-      units.push(
-        <g key={`unit-${unitIndex}`}>
-          <rect 
-            x={x} 
-            y={y} 
-            width={unitWidth} 
-            height={unitHeight} 
-            fill={color} 
-            fillOpacity={0.4}
-            stroke={color.replace('200', '500')}
-            strokeWidth={0.1}
-          />
-          {privateAreaPerUnit > 0 && (
-            <g transform={`translate(${x + unitWidth / 2}, ${y + unitHeight / 2})`}>
-              <text 
-                transform={`rotate(${counterRot})`}
-                textAnchor="middle" 
-                dominantBaseline="middle" 
-                fontSize={fSizeMd} 
-                fill="#4b5563"
-              >
-                {Math.round(privateAreaPerUnit)} m²
-              </text>
-            </g>
-          )}
-          <g transform={`translate(${x + 2}, ${y + (isRotated ? unitHeight - 2 : 4)})`}>
-            <text 
-               transform={`rotate(${counterRot})`}
-               fontSize={fSizeSm} 
-               fill="#6b7280"
-               dominantBaseline={isRotated ? "auto" : "hanging"}
-            >
-               U-{unitIndex + 1}
-            </text>
-          </g>
+  const units: React.ReactNode[] = layout.units.map((u) => (
+    <g key={`unit-${u.index}`}>
+      <rect
+        x={u.x}
+        y={u.y}
+        width={u.width}
+        height={u.height}
+        fill={u.color}
+        fillOpacity={0.4}
+        stroke={u.color.replace('200', '500')}
+        strokeWidth={0.1}
+      />
+      {privateAreaPerUnit > 0 && (
+        <g transform={`translate(${u.x + u.width / 2}, ${u.y + u.height / 2})`}>
+          <text
+            transform={`rotate(${counterRot})`}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontSize={fSizeMd}
+            fill="#4b5563"
+          >
+            {Math.round(privateAreaPerUnit)} m²
+          </text>
         </g>
-      );
-      unitIndex++;
-    }
-  }
+      )}
+      <g transform={`translate(${u.x + 2}, ${u.y + (isRotated ? u.height - 2 : 4)})`}>
+        <text
+           transform={`rotate(${counterRot})`}
+           fontSize={fSizeSm}
+           fill="#6b7280"
+           dominantBaseline={isRotated ? "auto" : "hanging"}
+        >
+           U-{u.index + 1}
+        </text>
+      </g>
+    </g>
+  ));
 
-  // Draw Core (Circulation / Elevators)
-  const coreWidth = w * 0.2; // 20% of width
-  const coreHeight = h * 0.2; // 20% of height
-  const coreX = (w - coreWidth) / 2;
-  const coreY = (h - coreHeight) / 2;
+  // Core (Circulation / Elevators)
+  const { x: coreX, y: coreY, width: coreWidth, height: coreHeight } = layout.core;
 
   return (
     <div className="w-full h-full relative flex items-center justify-center p-0 overflow-hidden bg-gray-50 rounded-xl">

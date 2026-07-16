@@ -1,9 +1,20 @@
-import React, { useMemo, useState, useRef } from 'react';
-import { X, Layers, Maximize, Minimize, Map, MousePointer2 } from 'lucide-react';
-import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import React, { useMemo, useState, useRef, Suspense } from 'react';
+import { Layers, Map, Square, Box, Columns2, Loader2 } from 'lucide-react';
 import { PlantScenario, PlantTerrain, PlantUrbanRuleset } from '../../types/plantaAi';
 import FloorPlanCanvas2D from './FloorPlanCanvas2D';
 import { PlantaAiEngine } from '../../services/plantaAiEngine';
+
+// Code-split: three.js só carrega quando o 3D é exibido.
+const Building3DViewer = React.lazy(() => import('./Building3DViewer'));
+
+type ViewMode = '2d' | '3d' | 'split';
+
+const Viewer3DFallback = () => (
+  <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 gap-3">
+    <Loader2 className="w-6 h-6 animate-spin" />
+    <span className="text-sm">Carregando modelo 3D…</span>
+  </div>
+);
 
 interface FloorViewerTabProps {
   scenario: PlantScenario | null;
@@ -13,6 +24,7 @@ interface FloorViewerTabProps {
 
 export default function FloorViewerTab({ scenario, terrain, rules }: FloorViewerTabProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('2d');
   const containerRef = useRef<HTMLDivElement>(null);
 
   const geometry = useMemo(() => {
@@ -62,8 +74,28 @@ export default function FloorViewerTab({ scenario, terrain, rules }: FloorViewer
           </div>
           <div>
             <h2 className="text-lg font-bold text-gray-900 tracking-tight">Plantas Baixas: {scenario.name}</h2>
-            <p className="text-xs text-gray-500 font-medium">Visualizador Paramétrico 2D</p>
+            <p className="text-xs text-gray-500 font-medium">Visualizador Paramétrico 2D / 3D</p>
           </div>
+        </div>
+
+        {/* Seletor de modo de visualização */}
+        <div className="flex bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
+          {([
+            { mode: '2d' as ViewMode, icon: Square, label: '2D' },
+            { mode: '3d' as ViewMode, icon: Box, label: '3D' },
+            { mode: 'split' as ViewMode, icon: Columns2, label: 'Lado a lado' },
+          ]).map(({ mode, icon: Icon, label }) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                viewMode === mode ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -99,43 +131,50 @@ export default function FloorViewerTab({ scenario, terrain, rules }: FloorViewer
           </div>
 
           {/* Right panel - Canvas */}
-          <div 
+          <div
             ref={containerRef}
-            className={`flex-1 bg-white border border-gray-200 relative flex items-center justify-center overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 rounded-none' : 'rounded-xl'}`}
+            className={`flex-1 bg-white border border-gray-200 relative flex items-stretch overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50 rounded-none' : 'rounded-xl'}`}
           >
-            <div className="absolute top-4 right-4 flex gap-2 z-10 shadow-sm rounded-lg overflow-hidden border border-gray-200">
-               <button 
-                 onClick={toggleFullscreen}
-                 className="p-2 bg-white hover:bg-gray-50 text-gray-600 transition-colors"
-                 title={isFullscreen ? "Sair da Tela Cheia" : "Tela Cheia"}
-               >
-                 {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-               </button>
-            </div>
-            
-            {/* Visual tip for panning */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1.5 bg-white/80 backdrop-blur border border-gray-200 rounded-full text-xs text-gray-500 shadow-sm z-10 pointer-events-none">
-              <MousePointer2 className="w-3.5 h-3.5" />
-              <span>Use o scroll (rodinha) para Zoom. Clique e arraste para Mover.</span>
-            </div>
+            {(viewMode === '2d' || viewMode === 'split') && (
+              <div className={`${viewMode === 'split' ? 'w-1/2 border-r border-gray-200' : 'w-full'} h-full flex items-center justify-center relative`}>
+                <FloorPlanCanvas2D
+                  buildingWidth={geometry?.buildingWidth}
+                  buildingDepth={geometry?.buildingDepth}
+                  unitsPerFloor={scenario.units_per_floor}
+                  privateAreaPerUnit={(scenario.total_units || 0) > 0 ? (scenario.total_private_area || 0) / (scenario.total_units || 1) : 0}
+                  terrainWidth={geometry?.terrainWidth}
+                  terrainDepth={geometry?.terrainDepth}
+                  leftSetback={geometry?.leftSetback}
+                  frontSetback={geometry?.frontSetback}
+                  minRightSetback={rules?.right_setback || 1.5}
+                  minRearSetback={rules?.rear_setback || 3}
+                  isRotated={true}
+                  onToggleFullscreen={viewMode === '2d' ? toggleFullscreen : undefined}
+                  isFullscreen={isFullscreen}
+                />
+              </div>
+            )}
 
-            <div className="w-full h-full flex items-center justify-center">
-              <FloorPlanCanvas2D 
-                buildingWidth={geometry?.buildingWidth}
-                buildingDepth={geometry?.buildingDepth}
-                unitsPerFloor={scenario.units_per_floor}
-                privateAreaPerUnit={(scenario.total_units || 0) > 0 ? (scenario.total_private_area || 0) / (scenario.total_units || 1) : 0}
-                terrainWidth={geometry?.terrainWidth}
-                terrainDepth={geometry?.terrainDepth}
-                leftSetback={geometry?.leftSetback}
-                frontSetback={geometry?.frontSetback}
-                minRightSetback={rules?.right_setback || 1.5}
-                minRearSetback={rules?.rear_setback || 3}
-                isRotated={true}
-                onToggleFullscreen={toggleFullscreen}
-                isFullscreen={isFullscreen}
-              />
-            </div>
+            {(viewMode === '3d' || viewMode === 'split') && (
+              <div className={`${viewMode === 'split' ? 'w-1/2' : 'w-full'} h-full`}>
+                <Suspense fallback={<Viewer3DFallback />}>
+                  <Building3DViewer
+                    buildingWidth={geometry?.buildingWidth}
+                    buildingDepth={geometry?.buildingDepth}
+                    unitsPerFloor={scenario.units_per_floor}
+                    terrainWidth={geometry?.terrainWidth}
+                    terrainDepth={geometry?.terrainDepth}
+                    leftSetback={geometry?.leftSetback}
+                    frontSetback={geometry?.frontSetback}
+                    minRightSetback={rules?.right_setback || 1.5}
+                    minRearSetback={rules?.rear_setback || 3}
+                    floorsCount={scenario.floors_count || 1}
+                    onToggleFullscreen={viewMode === '3d' ? toggleFullscreen : undefined}
+                    isFullscreen={isFullscreen}
+                  />
+                </Suspense>
+              </div>
+            )}
           </div>
       </div>
     </div>

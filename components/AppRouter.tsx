@@ -67,6 +67,7 @@ import { VIEW_TO_CONTROLADORIA_TAB } from '../constants/controladoríaTabs';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
 const AreaEngineModule = React.lazy(() => import('./AreaEngineModule'));
+const AppraisalModule = React.lazy(() => import('./AppraisalModule'));
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
 const CentralControle       = React.lazy(() => import('./CentralControle'));
@@ -289,7 +290,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = isModuleAllowed('canViewOffices', 'offices');
     } else if (['sales', 'rentals', 'gestao-vendas'].includes(activeView)) {
       allowed = isModuleAllowed('canViewSales', 'crm');
-    } else if (activeView === 'imovib' || activeView === 'empreendimentos') {
+    } else if (activeView === 'imovib' || activeView === 'empreendimentos' || activeView === 'laudo-avaliacao') {
       allowed = isModuleAllowed('canViewImovib', 'incorporacao');
     } else if (activeView === 'fiscal-nfe') {
       allowed = isModuleAllowed('canViewFiscal', 'fiscal');
@@ -1086,6 +1087,12 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<Spinner />}>
           <AreaEngineModule organizationId={activeOrganizationId || undefined} />
+        </React.Suspense>
+      );
+    case 'laudo-avaliacao':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <AppraisalModule organizationId={activeOrganizationId || ''} userEmail={currentProfile.email} />
         </React.Suspense>
       );
     case 'quality':

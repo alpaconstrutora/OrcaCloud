@@ -188,13 +188,13 @@ const LandDealComparatorPanel: React.FC<Props> = ({ opportunityId, organizationI
                                         {scenario.name}
                                     </td>
                                     <td className="p-4 text-gray-600">{LAND_DEAL_TYPE_LABELS[scenario.deal_type]}</td>
-                                    <td className="p-4 text-gray-700 font-mono">{scenario.land_cost_equivalent != null ? fmtBRL(scenario.land_cost_equivalent) : '—'}</td>
-                                    <td className="p-4 text-gray-700 font-mono">{scenario.max_cash_exposure != null ? fmtBRL(scenario.max_cash_exposure) : '—'}</td>
-                                    <td className="p-4 text-gray-700 font-mono">{scenario.impact_tir_pct != null ? fmtPct(scenario.impact_tir_pct) : '—'}</td>
+                                    <td className="p-4 text-gray-700 font-medium">{scenario.land_cost_equivalent != null ? fmtBRL(scenario.land_cost_equivalent) : '—'}</td>
+                                    <td className="p-4 text-gray-700 font-medium">{scenario.max_cash_exposure != null ? fmtBRL(scenario.max_cash_exposure) : '—'}</td>
+                                    <td className="p-4 text-gray-700 font-medium">{scenario.impact_tir_pct != null ? fmtPct(scenario.impact_tir_pct) : '—'}</td>
                                     <td className="p-4">
                                         <div className="flex items-center gap-1 justify-end">
                                             {!scenario.is_selected && (
-                                                <button onClick={() => handleSelect(scenario)} className="text-xs font-bold text-blue-600 hover:underline mr-2">Selecionar</button>
+                                                <button onClick={() => handleSelect(scenario)} className="text-sm font-medium text-blue-600 hover:underline mr-2">Selecionar</button>
                                             )}
                                             <button onClick={() => setEditing(scenario)} className="p-1.5 hover:bg-gray-100 rounded-lg"><Pencil className="w-3.5 h-3.5 text-gray-500" /></button>
                                             <button onClick={() => handleDelete(scenario)} className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 className="w-3.5 h-3.5 text-red-500" /></button>

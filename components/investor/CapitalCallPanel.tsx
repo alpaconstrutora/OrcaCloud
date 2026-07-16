@@ -172,7 +172,7 @@ const CapitalCallPanel: React.FC<Props> = ({ organizationId, speEntityId, partne
                                                     <tr key={item.id}>
                                                         <td className="py-2 font-medium text-gray-800">{item.investor_name || '—'}</td>
                                                         <td className="py-2 text-right text-gray-700">{formatCurrency(item.amount_due)}</td>
-                                                        <td className="py-2 text-right text-emerald-700 font-bold">{formatCurrency(item.amount_paid)}</td>
+                                                        <td className="py-2 text-right text-emerald-700 font-medium">{formatCurrency(item.amount_paid)}</td>
                                                         <td className="py-2 text-right text-gray-600">{CAPITAL_CALL_ITEM_STATUS_LABELS[item.status]}</td>
                                                         {isAdmin && (
                                                             <td className="py-2 text-right">

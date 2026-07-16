@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { PlantStudy, PlantScenario } from '../../types/plantaAi';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Building2, ArrowRight, Link2Off } from 'lucide-react';
+import { useStore } from '../../store/useStore';
 import { PlantaAiEngine } from '../../services/plantaAiEngine';
 import { PlantaAiIntegration } from '../../services/plantaAiIntegration';
 import { plantaAiMaterializeService } from '../../services/plantaAiMaterializeService';
@@ -30,13 +31,27 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
   const [rules, setRules] = useState<PlantUrbanRuleset | null>(null);
   const [briefing, setBriefing] = useState<PlantBriefing | null>(null);
   const [materializingId, setMaterializingId] = useState<string | null>(null);
+  // Empreendimento que aponta para este estudo. O vínculo é gravado do lado do
+  // Empreendimento (empreendimentos.planta_ai_study_id), então aqui é leitura reversa.
+  const [linkedEmp, setLinkedEmp] = useState<{ id: string; name: string } | null>(null);
   const confirm = useConfirm();
+  const setActiveView = useStore(s => s.setActiveView);
 
   useEffect(() => {
     fetchStudy();
     fetchScenarios();
     fetchContext();
+    fetchLinkedEmpreendimento();
   }, [studyId]);
+
+  async function fetchLinkedEmpreendimento() {
+    const { data } = await supabase
+      .from('empreendimentos')
+      .select('id, name')
+      .eq('planta_ai_study_id', studyId)
+      .maybeSingle();
+    setLinkedEmp(data ?? null);
+  }
 
   async function fetchContext() {
     const { data: tData } = await supabase.from('plant_terrains').select('*').eq('study_id', studyId).single();
@@ -202,6 +217,39 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
           <p className="text-sm text-gray-500">Status: {study.status}</p>
         </div>
       </div>
+
+      {/* Ponte com Empreendimentos. As duas direções do sync vivem no Centro de Sincronização
+          do Empreendimento (é lá que mora o dado real), então aqui a tela precisa pelo menos
+          dizer que a ponte existe e como chegar — sem isso o fluxo inverso fica invisível para
+          quem está no Planta IA. */}
+      {linkedEmp ? (
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-blue-50/60 border border-blue-100 rounded-[10px] px-4 py-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="p-1.5 bg-white text-blue-600 rounded-[6px] border border-blue-100 shrink-0">
+              <Building2 className="w-4 h-4" />
+            </span>
+            <p className="text-sm text-gray-600 truncate">
+              Vinculado ao empreendimento <strong className="text-gray-900">{linkedEmp.name}</strong>
+            </p>
+          </div>
+          <button
+            onClick={() => setActiveView('empreendimentos')}
+            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+            title="Sincronizar o cenário com as torres/unidades, ou enviar o realizado de volta ao cenário"
+          >
+            Abrir sincronização <ArrowRight className="w-[15px] h-[15px]" />
+          </button>
+        </div>
+      ) : (
+        <div className="mb-6 flex items-start gap-2.5 bg-gray-50 border border-dashed border-gray-200 rounded-[10px] px-4 py-3">
+          <Link2Off className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+          <p className="text-sm text-gray-500 leading-relaxed">
+            Nenhum empreendimento vinculado a este estudo. Para levar o cenário escolhido às torres
+            e unidades — e trazer o realizado de volta —, abra <strong className="text-gray-600">Comercial → Empreendimentos</strong>,
+            edite o empreendimento e selecione este estudo em <strong className="text-gray-600">Estudo de Arquitetura (Planta IA)</strong>.
+          </p>
+        </div>
+      )}
 
       <div className="border-b border-gray-200 mb-6">
         <nav className="-mb-px flex space-x-8">

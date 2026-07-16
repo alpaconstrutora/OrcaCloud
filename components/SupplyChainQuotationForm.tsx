@@ -4,6 +4,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { QuotationRequest, ProjectSettings, Supplier, QuotationRequestItem, SinapiType, SinapiCategory, BudgetEntry } from '../types';
 import { quotationService } from '../services/quotationService';
 import { projectService } from '../services/projectService';
+import { resolveProjectBudget } from '../services/budgetResolver';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
 import { sinapiService } from '../services/sinapiService';
@@ -183,8 +184,13 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
 
         const loadProjectData = async () => {
             try {
-                const data = await projectService.loadProject(formData.projectId);
+                const loaded = await projectService.loadProject(formData.projectId);
                 if (cancelled) return;
+                // O orçamento raramente está em project.budget: numa OBRA ele vive no
+                // projeto filho e num PLANEJAMENTO no snapshot congelado.
+                const resolved = await resolveProjectBudget(loaded, { searchChildren: true });
+                if (cancelled) return;
+                const data = { ...loaded, budget: resolved.budget };
                 setProjectData(data);
 
                 // Fetch updated prices
@@ -686,7 +692,13 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                     )}
                                 </div>
 
-                                {projectData ? (
+                                {projectData && projectData.budget.length === 0 ? (
+                                    <div className="py-12 flex flex-col items-center border-2 border-dashed border-gray-100 rounded-2xl bg-gray-50/50">
+                                        <Package className="w-8 h-8 text-gray-200 mb-2" />
+                                        <p className="text-sm font-medium text-gray-400">Esta obra não possui itens de orçamento</p>
+                                        <p className="text-sm font-normal text-gray-400 mt-1">Use os itens avulsos abaixo para montar a cotação</p>
+                                    </div>
+                                ) : projectData ? (
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-left text-sm">
                                             <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs">

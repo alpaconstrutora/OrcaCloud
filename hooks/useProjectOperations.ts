@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { projectService } from '../services/projectService';
+import { resolveProjectBudget } from '../services/budgetResolver';
 import { contractService } from '../services/contractService';
 import { organizationService } from '../services/organizationService';
 import { projectTypeTemplatesService } from '../services/projectTypeTemplatesService';
@@ -250,56 +251,18 @@ export const useProjectOperations = ({
       if (projectData) {
         const loadedSettings = { ...INITIAL_PROJECT_SETTINGS, ...projectData.settings, ...(projectData.code ? { code: projectData.code } : {}) };
         setProjectId(id);
-        let projectBudget = projectData.budget || [];
-        if (loadedSettings.classification === 'PLANEJAMENTO') {
-          // Versionamento orçamento × planejamento: o planejamento é FIXADO a uma versão do
-          // orçamento (basedOnBudgetVersionId) e sempre carrega aquela versão congelada — não drifta.
-          const linkedId = loadedSettings.linkedProjectId;
-          const linkedName = loadedSettings.linkedProjectName;
-
-          if (linkedId || linkedName) {
-            try {
-              let linkedData = null;
-              if (linkedId) {
-                linkedData = await projectService.loadProject(linkedId);
-              } else if (linkedName) {
-                const linkedProject = projects.find((p) => p.name === linkedName && (p.settings?.classification === 'ORCAMENTO' || p.settings?.classification === 'OBRA'));
-                if (linkedProject) {
-                  linkedData = await projectService.loadProject(linkedProject.id);
-                }
-              }
-
-              const linkedVersions = linkedData?.settings?.versions || [];
-              const pinId = loadedSettings.basedOnBudgetVersionId;
-              const pinnedVersion = pinId ? linkedVersions.find((v: { id: string }) => v.id === pinId) : undefined;
-
-              if ((loadedSettings.basedOnBudgetSnapshot?.length ?? 0) > 0) {
-                // Snapshot imutável já gravado — usa diretamente, sem tocar no orçamento vinculado
-                projectBudget = loadedSettings.basedOnBudgetSnapshot!;
-              } else if (pinnedVersion && (pinnedVersion.budget?.length || 0) > 0) {
-                // Sem snapshot ainda: migração — congela agora
-                projectBudget = pinnedVersion.budget;
-                loadedSettings.basedOnBudgetSnapshot = JSON.parse(JSON.stringify(pinnedVersion.budget));
-              } else if (linkedVersions.length > 0) {
-                // Primeira abertura: fixa na versão ativa e grava snapshot
-                const activeVersion = linkedVersions.find((v: { id: string }) => v.id === linkedData?.settings?.activeVersionId)
-                  || linkedVersions[linkedVersions.length - 1];
-                if (activeVersion && (activeVersion.budget?.length || 0) > 0) {
-                  projectBudget = activeVersion.budget;
-                  loadedSettings.basedOnBudgetVersionId = activeVersion.id;
-                  loadedSettings.basedOnBudgetVersionItem = activeVersion.item;
-                  loadedSettings.basedOnBudgetSnapshot = JSON.parse(JSON.stringify(activeVersion.budget));
-                } else if (linkedData?.budget && linkedData.budget.length > 0) {
-                  projectBudget = linkedData.budget;
-                }
-              } else if (linkedData?.budget && linkedData.budget.length > 0) {
-                // Orçamento sem versões: usa o budget ao vivo
-                projectBudget = linkedData.budget;
-              }
-            } catch (err) {
-              console.error("Erro ao carregar orçamento vinculado:", err);
-            }
-          }
+        // Versionamento orçamento × planejamento: o planejamento é FIXADO a uma versão do
+        // orçamento (basedOnBudgetVersionId) e sempre carrega aquela versão congelada — não drifta.
+        const resolved = await resolveProjectBudget(
+          { ...projectData, settings: loadedSettings },
+          { findByName: (name) => projects.find((p) => p.name === name && (p.settings?.classification === 'ORCAMENTO' || p.settings?.classification === 'OBRA')) },
+        );
+        let projectBudget = resolved.budget;
+        if (resolved.snapshotToPersist) {
+          // A resolução congelou a versão agora (primeira abertura ou migração).
+          loadedSettings.basedOnBudgetSnapshot = resolved.snapshotToPersist;
+          if (resolved.versionId) loadedSettings.basedOnBudgetVersionId = resolved.versionId;
+          if (resolved.versionItem !== undefined) loadedSettings.basedOnBudgetVersionItem = resolved.versionItem;
         }
         setProjectSettings(loadedSettings);
         setBudget(projectBudget);

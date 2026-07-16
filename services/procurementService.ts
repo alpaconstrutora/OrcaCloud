@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { BudgetEntry, SinapiCategory, SinapiType } from '../types/budget';
 import { SchedulePeriod, ItemDistribution, OutlineNode, TaskNature } from '../types/schedule';
 import { ProjectSchedule } from '../types/project';
+import { resolveProjectBudget, findChildProject } from './budgetResolver';
 import { inventoryService } from './inventoryService';
 import { quotationService } from './quotationService';
 import { orderService } from './orderService';
@@ -448,11 +449,8 @@ export const procurementService = {
         let schedule = settings.schedule as ProjectSchedule | undefined;
         let budgetVersionId = settings.activeVersionId as string | undefined;
 
-        // Budget: prefere project.budget; se vazio, usa basedOnBudgetSnapshot (caso PLANEJAMENTO)
-        let budget: BudgetEntry[] =
-            ((project.budget ?? []) as BudgetEntry[]).length > 0
-                ? (project.budget as BudgetEntry[])
-                : ((settings.basedOnBudgetSnapshot as BudgetEntry[]) ?? []);
+        // Budget: o campo project.budget raramente é a fonte — ver budgetResolver.
+        let budget: BudgetEntry[] = (await resolveProjectBudget(project as any)).budget;
 
         console.log('[procurement] projeto carregado', {
             projectId,
@@ -467,26 +465,19 @@ export const procurementService = {
 
         // Se o projeto não tiver cronograma, busca no projeto PLANEJAMENTO vinculado
         if (!schedule) {
-            const { data: planProj } = await supabase
-                .from('projects')
-                .select('id, budget, settings')
-                .filter('settings->>linkedProjectId', 'eq', projectId)
-                .filter('settings->>classification', 'eq', 'PLANEJAMENTO')
-                .order('updated_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
+            const planProj = await findChildProject(projectId, 'PLANEJAMENTO');
             if (planProj) {
                 const planSettings = (planProj.settings ?? {}) as Record<string, unknown>;
                 schedule = planSettings.schedule as ProjectSchedule | undefined;
                 if (!budgetVersionId) budgetVersionId = planSettings.activeVersionId as string | undefined;
                 // As distribuições do cronograma referenciam os IDs do basedOnBudgetSnapshot,
-                // então SEMPRE usamos o snapshot quando há PLANEJAMENTO vinculado.
-                const snap = (planSettings.basedOnBudgetSnapshot as BudgetEntry[] | undefined) ?? [];
-                budget = snap.length > 0 ? snap : ((planProj.budget ?? []) as BudgetEntry[]);
+                // então SEMPRE usamos o orçamento do PLANEJAMENTO quando há um vinculado —
+                // o resolver já prioriza o snapshot nesse caso.
+                budget = (await resolveProjectBudget(planProj)).budget;
                 console.log('[procurement] PLANEJAMENTO vinculado encontrado', {
                     planProjectId: planProj.id,
                     planLinkedProjectId: planSettings.linkedProjectId,
-                    snapshotRows: snap.length,
+                    snapshotRows: ((planSettings.basedOnBudgetSnapshot as any[]) ?? []).length,
                     planBudgetRows: ((planProj.budget ?? []) as any[]).length,
                     scheduleFound: !!schedule,
                     schedulePeriodsCount: (schedule as any)?.periods?.length ?? 0,

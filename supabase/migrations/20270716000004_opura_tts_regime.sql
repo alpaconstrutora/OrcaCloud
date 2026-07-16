@@ -16,15 +16,30 @@
 --      brutas). O cálculo de ICMS-devido-com/sem-TTS mora no ttsService, que
 --      combina estas somas com as alíquotas de tts_regime_settings.
 --
+-- ⚠️ RESISTÊNCIA A DEADLOCK (correção 2026-07-16): a 1ª versão criava as
+-- tabelas com `REFERENCES` inline. Adicionar FK exige lock na tabela
+-- REFERENCIADA (organizations/companies/nfe_invoices) — e com o app lendo
+-- essas tabelas ao vivo, o lock cruza com o AccessShareLock das queries em
+-- voo e dá `40P01 deadlock detected` (mesmo padrão de broker_proposals).
+-- Correção: (a) tabelas criadas SEM FK inline — só toca os objetos novos, não
+-- deadlocka; (b) FKs adicionadas depois, cada uma em bloco idempotente, com
+-- `NOT VALID` (não varre + lock menor) e `lock_timeout` para FALHAR RÁPIDO em
+-- vez de travar. Reexecutar é seguro (tudo IF NOT EXISTS / DROP-CREATE) — se
+-- um passo de FK falhar por lock, as tabelas já existem e só as FVs restantes
+-- são retentadas.
+--
 -- RLS: padrão vigente da casa — public.is_org_member(org_id), org-scoped,
 -- SEM policy anon (rollout drop-anon, ver project_rls_anon_rollout).
 -- ============================================================
 
--- ─── 1. Parâmetros do regime (config por org/filial) ─────────
+-- Falha rápido em espera de lock (em vez de bloquear até o deadlock detector).
+SET lock_timeout = '6s';
+
+-- ─── 1. Parâmetros do regime (config por org/filial) — SEM FK inline ──
 CREATE TABLE IF NOT EXISTS public.tts_regime_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
-    company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE,
+    org_id UUID NOT NULL,
+    company_id UUID,
     home_uf VARCHAR(2) NOT NULL DEFAULT 'MG',        -- UF de origem do benefício
     active BOOLEAN NOT NULL DEFAULT true,             -- regime TTS habilitado?
 
@@ -50,11 +65,11 @@ CREATE TABLE IF NOT EXISTS public.tts_regime_settings (
     CONSTRAINT tts_regime_settings_org_company_uq UNIQUE (org_id, company_id)
 );
 
--- ─── 2. Ledger de apuração (saídas/entradas por competência) ──
+-- ─── 2. Ledger de apuração (saídas/entradas por competência) — SEM FK inline ──
 CREATE TABLE IF NOT EXISTS public.tts_fiscal_movements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
-    company_id UUID NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
+    org_id UUID NOT NULL,
+    company_id UUID NOT NULL,
 
     reference_month DATE NOT NULL,                    -- competência (1º dia do mês)
     direction VARCHAR(10) NOT NULL,                   -- 'saida' | 'entrada'
@@ -66,7 +81,7 @@ CREATE TABLE IF NOT EXISTS public.tts_fiscal_movements (
     icms_credit NUMERIC(15,2) NOT NULL DEFAULT 0,     -- crédito real de ICMS (entradas)
 
     source VARCHAR(10) NOT NULL DEFAULT 'manual',     -- 'manual' | 'nfe' | 'erp'
-    nfe_invoice_id UUID REFERENCES public.nfe_invoices(id) ON DELETE SET NULL,
+    nfe_invoice_id UUID,
     document_ref VARCHAR(100),                        -- nº NF-e / chave / lançamento
     description TEXT,
 
@@ -85,7 +100,40 @@ CREATE INDEX IF NOT EXISTS idx_tts_movements_nfe
 CREATE INDEX IF NOT EXISTS idx_tts_regime_settings_org
     ON public.tts_regime_settings (org_id, company_id);
 
--- ─── 3. View de apuração (somas brutas por competência) ──────
+-- ─── 3. FKs adicionadas em separado, idempotentes, NOT VALID ──────────
+-- NOT VALID: pula a varredura das linhas existentes (tabelas novas/vazias de
+-- qualquer forma) e reduz a janela de lock na tabela referenciada. A regra
+-- CASCADE / SET NULL continua valendo para novas operações mesmo NOT VALID.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tts_regime_settings_org_fk') THEN
+        ALTER TABLE public.tts_regime_settings
+            ADD CONSTRAINT tts_regime_settings_org_fk
+            FOREIGN KEY (org_id) REFERENCES public.organizations(id) ON DELETE CASCADE NOT VALID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tts_regime_settings_company_fk') THEN
+        ALTER TABLE public.tts_regime_settings
+            ADD CONSTRAINT tts_regime_settings_company_fk
+            FOREIGN KEY (company_id) REFERENCES public.companies(id) ON DELETE CASCADE NOT VALID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tts_movements_org_fk') THEN
+        ALTER TABLE public.tts_fiscal_movements
+            ADD CONSTRAINT tts_movements_org_fk
+            FOREIGN KEY (org_id) REFERENCES public.organizations(id) ON DELETE CASCADE NOT VALID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tts_movements_company_fk') THEN
+        ALTER TABLE public.tts_fiscal_movements
+            ADD CONSTRAINT tts_movements_company_fk
+            FOREIGN KEY (company_id) REFERENCES public.companies(id) ON DELETE CASCADE NOT VALID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tts_movements_nfe_fk') THEN
+        ALTER TABLE public.tts_fiscal_movements
+            ADD CONSTRAINT tts_movements_nfe_fk
+            FOREIGN KEY (nfe_invoice_id) REFERENCES public.nfe_invoices(id) ON DELETE SET NULL NOT VALID;
+    END IF;
+END $$;
+
+-- ─── 4. View de apuração (somas brutas por competência) ──────
 -- Só agrega; o cálculo com/sem TTS (que depende das alíquotas) fica no service.
 -- security_invoker=on é OBRIGATÓRIO: sem ele a view roda como o dono e IGNORA a
 -- RLS das tabelas base, vazando apuração de todas as orgs. Com ele, o SELECT
@@ -113,7 +161,7 @@ SELECT
 FROM public.tts_fiscal_movements m
 GROUP BY m.org_id, m.company_id, m.reference_month;
 
--- ─── 4. RLS ──────────────────────────────────────────────────
+-- ─── 5. RLS ──────────────────────────────────────────────────
 ALTER TABLE public.tts_regime_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tts_fiscal_movements ENABLE ROW LEVEL SECURITY;
 

@@ -194,7 +194,12 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                 <KpiCard shadow={false} size="sm" label="TIR média (a.a.)" value={formatPercent(kpis.irrAvg, { asPoints: true, decimals: 1 })} icon={<Percent className="w-4 h-4" />} color="amber" />
             </div>
 
-            {/* Toolbar — §5.1 (variante desaninhada, escala compacta §16) */}
+            {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED): toolbar e
+                conteúdo dividem um único bloco — border/rounded/shadow ficam só no
+                container pai, a única costura visível é o border-b da toolbar, sem
+                bordas duplicadas entre a régua e a tabela/grade abaixo. */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-gray-100 bg-white">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -257,6 +262,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                     Novo estudo
                 </button>
             </div>
+            </div>
 
             {loading ? (
                 <div className="text-center py-12">
@@ -264,7 +270,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                     <p className="mt-2 text-gray-500">Carregando estudos...</p>
                 </div>
             ) : filteredRows.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                <div className="text-center py-12">
                     <BarChart className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum estudo encontrado</h3>
                     <p className="text-sm text-gray-500 mb-6">
@@ -283,9 +289,8 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                     )}
                 </div>
             ) : viewMode === 'list' ? (
-                <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                    <div className="overflow-auto max-h-[70vh]">
-                        <table className="w-full text-left border-collapse">
+                <div className="overflow-auto max-h-[70vh]">
+                    <table className="w-full text-left border-collapse">
                             {/* thead sentence case (§6.2) — sticky (§6.5), uppercase={false} nos SortableHeader */}
                             <thead>
                                 <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
@@ -403,9 +408,8 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                             </tbody>
                         </table>
                     </div>
-                </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
                     {filteredRows.map(({ study, m }) => (
                         <div
                             key={study.id}
@@ -466,6 +470,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNew
                     ))}
                 </div>
             )}
+            </div>
 
             {/* Toast — §13 */}
             {notification && (

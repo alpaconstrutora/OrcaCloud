@@ -165,8 +165,11 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                 <KpiCard shadow={false} size="sm" label="Concluídas" value={requests.filter(r => r.status === 'Concluída').length} sub="Pedidos gerados" icon={<Plus className="w-4 h-4" />} color="emerald" />
             </div>
 
-            {/* Filters — §5.1 (variante desaninhada, escala compacta §16) */}
-            <div className="flex flex-col md:flex-row gap-2.5 items-center">
+            {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
+                conteúdo dividem um único card (border/rounded/shadow só no container
+                pai); a costura visível entre os dois é o border-b da toolbar. */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
                 <div className="flex-1 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -225,7 +228,8 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                 </div>
             </div>
 
-            {/* List / Grid */}
+            {/* List / Grid — sem bg/border/rounded próprios: já está dentro do card
+                acoplado toolbar+conteúdo (ver abertura acima) */}
             {loading ? (
                 <div className="text-center py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -233,7 +237,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                 </div>
             ) : filteredRequests.length > 0 ? (
                 viewMode === 'list' ? (
-                    <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                    <div>
                         <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             {/* thead em sentence case (§6.2) — escala compacta; uppercase={false} porque
@@ -326,7 +330,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                         </div>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
                         {filteredRequests.map(req => (
                             <div
                                 key={req.id}
@@ -387,7 +391,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                     </div>
                 )
             ) : (
-                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
+                <div className="text-center py-12">
                     <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma cotação encontrada</h3>
                     <p className="text-sm text-gray-500 mb-6">Comece criando uma nova solicitação de cotação para suas obras.</p>
@@ -399,6 +403,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                     </button>
                 </div>
             )}
+            </div>
 
             {notification && (
                 <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${

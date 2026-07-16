@@ -29,6 +29,7 @@ import PropertyUnitMap from './common/PropertyUnitMap';
 import { SalesDashboard } from './SalesDashboard';
 import PricingIntelligenceModal from './PricingIntelligenceModal';
 import PriceTableManager from './PriceTableManager';
+import SalesPlanManager from './SalesPlanManager';
 import { pricingService } from '../services/pricingService';
 import { brokerService } from '../services/brokerService';
 import BrokerModal from './BrokerModal';
@@ -85,8 +86,8 @@ const getSunWeight = (p?: { sun_orientation?: string | null }) =>
     p?.sun_orientation === 'NORTH' ? 1.02 : p?.sun_orientation === 'EAST' ? 1.01 : p?.sun_orientation === 'WEST' ? 0.99 : p?.sun_orientation === 'SOUTH' ? 0.98 : 1.00;
 
 const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
-    const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'simulation' | 'price-tables' | 'brokers' | 'contracts'>(
-        (localStorage.getItem('sales_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'simulation' | 'price-tables' | 'brokers' | 'contracts') || 'inventory'
+    const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'simulation' | 'price-tables' | 'sales-plans' | 'brokers' | 'contracts'>(
+        (localStorage.getItem('sales_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'simulation' | 'price-tables' | 'sales-plans' | 'brokers' | 'contracts') || 'inventory'
     );
     const [properties, setProperties] = useState<Property[]>([]);
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
@@ -869,6 +870,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         Tabela de preços
                     </button>
                     <button
+                        onClick={() => setActiveTab('sales-plans')}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'sales-plans' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                    >
+                        <Percent className="w-3.5 h-3.5" />
+                        Planos de vendas
+                    </button>
+                    <button
                         onClick={() => setActiveTab('brokers')}
                         className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'brokers' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
@@ -1411,6 +1419,16 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             {activeTab === 'price-tables' && selectedBuildingId && currentBuilding && organizationId && (
                 <div className="animate-in slide-in-from-bottom-5 duration-500">
                     <PriceTableManager
+                        organizationId={organizationId}
+                        buildingId={selectedBuildingId}
+                        buildingName={currentBuilding.name}
+                    />
+                </div>
+            )}
+
+            {activeTab === 'sales-plans' && selectedBuildingId && currentBuilding && organizationId && (
+                <div className="animate-in slide-in-from-bottom-5 duration-500">
+                    <SalesPlanManager
                         organizationId={organizationId}
                         buildingId={selectedBuildingId}
                         buildingName={currentBuilding.name}

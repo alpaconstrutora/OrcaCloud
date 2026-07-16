@@ -81,11 +81,12 @@ function BuildingScene({
         <Edges color="#9ca3af" />
       </mesh>
 
-      {/* Envelope máximo edificável (recuos) */}
+      {/* Envelope máximo edificável (recuos) — só wireframe, sem fill translúcido
+          (fill transparente causava artefatos de ordenação contra o prédio) */}
       {envW > 0 && envD > 0 && (
         <mesh position={[leftSetback + envW / 2, buildingHeight / 2, frontSetback + envD / 2]}>
           <boxGeometry args={[envW, buildingHeight, envD]} />
-          <meshBasicMaterial color="#ef4444" transparent opacity={0.04} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
           <Edges color="#ef4444" />
         </mesh>
       )}
@@ -114,7 +115,7 @@ function BuildingScene({
                   castShadow
                 >
                   <boxGeometry args={[u.width * 0.96, unitBoxHeight, u.height * 0.96]} />
-                  <meshStandardMaterial color={u.color} roughness={0.7} transparent opacity={0.9} />
+                  <meshStandardMaterial color={u.color} roughness={0.7} />
                   <Edges color="#6b7280" threshold={15} />
                 </mesh>
               ))}
@@ -122,12 +123,22 @@ function BuildingScene({
           );
         })}
 
-        {/* Núcleo / hall — coluna central por toda a altura */}
-        <mesh position={[layout.core.x + layout.core.width / 2, buildingHeight / 2, layout.core.y + layout.core.height / 2]} castShadow>
-          <boxGeometry args={[layout.core.width, buildingHeight, layout.core.height]} />
-          <meshStandardMaterial color="#9ca3af" roughness={0.8} />
-          <Edges color="#6b7280" />
-        </mesh>
+        {/* Núcleo / hall — coluna central; sobe um pouco acima do telhado
+            (caixa de circulação/elevador) para ficar visível sobre as unidades opacas */}
+        {(() => {
+          const coreOverrun = floorHeight * 0.6;
+          const coreTotalHeight = buildingHeight + coreOverrun;
+          return (
+            <mesh
+              position={[layout.core.x + layout.core.width / 2, coreTotalHeight / 2, layout.core.y + layout.core.height / 2]}
+              castShadow
+            >
+              <boxGeometry args={[layout.core.width, coreTotalHeight, layout.core.height]} />
+              <meshStandardMaterial color="#9ca3af" roughness={0.8} />
+              <Edges color="#6b7280" />
+            </mesh>
+          );
+        })()}
       </group>
     </group>
   );
@@ -188,8 +199,10 @@ export default function Building3DViewer(props: Props) {
           position={[spread, buildingHeight + spread, spread * 0.6]}
           intensity={1.1}
           castShadow
-          shadow-mapSize-width={1024}
-          shadow-mapSize-height={1024}
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+          shadow-bias={-0.0005}
+          shadow-normalBias={0.05}
         />
         <directionalLight position={[-spread, spread, -spread]} intensity={0.3} />
 

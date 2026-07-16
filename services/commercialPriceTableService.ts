@@ -48,6 +48,17 @@ export const commercialPriceTableService = {
         return data ?? [];
     },
 
+    /** Unidades publicadas no Comercial sob este edifício (filhas diretas) — base para
+     *  detectar quais ainda não entraram em uma versão da tabela de preços. */
+    async listBuildingUnits(buildingId: string): Promise<{ id: string; name: string | null }[]> {
+        const { data, error } = await supabase
+            .from('commercial_properties')
+            .select('id, name')
+            .eq('parent_id', buildingId);
+        if (error) throw error;
+        return data ?? [];
+    },
+
     async getActiveTable(buildingId: string): Promise<CommercialPriceTable | null> {
         const { data, error } = await supabase
             .from('commercial_price_tables')

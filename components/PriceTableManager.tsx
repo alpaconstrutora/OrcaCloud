@@ -108,6 +108,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     const [tables, setTables] = React.useState<CommercialPriceTable[]>([]);
     const [selectedTableId, setSelectedTableId] = React.useState<string | null>(null);
     const [items, setItems] = React.useState<CommercialPriceTableItem[]>([]);
+    const [buildingUnits, setBuildingUnits] = React.useState<{ id: string; name: string | null }[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [loadingItems, setLoadingItems] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
@@ -140,6 +141,12 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     }, [buildingId]);
 
     React.useEffect(() => { loadTables(); }, [loadTables]);
+
+    React.useEffect(() => {
+        commercialPriceTableService.listBuildingUnits(buildingId)
+            .then(setBuildingUnits)
+            .catch(err => console.error('[PriceTableManager] erro ao listar unidades do edifício:', err));
+    }, [buildingId]);
 
     const loadItems = React.useCallback(async (tableId: string) => {
         setLoadingItems(true);
@@ -234,6 +241,13 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     const totalDraft = items.reduce((s, i) => s + i.price, 0);
     const totalCurrent = items.reduce((s, i) => s + (i.current_price ?? i.price), 0);
     const deltaPct = totalCurrent > 0 ? ((totalDraft - totalCurrent) / totalCurrent) * 100 : 0;
+
+    // Unidades publicadas no Comercial que ainda não estão nesta versão (a lista de
+    // itens de uma versão é congelada na criação do rascunho — ver createDraftFromActive).
+    const missingUnits = React.useMemo(() => {
+        const inVersion = new Set(items.map(i => i.property_id));
+        return buildingUnits.filter(u => !inVersion.has(u.id));
+    }, [buildingUnits, items]);
 
     const itemDelta = (i: CommercialPriceTableItem) => {
         const cur = i.current_price ?? i.price;
@@ -339,6 +353,28 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                             </button>
                         )}
                     </div>
+
+                    {/* Aviso: unidades publicadas no Comercial fora desta versão (lista congelada na criação) */}
+                    {!loadingItems && missingUnits.length > 0 && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-start gap-3">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-amber-800">
+                                    {missingUnits.length} unidade{missingUnits.length > 1 ? 's' : ''} publicada{missingUnits.length > 1 ? 's' : ''} no Comercial {missingUnits.length > 1 ? 'não estão' : 'não está'} nesta versão.
+                                </p>
+                                <p className="text-xs text-amber-700/80 mt-0.5">
+                                    A lista de unidades é fixada quando a versão é criada. Crie uma nova versão para incluir {missingUnits.length > 1 ? 'as unidades novas' : 'a unidade nova'}: {missingUnits.map(u => u.name || '—').join(', ')}
+                                </p>
+                            </div>
+                            <button
+                                onClick={handleCreateDraft}
+                                disabled={creating}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                            >
+                                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-[15px] h-[15px]" />} Nova versão
+                            </button>
+                        </div>
+                    )}
 
                     {/* Reajuste em massa — só em rascunho */}
                     {isDraft && (

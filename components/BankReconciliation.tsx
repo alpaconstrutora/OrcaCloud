@@ -3320,48 +3320,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         Pró-labore
                     </button>
                 </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                    <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[6px] border border-gray-100">
-                        <button
-                            onClick={() => setFlowFilter('ALL')}
-                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'ALL' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                        >
-                            Tudo
-                        </button>
-                        <button
-                            onClick={() => setFlowFilter('INCOME')}
-                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'INCOME' ? 'bg-emerald-500 text-white' : 'text-emerald-600/60 hover:text-emerald-600'}`}
-                        >
-                            Receitas
-                        </button>
-                        <button
-                            onClick={() => setFlowFilter('EXPENSE')}
-                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'EXPENSE' ? 'bg-red-500 text-white' : 'text-red-400 hover:text-red-500'}`}
-                        >
-                            Despesas
-                        </button>
-                    </div>
-
-                    {/* Botão primário — variante compacta (guia §17) */}
-                    <button
-                        onClick={() => setShowImportDrawer(true)}
-                        disabled={isImporting}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isImporting ? (
-                            <>
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full" />
-                                <span>{importingMessage || 'Importando...'}</span>
-                            </>
-                        ) : (
-                            <>
-                                <Upload className="w-[15px] h-[15px]" />
-                                <span>Importar extrato</span>
-                            </>
-                        )}
-                    </button>
-                </div>
             </div>
 
             {/* Toolbar — escala compacta (guia §5/§16) */}
@@ -3487,6 +3445,25 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         </button>
                     )}
                 </div>
+
+                {/* Botão primário — variante compacta (guia §17) */}
+                <button
+                    onClick={() => setShowImportDrawer(true)}
+                    disabled={isImporting}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                >
+                    {isImporting ? (
+                        <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full" />
+                            <span>{importingMessage || 'Importando...'}</span>
+                        </>
+                    ) : (
+                        <>
+                            <Upload className="w-[15px] h-[15px]" />
+                            <span>Importar extrato</span>
+                        </>
+                    )}
+                </button>
             </div>
 
             {/* Bulk Action Bar — Extrato (padrão simples: contagem + Editar em Lote + Desmarcar,
@@ -4149,6 +4126,26 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             </div>
                             )}
                             <div className={activeView === 'statement' ? "flex items-center gap-2 order-2 shrink-0" : "flex items-center gap-2"}>
+                                <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[6px] border border-gray-100 shrink-0">
+                                    <button
+                                        onClick={() => setFlowFilter('ALL')}
+                                        className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'ALL' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                    >
+                                        Tudo
+                                    </button>
+                                    <button
+                                        onClick={() => setFlowFilter('INCOME')}
+                                        className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'INCOME' ? 'bg-emerald-500 text-white' : 'text-emerald-600/60 hover:text-emerald-600'}`}
+                                    >
+                                        Receitas
+                                    </button>
+                                    <button
+                                        onClick={() => setFlowFilter('EXPENSE')}
+                                        className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'EXPENSE' ? 'bg-red-500 text-white' : 'text-red-400 hover:text-red-500'}`}
+                                    >
+                                        Despesas
+                                    </button>
+                                </div>
                                 <div className="relative">
                                     <button
                                         onClick={() => { setBankCatDropdownOpen(o => !o); setInternalCatDropdownOpen(false); setBankCpDropdownOpen(false); }}

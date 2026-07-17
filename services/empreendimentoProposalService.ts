@@ -100,15 +100,22 @@ export const empreendimentoProposalService = {
         return data?.length ?? 0;
     },
 
-    /** Propostas pendentes (via view, com nome de torre/unidade). */
+    /** Propostas pendentes. Os nomes de torre/unidade são resolvidos no cliente (não há view —
+     *  ela adicionaria contenção de lock na migration; ver o topo do 20270218000000). */
     async listPending(empreendimentoId: string): Promise<FieldProposal[]> {
         const { data, error } = await supabase
-            .from('empreendimento_proposal_queue')
-            .select(`${COLS}, tower_name, unit_name`)
+            .from('empreendimento_field_proposals')
+            .select(COLS)
             .eq('empreendimento_id', empreendimentoId)
+            .eq('status', 'pending')
             .order('detected_at', { ascending: false });
-        if (error) throw new Error(`Falha ao listar propostas: ${error.message}`);
-        return (data ?? []) as FieldProposal[];
+        if (error) {
+            if (error.code === '42P01' || error.code === 'PGRST205' || /schema cache|does not exist/i.test(error.message)) {
+                throw new Error('Curadoria indisponível: aplique a migration 20270218000000_empreendimento_field_proposals no banco.');
+            }
+            throw new Error(`Falha ao listar propostas: ${error.message}`);
+        }
+        return resolveNames((data ?? []) as FieldProposal[]);
     },
 
     /** Propostas já decididas (applied/rejected/superseded) — o "Arquivados". */
@@ -199,6 +206,43 @@ export const empreendimentoProposalService = {
         return outcome;
     },
 };
+
+/**
+ * Preenche tower_name/unit_name resolvendo torres e unidades pelos ids das propostas. Para uma
+ * proposta de UNIDADE, resolve também o nome da torre dela (via unit.tower_id) — assim o
+ * agrupamento por torre na inbox funciona de verdade (a view antiga não fazia esse salto).
+ */
+async function resolveNames(proposals: FieldProposal[]): Promise<FieldProposal[]> {
+    if (proposals.length === 0) return proposals;
+
+    const towerIds = new Set<string>();
+    const unitIds = new Set<string>();
+    for (const p of proposals) {
+        if (p.entity === 'tower') towerIds.add(p.entity_id);
+        if (p.entity === 'unit') unitIds.add(p.entity_id);
+    }
+
+    const unitRes = unitIds.size
+        ? await supabase.from('empreendimento_units').select('id, name, tower_id').in('id', [...unitIds])
+        : { data: [] as { id: string; name: string; tower_id: string }[] };
+    const units = (unitRes.data ?? []) as { id: string; name: string; tower_id: string }[];
+    for (const u of units) towerIds.add(u.tower_id);
+
+    const towerRes = towerIds.size
+        ? await supabase.from('empreendimento_towers').select('id, name').in('id', [...towerIds])
+        : { data: [] as { id: string; name: string }[] };
+    const towerName = new Map((towerRes.data ?? []).map((t: any) => [t.id, t.name as string]));
+    const unitById = new Map(units.map(u => [u.id, u]));
+
+    return proposals.map(p => {
+        if (p.entity === 'tower') return { ...p, tower_name: towerName.get(p.entity_id) ?? null, unit_name: null };
+        if (p.entity === 'unit') {
+            const u = unitById.get(p.entity_id);
+            return { ...p, tower_name: u ? (towerName.get(u.tower_id) ?? null) : null, unit_name: u?.name ?? null };
+        }
+        return p;
+    });
+}
 
 /** Igualdade tolerante ao ruído de float e a null/undefined, alinhada à do diff. */
 function sameValue(a: unknown, b: unknown): boolean {

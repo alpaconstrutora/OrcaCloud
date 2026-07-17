@@ -8,19 +8,25 @@
 -- de torre/unidade e preenchimento de campo vazio continuam aplicando direto (não geram
 -- proposta) — só o conflito exige decisão humana.
 --
+-- ⚠️ Anti-deadlock (40P01): esta migration toca SÓ a tabela nova. Sem FK para
+-- empreendimentos (a FK pega ShareRowExclusiveLock na tabela referenciada, que deadlocka com
+-- o app ativo — é o mesmo motivo pelo qual as colunas de proveniência do módulo, imovib_*/
+-- planta_ai_*, são sem FK de propósito). Sem view com JOIN em towers/units (o cliente resolve
+-- os nomes). Assim nenhuma tabela usada pelo app é bloqueada.
+--
 -- Decisões de desenho:
 --  · proposal_hash é a IDENTIDADE (empreendimento+origem+entidade+campo+valor proposto),
---    computada NO CLIENTE (services/sync/hash.ts) e nunca recalculada no servidor — some o
---    risco de canonicalização TS≡SQL. Ela existe só para o unique index abaixo.
+--    computada NO CLIENTE (services/sync/hash.ts) e nunca recalculada no servidor.
 --  · A obsolescência ("o destino mudou desde que revisei") é detectada comparando o
 --    current_value gravado com o valor atual do destino, no apply — não por um 2º hash.
---  · Rejeitar NÃO apaga: carimba decided_* e mantém os valores, preservando o histórico
---    (mesmo espírito do dismiss do dead letter fiscal, 20270129000000).
+--  · Rejeitar NÃO apaga: carimba decided_* e mantém os valores (espírito do dead letter fiscal).
+--  · Sem ON DELETE CASCADE: empreendimento deletado deixa propostas órfãs, inofensivas (nunca
+--    consultadas — a UI sempre filtra por empreendimento_id).
 
 CREATE TABLE IF NOT EXISTS public.empreendimento_field_proposals (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id   UUID NOT NULL,                                   -- denormalizado p/ RLS barata
-    empreendimento_id UUID NOT NULL REFERENCES public.empreendimentos(id) ON DELETE CASCADE,
+    empreendimento_id UUID NOT NULL,                                   -- sem FK (anti-deadlock, ver topo)
     origin            TEXT NOT NULL CHECK (origin IN ('imovib', 'planta_ai')),
     entity            TEXT NOT NULL CHECK (entity IN ('empreendimento', 'tower', 'unit', 'common_area')),
     entity_id         UUID NOT NULL,                                   -- destino sempre existe (create aplica direto)
@@ -57,12 +63,9 @@ CREATE INDEX IF NOT EXISTS idx_emp_proposals_decided
     ON public.empreendimento_field_proposals (empreendimento_id, decided_at DESC)
     WHERE decided_at IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_emp_proposals_target
-    ON public.empreendimento_field_proposals (entity, entity_id)
-    WHERE status = 'pending';
-
 -- RLS org-scoped, reusando o helper dual-check (uid OU email) do módulo. NÃO usar o padrão
--- qual=true das tabelas legadas.
+-- qual=true das tabelas legadas. A policy referencia a FUNÇÃO empr_user_org_ids (não uma
+-- tabela do app), então não adiciona contenção.
 ALTER TABLE public.empreendimento_field_proposals ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "org_access_emp_field_proposals" ON public.empreendimento_field_proposals;
@@ -70,17 +73,3 @@ CREATE POLICY "org_access_emp_field_proposals" ON public.empreendimento_field_pr
     FOR ALL TO authenticated
     USING (organization_id IN (SELECT public.empr_user_org_ids()))
     WITH CHECK (organization_id IN (SELECT public.empr_user_org_ids()));
-
--- Fila ativa = só o que aguarda decisão, com o nome da torre/unidade para a UI não precisar
--- de N joins. Espelha a view dead_letter_queue (20270129000000).
-CREATE OR REPLACE VIEW public.empreendimento_proposal_queue AS
-SELECT
-    p.*,
-    t.name AS tower_name,
-    u.name AS unit_name
-FROM public.empreendimento_field_proposals p
-LEFT JOIN public.empreendimento_towers t
-    ON p.entity = 'tower' AND t.id = p.entity_id
-LEFT JOIN public.empreendimento_units u
-    ON p.entity = 'unit' AND u.id = p.entity_id
-WHERE p.status = 'pending';

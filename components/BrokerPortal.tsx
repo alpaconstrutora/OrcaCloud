@@ -148,12 +148,16 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             setLoading(true);
             try {
                 if (portalToken) {
-                    const [unitsRes, proposalsRes] = await Promise.all([
+                    // allSettled: uma RPC que falhe nao zera as demais (antes era
+                    // Promise.all -> qualquer erro deixava o portal TODO zerado).
+                    const [unitsRes, proposalsRes] = await Promise.allSettled([
                         brokerPortalService.getUnitsByToken(portalToken),
                         brokerPortalService.getProposalsByToken(portalToken),
                     ]);
-                    setUnits(unitsRes as BrokerUnit[]);
-                    setProposals(proposalsRes);
+                    if (unitsRes.status === 'fulfilled') setUnits(unitsRes.value as BrokerUnit[]);
+                    else console.error('[BrokerPortal] getUnitsByToken error:', unitsRes.reason);
+                    if (proposalsRes.status === 'fulfilled') setProposals(proposalsRes.value);
+                    else console.error('[BrokerPortal] getProposalsByToken error:', proposalsRes.reason);
                     setCommercialDeals([]);
                 } else {
                     const orgId = selectedOrgId;

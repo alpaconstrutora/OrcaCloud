@@ -542,6 +542,10 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
     const currentBuilding = selectedBuildingId ? properties.find(p => String(p.id).toLowerCase() === String(selectedBuildingId).toLowerCase()) : null;
 
+    // Com "Todas as organizações" o organizationId vem undefined; a org do
+    // empreendimento aberto é a fonte de verdade nesse caso.
+    const effectiveOrganizationId = organizationId || currentBuilding?.organization_id;
+
     const buildingDeals = selectedBuildingId ? deals.filter(deal => {
         const property = properties.find(p => p.id === deal.property_id);
         if (!property) return false;
@@ -1404,7 +1408,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                     buildings={properties} 
                                     selectedBuildingId={selectedBuildingId} 
                                     mode="simulation"
-                                    organizationId={organizationId}
+                                    organizationId={effectiveOrganizationId}
                                     simulationParams={{
                                         monthlySales: simMonthlySales,
                                         priceAdjust: simPriceAdjust
@@ -1416,20 +1420,20 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 </div>
             )}
 
-            {activeTab === 'price-tables' && selectedBuildingId && currentBuilding && organizationId && (
+            {activeTab === 'price-tables' && selectedBuildingId && currentBuilding && effectiveOrganizationId && (
                 <div className="animate-in slide-in-from-bottom-5 duration-500">
                     <PriceTableManager
-                        organizationId={organizationId}
+                        organizationId={effectiveOrganizationId}
                         buildingId={selectedBuildingId}
                         buildingName={currentBuilding.name}
                     />
                 </div>
             )}
 
-            {activeTab === 'sales-plans' && selectedBuildingId && currentBuilding && organizationId && (
+            {activeTab === 'sales-plans' && selectedBuildingId && currentBuilding && effectiveOrganizationId && (
                 <div className="animate-in slide-in-from-bottom-5 duration-500">
                     <SalesPlanManager
-                        organizationId={organizationId}
+                        organizationId={effectiveOrganizationId}
                         buildingId={selectedBuildingId}
                         buildingName={currentBuilding.name}
                     />
@@ -1745,13 +1749,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         contractId={selectedContractId}
                         onBack={() => setSelectedContractId(null)}
                         budget={[]}
-                        organizationId={organizationId}
+                        organizationId={effectiveOrganizationId}
                         onEdit={(contract) => { setEditingContract(contract); setIsContractModalOpen(true); }}
                     />
                 ) : (
                     <ContractsDashboard
                         key={contractsVersion}
-                        organizationId={organizationId || ''}
+                        organizationId={effectiveOrganizationId || ''}
                         domain="VENDAS"
                         onViewContract={(id) => setSelectedContractId(id)}
                         onCreateNew={() => {
@@ -1767,12 +1771,12 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 )
             )}
 
-            {(organizationId || editingContract?.organization_id) && (
+            {(effectiveOrganizationId || editingContract?.organization_id) && (
                 <ContractModal
                     isOpen={isContractModalOpen}
                     onClose={() => { setIsContractModalOpen(false); setEditingContract(undefined); }}
                     onSubmit={async (data) => {
-                        const effectiveOrgId = organizationId || editingContract?.organization_id;
+                        const effectiveOrgId = effectiveOrganizationId || editingContract?.organization_id;
                         const payload = { ...data, direction: 'OUTGOING' as const, domain: 'VENDAS' as const, organization_id: effectiveOrgId };
                         let saved;
                         if (editingContract?.id) {
@@ -1786,7 +1790,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         setSelectedContractId(saved.id);
                     }}
                     projectId={editingContract?.project_id ?? ''}
-                    organizationId={organizationId || editingContract?.organization_id}
+                    organizationId={effectiveOrganizationId || editingContract?.organization_id}
                     initialData={editingContract ?? undefined}
                     titleNew="Novo Contrato de Venda"
                     moduleLabel="Contratos de Venda de Ativos"
@@ -1801,7 +1805,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 onSubmit={handleSaveProperty}
                 initialData={editingProperty || (selectedBuildingId ? { parent_id: selectedBuildingId, type: 'APARTMENT' } as Property : undefined)}
                 defaultPurpose="SALE"
-                organizationId={organizationId}
+                organizationId={effectiveOrganizationId}
             />
 
             <DealModal
@@ -1809,7 +1813,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 onClose={() => { setIsDealModalOpen(false); setEditingDeal(undefined); }}
                 onSave={() => loadData()}
                 initialData={editingDeal}
-                organizationId={organizationId}
+                organizationId={effectiveOrganizationId}
                 buildingId={selectedBuildingId || undefined}
             />
 
@@ -1818,7 +1822,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 onClose={() => { setIsBrokerModalOpen(false); setEditingBroker(undefined); }}
                 onSave={handleSaveBroker}
                 initialData={editingBroker}
-                organizationId={organizationId}
+                organizationId={effectiveOrganizationId}
             />
 
             {/* Toast de Notificação — §13 */}

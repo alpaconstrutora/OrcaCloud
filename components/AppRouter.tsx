@@ -1104,7 +1104,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           userRole={currentProfile?.role}
           obras={typedProjects
             .filter(p => p.settings?.classification === 'OBRA' && p.name !== 'Gestão Comercial')
-            .map(p => ({ id: p.id, name: p.name }))}
+            .map(p => ({ id: p.id, name: p.name, organizationId: p.settings?.organizationId }))}
         />
       );
 

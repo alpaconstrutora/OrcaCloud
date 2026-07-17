@@ -7,9 +7,10 @@ import type {
   Severity, ProbableOrigin
 } from '../../types/quality';
 
-interface Project { id: string; name: string; }
+interface Project { id: string; name: string; organizationId?: string; }
 
 interface Props {
+  /** Vazio quando o usuário está em "Todas as organizações" — nesse caso a org sai da obra escolhida. */
   organizationId: string;
   obras?: Project[];
   currentActor: ActorReference;
@@ -37,6 +38,9 @@ const DetectConditionModal: React.FC<Props> = ({
   const [files, setFiles]                     = React.useState<File[]>([]);
   const [captureGeo, setCaptureGeo]           = React.useState(false);
   const [geoRef, setGeoRef]                   = React.useState<GeolocationCoordinates | null>(null);
+
+  const effectiveOrganizationId =
+    organizationId || obras.find(o => o.id === empreendimentoId)?.organizationId || '';
 
   React.useEffect(() => {
     // Se a prop vier preenchida usa ela; senão busca do banco (mesmo padrão do ProjectList)
@@ -86,13 +90,17 @@ const DetectConditionModal: React.FC<Props> = ({
       setError('Anexe ao menos uma foto');
       return;
     }
+    if (!effectiveOrganizationId) {
+      setError('Não foi possível identificar a organização desta obra. Selecione uma organização específica no topo.');
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
 
     try {
       const result = await qualityConditionService.detect({
-        organizationId,
+        organizationId: effectiveOrganizationId,
         assetEmpreendimentoId: empreendimentoId,
         assetUnidadeId:  unidade.trim()  || undefined,
         assetAmbienteId: ambiente.trim() || undefined,
@@ -110,7 +118,7 @@ const DetectConditionModal: React.FC<Props> = ({
       for (const file of files) {
         const evidenceId = crypto.randomUUID();
         const path = await qualityConditionService.uploadEvidence(
-          organizationId, conditionId, evidenceId, file
+          effectiveOrganizationId, conditionId, evidenceId, file
         );
 
         const geo = geoRef ? {
@@ -127,7 +135,7 @@ const DetectConditionModal: React.FC<Props> = ({
 
         await supabase.from('condition_evidence').insert({
           id:              evidenceId,
-          organization_id: organizationId,
+          organization_id: effectiveOrganizationId,
           condition_id:    conditionId,
           type:            file.type.startsWith('image') ? 'photo' : 'document',
           url:             path,

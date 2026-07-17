@@ -7,7 +7,8 @@ import {
 } from '../../services/investorPortalService';
 
 interface Props {
-    organizationId: string;
+    /** Ausente quando o usuário está em "Todas as organizações" — lista os interesses de todas. */
+    organizationId?: string | null;
     opportunities: InvestorOpportunity[];
 }
 

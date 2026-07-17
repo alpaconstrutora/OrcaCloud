@@ -282,13 +282,15 @@ export const investorPortalService = {
         return saved;
     },
 
-    async listInterests(organizationId: string, opportunityId?: string): Promise<OpportunityInterest[]> {
+    // organizationId null/undefined ⇒ "todas as organizações": sem filtro de org,
+    // a RLS do Supabase restringe às orgs que o usuário pode acessar.
+    async listInterests(organizationId?: string | null, opportunityId?: string): Promise<OpportunityInterest[]> {
         let query = supabase
             .from('opportunity_interests')
             .select(INTEREST_COLS)
-            .eq('organization_id', organizationId)
             .order('created_at', { ascending: false });
 
+        if (organizationId) query = query.eq('organization_id', organizationId);
         if (opportunityId) query = query.eq('opportunity_id', opportunityId);
 
         const { data, error } = await query;

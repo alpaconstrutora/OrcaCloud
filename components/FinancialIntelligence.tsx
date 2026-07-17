@@ -422,6 +422,10 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
     const [sendingId, setSendingId]         = useState<string | null>(null);
     const [sendMsg, setSendMsg]             = useState<string | null>(null);
 
+    // Em "Todas as organizações" editar usa a org do próprio agendamento;
+    // só criar um novo exige que o usuário escolha uma.
+    const scheduleFormOrganizationId = organizationId || editTarget?.organization_id;
+
     const load = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -718,7 +722,9 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                     {!showForm && !editTarget && (
                                         <button
                                             onClick={() => { setShowForm(true); setEditTarget(null); setSendMsg(null); }}
-                                            className="flex items-center gap-2 px-3 py-2 bg-violet-600 text-white rounded-xl text-button font-black hover:bg-violet-700 transition-colors flex-shrink-0"
+                                            disabled={!organizationId}
+                                            title={!organizationId ? 'Selecione uma organização específica para criar um agendamento' : undefined}
+                                            className="flex items-center gap-2 px-3 py-2 bg-violet-600 text-white rounded-xl text-button font-black hover:bg-violet-700 transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                                         >
                                             <Plus className="w-3.5 h-3.5" />
                                             Novo
@@ -727,9 +733,9 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                 </div>
 
                                 {/* Formulário */}
-                                {(showForm || editTarget) && organizationId && (
+                                {(showForm || editTarget) && scheduleFormOrganizationId && (
                                     <ScheduleForm
-                                        organizationId={organizationId}
+                                        organizationId={scheduleFormOrganizationId}
                                         initial={editTarget}
                                         onSave={handleScheduleSave}
                                         onCancel={() => { setShowForm(false); setEditTarget(null); }}

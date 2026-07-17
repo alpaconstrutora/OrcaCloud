@@ -11,7 +11,7 @@ import type {
 import DetectConditionModal from './quality/DetectConditionModal';
 import ConditionDetailPanel from './quality/ConditionDetailPanel';
 
-interface ObraRef { id: string; name: string; }
+interface ObraRef { id: string; name: string; organizationId?: string; }
 
 interface QualityModuleProps {
   organizationId: string | null;
@@ -257,12 +257,12 @@ const QualityModule: React.FC<QualityModuleProps> = ({
         </div>
 
         {/* Painel de detalhe */}
-        {selectedId && selectedCondition && organizationId && (
+        {selectedId && selectedCondition && (
           <div className="w-3/5 border-l border-gray-200 bg-white overflow-y-auto">
             <ConditionDetailPanel
               condition={selectedCondition}
               currentActor={currentActor}
-              organizationId={organizationId}
+              organizationId={selectedCondition.organizationId}
               onClose={() => setSelectedId(null)}
               onRefresh={loadConditions}
             />
@@ -271,9 +271,9 @@ const QualityModule: React.FC<QualityModuleProps> = ({
       </div>
 
       {/* Modal de detecção */}
-      {isDetectOpen && organizationId && (
+      {isDetectOpen && (
         <DetectConditionModal
-          organizationId={organizationId}
+          organizationId={organizationId || ''}
           obras={obras}
           currentActor={currentActor}
           onClose={() => setIsDetectOpen(false)}

@@ -44,11 +44,16 @@ const OpportunitiesTab: React.FC<Props> = ({
     const [saving, setSaving] = React.useState(false);
     const [adminTab, setAdminTab] = React.useState<AdminTab>('opportunities');
 
+    // Em "Todas as organizações" não há org selecionada: editar usa a org da própria
+    // oportunidade; só criar do zero exige que o usuário escolha uma.
+    const editingOrganizationId =
+        organizationId || (editing && editing !== 'new' ? editing.organization_id : undefined);
+
     const handleSave = async (
         data: Omit<InvestorOpportunity, 'id' | 'created_at'>,
         competitors: Omit<OpportunityCompetitor, 'id' | 'created_at' | 'opportunity_id'>[]
     ) => {
-        if (!organizationId) return;
+        if (!editingOrganizationId) return;
         setSaving(true);
         try {
             let saved: InvestorOpportunity;
@@ -75,7 +80,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                     await investorPortalService.saveCompetitor({
                         ...item,
                         opportunity_id: saved.id,
-                        organization_id: organizationId,
+                        organization_id: editingOrganizationId,
                     });
                 }
             }
@@ -162,9 +167,11 @@ const OpportunitiesTab: React.FC<Props> = ({
                     )}
                 </div>
 
-                {isAdmin && adminTab === 'opportunities' && organizationId && (
+                {isAdmin && adminTab === 'opportunities' && (
                     <Button
                         variant="primary"
+                        disabled={!organizationId}
+                        title={!organizationId ? 'Selecione uma organização específica para criar uma oportunidade' : undefined}
                         onClick={() => setEditing('new')}
                     >
                         <Plus className="w-4 h-4" />
@@ -211,7 +218,7 @@ const OpportunitiesTab: React.FC<Props> = ({
             )}
 
             {/* Painel de interesses (admin) */}
-            {isAdmin && adminTab === 'interests' && organizationId && (
+            {isAdmin && adminTab === 'interests' && (
                 <InterestsPanel
                     organizationId={organizationId}
                     opportunities={opportunities}
@@ -227,10 +234,12 @@ const OpportunitiesTab: React.FC<Props> = ({
                             <p className="text-sm font-bold text-gray-400">
                                 {isAdmin ? 'Nenhuma oportunidade cadastrada' : 'Nenhuma oportunidade disponível no momento'}
                             </p>
-                            {isAdmin && organizationId && (
+                            {isAdmin && (
                                 <Button
                                     variant="primary"
                                     className="mt-4"
+                                    disabled={!organizationId}
+                                    title={!organizationId ? 'Selecione uma organização específica para criar uma oportunidade' : undefined}
                                     onClick={() => setEditing('new')}
                                 >
                                     Criar primeira oportunidade
@@ -504,10 +513,10 @@ const OpportunitiesTab: React.FC<Props> = ({
             )}
 
             {/* Modais */}
-            {detail && organizationId && (
+            {detail && (
                 <OpportunityDetail
                     opportunity={detail}
-                    organizationId={organizationId}
+                    organizationId={organizationId || detail.organization_id}
                     isAdmin={isAdmin}
                     investorProfile={investorProfile}
                     portalToken={portalToken}
@@ -515,10 +524,10 @@ const OpportunitiesTab: React.FC<Props> = ({
                 />
             )}
 
-            {editing !== null && organizationId && (
+            {editing !== null && editingOrganizationId && (
                 <OpportunityForm
                     initial={editing === 'new' ? undefined : editing}
-                    organizationId={organizationId}
+                    organizationId={editingOrganizationId}
                     onSave={handleSave}
                     onClose={() => { if (!saving) setEditing(null); }}
                 />

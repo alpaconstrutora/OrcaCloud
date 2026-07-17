@@ -17,6 +17,7 @@ import { buildPlan, PlanOptions } from './sync/planner';
 import { applyPlan } from './sync/applier';
 import { loadImovibSide } from './sync/imovibAdapter';
 import { SyncPlan, TargetState } from './sync/types';
+import { empreendimentoProposalService } from './empreendimentoProposalService';
 
 // Resumo de divergências entre as unidades do empreendimento e suas properties no Comercial.
 export interface CommercialDivergenceSummary {
@@ -822,14 +823,20 @@ export const empreendimentoService = {
         return planToReport(plan);
     },
 
-    /** Aplica a sincronização (merge): cria/atualiza torres, unidades e áreas comuns. */
+    /**
+     * Aplica a sincronização: cria torres/unidades/áreas, preenche vazios e adota vínculos.
+     * Conflitos NÃO sobrescrevem o Empreendimento — viram propostas de curadoria.
+     */
     async syncFromStudy(
         empreendimentoId: string,
         opts?: { overwriteCommercialState?: boolean },
     ): Promise<EmpreendimentoSyncReport> {
-        const { plan } = await planImovibSync(empreendimentoId, {
+        const { plan, organizationId } = await planImovibSync(empreendimentoId, {
             overwriteCommercialState: !!opts?.overwriteCommercialState,
         });
+        // Materializa antes de aplicar: se a curadoria não estiver disponível (migration não
+        // aplicada), falha aqui, sem ter escrito creates/fills parciais.
+        await empreendimentoProposalService.materializeConflicts(empreendimentoId, organizationId, plan.conflicts);
         await applyPlan(plan);
         return planToReport(plan);
     },
@@ -858,14 +865,14 @@ export async function loadTargetState(empreendimentoId: string): Promise<TargetS
     return { towers, units, commonAreas };
 }
 
-async function planImovibSync(empreendimentoId: string, opts: PlanOptions): Promise<{ plan: SyncPlan }> {
+async function planImovibSync(empreendimentoId: string, opts: PlanOptions): Promise<{ plan: SyncPlan; organizationId: string }> {
     const empreendimento = await empreendimentoService.getById(empreendimentoId) as Empreendimento | null;
     if (!empreendimento) throw new Error('Empreendimento não encontrado.');
     const [side, target] = await Promise.all([
         loadImovibSide(empreendimento),
         loadTargetState(empreendimentoId),
     ]);
-    return { plan: buildPlan(side, target, opts) };
+    return { plan: buildPlan(side, target, opts), organizationId: empreendimento.organization_id };
 }
 
 /** Traduz o plano para o relatório que a UI já conhece (contadores). */

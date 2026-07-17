@@ -1,6 +1,6 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag, KeyRound, Map, Loader2, ArrowLeftRight, ScrollText } from 'lucide-react';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag, KeyRound, Map, Loader2, ArrowLeftRight, ScrollText, Inbox } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus, ImovibStudy } from '../../types';
 import TowerEditor from './TowerEditor';
 import CommonAreaEditor from './CommonAreaEditor';
@@ -8,6 +8,8 @@ import SyncFromStudyModal from './SyncFromStudyModal';
 import { EspelhoVendasTab } from './EspelhoVendasTab';
 import { EspelhoLocacoesTab } from './EspelhoLocacoesTab';
 import { SyncCenterTab } from './SyncCenterTab';
+import CuradoriaTab from './CuradoriaTab';
+import { empreendimentoProposalService } from '../../services/empreendimentoProposalService';
 import ImovibRegulatoryMapTab from '../ImovibRegulatoryMapTab';
 import ImovibBlocksTypologyTab from '../ImovibBlocksTypologyTab';
 import { imovibService } from '../../services/imovibService';
@@ -41,7 +43,7 @@ const TIPO_LABELS: Record<string, string> = {
   COND_INDUSTRIAL: 'Condomínio Industrial',
 };
 
-type Tab = 'visao' | 'sync' | 'tipologia' | 'torres' | 'areas' | 'regulatorio' | 'comercial' | 'locacoes';
+type Tab = 'visao' | 'sync' | 'curadoria' | 'tipologia' | 'torres' | 'areas' | 'regulatorio' | 'comercial' | 'locacoes';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced }) => {
   const [tab, setTab] = React.useState<Tab>('visao');
@@ -51,6 +53,17 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
   const [isLoadingLinkedStudy, setIsLoadingLinkedStudy] = React.useState(false);
   const [linkedStudyError, setLinkedStudyError] = React.useState<string | null>(null);
   const [generatingMemorial, setGeneratingMemorial] = React.useState(false);
+  const [pendingCuradoria, setPendingCuradoria] = React.useState(0);
+
+  const loadPendingCuradoria = React.useCallback(async () => {
+    try {
+      setPendingCuradoria(await empreendimentoProposalService.countPending(e.id));
+    } catch {
+      setPendingCuradoria(0); // curadoria indisponível (migration não aplicada) — badge some
+    }
+  }, [e.id]);
+
+  React.useEffect(() => { loadPendingCuradoria(); }, [loadPendingCuradoria, refreshKey]);
 
   const terrenoCidade = [e.terreno_city, e.terreno_state].filter(Boolean).join(' - ');
   const terrenoLinha = [e.terreno_street, e.terreno_number].filter(Boolean).join(', ');
@@ -113,9 +126,10 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     }
   };
 
-  const tabs: { id: Tab; label: string; icon: any }[] = [
+  const tabs: { id: Tab; label: string; icon: any; badge?: number }[] = [
     { id: 'visao', label: 'Visão Geral', icon: FileText },
     { id: 'sync', label: 'Sincronização', icon: ArrowLeftRight },
+    { id: 'curadoria', label: 'Curadoria', icon: Inbox, badge: pendingCuradoria },
     { id: 'tipologia', label: 'Bloco e Tipologia', icon: Building2 },
     { id: 'torres', label: 'Torres & Unidades', icon: Layers },
     { id: 'areas', label: 'Áreas Comuns', icon: Trees },
@@ -184,6 +198,11 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
               ${tab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
           >
             <t.icon className="w-4 h-4" /> {t.label}
+            {t.badge != null && t.badge > 0 && (
+              <span className="ml-0.5 min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-black tracking-normal">
+                {t.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -321,6 +340,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
           onOpenStudySync={() => setSyncOpen(true)}
           onGoToComercial={() => setTab('comercial')}
         />
+      )}
+      {tab === 'curadoria' && (
+        <CuradoriaTab empreendimentoId={e.id} onChanged={() => setRefreshKey(k => k + 1)} />
       )}
 
       {syncOpen && (

@@ -5,9 +5,10 @@
 // contexto e recalculava o plano, então o número que o usuário confirmava no preview não era
 // necessariamente o que ia para o banco.
 //
-// Escopo desta fase: `fills` e `conflicts` são ambos aplicados — é o comportamento atual,
-// preservado de propósito. Quando a inbox de curadoria existir, `conflicts` deixa de ser
-// escrito aqui e passa a virar proposta pendente; `fills` continua direto.
+// Curadoria: `creates`, `fills` e `adoptions` aplicam direto (não há o que decidir — criar,
+// preencher vazio, ou reconhecer um vínculo nunca destrói dado). `conflicts` NÃO são escritos
+// aqui: viram propostas pendentes (empreendimentoProposalService.materializeConflicts, chamado
+// pelo sync após este apply). É o que torna o Empreendimento o centro da verdade na entrada.
 
 import { supabase } from '../../lib/supabase';
 import { EmpreendimentoUnitInsert } from '../../types/empreendimento';
@@ -54,8 +55,8 @@ export async function applyPlan(plan: SyncPlan): Promise<SyncApplyResult> {
         result.unitsCreated += rows.length;
     }
 
-    // 3. Campos: um update por entidade, não um por campo.
-    const updates = changesToUpdates([...plan.fills, ...plan.conflicts]);
+    // 3. Campos: só os `fills` (destino vazio). Conflitos não entram — viram propostas.
+    const updates = changesToUpdates(plan.fills);
     for (const [entityId, { entity, fields }] of updates) {
         const table = entity === 'tower' ? 'empreendimento_towers' : 'empreendimento_units';
         const { error } = await supabase.from(table).update(fields).eq('id', entityId);

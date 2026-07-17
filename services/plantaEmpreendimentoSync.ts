@@ -32,6 +32,7 @@ import { supabase } from '../lib/supabase';
 import { Empreendimento, PlantaAiSyncReport, PlantaAiWriteBackReport } from '../types/empreendimento';
 import { PlantScenario } from '../types/plantaAi';
 import { empreendimentoService, loadTargetState } from './empreendimentoService';
+import { empreendimentoProposalService } from './empreendimentoProposalService';
 import { buildPlan } from './sync/planner';
 import { applyPlan } from './sync/applier';
 import { loadPlantaSide } from './sync/plantaAdapter';
@@ -87,9 +88,16 @@ export const plantaEmpreendimentoSync = {
         return planToReport(await planPlantaSync(empreendimentoId));
     },
 
-    /** Aplica a sincronização: cria/atualiza torres e unidades a partir do cenário selecionado. */
+    /**
+     * Aplica a sincronização: cria/atualiza torres e unidades a partir do cenário selecionado.
+     * Conflitos não sobrescrevem o Empreendimento — viram propostas de curadoria.
+     */
     async syncToEmpreendimento(empreendimentoId: string): Promise<PlantaAiSyncReport> {
         const sync = await planPlantaSync(empreendimentoId);
+        // Materializa antes de aplicar: falha cedo se a curadoria não estiver disponível.
+        await empreendimentoProposalService.materializeConflicts(
+            empreendimentoId, sync.side.empreendimento.organization_id, sync.plan.conflicts,
+        );
         await applyPlan(sync.plan);
         return planToReport(sync);
     },

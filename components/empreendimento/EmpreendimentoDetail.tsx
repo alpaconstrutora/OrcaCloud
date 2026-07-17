@@ -152,11 +152,11 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {e.imovib_study_id && (
-              <button onClick={() => setSyncOpen(true)} className="px-4 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-black text-button uppercase tracking-widest flex items-center gap-2">
-                <RefreshCw className="w-4 h-4" /> Sincronizar do Estudo
-              </button>
-            )}
+            {/* "Sincronizar do Estudo" NÃO mora aqui: a mesma ação já existe na aba Centro de
+                Sincronização, onde ela tem contexto (divergências, última sync) e desabilita
+                sozinha quando não há o que sincronizar. Ter as duas era o mesmo controle em
+                dois lugares com estados diferentes — o do header ficava sempre aceso, mesmo
+                sem divergência nenhuma (ui_ux_standard_guide.md §6.4/§18). */}
             {e.imovib_study_id && onGoToStudy && (
               <button onClick={onGoToStudy} className="px-4 py-2.5 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-xl font-black text-button uppercase tracking-widest flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" /> Ver Estudo

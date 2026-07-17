@@ -546,8 +546,10 @@ export const contractService = {
         }
     },
 
-    // Cria (ou retorna se já existir) um contrato domain='VENDAS' a partir de uma
-    // negociação de Vendas de Ativos. Idempotente via deal_id ou número do contrato.
+    // Cria (ou retorna se já existir) um contrato a partir de uma negociação
+    // comercial. `domain` decide o tipo: 'VENDAS' (compra e venda avulsa) ou
+    // 'LOCACAO' (contrato recorrente de aluguel, com reajuste anual). Idempotente
+    // via deal_id ou número do contrato.
     createFromDeal: async (deal: {
         id: string;
         organization_id?: string;
@@ -563,9 +565,19 @@ export const contractService = {
         signature_status?: string;
         signature_url?: string;
         signed_contract_url?: string;
-    }): Promise<Contract> => {
+        // Locação (domain='LOCACAO') — parâmetros do contrato recorrente
+        payment_due_date?: string;
+        end_date?: string;
+        billing_cycle?: 'Mensal' | 'Bimestral' | 'Semestral' | 'Anual';
+        reajuste_index?: string;
+    }, domain: 'VENDAS' | 'LOCACAO' = 'VENDAS'): Promise<Contract> => {
         if (!deal.organization_id) throw new Error('Negociação sem organização — impossível gerar contrato.');
         if (!deal.client_id) throw new Error('Negociação sem cliente — selecione o comprador antes de gerar o contrato.');
+
+        const isRental = domain === 'LOCACAO';
+        const cfg = isRental
+            ? { contractType: 'Contrato Recorrente', nature: 'Locação', titlePrefix: 'Contrato de Locação', titleFallback: 'Contrato de Locação', numberPrefix: 'CL' }
+            : { contractType: 'Compra e Venda', nature: 'Outros', titlePrefix: 'Contrato de Venda', titleFallback: 'Contrato de Compra e Venda', numberPrefix: 'CV' };
 
         // Idempotência primária: busca por deal_id (requer migration 20261228000006 aplicada)
         const existing = await contractService.getContractByDealId(deal.id);
@@ -584,24 +596,35 @@ export const contractService = {
             } catch { /* título sem unidade, não bloqueia */ }
         }
 
-        // Gera número: usa o do deal se preenchido; senão tenta RPC; senão fallback timestamp
+        // Gera número: usa o do deal se preenchido; senão sequência própria do domínio.
         let number = (deal.contract_number && deal.contract_number.trim())
             ? deal.contract_number.trim()
             : '';
         if (!number) {
-            try {
-                number = await contractService.getNextContractNumber(deal.organization_id, 'OUTGOING');
-            } catch {
-                number = `CV-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
-            }
-            if (!number || number === '001') {
-                // RPC inexistente retorna '001' — fallback por contagem local
+            const year = new Date().getFullYear();
+            if (isRental) {
+                // Locação tem sua própria sequência (CL-), independente das vendas.
                 const { count } = await supabase
                     .from('contracts')
                     .select('id', { count: 'exact', head: true })
                     .eq('organization_id', deal.organization_id)
-                    .eq('direction', 'OUTGOING');
-                number = `CV-${new Date().getFullYear()}-${String((count || 0) + 1).padStart(3, '0')}`;
+                    .eq('domain', 'LOCACAO');
+                number = `${cfg.numberPrefix}-${year}-${String((count || 0) + 1).padStart(3, '0')}`;
+            } else {
+                try {
+                    number = await contractService.getNextContractNumber(deal.organization_id, 'OUTGOING');
+                } catch {
+                    number = `${cfg.numberPrefix}-${year}-${Date.now().toString().slice(-4)}`;
+                }
+                if (!number || number === '001') {
+                    // RPC inexistente retorna '001' — fallback por contagem local
+                    const { count } = await supabase
+                        .from('contracts')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('organization_id', deal.organization_id)
+                        .eq('direction', 'OUTGOING');
+                    number = `${cfg.numberPrefix}-${year}-${String((count || 0) + 1).padStart(3, '0')}`;
+                }
             }
         }
 
@@ -623,21 +646,43 @@ export const contractService = {
             : deal.signature_status === 'SIGNED' ? 'Assinado'
             : 'Ativo';
 
+        // Reajuste anual (locação): +12 meses a partir da data-base, sem drift de fuso.
+        const nextAdjustment = (() => {
+            if (!isRental || !deal.date) return undefined;
+            const [y, m, d] = deal.date.split('-').map(Number);
+            if (!y || !m || !d) return undefined;
+            const dt = new Date(Date.UTC(y, m - 1, d));
+            dt.setUTCFullYear(dt.getUTCFullYear() + 1);
+            return dt.toISOString().split('T')[0];
+        })();
+        // Dia de vencimento derivado do vencimento informado (UTC evita retroceder 1 dia).
+        const dueDay = isRental && deal.payment_due_date
+            ? new Date(deal.payment_due_date).getUTCDate()
+            : undefined;
+
         const payload = {
             deal_id: deal.id,
             organization_id: deal.organization_id,
             client_id: deal.client_id,
             number,
-            title: unitLabel ? `Contrato de Venda — ${unitLabel}` : 'Contrato de Compra e Venda',
+            title: unitLabel ? `${cfg.titlePrefix} — ${unitLabel}` : cfg.titleFallback,
             description: deal.notes || undefined,
-            contract_type: 'Compra e Venda',
-            nature: 'Outros',
+            contract_type: cfg.contractType,
+            nature: cfg.nature,
             direction: 'OUTGOING' as const,
-            domain: 'VENDAS' as const,
+            domain,
             status,
             original_value: deal.value || 0,
             start_date: deal.date || new Date().toISOString().split('T')[0],
-            is_recurring: false,
+            is_recurring: isRental,
+            ...(isRental ? {
+                billing_cycle: deal.billing_cycle || 'Mensal',
+                due_day: dueDay,
+                end_date: deal.end_date || undefined,
+                reajuste_index: deal.reajuste_index || 'IGPM',
+                reajuste_data_base: deal.date || undefined,
+                reajuste_proximo: nextAdjustment,
+            } : {}),
             payment_method: deal.payment_method || undefined,
             payment_installments: deal.installments || undefined,
             signature_status: deal.signature_status && ['PENDING', 'SENT', 'SIGNED', 'EXPIRED', 'CANCELLED'].includes(deal.signature_status)

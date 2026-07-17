@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine } from 'lucide-react';
-import { Property, PropertyDeal, Client, Organization, PaymentInstallment, Supplier } from '../types';
+import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile } from '../types';
 import { commercialService } from '../services/commercialService';
 import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
 import { propertyExportService } from '../services/propertyExportService';
 import { projectService, ProjectData } from '../services/projectService';
-import { supplierService } from '../services/supplierService';
+import { brokerService } from '../services/brokerService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { contractService } from '../services/contractService';
 import { Contract } from '../types';
@@ -71,29 +71,34 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [properties, setProperties] = useState<Property[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [projects, setProjects] = useState<ProjectData[]>([]);
-    const [brokers, setBrokers] = useState<Supplier[]>([]);
+    const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
     const [loading, setLoading] = useState(false);
     const [org, setOrg] = useState<Organization | null>(null);
 
-    // Ponte Negociação → Contrato de Venda (domain='VENDAS')
-    const [salesContract, setSalesContract] = useState<Contract | null>(null);
+    // Ponte Negociação → Contrato formal. Venda (domain='VENDAS') gera um contrato
+    // de compra e venda; Locação (domain='LOCACAO') gera um contrato recorrente.
+    const [linkedContract, setLinkedContract] = useState<Contract | null>(null);
     const [generatingContract, setGeneratingContract] = useState(false);
     const [contractError, setContractError] = useState<string | null>(null);
 
-    // Ao abrir uma negociação de venda já salva, verifica se já existe contrato gerado
+    // Quem tem ponte para contrato formal: Venda e Locação (Serviço não).
+    const canGenerateContract = formData.type === 'SALE' || formData.type === 'RENTAL';
+
+    // Ao abrir uma negociação de venda/locação já salva, verifica se já há contrato gerado
     useEffect(() => {
-        setSalesContract(null);
+        setLinkedContract(null);
         setContractError(null);
-        if (isOpen && formData.id && formData.type === 'SALE') {
+        if (isOpen && formData.id && canGenerateContract) {
             contractService.getContractByDealId(formData.id)
-                .then(setSalesContract)
+                .then(setLinkedContract)
                 .catch(err => console.error('[DealModal] Erro ao buscar contrato da negociação:', err));
         }
     }, [isOpen, formData.id, formData.type]);
 
     const handleGenerateContract = async () => {
         if (!formData.id) return;
-        if (!formData.client_id) { setContractError('Selecione o comprador antes de gerar o contrato.'); return; }
+        const isRental = formData.type === 'RENTAL';
+        if (!formData.client_id) { setContractError(`Selecione o ${isRental ? 'locatário' : 'comprador'} antes de gerar o contrato.`); return; }
         setGeneratingContract(true);
         setContractError(null);
         try {
@@ -112,10 +117,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 signature_status: formData.signature_status,
                 signature_url: formData.signature_url,
                 signed_contract_url: formData.signed_contract_url,
-            });
-            setSalesContract(contract);
+                // Locação: alimenta recorrência/reajuste do contrato
+                payment_due_date: formData.payment_due_date,
+            }, isRental ? 'LOCACAO' : 'VENDAS');
+            setLinkedContract(contract);
         } catch (err: any) {
-            console.error('[DealModal] Erro ao gerar contrato de venda:', err);
+            console.error('[DealModal] Erro ao gerar contrato:', err);
             setContractError(err?.message || 'Erro ao gerar contrato.');
         } finally {
             setGeneratingContract(false);
@@ -144,7 +151,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     if (!formData.id && !formData.organization_id) {
                         setFormData(prev => ({ ...prev, organization_id: o[0].id }));
                     }
-                    const brokerData = await supplierService.listRealEstateBrokers(organizationId);
+                    const brokerData = await brokerService.listProfiles(organizationId);
                     setBrokers(brokerData);
                 }
             } catch (err) {
@@ -704,7 +711,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         setFormData({
                                             ...formData,
                                             broker_id: brokerId || undefined,
-                                            broker_name: (broker?.contact_name || broker?.name) || undefined,
+                                            broker_name: broker?.name || undefined,
                                             broker_commission_pct: commissionPct,
                                             broker_commission_value: commissionValue
                                         });
@@ -714,7 +721,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     <option value="">Sem corretor / Venda direta</option>
                                     {brokers.map(b => (
                                         <option key={b.id} value={b.id}>
-                                            {b.contact_name || b.name}{b.contact_name && b.name ? ` - ${b.name}` : ''}
+                                            {b.name}{b.agency_name ? ` - ${b.agency_name}` : ''}
                                         </option>
                                     ))}
                                 </select>
@@ -725,13 +732,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             <UserCheck className="w-5 h-5 text-amber-600" />
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-black text-gray-900 truncate">{selectedBroker.contact_name || selectedBroker.name}</p>
+                                            <p className="text-sm font-black text-gray-900 truncate">{selectedBroker.name}</p>
                                             <div className="flex items-center gap-3 mt-0.5">
-                                                {selectedBroker.document && (
-                                                    <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">Doc: {selectedBroker.document}</span>
+                                                {selectedBroker.cpf && (
+                                                    <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">Doc: {selectedBroker.cpf}</span>
                                                 )}
-                                                {selectedBroker.type === 'PJ' && (
-                                                    <span className="text-xs font-bold text-gray-400 truncate">{selectedBroker.name}</span>
+                                                {selectedBroker.agency_name && (
+                                                    <span className="text-xs font-bold text-gray-400 truncate">{selectedBroker.agency_name}</span>
                                                 )}
                                             </div>
                                         </div>
@@ -849,18 +856,22 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
                                     </div>
 
-                                    {/* Ponte → Contrato de Venda (somente SALE, negociação já salva) */}
-                                    {formData.type === 'SALE' && formData.id && (
+                                    {/* Ponte → Contrato formal (Venda ou Locação, negociação já salva) */}
+                                    {canGenerateContract && formData.id && (
                                         <div className="space-y-2">
-                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Contrato de Venda</label>
-                                            {salesContract ? (
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">
+                                                {formData.type === 'RENTAL' ? 'Contrato de Locação' : 'Contrato de Venda'}
+                                            </label>
+                                            {linkedContract ? (
                                                 <div className="p-5 bg-emerald-50 rounded-3xl border border-emerald-100 flex gap-4 items-start">
                                                     <Check className="w-6 h-6 text-emerald-500 shrink-0 mt-0.5" />
                                                     <div className="min-w-0">
                                                         <p className="text-xs font-black text-emerald-800 uppercase tracking-widest mb-1">Contrato Gerado</p>
                                                         <p className="text-xs text-emerald-700 leading-relaxed">
-                                                            Nº <span className="font-black">{salesContract.number}</span> · {salesContract.status}.
-                                                            Disponível em <span className="font-bold">Vendas de Ativos → Contratos</span> e no Portal do Cliente.
+                                                            Nº <span className="font-black">{linkedContract.number}</span> · {linkedContract.status}.
+                                                            {formData.type === 'RENTAL'
+                                                                ? <> Contrato recorrente mensal, disponível no <span className="font-bold">Portal do Cliente</span> (categoria Locação).</>
+                                                                : <> Disponível em <span className="font-bold">Vendas de Ativos → Contratos</span> e no Portal do Cliente.</>}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -872,7 +883,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-purple-600 text-white rounded-2xl font-black hover:bg-purple-700 transition-all shadow-sm active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
                                                 >
                                                     <FileText className="w-5 h-5" />
-                                                    <span className="uppercase text-xs tracking-widest">{generatingContract ? 'Gerando…' : 'Gerar Contrato de Venda'}</span>
+                                                    <span className="uppercase text-xs tracking-widest">{generatingContract ? 'Gerando…' : formData.type === 'RENTAL' ? 'Gerar Contrato de Locação' : 'Gerar Contrato de Venda'}</span>
                                                 </button>
                                             )}
                                             {contractError && (

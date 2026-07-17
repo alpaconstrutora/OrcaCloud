@@ -68,7 +68,7 @@ suficiente).
 - [ ] §2 Columns — definição das colunas
 - [ ] §3 State — filtros persistidos e colunas
 - [ ] §4 KPI Cards (+ §4.1 `sub` opcional, §4.2 quebra de simetria, §4.3 uppercase por `size`)
-- [ ] §5 Toolbar (+ §5.1 variante desaninhada, §5.2 variante acoplada à tabela — qual das três foi escolhida e por quê)
+- [ ] §5 Toolbar (+ §5.1 variante desaninhada, §5.2 variante acoplada à tabela — qual das três foi escolhida e por quê; + §5.3 toolbar de botões, quando a tela tem controles de escopo que não são busca)
 - [ ] §6 Tabela — container e `<thead>`
 - [ ] §6.1 Redimensionamento de colunas — decisão explícita (tem ou não tem, por quê)
 - [ ] §6.2 `<thead>` sentence case (padrão único desde §16 fechado — ❌ se ainda uppercase, não é mais decisão)
@@ -90,8 +90,9 @@ suficiente).
 - [ ] §16 Escala de radius — compacta é o padrão único (❌ se a tela ainda usa `rounded-[2.5rem]`/`[1.25rem]`; consistente na tela toda?)
 - [ ] §17 Botão primário — variante compacta é a única válida (❌ se herdou o estilo pesado de um componente compartilhado sem perceber)
 - [ ] §18 Não duplicar contexto já visível no shell
-- [ ] §19 Navegação de módulos — se a tela pertencer a um módulo com navegação de nível de módulo, conferir se é via sidebar (padrão atual) ou, em módulos legados, se a barra de abas local bate com a escala de radius/tamanho da página
+- [ ] §19 Navegação de módulos — se a tela pertencer a um módulo com navegação de nível de módulo, conferir se é via sidebar (padrão atual) ou, em módulos legados, se a barra de abas local bate com a escala de radius/tamanho da página (+ §19.1: se tem barra de abas local, ela segue a anatomia canônica — trilho `bg-gray-50`, aba ativa `bg-white text-blue-600`, `flex-wrap`, título por aba)
 - [ ] §20 Cabeçalho de tela (título + subtítulo + KPIs) — `space-y-6`, `h1` + `p mt-1.5` direto (sem card/hero, a menos que seja decisão documentada), grid de KPI logo em seguida
+- [ ] §20.1 Ritmo de espaçamento do cromo — 24px até os KPIs, 12px (`mb-3`) entre KPIs → abas → botões → toolbar acoplada
 - [ ] §21 Rótulo de campo e título de modal — sentence case em `<h3>`/`<h4>`/`<label>` de formulário, badge/pill dentro de modal segue §8, sub-abas dentro de modal seguem §19; exceção só para token literal de máscara e preview de impressão
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
@@ -453,6 +454,54 @@ Extraído de `components/OpuraDocsModule.tsx` (GED) e replicado em
 > visual desejado — não é substituição obrigatória das duas primeiras
 > variantes, é uma terceira opção para quando o acoplamento visual é a
 > intenção.
+
+### 5.3 Toolbar de botões (controles de escopo, separada da busca)
+
+**Referência canônica: `components/BankReconciliation.tsx`, aba Extrato
+Bancário** (adotada como padrão em 2026-07-16 — a composição de três barras
+descrita aqui e no §19/§20.1 é o melhor resultado que o app produziu até
+hoje, e é o que telas novas devem copiar).
+
+As três variantes acima (§5/§5.1/§5.2) tratam da barra de **busca e
+visualização** — o que filtra e como exibe as linhas já carregadas. A toolbar
+de botões é outra coisa: são os controles que definem **qual conjunto de dados
+a tela está olhando** (conta bancária, competência, período) mais a **ação
+primária** da tela (§17). Ela é uma barra própria, acima da toolbar de busca,
+justamente porque muda o escopo — não o recorte.
+
+```tsx
+{/* Toolbar de botões — card compacto, controles à esquerda, ação primária à direita */}
+<div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+  {/* Grupo de escopo — todos h-9, radius 6px (§16) */}
+  <div className="flex flex-wrap items-center gap-2">
+    <select className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
+      {/* ...conta, competência, período... */}
+    </select>
+  </div>
+
+  {/* Ação primária — §17, variante compacta */}
+  <button className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0">
+    <Upload className="w-[15px] h-[15px]" />
+    Importar extrato
+  </button>
+</div>
+```
+
+> ✅ `justify-between`: escopo à esquerda, ação primária à direita. A ação
+> primária mora **aqui**, não solta ao lado do `<h1>` — o §17 já dizia que
+> ação frequente pode ficar isolada no cabeçalho, mas quando a tela tem uma
+> toolbar de botões, ela é o lugar certo (o cabeçalho fica só título +
+> subtítulo, e o botão fica junto dos controles que determinam sobre o que
+> ele age).
+> ✅ Todo controle em `h-9` + `rounded-[6px]` — mesma régua da §5.1/§16, para
+> as três barras empilhadas lerem como uma escada regular e não como três
+> réguas de alturas diferentes.
+> ❌ Não fundir escopo com busca na mesma barra. São perguntas diferentes
+> ("qual conta/mês?" vs "qual linha?"), e misturá-las produz uma barra longa
+> onde o usuário não acha nada. Se a tela **não tem** controles de escopo (a
+> maioria dos CRUDs — Fornecedores, Clientes), ela simplesmente não tem esta
+> barra: vai direto de KPIs para a toolbar de busca. Esta seção não obriga
+> ninguém a inventar uma barra vazia.
 
 ---
 
@@ -1332,6 +1381,50 @@ linhas) — a tela agora começa direto no conteúdo da aba ativa (§20).
 > estilo — mas prefira sidebar quando a navegação for de nível de módulo
 > inteiro (não de sub-fluxo dentro de uma tela), pelo motivo acima.
 
+### 19.1 Toolbar de abas — anatomia canônica
+
+Quando a barra de abas local **é** a escolha certa (sub-fluxos de uma mesma
+tela, não navegação de módulo — ver a ressalva acima, que continua valendo),
+esta é a forma canônica. **Referência: `components/BankReconciliation.tsx`**
+(adotada como padrão em 2026-07-16).
+
+```tsx
+{/* Toolbar de abas — card próprio, mb-3 pelo ritmo do §20.1 */}
+<div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+  {/* Trilho cinza: agrupa as abas e dá o contraste que faz a aba ativa (branca) "subir" */}
+  <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+    {VIEWS.map(v => (
+      <button
+        key={v.id}
+        onClick={() => setActiveView(v.id)}
+        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+          activeView === v.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+        }`}
+      >
+        {v.label}
+      </button>
+    ))}
+  </div>
+</div>
+```
+
+> ✅ **Aba ativa = `bg-white text-blue-600 shadow-sm` sobre trilho
+> `bg-gray-50`.** Não é o azul sólido do toggle grid/lista (§5) nem do botão
+> primário (§17) — aba ativa é *estado de navegação*, não ação; azul sólido
+> aqui competiria com a ação primária logo abaixo (§5.3).
+> ✅ **`flex-wrap`, nunca `overflow-x-auto`.** Com muitas abas (o Extrato tem
+> 11), rolagem horizontal corta o texto no meio sem nenhum indício de que há
+> mais abas — o usuário não descobre o que não vê. Quebra de linha garante
+> que todas ficam visíveis; a barra fica mais alta em telas estreitas, o que é
+> o custo certo a pagar.
+> ✅ Abas em `h-7` dentro de um card `p-3` — mais baixas que o `h-9` do resto
+> dos controles de propósito: navegação é secundária à tarefa, e a diferença
+> de altura já sinaliza isso sem precisar de separador.
+> ℹ️ O título da tela (`<h1>`, §20) deve **mudar junto com a aba ativa** — um
+> `Record<View, {title, subtitle}>` no topo do arquivo, como
+> `VIEW_HEADERS` em `BankReconciliation.tsx`. Aba que troca o conteúdo inteiro
+> sem trocar o título deixa o `<h1>` mentindo sobre o que está na tela.
+
 ---
 
 ## 20. CABEÇALHO DE TELA (título + subtítulo + KPIs)
@@ -1387,6 +1480,48 @@ Referência: `SupplierList.tsx`, `ClientList.tsx`, `InvestorList.tsx`.
 > ℹ️ Quando um dos KPIs é "o total" do qual os outros são decomposição, veja
 > §4.2 (quebra de simetria) — a régua de espaçamento título↔KPI é a mesma
 > nos dois casos (simétrico ou não), só a grade de KPI muda.
+
+### 20.1 Ritmo de espaçamento do cromo — 24px até os KPIs, 12px depois
+
+**Regra:** o `space-y-6` (24px) do container raiz governa o **conteúdo** da
+tela — título → KPIs, e o último bloco de cromo → tabela. Já as barras de
+cromo empilhadas entre os KPIs e a tabela (abas §19 → botões §5.3 → toolbar
+acoplada §5.2) respiram **12px** entre si: são controles da mesma tarefa, e a
+24px cada uma lê como uma seção independente da página, empurrando a tabela
+para baixo da dobra sem ganhar nenhuma clareza em troca.
+
+```tsx
+<div className="space-y-6">
+  <div>{/* h1 + p — §20 */}</div>
+
+  {/* mb-3 quebra o ritmo de 24px a partir daqui: KPIs e cromo são um bloco só */}
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">{/* KpiCard — §4 */}</div>
+  <div className="... rounded-[10px] border border-gray-100 shadow-sm mb-3">{/* abas — §19 */}</div>
+  <div className="... rounded-[10px] border border-gray-100 shadow-sm mb-3">{/* botões — §5.3 */}</div>
+
+  <div>{/* toolbar acoplada + tabela — §5.2 */}</div>
+</div>
+```
+
+> ✅ **`mb-3` no filho, não `space-y-3` no pai.** No Tailwind v4 o
+> `space-y-6` compila para `:where(.space-y-6 > :not(:last-child)) {
+> margin-block-end: … }` — o `:where()` zera a especificidade do seletor, então
+> qualquer `mb-*` no filho (especificidade 0,1,0) vence limpo, sem
+> `!important` e sem depender da ordem do CSS. Verificado no bundle real
+> (`dist/assets/index-*.css`) antes de adotar. Isso **não** vale para o
+> Tailwind v3, onde `space-y-*` usava `margin-top` no filho seguinte com
+> especificidade de duas classes — se este projeto voltar ao v3 (não deve), a
+> técnica quebra silenciosamente.
+> ✅ O `mb-3` vai no **elemento de cima** de cada par (é `margin-block-end`),
+> ou seja: KPIs, abas e botões carregam o `mb-3`; a toolbar acoplada não
+> carrega nada — ela usa o `space-y-6` normal para se separar do que vier
+> depois (barra de auditoria, etc.).
+> ❌ Não aplicar `mb-3` no bloco de título — o respiro de 24px entre `<h1>` e
+> KPIs é o que separa "identidade da tela" de "dados da tela", e é o único
+> lugar da página onde essa pausa é o ponto. Regra rápida: 24px sempre que a
+> pergunta muda; 12px enquanto for a mesma pergunta.
+> ℹ️ Referência: `components/BankReconciliation.tsx` (aba Extrato Bancário),
+> 2026-07-16.
 
 ---
 

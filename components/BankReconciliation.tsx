@@ -3205,7 +3205,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             {/* Header / Stats — variante flat (bare icon, sentence case, sem sombra),
                 igual à tela de referência SupplierList.tsx. Grade simétrica: os 4 KPIs
                 são métricas independentes, sem relação total→decomposição (guia §4.2). */}
-            <div className="relative">
+            {/* mb-3 — ritmo de cromo do guia §20.1: o bloco de controles (abas → botões →
+                toolbar acoplada) respira 12px, metade do space-y-6 do container raiz. */}
+            <div className="relative mb-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <KpiCard
                         shadow={false}
@@ -3246,8 +3248,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             </div>
         </div>
 
-            {/* Toolbar acoplada — abas de visão + filtro Tudo/Receitas/Despesas + ação primária (guia §5.2/§19) */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
+            {/* Toolbar de abas — guia §19/§20.1 (mb-3: ritmo de cromo, metade do space-y-6 raiz) */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 {/* Barra de abas local — escala compacta (guia §19). flex-wrap em vez de
                     overflow-x-auto: com 9 abas, rolagem horizontal (mesmo sem scrollbar
                     visível) corta texto no meio sem nenhum indício de que há mais abas —
@@ -3322,8 +3324,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 </div>
             </div>
 
-            {/* Toolbar — escala compacta (guia §5/§16) */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
+            {/* Toolbar de botões — guia §5.3/§20.1 (mb-3: ritmo de cromo, metade do space-y-6 raiz) */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
                     <select
                         value={selectedAccountId || ''}

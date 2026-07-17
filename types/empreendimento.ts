@@ -141,6 +141,7 @@ export interface EmpreendimentoUnit {
     total_area?: number;
     bedrooms?: number;
     bathrooms?: number;
+    suites?: number;
     parking_spaces?: number;
     position_type?: UnitPositionType | null;
     sun_orientation?: UnitSunOrientation | null;
@@ -182,6 +183,41 @@ export interface EmpreendimentoCommonArea {
 
 export type EmpreendimentoCommonAreaInsert = Omit<EmpreendimentoCommonArea, 'id' | 'created_at' | 'updated_at'>;
 export type EmpreendimentoCommonAreaUpdate = Partial<EmpreendimentoCommonAreaInsert>;
+
+// Mapa Regulatório — mora no empreendimento (fonte única), mostrado/editado também na
+// Viabilidade e na Planta (migration 20270218000002). 21 parâmetros urbanísticos por zona.
+export interface EmpreendimentoRegulatoryZone {
+    id: string;
+    empreendimento_id: string;
+    organization_id: string;
+    macroarea?: string;
+    zona?: string;
+    ca_minimo?: string;
+    ca_basico?: string;
+    ca_maximo?: string;
+    taxa_ocupacao_maxima?: string;
+    taxa_permeabilidade_minima?: string;
+    gabarito_altura_maxima?: string;
+    uso_permitido?: string;
+    recuo_frente?: string;
+    recuo_fundos?: string;
+    recuo_lateral_direita?: string;
+    recuo_lateral_esquerda?: string;
+    gabarito_pavimentos?: string;
+    regra_vagas?: string;
+    vagas_por_unidade?: string;
+    area_minima_unidade?: string;
+    lei_referencia?: string;
+    documento_fonte?: string;
+    nivel_confianca?: string;
+    observacoes?: string;
+    sort_order?: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export type EmpreendimentoRegulatoryZoneInsert = Omit<EmpreendimentoRegulatoryZone, 'id' | 'created_at' | 'updated_at'>;
+export type EmpreendimentoRegulatoryZoneUpdate = Partial<EmpreendimentoRegulatoryZoneInsert>;
 
 export type EmpreendimentoWithChildren = Empreendimento & {
     towers: EmpreendimentoTower[];

@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { ImovibStudy, ImovibRegulatoryZone, ImovibUnitInstance } from '../types';
+import { ImovibStudy, EmpreendimentoRegulatoryZone, ImovibUnitInstance } from '../types';
 import { imovibService } from '../services/imovibService';
+import { empreendimentoService } from '../services/empreendimentoService';
 import { Calculator, TrendingUp, DollarSign, PieChart, Activity } from 'lucide-react';
 
 const parseRegVal = (v: string | undefined): number | null => {
@@ -13,11 +14,11 @@ interface ImovibStaticViabilityProps {
 }
 
 const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) => {
-    const [zones, setZones] = useState<ImovibRegulatoryZone[]>([]);
+    const [zones, setZones] = useState<EmpreendimentoRegulatoryZone[]>([]);
     const [unitInstances, setUnitInstances] = useState<ImovibUnitInstance[]>([]);
 
     useEffect(() => {
-        imovibService.getRegulatoryZones(study.id).then(setZones).catch(console.error);
+        empreendimentoService.listRegulatoryZonesByImovibStudy(study.id).then(setZones).catch(console.error);
         imovibService.getUnitInstances(study.id).then(setUnitInstances).catch(console.error);
     }, [study.id]);
 

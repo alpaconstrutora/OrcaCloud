@@ -7,6 +7,7 @@ import {
     EmpreendimentoFloor, EmpreendimentoFloorInsert, EmpreendimentoFloorUpdate,
     EmpreendimentoUnit, EmpreendimentoUnitInsert, EmpreendimentoUnitUpdate,
     EmpreendimentoCommonArea, EmpreendimentoCommonAreaInsert, EmpreendimentoSyncReport,
+    EmpreendimentoRegulatoryZone, EmpreendimentoRegulatoryZoneInsert, EmpreendimentoRegulatoryZoneUpdate,
     UnitStatus,
 } from '../types';
 import {
@@ -84,6 +85,8 @@ const FLOOR_COLS = 'id, tower_id, name, tipo, floor_number, repeat_count, units_
 const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_instance_id, planta_ai_unit_id, name, floor, typology, private_area, common_area, total_area, bedrooms, bathrooms, parking_spaces, position_type, sun_orientation, view_type, price, status, is_vendavel, commercial_property_id, rental_property_id, sort_order, fracao_ideal_decimal, fracao_ideal_thousandths, area_real_total_m2, area_engine_version_id, area_engine_synced_at, created_at, updated_at';
 
 const COMMON_AREA_COLS = 'id, empreendimento_id, tower_id, name, category, area, floor, description, is_vendavel, sort_order, created_at, updated_at';
+
+const REGULATORY_ZONE_COLS = 'id, empreendimento_id, organization_id, macroarea, zona, ca_minimo, ca_basico, ca_maximo, taxa_ocupacao_maxima, taxa_permeabilidade_minima, gabarito_altura_maxima, uso_permitido, recuo_frente, recuo_fundos, recuo_lateral_direita, recuo_lateral_esquerda, gabarito_pavimentos, regra_vagas, vagas_por_unidade, area_minima_unidade, lei_referencia, documento_fonte, nivel_confianca, observacoes, sort_order, created_at, updated_at';
 
 export const empreendimentoService = {
     // ── Empreendimentos ──────────────────────────────────────────────────────
@@ -810,6 +813,46 @@ export const empreendimentoService = {
     async deleteCommonArea(id: string): Promise<void> {
         const { error } = await supabase.from('empreendimento_common_areas').delete().eq('id', id);
         if (error) throw new Error(`Failed to delete common area: ${error.message}`);
+    },
+
+    // ── Mapa Regulatório (mora no empreendimento — fonte única) ───────────────
+    async listRegulatoryZones(empreendimentoId: string): Promise<EmpreendimentoRegulatoryZone[]> {
+        const { data, error } = await supabase
+            .from('empreendimento_regulatory_zones')
+            .select(REGULATORY_ZONE_COLS)
+            .eq('empreendimento_id', empreendimentoId)
+            .order('sort_order', { ascending: true })
+            .order('created_at', { ascending: true });
+        if (error) throw new Error(`Falha ao carregar zonas regulatórias: ${error.message}`);
+        return data || [];
+    },
+
+    /** Zonas do empreendimento vinculado a um estudo Imovib — usado pelos cálculos da
+     *  Viabilidade (Potencial Construtivo, CAPEX, Viabilidade Estática). Sem empreendimento
+     *  vinculado, retorna [] (fonte única: o regulatório mora no empreendimento). */
+    async listRegulatoryZonesByImovibStudy(imovibStudyId: string): Promise<EmpreendimentoRegulatoryZone[]> {
+        const { data: emp, error: empErr } = await supabase
+            .from('empreendimentos').select('id').eq('imovib_study_id', imovibStudyId).maybeSingle();
+        if (empErr) throw new Error(`Falha ao resolver empreendimento do estudo: ${empErr.message}`);
+        if (!emp) return [];
+        return this.listRegulatoryZones(emp.id);
+    },
+
+    async createRegulatoryZone(zone: EmpreendimentoRegulatoryZoneInsert): Promise<EmpreendimentoRegulatoryZone> {
+        const { data, error } = await supabase
+            .from('empreendimento_regulatory_zones').insert(zone).select(REGULATORY_ZONE_COLS).single();
+        if (error) throw new Error(`Falha ao criar zona regulatória: ${error.message}`);
+        return data;
+    },
+
+    async updateRegulatoryZone(id: string, updates: EmpreendimentoRegulatoryZoneUpdate): Promise<void> {
+        const { error } = await supabase.from('empreendimento_regulatory_zones').update(updates).eq('id', id);
+        if (error) throw new Error(`Falha ao atualizar zona regulatória: ${error.message}`);
+    },
+
+    async deleteRegulatoryZone(id: string): Promise<void> {
+        const { error } = await supabase.from('empreendimento_regulatory_zones').delete().eq('id', id);
+        if (error) throw new Error(`Falha ao excluir zona regulatória: ${error.message}`);
     },
 
     // ── Sincronização com o estudo Imovib (vínculo vivo) ─────────────────────

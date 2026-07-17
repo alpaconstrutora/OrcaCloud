@@ -8,8 +8,9 @@ import React, { useEffect, useState } from 'react';
 import { Building, Loader2, MapPin, Plus, Save, Users, Check, X, AlertCircle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { ImovibBlock, ImovibRegulatoryZone, ImovibStudy, ImovibUnit } from '../types';
+import { ImovibBlock, EmpreendimentoRegulatoryZone, ImovibStudy, ImovibUnit } from '../types';
 import { imovibService } from '../services/imovibService';
+import { empreendimentoService } from '../services/empreendimentoService';
 import { TorreCard, TorreEmpty } from './torres/TorreCard';
 
 const parseRegVal = (v: string | undefined): number | null => {
@@ -33,7 +34,7 @@ const LAND_FIELDS: { label: string; key: keyof ImovibStudy }[] = [
 const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
     const confirm = useConfirm();
     const [formData, setFormData] = useState<Partial<ImovibStudy>>(study);
-    const [regulatoryZones, setRegulatoryZones] = useState<ImovibRegulatoryZone[]>([]);
+    const [regulatoryZones, setRegulatoryZones] = useState<EmpreendimentoRegulatoryZone[]>([]);
     const [addingBlock, setAddingBlock] = useState(false);
     const [newBlockName, setNewBlockName] = useState('');
     const [blockNameError, setBlockNameError] = useState(false);
@@ -50,7 +51,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
 
     useEffect(() => { setFormData(study); }, [study]);
     useEffect(() => {
-        imovibService.getRegulatoryZones(study.id).then(setRegulatoryZones).catch(console.error);
+        empreendimentoService.listRegulatoryZonesByImovibStudy(study.id).then(setRegulatoryZones).catch(console.error);
     }, [study.id]);
 
     const handleSaveLand = async () => {

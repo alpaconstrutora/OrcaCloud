@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { Building, FileText, PieChart, Activity, Save, Loader2, Map, Layers } from 'lucide-react';
-import ImovibRegulatoryMapTab from './ImovibRegulatoryMapTab';
+import EstudoMapaRegulatorio from './EstudoMapaRegulatorio';
 import ImovibBlocksTypologyTab from './ImovibBlocksTypologyTab';
 import EstudoTorresUnidades from './torres/EstudoTorresUnidades';
 
@@ -175,7 +175,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             )}
             {/* TAB: MAPA REGULATÓRIO */}
             {activeTab === 'regulatorio' && (
-                <ImovibRegulatoryMapTab studyId={study.id} />
+                <EstudoMapaRegulatorio studyId={study.id} origin="imovib" />
             )}
 
         </div>

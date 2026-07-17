@@ -31,18 +31,18 @@ const FLOOR_TIPO_STYLE: Record<FloorTipo, string> = {
 // §8 Status Badge = texto simples colorido. Reaproveita a cor de texto das
 // paletas acima (bg+text combinados) extraindo só o token `text-*`.
 const textColor = (style?: string) => style?.split(' ').find(c => c.startsWith('text-')) ?? 'text-gray-600';
-type SortCol = 'name' | 'floor' | 'floor_tipo' | 'typology' | 'private_area' | 'common_area' | 'bedrooms' | 'bathrooms' | 'parking_spaces' | 'position_type' | 'view_type' | 'sun_orientation';
+type SortCol = 'name' | 'floor' | 'floor_tipo' | 'typology' | 'private_area' | 'common_area' | 'bedrooms' | 'bathrooms' | 'suites' | 'parking_spaces' | 'position_type' | 'view_type' | 'sun_orientation';
 
 const emptyForm = () => ({
   name: '', floor: '', typology: '', private_area: '', common_area: '',
-  bedrooms: '', bathrooms: '',
+  bedrooms: '', bathrooms: '', suites: '',
   parking_spaces: '', floor_tipo: '' as FloorTipo | '',
   position_type: '' as UnitPositionType | '', view_type: '' as UnitViewType | '',
   sun_orientation: '' as UnitSunOrientation | '',
 });
 const emptyBulkForm = () => ({
   floor: '', floor_tipo: '' as FloorTipo | '',
-  typology: '', private_area: '', common_area: '', bedrooms: '', bathrooms: '', parking_spaces: '',
+  typology: '', private_area: '', common_area: '', bedrooms: '', bathrooms: '', suites: '', parking_spaces: '',
   position_type: '' as UnitPositionType | '', view_type: '' as UnitViewType | '',
   sun_orientation: '' as UnitSunOrientation | '',
 });
@@ -120,6 +120,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       case 'common_area':   va = a.common_area ?? 0;  vb = b.common_area ?? 0; break;
       case 'bedrooms':      va = a.bedrooms ?? 0;     vb = b.bedrooms ?? 0; break;
       case 'bathrooms':     va = a.bathrooms ?? 0;    vb = b.bathrooms ?? 0; break;
+      case 'suites':        va = a.suites ?? 0;       vb = b.suites ?? 0; break;
       case 'parking_spaces':va = a.parking_spaces ?? 0; vb = b.parking_spaces ?? 0; break;
       case 'position_type': va = a.position_type ?? ''; vb = b.position_type ?? ''; break;
       case 'view_type':     va = a.view_type ?? '';   vb = b.view_type ?? ''; break;
@@ -185,6 +186,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       total_area: priv !== undefined || common !== undefined ? (priv ?? 0) + (common ?? 0) : undefined,
       bedrooms: f.bedrooms ? Number(f.bedrooms) : undefined,
       bathrooms: f.bathrooms ? Number(f.bathrooms) : undefined,
+      suites: f.suites ? Number(f.suites) : undefined,
       parking_spaces: f.parking_spaces ? Number(f.parking_spaces) : undefined,
       position_type: (f.position_type || undefined) as UnitPositionType | undefined,
       view_type: (f.view_type || undefined) as UnitViewType | undefined,
@@ -211,7 +213,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       name: u.name, floor: u.floor?.toString() ?? '',
       typology: u.typology ?? '', private_area: u.private_area?.toString() ?? '',
       common_area: u.common_area?.toString() ?? '',
-      bedrooms: u.bedrooms?.toString() ?? '', bathrooms: u.bathrooms?.toString() ?? '',
+      bedrooms: u.bedrooms?.toString() ?? '', bathrooms: u.bathrooms?.toString() ?? '', suites: u.suites?.toString() ?? '',
       parking_spaces: u.parking_spaces?.toString() ?? '', floor_tipo: u.floor_tipo ?? '',
       floor_id: u.floor_id ?? '',
       position_type: u.position_type ?? '', view_type: u.view_type ?? '',
@@ -231,6 +233,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         total_area: priv !== undefined || common !== undefined ? (priv ?? 0) + (common ?? 0) : undefined,
         bedrooms: editForm.bedrooms ? Number(editForm.bedrooms) : undefined,
         bathrooms: editForm.bathrooms ? Number(editForm.bathrooms) : undefined,
+        suites: editForm.suites ? Number(editForm.suites) : undefined,
         parking_spaces: editForm.parking_spaces ? Number(editForm.parking_spaces) : undefined,
         position_type: (editForm.position_type || null) as UnitPositionType | null,
         view_type: (editForm.view_type || null) as UnitViewType | null,
@@ -251,7 +254,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         typology: u.typology ?? undefined, private_area: u.private_area ?? undefined,
         common_area: u.common_area ?? undefined, total_area: u.total_area ?? undefined,
         price: u.price ?? undefined, bedrooms: u.bedrooms ?? undefined,
-        bathrooms: u.bathrooms ?? undefined, parking_spaces: u.parking_spaces ?? undefined,
+        bathrooms: u.bathrooms ?? undefined, suites: u.suites ?? undefined, parking_spaces: u.parking_spaces ?? undefined,
         status: 'DISPONIVEL', is_vendavel: true, sort_order: units.length,
       });
       await load();
@@ -276,7 +279,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
 
   const handleBulkSave = async () => {
     const hasAny = bulkForm.floor || bulkForm.floor_tipo || bulkForm.typology.trim()
-      || bulkForm.private_area || bulkForm.common_area || bulkForm.bedrooms || bulkForm.bathrooms || bulkForm.parking_spaces
+      || bulkForm.private_area || bulkForm.common_area || bulkForm.bedrooms || bulkForm.bathrooms || bulkForm.suites || bulkForm.parking_spaces
       || bulkForm.position_type || bulkForm.view_type || bulkForm.sun_orientation;
     if (!hasAny) { alert('Preencha pelo menos um campo para aplicar em lote.'); return; }
     setBulkSaving(true);
@@ -288,6 +291,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       if (bulkForm.typology.trim()) upd.typology = bulkForm.typology.trim();
       if (bulkForm.bedrooms) upd.bedrooms = Number(bulkForm.bedrooms);
       if (bulkForm.bathrooms) upd.bathrooms = Number(bulkForm.bathrooms);
+      if (bulkForm.suites) upd.suites = Number(bulkForm.suites);
       if (bulkForm.parking_spaces) upd.parking_spaces = Number(bulkForm.parking_spaces);
       if (bulkForm.position_type) upd.position_type = bulkForm.position_type;
       if (bulkForm.view_type) upd.view_type = bulkForm.view_type;
@@ -386,6 +390,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         <input className={inputCls} placeholder="Comum m²" type="number" step="0.01" value={form.common_area} onChange={e => setForm(p => ({ ...p, common_area: e.target.value }))} />
         <input className={inputCls} placeholder="Dormitórios" type="number" value={form.bedrooms} onChange={e => setForm(p => ({ ...p, bedrooms: e.target.value }))} />
         <input className={inputCls} placeholder="Banheiros" type="number" value={form.bathrooms} onChange={e => setForm(p => ({ ...p, bathrooms: e.target.value }))} />
+        <input className={inputCls} placeholder="Suítes" type="number" value={form.suites} onChange={e => setForm(p => ({ ...p, suites: e.target.value }))} />
         <input className={inputCls} placeholder="Vagas" type="number" value={form.parking_spaces} onChange={e => setForm(p => ({ ...p, parking_spaces: e.target.value }))} />
         <select className={inputCls} value={form.position_type} onChange={e => setForm(p => ({ ...p, position_type: e.target.value as UnitPositionType | '' }))}>
           <option value="">Posição</option>
@@ -493,6 +498,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                 <SortableHeader col="common_area" current={sortCol} dir={sortDir} onSort={handleSort}>Comum m²</SortableHeader>
                 <SortableHeader col="bedrooms" current={sortCol} dir={sortDir} onSort={handleSort}>Dormitórios</SortableHeader>
                 <SortableHeader col="bathrooms" current={sortCol} dir={sortDir} onSort={handleSort}>Banheiros</SortableHeader>
+                <SortableHeader col="suites" current={sortCol} dir={sortDir} onSort={handleSort}>Suítes</SortableHeader>
                 <SortableHeader col="parking_spaces" current={sortCol} dir={sortDir} onSort={handleSort}>Vagas</SortableHeader>
                 <SortableHeader col="position_type" current={sortCol} dir={sortDir} onSort={handleSort}>Posição</SortableHeader>
                 <SortableHeader col="view_type" current={sortCol} dir={sortDir} onSort={handleSort}>Vista</SortableHeader>
@@ -544,7 +550,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                       <td className="py-2.5 px-4 text-sm font-medium text-teal-600">
                         {group.totalComum > 0 ? `${fmtArea(group.totalComum)} m²` : '—'}
                       </td>
-                      <td colSpan={7} />
+                      <td colSpan={8} />
                     </tr>
 
                     {/* Unidades do grupo */}
@@ -578,6 +584,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                               <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.common_area} onChange={e => setEditForm(p => ({ ...p, common_area: e.target.value }))} /></td>
                               <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.bedrooms} onChange={e => setEditForm(p => ({ ...p, bedrooms: e.target.value }))} /></td>
                               <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.bathrooms} onChange={e => setEditForm(p => ({ ...p, bathrooms: e.target.value }))} /></td>
+                              <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.suites} onChange={e => setEditForm(p => ({ ...p, suites: e.target.value }))} /></td>
                               <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.parking_spaces} onChange={e => setEditForm(p => ({ ...p, parking_spaces: e.target.value }))} /></td>
                               <td className="py-2 px-3">
                                 <select value={editForm.position_type} onChange={e => setEditForm(p => ({ ...p, position_type: e.target.value as UnitPositionType | '' }))} className={editCls}>
@@ -618,6 +625,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                               <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.common_area != null ? `${u.common_area} m²` : '—'}</td>
                               <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bedrooms ?? '—'}</td>
                               <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bathrooms ?? '—'}</td>
+                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.suites ?? '—'}</td>
                               <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.parking_spaces ?? '—'}</td>
                               <td className="py-2.5 px-4 text-sm font-normal">
                                 {u.position_type
@@ -658,7 +666,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                 </td>
                 <td className="py-2.5 px-4 font-medium text-blue-600">{totalPriv > 0 ? `${fmtArea(totalPriv)} m²` : '—'}</td>
                 <td className="py-2.5 px-4 font-medium text-teal-600">{totalComum > 0 ? `${fmtArea(totalComum)} m²` : '—'}</td>
-                <td colSpan={7} />
+                <td colSpan={8} />
               </tr>
             </tfoot>
           </table>
@@ -691,6 +699,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
             <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Comum m²" value={bulkForm.common_area} onChange={e => setBulkForm(p => ({ ...p, common_area: e.target.value }))} />
             <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Dormitórios" value={bulkForm.bedrooms} onChange={e => setBulkForm(p => ({ ...p, bedrooms: e.target.value }))} />
             <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Banheiros" value={bulkForm.bathrooms} onChange={e => setBulkForm(p => ({ ...p, bathrooms: e.target.value }))} />
+            <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Suítes" value={bulkForm.suites} onChange={e => setBulkForm(p => ({ ...p, suites: e.target.value }))} />
             <select value={bulkForm.position_type} onChange={e => setBulkForm(p => ({ ...p, position_type: e.target.value as UnitPositionType | '' }))}
               className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-semibold outline-none focus:border-blue-400">
               <option value="">Posição...</option>

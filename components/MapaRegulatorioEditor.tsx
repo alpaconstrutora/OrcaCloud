@@ -1,17 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { ImovibRegulatoryZone, ImovibRegulatoryZoneUpdate } from '../types';
-import { imovibService } from '../services/imovibService';
+// components/MapaRegulatorioEditor.tsx
+//
+// Editor do Mapa Regulatório — a tabela de zonas urbanísticas que agora MORA no empreendimento
+// (empreendimento_regulatory_zones). Mesma tela nos três módulos: no Empreendimento direto, e
+// na Viabilidade/Planta via o wrapper EstudoMapaRegulatorio (que resolve o empreendimento do
+// estudo). Editar em qualquer lugar edita a mesma linha — fonte única.
+import React from 'react';
+import {
+    EmpreendimentoRegulatoryZone,
+    EmpreendimentoRegulatoryZoneUpdate,
+} from '../types';
+import { empreendimentoService } from '../services/empreendimentoService';
 import { Plus, Loader2, Map } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 
 interface Props {
-    studyId: string;
+    empreendimentoId: string;
+    organizationId: string;
 }
 
-// Campos editáveis de uma zona. Os 8 primeiros são os originais do Imovib (selects com
-// opções fixas do PDE/LPUOS); os demais foram unificados do ruleset da Planta
-// (migration 20270218000001) — o mapa passa a conter TUDO, em todos os módulos.
 type ZoneField =
     | 'macroarea' | 'zona' | 'ca_minimo' | 'ca_basico' | 'ca_maximo'
     | 'taxa_ocupacao_maxima' | 'taxa_permeabilidade_minima' | 'gabarito_altura_maxima'
@@ -31,16 +38,9 @@ const SELECT_OPTIONS: Partial<Record<ZoneField, readonly string[]>> = {
     nivel_confianca: ['Baixo', 'Médio', 'Alto', 'Validado por profissional', 'Validado na prefeitura'],
 };
 
-interface ColDef {
-    key: ZoneField;
-    label: string;
-    width: string;
-    type: 'select' | 'text';
-    placeholder?: string;
-}
+interface ColDef { key: ZoneField; label: string; width: string; type: 'select' | 'text'; placeholder?: string; }
 
 const COLUMNS: ColDef[] = [
-    // ── Zoneamento (Imovib) ──
     { key: 'macroarea',                  label: 'Macroárea',           width: 'w-44', type: 'select' },
     { key: 'zona',                       label: 'Zona',                width: 'w-28', type: 'select' },
     { key: 'uso_permitido',              label: 'Uso permitido',       width: 'w-40', type: 'text', placeholder: 'Residencial, misto…' },
@@ -51,103 +51,75 @@ const COLUMNS: ColDef[] = [
     { key: 'taxa_permeabilidade_minima', label: 'T.perm. mín.',        width: 'w-24', type: 'select' },
     { key: 'gabarito_altura_maxima',     label: 'Gabarito (m)',        width: 'w-28', type: 'select' },
     { key: 'gabarito_pavimentos',        label: 'Gabarito (pav.)',     width: 'w-28', type: 'text', placeholder: 'nº' },
-    // ── Recuos (Planta) ──
     { key: 'recuo_frente',               label: 'Recuo frente (m)',    width: 'w-28', type: 'text', placeholder: '0' },
     { key: 'recuo_fundos',               label: 'Recuo fundos (m)',    width: 'w-28', type: 'text', placeholder: '0' },
     { key: 'recuo_lateral_direita',      label: 'Recuo lat. dir. (m)', width: 'w-32', type: 'text', placeholder: '0' },
     { key: 'recuo_lateral_esquerda',     label: 'Recuo lat. esq. (m)', width: 'w-32', type: 'text', placeholder: '0' },
-    // ── Vagas e unidade (Planta) ──
     { key: 'regra_vagas',                label: 'Regra de vagas',      width: 'w-40', type: 'text', placeholder: 'por unidade, por m²…' },
     { key: 'vagas_por_unidade',          label: 'Vagas / unidade',     width: 'w-28', type: 'text', placeholder: '0' },
     { key: 'area_minima_unidade',        label: 'Área mín. unid. (m²)', width: 'w-32', type: 'text', placeholder: '0' },
-    // ── Referência (Planta) ──
     { key: 'lei_referencia',             label: 'Lei de referência',   width: 'w-44', type: 'text', placeholder: 'Lei nº…' },
     { key: 'documento_fonte',            label: 'Documento fonte',     width: 'w-44', type: 'text' },
     { key: 'nivel_confianca',            label: 'Nível de confiança',  width: 'w-48', type: 'select' },
     { key: 'observacoes',                label: 'Observações',         width: 'w-56', type: 'text' },
 ];
 
-const SelectCell: React.FC<{
-    value?: string; options: readonly string[]; onChange: (v: string) => void; saving: boolean;
-}> = ({ value, options, onChange, saving }) => (
-    <select
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={saving}
-        className="w-full bg-transparent border-none focus:ring-0 text-sm font-normal text-slate-700 cursor-pointer py-0.5 disabled:opacity-50"
-    >
+const SelectCell: React.FC<{ value?: string; options: readonly string[]; onChange: (v: string) => void; saving: boolean }> =
+    ({ value, options, onChange, saving }) => (
+    <select value={value || ''} onChange={(e) => onChange(e.target.value)} disabled={saving}
+        className="w-full bg-transparent border-none focus:ring-0 text-sm font-normal text-slate-700 cursor-pointer py-0.5 disabled:opacity-50">
         <option value="">—</option>
         {options.map(o => <option key={o} value={o}>{o}</option>)}
     </select>
 );
 
-// Texto de forma livre — commit no blur (não salva a cada tecla). defaultValue + onBlur para
-// não re-renderizar a cada caractere.
-const TextCell: React.FC<{
-    value?: string; onCommit: (v: string) => void; saving: boolean; placeholder?: string;
-}> = ({ value, onCommit, saving, placeholder }) => (
-    <input
-        type="text"
-        defaultValue={value ?? ''}
-        placeholder={placeholder}
-        disabled={saving}
+const TextCell: React.FC<{ value?: string; onCommit: (v: string) => void; saving: boolean; placeholder?: string }> =
+    ({ value, onCommit, saving, placeholder }) => (
+    <input type="text" defaultValue={value ?? ''} placeholder={placeholder} disabled={saving}
         onBlur={(e) => { if ((e.target.value ?? '') !== (value ?? '')) onCommit(e.target.value); }}
-        className="w-full bg-transparent border-none focus:ring-1 focus:ring-indigo-400 rounded text-sm font-normal text-slate-700 py-0.5 disabled:opacity-50"
-    />
+        className="w-full bg-transparent border-none focus:ring-1 focus:ring-indigo-400 rounded text-sm font-normal text-slate-700 py-0.5 disabled:opacity-50" />
 );
 
-const ImovibRegulatoryMapTab: React.FC<Props> = ({ studyId }) => {
+export const MapaRegulatorioEditor: React.FC<Props> = ({ empreendimentoId, organizationId }) => {
     const confirm = useConfirm();
-    const [zones, setZones] = useState<ImovibRegulatoryZone[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [savingId, setSavingId] = useState<string | null>(null);
-    const [adding, setAdding] = useState(false);
+    const [zones, setZones] = React.useState<EmpreendimentoRegulatoryZone[]>([]);
+    const [loading, setLoading] = React.useState(true);
+    const [savingId, setSavingId] = React.useState<string | null>(null);
+    const [adding, setAdding] = React.useState(false);
 
-    useEffect(() => {
-        imovibService.getRegulatoryZones(studyId)
-            .then(setZones)
-            .catch(console.error)
-            .finally(() => setLoading(false));
-    }, [studyId]);
+    React.useEffect(() => {
+        setLoading(true);
+        empreendimentoService.listRegulatoryZones(empreendimentoId)
+            .then(setZones).catch(console.error).finally(() => setLoading(false));
+    }, [empreendimentoId]);
 
     const handleAdd = async () => {
         try {
             setAdding(true);
-            const created = await imovibService.createRegulatoryZone({ study_id: studyId });
+            const created = await empreendimentoService.createRegulatoryZone({
+                empreendimento_id: empreendimentoId, organization_id: organizationId, sort_order: zones.length,
+            });
             setZones(prev => [...prev, created]);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setAdding(false);
-        }
+        } catch (e) { console.error(e); } finally { setAdding(false); }
     };
 
     const handleUpdate = async (id: string, field: ZoneField, value: string) => {
         setZones(prev => prev.map(z => z.id === id ? { ...z, [field]: value } : z));
         setSavingId(id);
         try {
-            await imovibService.updateRegulatoryZone(id, { [field]: value } as ImovibRegulatoryZoneUpdate);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setSavingId(null);
-        }
+            await empreendimentoService.updateRegulatoryZone(id, { [field]: value } as EmpreendimentoRegulatoryZoneUpdate);
+        } catch (e) { console.error(e); } finally { setSavingId(null); }
     };
 
     const handleDelete = async (id: string) => {
         const ok = await confirm({
             title: 'Excluir zona regulatória?',
             message: 'A zona e seus parâmetros serão removidos.',
-            confirmLabel: 'Excluir',
-            variant: 'danger',
+            confirmLabel: 'Excluir', variant: 'danger',
         });
         if (!ok) return;
         setZones(prev => prev.filter(z => z.id !== id));
-        try {
-            await imovibService.deleteRegulatoryZone(id);
-        } catch (e) {
-            console.error(e);
-        }
+        try { await empreendimentoService.deleteRegulatoryZone(id); } catch (e) { console.error(e); }
     };
 
     if (loading) {
@@ -163,19 +135,15 @@ const ImovibRegulatoryMapTab: React.FC<Props> = ({ studyId }) => {
             <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
                 <div>
                     <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <Map className="w-5 h-5 text-indigo-500" />
-                        Mapa Regulatório
+                        <Map className="w-5 h-5 text-indigo-500" /> Mapa Regulatório
                     </h2>
                     <p className="text-slate-500 text-sm mt-1 font-medium">
-                        Todos os parâmetros urbanísticos por zona — zoneamento, recuos, vagas e referências —
-                        em um lugar só, compartilhado por Empreendimento, Viabilidade e Planta.
+                        Todos os parâmetros urbanísticos por zona, no empreendimento — compartilhado com
+                        Viabilidade e Planta. Editar aqui edita em todos.
                     </p>
                 </div>
-                <button
-                    onClick={handleAdd}
-                    disabled={adding}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-sm transition-all shadow-sm disabled:opacity-60 shrink-0"
-                >
+                <button onClick={handleAdd} disabled={adding}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-sm transition-all shadow-sm disabled:opacity-60 shrink-0">
                     {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                     Nova Zona
                 </button>
@@ -192,18 +160,13 @@ const ImovibRegulatoryMapTab: React.FC<Props> = ({ studyId }) => {
                     <table className="w-full text-left min-w-max">
                         <thead>
                             <tr className="bg-slate-50 text-xs font-black tracking-widest uppercase text-slate-400 border-b border-slate-100">
-                                {COLUMNS.map(col => (
-                                    <th key={col.key} className={`px-4 py-3 ${col.width}`}>{col.label}</th>
-                                ))}
+                                {COLUMNS.map(col => <th key={col.key} className={`px-4 py-3 ${col.width}`}>{col.label}</th>)}
                                 <th className="px-4 py-3 w-12" />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
                             {zones.map(zone => (
-                                <tr
-                                    key={zone.id}
-                                    className={`group hover:bg-slate-50/60 transition-colors ${savingId === zone.id ? 'opacity-60' : ''}`}
-                                >
+                                <tr key={zone.id} className={`group hover:bg-slate-50/60 transition-colors ${savingId === zone.id ? 'opacity-60' : ''}`}>
                                     {COLUMNS.map(col => (
                                         <td key={col.key} className={`px-4 py-2.5 ${col.width}`}>
                                             {col.type === 'select' ? (
@@ -236,4 +199,4 @@ const ImovibRegulatoryMapTab: React.FC<Props> = ({ studyId }) => {
     );
 };
 
-export default ImovibRegulatoryMapTab;
+export default MapaRegulatorioEditor;

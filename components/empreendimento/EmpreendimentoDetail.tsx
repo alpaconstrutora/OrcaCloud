@@ -10,7 +10,7 @@ import { EspelhoLocacoesTab } from './EspelhoLocacoesTab';
 import { SyncCenterTab } from './SyncCenterTab';
 import CuradoriaTab from './CuradoriaTab';
 import { empreendimentoProposalService } from '../../services/empreendimentoProposalService';
-import ImovibRegulatoryMapTab from '../ImovibRegulatoryMapTab';
+import MapaRegulatorioEditor from '../MapaRegulatorioEditor';
 import ImovibBlocksTypologyTab from '../ImovibBlocksTypologyTab';
 import { imovibService } from '../../services/imovibService';
 import { empreendimentoService } from '../../services/empreendimentoService';
@@ -312,20 +312,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       )}
 
       {tab === 'regulatorio' && (
-        e.imovib_study_id ? (
-          <ImovibRegulatoryMapTab studyId={e.imovib_study_id} />
-        ) : (
-          <div className="bg-white p-10 rounded-3xl border border-gray-100 shadow-sm text-center">
-            <Map className="w-10 h-10 mx-auto text-gray-300 mb-3" />
-            <h3 className="text-lg font-black text-gray-800 tracking-tight">Nenhum estudo de viabilidade vinculado</h3>
-            <p className="text-sm text-gray-500 font-medium mt-1 max-w-xl mx-auto">
-              O mapa regulatorio do empreendimento usa a mesma base do IMOVIB. Vincule um estudo de viabilidade para visualizar e manter os parametros urbanisticos em uma fonte unica.
-            </p>
-            <Button onClick={onEdit} className="mt-5">
-              <Edit className="w-4 h-4" /> Vincular Estudo
-            </Button>
-          </div>
-        )
+        <MapaRegulatorioEditor empreendimentoId={e.id} organizationId={e.organization_id} />
       )}
       {tab === 'comercial' && (
         <EspelhoVendasTab empreendimento={e} />

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ImovibStudy, ImovibCapexItem, ImovibCapexItemInsert, ImovibRegulatoryZone } from '../types';
+import { ImovibStudy, ImovibCapexItem, ImovibCapexItemInsert, EmpreendimentoRegulatoryZone } from '../types';
 import { imovibService } from '../services/imovibService';
+import { empreendimentoService } from '../services/empreendimentoService';
 import { Calculator, ChevronRight, Activity, Leaf, Plus, LayoutList, Zap } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useImovibMath } from '../hooks/useImovibMath';
@@ -73,7 +74,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const [initializing, setInitializing] = useState(true);
     const [landCost, setLandCost] = useState<number>(study.land_cost || 0);
     const [landCostFocused, setLandCostFocused] = useState(false);
-    const [zones, setZones] = useState<ImovibRegulatoryZone[]>([]);
+    const [zones, setZones] = useState<EmpreendimentoRegulatoryZone[]>([]);
     const [blockCosts, setBlockCosts] = useState<Record<string, number>>(
         Object.fromEntries((study.blocks || []).map(b => [b.id, b.construction_cost_sqm || 0]))
     );
@@ -87,7 +88,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const math = useImovibMath(study);
 
     useEffect(() => {
-        imovibService.getRegulatoryZones(study.id).then(setZones).catch(console.error);
+        empreendimentoService.listRegulatoryZonesByImovibStudy(study.id).then(setZones).catch(console.error);
     }, [study.id]);
 
     // Área Total = Σ(T.O. × Área do Terreno × Pavimentos) — igual à coluna nas Premissas

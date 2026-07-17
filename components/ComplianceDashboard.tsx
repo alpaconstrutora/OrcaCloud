@@ -109,6 +109,10 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
 
   // Importa movimentos de ICMS a partir das NF-e já ingeridas no Fiscal.
   const handleBackfill = async () => {
+    if (!organizationId) {
+      setBackfillMsg('Organização não carregada. Recarregue a página e tente novamente.');
+      return;
+    }
     const ok = await confirm({
       title: 'Importar movimentos das NF-e?',
       message:
@@ -184,9 +188,9 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
 
           <button
             onClick={handleBackfill}
-            disabled={backfilling}
-            className="h-9 px-3 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center gap-2 text-xs font-bold text-slate-700 active:scale-95 transition-transform hover:bg-slate-50 disabled:opacity-50"
-            title="Gerar apuração a partir das NF-e já ingeridas no Fiscal"
+            disabled={backfilling || !organizationId || companies.length === 0}
+            className="h-9 px-3 rounded-xl bg-white border border-slate-200 shadow-sm flex items-center gap-2 text-xs font-bold text-slate-700 active:scale-95 transition-transform hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={companies.length === 0 ? 'Cadastre ao menos uma filial para importar' : 'Gerar apuração a partir das NF-e já ingeridas no Fiscal'}
           >
             {backfilling ? '⏳ Importando...' : '📥 Importar das NF-e'}
           </button>

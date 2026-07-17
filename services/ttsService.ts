@@ -403,6 +403,12 @@ export const ttsService = {
    * reprocessadas antes de reinserir, então rodar de novo não duplica.
    */
   async backfillFromNfe(orgId: string): Promise<TtsBackfillResult> {
+    // Guarda contra org vazia (AppRouter passa '' enquanto a org não resolve) —
+    // sem isso o Postgres rejeita a string vazia como UUID com erro críptico.
+    if (!orgId) {
+      throw new Error('Organização não identificada. Recarregue a página e tente novamente.');
+    }
+
     const result: TtsBackfillResult = {
       invoices_scanned: 0,
       invoices_applied: 0,

@@ -14,7 +14,7 @@ import BriefingForm from './forms/BriefingForm';
 import ScenarioVisualizer2D from './ScenarioVisualizer2D';
 import FloorViewerTab from './FloorViewerTab';
 import View3DTab from './View3DTab';
-import PlantaUnidadesTab from './PlantaUnidadesTab';
+import EstudoTorresUnidades from '../torres/EstudoTorresUnidades';
 import { PlantTerrain, PlantUrbanRuleset } from '../../types/plantaAi';
 
 interface Props {
@@ -23,7 +23,7 @@ interface Props {
 }
 
 export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
-  const [activeTab, setActiveTab] = useState<'Terreno' | 'Regras' | 'Briefing' | 'Cenários' | 'Unidades' | 'Plantas' | '3D'>('Terreno');
+  const [activeTab, setActiveTab] = useState<'Terreno' | 'Regras' | 'Briefing' | 'Cenários' | 'Torres & Unidades' | 'Plantas' | '3D'>('Terreno');
   const [study, setStudy] = useState<PlantStudy | null>(null);
   const [scenarios, setScenarios] = useState<PlantScenario[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -254,7 +254,7 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
 
       <div className="border-b border-gray-200 mb-6">
         <nav className="-mb-px flex space-x-8">
-          {['Terreno', 'Regras', 'Briefing', 'Cenários', 'Unidades', 'Plantas', '3D'].map((tab) => (
+          {['Terreno', 'Regras', 'Briefing', 'Cenários', 'Torres & Unidades', 'Plantas', '3D'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -390,9 +390,9 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
           </div>
         )}
         
-        {activeTab === 'Unidades' && (
+        {activeTab === 'Torres & Unidades' && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <PlantaUnidadesTab scenarios={scenarios} selectedScenarioId={study?.selected_scenario_id} />
+            <EstudoTorresUnidades studyId={studyId} origin="planta_ai" />
           </div>
         )}
 

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { Building, FileText, PieChart, Activity, Save, Loader2, Map } from 'lucide-react';
+import { Building, FileText, PieChart, Activity, Save, Loader2, Map, Layers } from 'lucide-react';
 import ImovibRegulatoryMapTab from './ImovibRegulatoryMapTab';
 import ImovibBlocksTypologyTab from './ImovibBlocksTypologyTab';
+import EstudoTorresUnidades from './torres/EstudoTorresUnidades';
 
 
 interface ImovibPremisesFormProps {
@@ -12,7 +13,7 @@ interface ImovibPremisesFormProps {
 }
 
 const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataChanged }) => {
-    const [activeTab, setActiveTab] = useState<'identificacao' | 'mercado' | 'blocos' | 'regulatorio'>('identificacao');
+    const [activeTab, setActiveTab] = useState<'identificacao' | 'mercado' | 'blocos' | 'torres' | 'regulatorio'>('identificacao');
     const [formData, setFormData] = useState<Partial<ImovibStudy>>(study);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -83,7 +84,8 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                     { id: 'identificacao', label: '0. Identificação', icon: <FileText className="w-4 h-4" /> },
                     { id: 'mercado', label: '1. Mercado', icon: <PieChart className="w-4 h-4" /> },
                     { id: 'blocos', label: '2. Blocos e Tipologia', icon: <Building className="w-4 h-4" /> },
-                    { id: 'regulatorio', label: '3. Mapa Regulatório', icon: <Map className="w-4 h-4" /> },
+                    { id: 'torres', label: '3. Torres & Unidades', icon: <Layers className="w-4 h-4" /> },
+                    { id: 'regulatorio', label: '4. Mapa Regulatório', icon: <Map className="w-4 h-4" /> },
                 ].map((tab) => (
                     <button
                         key={tab.id}
@@ -166,6 +168,10 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             {/* TAB: BLOCOS & TIPOLOGIAS */}
             {activeTab === 'blocos' && (
                 <ImovibBlocksTypologyTab study={study} onDataChanged={onDataChanged} />
+            )}
+            {/* TAB: TORRES & UNIDADES — as MESMAS do empreendimento vinculado (fonte única) */}
+            {activeTab === 'torres' && (
+                <EstudoTorresUnidades studyId={study.id} origin="imovib" />
             )}
             {/* TAB: MAPA REGULATÓRIO */}
             {activeTab === 'regulatorio' && (

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useMemo } from 'react';
-import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X } from 'lucide-react';
+import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, User, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X } from 'lucide-react';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import BrokerProposalSimulator from './broker/BrokerProposalSimulator';
 import BrokerLeadManager from './broker/BrokerLeadManager';
@@ -70,6 +70,17 @@ const ALL_TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
     { id: 'saude', label: 'Saúde', icon: Activity },
     { id: 'integracoes', label: 'Integrações', icon: Link2 },
 ];
+
+// Agrupamento das abas para a navegação em sidebar do portal público (Fase 1+2 do redesign UI/UX).
+const NAV_GROUPS: { label: string; tabs: PortalTab[] }[] = [
+    { label: 'Comercial', tabs: ['estoque', 'propostas', 'leads'] },
+    { label: 'Financeiro', tabs: ['comissoes'] },
+    { label: 'Conteúdo', tabs: ['materiais', 'treinamento'] },
+    { label: 'Engajamento', tabs: ['ranking', 'agenda', 'chat'] },
+    { label: 'Gestão', tabs: ['analytics', 'saude', 'integracoes'] },
+];
+const TAB_BY_ID: Record<PortalTab, { id: PortalTab; label: string; icon: React.ElementType }> =
+    Object.fromEntries(ALL_TABS.map(t => [t.id, t])) as Record<PortalTab, { id: PortalTab; label: string; icon: React.ElementType }>;
 
 const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoque', organizationId: initialOrgId, isPreview = false, portalToken, initialBroker }) => {
     const { organizations } = useStore();
@@ -238,8 +249,61 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
         }
     };
 
+    // Modo standalone = link público do corretor (portalToken). Só nele renderizamos a
+    // casca própria do portal (banner + header + sidebar), espelhando o Portal do Parceiro.
+    // No app autenticado a navegação já vem da sidebar do Layout — não duplicar.
+    const isStandalone = !!portalToken;
+    const brokerDisplayName = effectiveBroker?.name || (effectiveBrokerEmail ? effectiveBrokerEmail.split('@')[0] : 'Corretor');
+    const navGroups = NAV_GROUPS
+        .map(g => ({ label: g.label, items: g.tabs.map(id => TAB_BY_ID[id]).filter(t => t && navTabs.some(nt => nt.id === t.id)) }))
+        .filter(g => g.items.length > 0);
+
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-700">
+        <div className={isStandalone ? 'flex flex-col h-screen bg-white text-gray-800 overflow-hidden font-sans' : 'animate-in fade-in slide-in-from-top-4 duration-700'}>
+            {/* Casca do portal público — banner + header + sidebar (Fase 1+2 do redesign) */}
+            {isStandalone && (
+                <div className="h-9 bg-indigo-50 border-b border-indigo-200 flex items-center justify-center gap-3 shrink-0 text-xs font-bold text-indigo-700 uppercase tracking-wider">
+                    <span>Acesso via link público</span>
+                </div>
+            )}
+            {isStandalone && (
+                <header className="h-16 border-b border-gray-100 bg-white flex items-center justify-between px-6 shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-black uppercase tracking-wider">Broker Portal</div>
+                        <h1 className="text-md font-bold text-gray-900 tracking-tight">Portal do Corretor</h1>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
+                        <User className="w-3.5 h-3.5 text-indigo-600" />
+                        <span className="font-semibold text-gray-600">{brokerDisplayName} (CORRETOR)</span>
+                    </div>
+                </header>
+            )}
+            <div className={isStandalone ? 'flex flex-1 overflow-hidden' : ''}>
+                {isStandalone && (
+                    <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex flex-col shrink-0 overflow-y-auto">
+                        {navGroups.map(group => (
+                            <div key={group.label} className="flex flex-col gap-1">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 px-4 mt-4 mb-1 first:mt-0">{group.label}</span>
+                                {group.items.map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => { setCurrentTab(tab.id as PortalTab); setShowSimulator(false); }}
+                                        className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                                            currentTab === tab.id
+                                                ? 'bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 font-bold'
+                                                : 'text-gray-500 hover:text-gray-900 hover:bg-white'
+                                        }`}
+                                    >
+                                        <tab.icon className="w-4 h-4" />
+                                        <span>{tab.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        ))}
+                    </aside>
+                )}
+                <div className={isStandalone ? 'flex-1 bg-white overflow-y-auto p-6' : ''}>
+                    <div className="space-y-6">
             {/* Prévia Mobile — renderiza o portal como o corretor vê, dentro de um iframe estreito */}
             {showMobilePreview && !isPreview && (
                 <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Portal do Corretor">
@@ -253,7 +317,8 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                 </MobilePreviewFrame>
             )}
 
-            {/* Header */}
+            {/* Header — só no app autenticado; no portal público a casca acima já tem header próprio */}
+            {!isStandalone && (
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-4">
@@ -321,6 +386,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                     )}
                 </div>
             </div>
+            )}
 
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -385,7 +451,8 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                 </div>
             )}
 
-            {/* Tab Navigation */}
+            {/* Tab Navigation — só no app autenticado; no portal público a navegação fica na sidebar da casca */}
+            {!isStandalone && (
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                 {navTabs.map(tab => {
                     const hidden = isAdmin && !visibleTabs.some(v => v.id === tab.id);
@@ -409,6 +476,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                     );
                 })}
             </div>
+            )}
 
             {/* Tab Content */}
             {currentTab === 'estoque' && !showSimulator && (
@@ -582,6 +650,9 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             {currentTab === 'integracoes' && (
                 <BrokerIntegrations organizationId={initialOrgId || selectedOrgId || 'demo'} />
             )}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

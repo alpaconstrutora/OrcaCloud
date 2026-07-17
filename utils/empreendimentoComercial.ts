@@ -28,6 +28,16 @@ export const mapEmprToCommercial = (s: UnitStatus): string => {
   }
 };
 
+// Empreendimento (PT) → status do imóvel de LOCAÇÃO (EN). Vendido/Permutado não
+// fazem sentido num inventário de aluguel, então caem para Disponível — a
+// ocupação real (Locado) é gerida no módulo de Locações, não no Empreendimento.
+export const mapEmprToRentalStatus = (s: UnitStatus): string => {
+  switch (s) {
+    case 'RESERVADO': return 'RESERVED';
+    default:          return 'AVAILABLE';
+  }
+};
+
 export const UNIT_STATUS_LABEL: Record<UnitStatus, string> = {
   DISPONIVEL: 'Disponível', RESERVADO: 'Reservado', VENDIDO: 'Vendido', PERMUTADO: 'Permutado',
 };

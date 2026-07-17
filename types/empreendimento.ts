@@ -69,7 +69,8 @@ export interface Empreendimento {
 
     // Comercial
     vgv_total?: number;
-    commercial_building_id?: string | null;  // edifício-pai no módulo Comercial (agrupa as unidades publicadas)
+    commercial_building_id?: string | null;  // edifício-pai no módulo Comercial (agrupa as unidades publicadas p/ venda)
+    commercial_rental_building_id?: string | null;  // edifício-pai no módulo Locações (agrupa as unidades publicadas p/ aluguel)
     developer_name?: string;
     manager?: string;
     launch_date?: string;
@@ -147,7 +148,8 @@ export interface EmpreendimentoUnit {
     price?: number;
     status: UnitStatus;
     is_vendavel?: boolean;
-    commercial_property_id?: string | null;
+    commercial_property_id?: string | null;   // ponte p/ Venda de Ativos (purpose='SALE')
+    rental_property_id?: string | null;        // ponte p/ Locações (purpose='RENTAL') — eixo independente
     sort_order?: number;
     // Escrita reversa do motor de Areas NBR 12721 (F4) — so-leitura no Comercial,
     // alimentados exclusivamente pela versao calculada/aprovada/travada do motor.

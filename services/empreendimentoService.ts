@@ -10,7 +10,7 @@ import {
     UnitStatus,
 } from '../types';
 import {
-    mapCommercialToEmpr, mapEmprToCommercial, UNMAPPABLE_COMMERCIAL_STATUSES,
+    mapCommercialToEmpr, mapEmprToCommercial, mapEmprToRentalStatus, UNMAPPABLE_COMMERCIAL_STATUSES,
     mapPositionToCommercial, mapViewToCommercial, mapSunToCommercial,
 } from '../utils/empreendimentoComercial';
 import { buildPlan, PlanOptions } from './sync/planner';
@@ -74,13 +74,13 @@ export const buildCommercialAddressFields = (emp: Empreendimento): CommercialAdd
 
 // NOTA: estas constantes precisam ser string LITERAIS (sem concatenação com +),
 // senão o supabase-js infere GenericStringError em vez do tipo da linha.
-const EMPREENDIMENTO_COLS = 'id, organization_id, name, code, status, tipo, imovib_study_id, planta_ai_study_id, last_synced_at, matricula, construtora, responsavel_tecnico, crea_cau, numero_processo, endereco_street, endereco_number, endereco_complement, endereco_neighborhood, endereco_city, endereco_state, endereco_zip_code, spe_razao_social, spe_cnpj, spe_nome_fantasia, terreno_street, terreno_number, terreno_complement, terreno_neighborhood, terreno_city, terreno_state, terreno_zip_code, terreno_area, terreno_frente, terreno_fundos, terreno_lateral_direita, terreno_lateral_esquerda, vgv_total, commercial_building_id, developer_name, manager, launch_date, expected_delivery_date, metadata, created_at, updated_at';
+const EMPREENDIMENTO_COLS = 'id, organization_id, name, code, status, tipo, imovib_study_id, planta_ai_study_id, last_synced_at, matricula, construtora, responsavel_tecnico, crea_cau, numero_processo, endereco_street, endereco_number, endereco_complement, endereco_neighborhood, endereco_city, endereco_state, endereco_zip_code, spe_razao_social, spe_cnpj, spe_nome_fantasia, terreno_street, terreno_number, terreno_complement, terreno_neighborhood, terreno_city, terreno_state, terreno_zip_code, terreno_area, terreno_frente, terreno_fundos, terreno_lateral_direita, terreno_lateral_esquerda, vgv_total, commercial_building_id, commercial_rental_building_id, developer_name, manager, launch_date, expected_delivery_date, metadata, created_at, updated_at';
 
 const TOWER_COLS = 'id, empreendimento_id, project_id, imovib_block_id, planta_ai_scenario_id, name, floors_count, units_per_floor, construction_cost_sqm, sales_price_sqm, sort_order, created_at, updated_at';
 
 const FLOOR_COLS = 'id, tower_id, name, tipo, floor_number, repeat_count, units_per_floor, prefix, sort_order, created_at, updated_at';
 
-const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_instance_id, planta_ai_unit_id, name, floor, typology, private_area, common_area, total_area, bedrooms, bathrooms, parking_spaces, position_type, sun_orientation, view_type, price, status, is_vendavel, commercial_property_id, sort_order, fracao_ideal_decimal, fracao_ideal_thousandths, area_real_total_m2, area_engine_version_id, area_engine_synced_at, created_at, updated_at';
+const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_instance_id, planta_ai_unit_id, name, floor, typology, private_area, common_area, total_area, bedrooms, bathrooms, parking_spaces, position_type, sun_orientation, view_type, price, status, is_vendavel, commercial_property_id, rental_property_id, sort_order, fracao_ideal_decimal, fracao_ideal_thousandths, area_real_total_m2, area_engine_version_id, area_engine_synced_at, created_at, updated_at';
 
 const COMMON_AREA_COLS = 'id, empreendimento_id, tower_id, name, category, area, floor, description, is_vendavel, sort_order, created_at, updated_at';
 
@@ -156,12 +156,13 @@ export const empreendimentoService = {
             .single();
         if (error) throw new Error(`Failed to update empreendimento: ${error.message}`);
 
-        // Propaga renomeação para o edifício-pai no Comercial (best-effort)
-        if (updates.name && data.commercial_building_id) {
+        // Propaga renomeação para os edifícios-pai no Comercial — venda e locação (best-effort)
+        const buildingIds = [data.commercial_building_id, data.commercial_rental_building_id].filter(Boolean) as string[];
+        if (updates.name && buildingIds.length) {
             await supabase
                 .from('commercial_properties')
                 .update({ name: updates.name })
-                .eq('id', data.commercial_building_id);
+                .in('id', buildingIds);
         }
 
         // Propaga mudança de endereço para o edifício-pai + todas as unidades já
@@ -173,21 +174,22 @@ export const empreendimentoService = {
             'endereco_city', 'endereco_state', 'endereco_zip_code',
             'terreno_street', 'terreno_number', 'terreno_neighborhood', 'terreno_city', 'terreno_state', 'terreno_zip_code',
         ];
-        if (data.commercial_building_id && ADDRESS_FIELDS.some(f => f in updates)) {
+        if (buildingIds.length && ADDRESS_FIELDS.some(f => f in updates)) {
             try {
                 const addressFields = buildCommercialAddressFields(data);
-                await supabase
-                    .from('commercial_properties')
-                    .update(addressFields)
-                    .eq('id', data.commercial_building_id);
-
                 const units = await this.listAllUnitsForEmpreendimento(id);
-                const linkedIds = units.map(u => u.commercial_property_id).filter(Boolean) as string[];
-                if (linkedIds.length) {
+                // Edifícios-pai (venda + locação) e todas as unidades vinculadas em qualquer
+                // dos dois canais recebem o novo endereço.
+                const targetIds = [
+                    ...buildingIds,
+                    ...units.map(u => u.commercial_property_id).filter(Boolean) as string[],
+                    ...units.map(u => u.rental_property_id).filter(Boolean) as string[],
+                ];
+                if (targetIds.length) {
                     await supabase
                         .from('commercial_properties')
                         .update(addressFields)
-                        .in('id', linkedIds);
+                        .in('id', targetIds);
                 }
             } catch (err) {
                 console.error('[empreendimentoService] erro ao propagar endereço para o Comercial:', err);
@@ -470,6 +472,126 @@ export const empreendimentoService = {
             .in('id', ids);
 
         // Só as unidades (não o próprio building) que ainda não apontam para o edifício
+        const toFix = (data || []).filter((p: any) => p.id !== buildingId && p.type !== 'BUILDING' && p.parent_id !== buildingId);
+        if (!toFix.length) return 0;
+
+        await Promise.all(toFix.map((p: any) =>
+            commercialService.saveProperty({ id: p.id, parent_id: buildingId } as any)
+        ));
+        return toFix.length;
+    },
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Empreendimento ⇄ Locações — espelho da ponte de Vendas, num eixo próprio.
+    // Vínculo por `rental_property_id` (não `commercial_property_id`), edifício-pai
+    // por `commercial_rental_building_id`, properties com purpose='RENTAL'. Uma
+    // unidade pode estar publicada em Vendas e em Locações ao mesmo tempo, sem
+    // que um status contamine o outro. Diferença de fundo: o Empreendimento não
+    // guarda ocupação de aluguel (Locado), então NÃO há pull de status de volta —
+    // a ocupação é gerida no módulo de Locações.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Garante o edifício-pai de LOCAÇÃO (commercial_properties type='BUILDING',
+     * purpose='RENTAL') para o empreendimento e retorna seu id. Reusa o existente
+     * se já vinculado e presente; senão cria e persiste em
+     * empreendimentos.commercial_rental_building_id.
+     */
+    async ensureCommercialRentalBuilding(emp: Empreendimento, organizationId: string): Promise<string> {
+        if (emp.commercial_rental_building_id) {
+            const { data } = await supabase
+                .from('commercial_properties')
+                .select('id')
+                .eq('id', emp.commercial_rental_building_id)
+                .eq('organization_id', organizationId)
+                .maybeSingle();
+            if (data?.id) return data.id;
+        }
+
+        const addressFields = buildCommercialAddressFields(emp);
+
+        const building = await commercialService.saveProperty({
+            organization_id: organizationId,
+            name: emp.name,
+            type: 'BUILDING',
+            purpose: 'RENTAL',
+            ...addressFields,
+            area: 0,
+            price: 0,
+            status: 'AVAILABLE' as any,
+        } as any);
+
+        await this.update(emp.id, { commercial_rental_building_id: building.id });
+        return building.id;
+    },
+
+    /** Empreendimento → Locações: publica as unidades ainda não vinculadas ao aluguel. */
+    async publishAllToRental(
+        empreendimentoId: string,
+        organizationId: string,
+    ): Promise<CommercialPublishReport> {
+        const emp = await this.getById(empreendimentoId) as Empreendimento | null;
+        if (!emp) throw new Error('Empreendimento não encontrado.');
+
+        const units = await this.listAllUnitsForEmpreendimento(empreendimentoId);
+        const unpublished = units.filter(u => !u.rental_property_id);
+        if (!unpublished.length) {
+            return { published: 0, alreadyPublished: units.length };
+        }
+
+        const buildingId = await this.ensureCommercialRentalBuilding(emp, organizationId);
+        const addressFields = buildCommercialAddressFields(emp);
+
+        for (const unit of unpublished) {
+            const prop = await commercialService.saveProperty({
+                organization_id: organizationId,
+                name: unit.name,
+                type: 'APARTMENT',
+                purpose: 'RENTAL',
+                parent_id: buildingId,
+                ...addressFields,
+                // Aluguel mensal é definido no módulo de Locações (não herda o preço de
+                // venda da unidade, que é VGV). Começa em 0 e é ajustado lá.
+                price: 0,
+                private_area: unit.private_area,
+                common_area: unit.common_area,
+                total_area: unit.total_area,
+                status: mapEmprToRentalStatus(unit.status),
+                floor: unit.floor,
+                typology: unit.typology || undefined,
+                block: unit._tower_name,
+                project_id: unit._tower_project_id || undefined,
+                position_type: mapPositionToCommercial(unit.position_type),
+                view_type: mapViewToCommercial(unit.view_type),
+                sun_orientation: mapSunToCommercial(unit.sun_orientation),
+                specs: {
+                    parkingSpaces: unit.parking_spaces,
+                    bedrooms: unit.bedrooms,
+                    bathrooms: unit.bathrooms,
+                    ...(unit.floor_tipo ? { floorTipo: unit.floor_tipo } : {}),
+                },
+            } as any);
+            await this.updateUnit(unit.id, { rental_property_id: prop.id });
+        }
+
+        return { published: unpublished.length, alreadyPublished: units.length - unpublished.length };
+    },
+
+    /**
+     * Reagrupa unidades publicadas p/ locação que estão soltas (property sem
+     * parent_id ou com parent_id diferente do edifício de locação). Retorna quantas.
+     */
+    async regroupRentalUnits(empreendimentoId: string, organizationId: string, buildingId: string): Promise<number> {
+        const units = await this.listAllUnitsForEmpreendimento(empreendimentoId);
+        const ids = units.map(u => u.rental_property_id).filter(Boolean) as string[];
+        if (!ids.length) return 0;
+
+        const { data } = await supabase
+            .from('commercial_properties')
+            .select('id, parent_id, type')
+            .eq('organization_id', organizationId)
+            .in('id', ids);
+
         const toFix = (data || []).filter((p: any) => p.id !== buildingId && p.type !== 'BUILDING' && p.parent_id !== buildingId);
         if (!toFix.length) return 0;
 

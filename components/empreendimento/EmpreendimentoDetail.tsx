@@ -1,11 +1,12 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag, Map, Loader2, ArrowLeftRight, ScrollText } from 'lucide-react';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag, KeyRound, Map, Loader2, ArrowLeftRight, ScrollText } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus, ImovibStudy } from '../../types';
 import TowerEditor from './TowerEditor';
 import CommonAreaEditor from './CommonAreaEditor';
 import SyncFromStudyModal from './SyncFromStudyModal';
 import { EspelhoVendasTab } from './EspelhoVendasTab';
+import { EspelhoLocacoesTab } from './EspelhoLocacoesTab';
 import { SyncCenterTab } from './SyncCenterTab';
 import ImovibRegulatoryMapTab from '../ImovibRegulatoryMapTab';
 import ImovibBlocksTypologyTab from '../ImovibBlocksTypologyTab';
@@ -40,7 +41,7 @@ const TIPO_LABELS: Record<string, string> = {
   COND_INDUSTRIAL: 'Condomínio Industrial',
 };
 
-type Tab = 'visao' | 'sync' | 'tipologia' | 'torres' | 'areas' | 'regulatorio' | 'comercial';
+type Tab = 'visao' | 'sync' | 'tipologia' | 'torres' | 'areas' | 'regulatorio' | 'comercial' | 'locacoes';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced }) => {
   const [tab, setTab] = React.useState<Tab>('visao');
@@ -120,6 +121,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     { id: 'areas', label: 'Áreas Comuns', icon: Trees },
     { id: 'regulatorio', label: 'Mapa Regulatorio', icon: Map },
     { id: 'comercial', label: 'Espelho de Vendas', icon: ShoppingBag },
+    { id: 'locacoes', label: 'Espelho de Locações', icon: KeyRound },
   ];
 
   return (
@@ -308,6 +310,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       )}
       {tab === 'comercial' && (
         <EspelhoVendasTab empreendimento={e} />
+      )}
+      {tab === 'locacoes' && (
+        <EspelhoLocacoesTab empreendimento={e} />
       )}
       {tab === 'sync' && (
         <SyncCenterTab

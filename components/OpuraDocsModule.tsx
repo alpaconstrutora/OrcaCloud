@@ -39,7 +39,8 @@ import {
   RefreshCw,
   Edit2,
   Check,
-  AlertCircle
+  AlertCircle,
+  Lock
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import {
@@ -62,6 +63,7 @@ import {
   OpuraDocumentApprovalStatus,
   OpuraDocumentAuditLog,
   PartnerWorkspace,
+  UserPermissions,
 } from '../types';
 import { useStore } from '../store/useStore';
 
@@ -245,11 +247,51 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [uploadingVersion, setUploadingVersion] = React.useState(false);
 
   // Determinar Permissões do Usuário
+  //
+  // O acesso NÃO pode sair de `currentProfile.role`: esse campo é preenchido por
+  // useAuthSync a partir do grupo do gateway de login (enum UserProfile →
+  // 'PERFIL_USUARIO', 'DESENVOLVEDOR', ...), e nunca assume 'owner'/'admin'/
+  // 'engenheiro'/'financeiro' — o vocabulário que CATEGORIES.roles usa. Com isso
+  // canAccessTab reprovava todas as abas e o módulo aparecia vazio para qualquer
+  // colaborador que não fosse o dev. A fonte de verdade é a membership na
+  // organização ativa: organization_members.role ('owner' | 'admin' | 'member')
+  // mais o JSONB de permissões, que é de onde sai a separação por disciplina.
   const isDev = currentProfile?.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br' || currentProfile?.group === 'DESENVOLVEDOR';
-  const rawRole = currentProfile?.role?.toLowerCase() || 'member';
-  const isOrgAdmin = isDev || rawRole === 'owner' || rawRole === 'admin';
-  const isEngenheiro = rawRole === 'engenheiro';
-  const isFinanceiro = rawRole === 'financeiro';
+  const [orgRole, setOrgRole] = React.useState<string | null>(null);
+  const [orgPermissions, setOrgPermissions] = React.useState<Partial<UserPermissions>>({});
+  const [accessLoading, setAccessLoading] = React.useState(true);
+
+  const isOrgAdmin = isDev || orgRole === 'owner' || orgRole === 'admin';
+  // 'engenheiro'/'financeiro' não existem como role no banco (só owner/admin/member).
+  // Mapeamos as disciplinas para as permissões equivalentes já usadas no resto do
+  // sistema: dados técnicos ↔ acervo de engenharia, financeiro ↔ contratos e NFs.
+  const isEngenheiro = orgPermissions.canViewTechnicalData === true;
+  const isFinanceiro = orgPermissions.canViewFinancial === true;
+
+  const fetchMemberAccess = async () => {
+    if (!activeOrganizationId || !currentProfile?.email) {
+      setOrgRole(null);
+      setOrgPermissions({});
+      setAccessLoading(false);
+      return;
+    }
+    setAccessLoading(true);
+    try {
+      const access = await documentService.getMemberAccess(activeOrganizationId, currentProfile.email);
+      setOrgRole(access.role);
+      setOrgPermissions(access.permissions);
+    } catch (err) {
+      console.error('[OpuraDocsModule] Erro ao carregar permissões do membro:', err);
+      setOrgRole(null);
+      setOrgPermissions({});
+    } finally {
+      setAccessLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchMemberAccess();
+  }, [activeOrganizationId, currentProfile?.email]);
 
   // Verificar permissão sobre a aba ativa
   const canAccessTab = (catId: OpuraDocumentCategoria) => {
@@ -261,13 +303,16 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     return false;
   };
 
-  // Se o usuário não puder ler a aba ativa default (engenharia), redireciona para a primeira permitida
+  // Se o usuário não puder ler a aba ativa default (engenharia), redireciona para a primeira permitida.
+  // Só decide depois que a membership chegou — antes disso todo canAccessTab é falso
+  // por ausência de dado, não por proibição.
   React.useEffect(() => {
+    if (accessLoading) return;
     if (!canAccessTab(activeTab)) {
       const allowed = CATEGORIES.find(c => canAccessTab(c.id));
       if (allowed) setActiveTab(allowed.id);
     }
-  }, [rawRole]);
+  }, [accessLoading, orgRole, orgPermissions]);
 
   // Carregar lista de diretórios (pastas virtuais)
   const fetchFolders = async () => {
@@ -1933,10 +1978,25 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         </div>
 
         {/* Listagem */}
-        {loading ? (
+        {loading || accessLoading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-2 text-gray-500">Carregando...</p>
+          </div>
+        ) : activeOrganizationId && !CATEGORIES.some(c => canAccessTab(c.id)) ? (
+          /* Sem nenhuma categoria liberada: antes a tela ficava muda (todas as abas
+             viravam null) e parecia um acervo vazio, não uma restrição de acesso. */
+          <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+            <div className="p-4 bg-slate-50 text-slate-400 rounded-full">
+              <Lock className="w-12 h-12" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-700">Sem acesso ao acervo desta organização</h3>
+              <p className="text-slate-400 text-sm mt-1 max-w-sm">
+                Seu usuário não tem permissão para nenhuma categoria de documentos. Peça a um
+                administrador para liberar dados técnicos ou financeiros no seu perfil de acesso.
+              </p>
+            </div>
           </div>
         ) : !activeOrganizationId ? (
           <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">

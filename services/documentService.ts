@@ -12,6 +12,7 @@ import {
   OpuraDocumentApprovalStatus,
   OpuraDocumentAuditLog,
   OpuraDocumentMarkup,
+  UserPermissions,
 } from '../types';
 import { notificationService } from './notificationService';
 
@@ -1199,6 +1200,33 @@ export const documentService = {
     }
 
     return data || [];
+  },
+
+  // Papel + permissões do usuário DENTRO da organização ativa.
+  // `currentProfile.role` vem do enum de login (UserProfile), que só sabe o grupo
+  // do gateway — nunca 'owner'/'admin'. O vocabulário que o GED usa para liberar
+  // abas vive em organization_members.role, e a separação por disciplina
+  // (engenheiro/financeiro) sai do JSONB de permissões da própria membership.
+  async getMemberAccess(
+    organizationId: string,
+    email: string
+  ): Promise<{ role: string | null; permissions: Partial<UserPermissions> }> {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('role, permissions')
+      .eq('organization_id', organizationId)
+      .ilike('email', email)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[DocumentService] Erro ao obter acesso do membro:', error);
+      throw new Error(`Erro ao obter permissões do usuário: ${error.message}`);
+    }
+
+    return {
+      role: data?.role ? String(data.role).toLowerCase() : null,
+      permissions: (data?.permissions as Partial<UserPermissions>) || {},
+    };
   },
 
   async listOrganizationMembers(organizationId: string): Promise<{ name: string; email: string }[]> {

@@ -8,7 +8,6 @@ import {
     EmpreendimentoUnit, EmpreendimentoUnitInsert, EmpreendimentoUnitUpdate,
     EmpreendimentoCommonArea, EmpreendimentoCommonAreaInsert, EmpreendimentoSyncReport,
     UnitStatus,
-    ImovibUnitInstanceInsert,
 } from '../types';
 import {
     mapCommercialToEmpr, mapEmprToCommercial, UNMAPPABLE_COMMERCIAL_STATUSES,
@@ -28,12 +27,6 @@ export interface CommercialDivergenceSummary {
     priceDiverge: number;
     unmappable: number;
     orphans: number;
-}
-
-// Resultado da escrita reversa Empreendimento → Viabilidade (Imovib).
-export interface EmpreendimentoWriteBackReport {
-    instancesUpdated: number;   // instâncias com nome/pav./área/posição/orientação atualizados
-    unitsWithoutInstance: number; // unidades sem imovib_instance_id — não elegíveis (nunca geradas por instância)
 }
 
 // Resultado de Empreendimento → Comercial (publicação em lote).
@@ -720,26 +713,9 @@ export const empreendimentoService = {
     },
 
     // ── Escrita reversa: Empreendimento → Viabilidade (Imovib) ───────────────
-    // Propaga só campos estruturais (nome/pavimento/área privativa/posição/orientação)
-    // das unidades de volta à instância de origem no estudo. NUNCA propaga preço/status
-    // (a simulação do estudo permanece independente do realizado). Tipologia também fica
-    // de fora: mudar a tipologia da instância exigiria re-vincular a um ImovibUnit
-    // diferente (operação estrutural no estudo, não um simples update de campo).
-
-    /** Dry-run: calcula quantas instâncias seriam atualizadas, sem escrever. */
-    async previewWriteBackToStudy(empreendimentoId: string): Promise<EmpreendimentoWriteBackReport> {
-        const plan = await buildWriteBackPlan(empreendimentoId);
-        return { instancesUpdated: plan.updates.length, unitsWithoutInstance: plan.unitsWithoutInstance };
-    },
-
-    /** Aplica a escrita reversa: atualiza as instâncias divergentes no estudo. */
-    async writeBackToStudy(empreendimentoId: string): Promise<EmpreendimentoWriteBackReport> {
-        const plan = await buildWriteBackPlan(empreendimentoId);
-        for (const u of plan.updates) {
-            await imovibService.updateUnitInstance(u.instanceId, u.fields);
-        }
-        return { instancesUpdated: plan.updates.length, unitsWithoutInstance: plan.unitsWithoutInstance };
-    },
+    // Vive em services/sync/writeBackImovib.ts: previewWriteBackImovib / applyWriteBackImovib.
+    // Além de atualizar instâncias vinculadas, CRIA no estudo bloco/instância que só existem
+    // no empreendimento (o empreendimento é a fonte). Só estrutura — nunca preço/status.
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -790,46 +766,5 @@ function planToReport(plan: SyncPlan): EmpreendimentoSyncReport {
         skippedDueToLocalChanges: plan.preservedUnitNames,
         warnings: plan.warnings,
     };
-}
-
-// ── Escrita reversa: diff campo a campo (Empreendimento → instância do estudo) ──
-
-interface WriteBackPlan {
-    updates: { instanceId: string; fields: Partial<ImovibUnitInstanceInsert> }[];
-    unitsWithoutInstance: number;
-}
-
-async function buildWriteBackPlan(empreendimentoId: string): Promise<WriteBackPlan> {
-    const empreendimento = await empreendimentoService.getById(empreendimentoId) as Empreendimento | null;
-    if (!empreendimento) throw new Error('Empreendimento não encontrado.');
-    if (!empreendimento.imovib_study_id) {
-        throw new Error('Este empreendimento não está vinculado a um estudo de viabilidade (Imovib).');
-    }
-
-    const [instances, target] = await Promise.all([
-        imovibService.getUnitInstances(empreendimento.imovib_study_id),
-        loadTargetState(empreendimentoId),
-    ]);
-
-    const instanceById = new Map(instances.map(i => [i.id, i]));
-    const updates: WriteBackPlan['updates'] = [];
-    let unitsWithoutInstance = 0;
-
-    for (const u of target.units) {
-        if (!u.imovib_instance_id) { unitsWithoutInstance++; continue; }
-        const inst = instanceById.get(u.imovib_instance_id);
-        if (!inst) continue; // órfão — instância sumiu do estudo, nunca escreve de volta
-
-        const fields: Partial<ImovibUnitInstanceInsert> = {};
-        if (u.name && u.name !== inst.name) fields.name = u.name;
-        if (u.floor != null && u.floor !== inst.floor) fields.floor = u.floor;
-        if (u.private_area != null && u.private_area !== inst.private_area) fields.private_area = u.private_area;
-        if (u.position_type && u.position_type !== inst.position_type) fields.position_type = u.position_type;
-        if (u.sun_orientation && u.sun_orientation !== inst.sun_orientation) fields.sun_orientation = u.sun_orientation;
-
-        if (Object.keys(fields).length > 0) updates.push({ instanceId: inst.id, fields });
-    }
-
-    return { updates, unitsWithoutInstance };
 }
 

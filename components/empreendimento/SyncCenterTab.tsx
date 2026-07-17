@@ -15,11 +15,13 @@ import {
   Download, Send,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { empreendimentoService, CommercialDivergenceSummary, EmpreendimentoWriteBackReport } from '../../services/empreendimentoService';
+import { empreendimentoService, CommercialDivergenceSummary } from '../../services/empreendimentoService';
 import { plantaEmpreendimentoSync } from '../../services/plantaEmpreendimentoSync';
 import { PlantaAiIntegration } from '../../services/plantaAiIntegration';
+import { previewWriteBackImovib, applyWriteBackImovib, WriteBackItem } from '../../services/sync/writeBackImovib';
 import { Empreendimento, EmpreendimentoSyncReport, PlantaAiSyncReport, PlantaAiWriteBackReport } from '../../types';
 import { useConfirm } from '../ui/confirm';
+import WriteBackPreviewSheet from './WriteBackPreviewSheet';
 
 interface Props {
   empreendimento: Empreendimento;
@@ -42,9 +44,10 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
   const [studyReport, setStudyReport] = React.useState<EmpreendimentoSyncReport | null>(null);
   const [studyError, setStudyError] = React.useState<string | null>(null);
   const [comm, setComm] = React.useState<CommercialDivergenceSummary | null>(null);
-  const [writeBackReport, setWriteBackReport] = React.useState<EmpreendimentoWriteBackReport | null>(null);
+  const [writeBackItems, setWriteBackItems] = React.useState<WriteBackItem[] | null>(null);
   const [writeBackError, setWriteBackError] = React.useState<string | null>(null);
   const [writingBack, setWritingBack] = React.useState(false);
+  const [writeBackSheetOpen, setWriteBackSheetOpen] = React.useState(false);
 
   // Planta IA (vínculo direto)
   const [plantaReport, setPlantaReport] = React.useState<PlantaAiSyncReport | null>(null);
@@ -78,13 +81,13 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
           .catch(err => { setStudyError(err.message); setStudyReport(null); })
       );
       tasks.push(
-        empreendimentoService.previewWriteBackToStudy(e.id)
-          .then(r => setWriteBackReport(r))
-          .catch(err => { setWriteBackError(err.message); setWriteBackReport(null); })
+        previewWriteBackImovib(e.id)
+          .then(r => setWriteBackItems(r))
+          .catch(err => { setWriteBackError(err.message); setWriteBackItems(null); })
       );
     } else {
       setStudyReport(null);
-      setWriteBackReport(null);
+      setWriteBackItems(null);
     }
 
     // Planta IA — só roda o dry-run se houver estudo de arquitetura vinculado
@@ -135,18 +138,17 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
 
   React.useEffect(() => { load(); }, [load]);
 
-  const handleWriteBack = async () => {
-    if (!writeBackReport || writeBackReport.instancesUpdated === 0) return;
-    const ok = await confirm({
-      title: 'Enviar ao Estudo de Viabilidade?',
-      message: `${writeBackReport.instancesUpdated} unidade${writeBackReport.instancesUpdated > 1 ? 's' : ''} do empreendimento ${writeBackReport.instancesUpdated > 1 ? 'têm' : 'tem'} nome, pavimento, área privativa, posição ou orientação diferentes da instância de origem no estudo.\n\nSó dados estruturais são enviados — preço e status de venda nunca são propagados ao estudo.`,
-      confirmLabel: 'Enviar',
-      variant: 'warning',
-    });
-    if (!ok) return;
+  // Abre o preview com seleção (em vez de um sim/não): o usuário decide o que atualizar e o
+  // que criar no estudo. A aplicação real acontece em handleWriteBackApply.
+  const handleWriteBack = () => {
+    if (!writeBackItems || writeBackItems.length === 0) return;
+    setWriteBackSheetOpen(true);
+  };
+
+  const handleWriteBackApply = async (selectedUnitIds: string[]) => {
     setWritingBack(true);
     try {
-      await empreendimentoService.writeBackToStudy(e.id);
+      await applyWriteBackImovib(e.id, selectedUnitIds);
       await load();
     } catch (err: any) {
       setWriteBackError(err.message);
@@ -275,6 +277,11 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
       setPlantaError(err.message);
     } finally { setAxBusy(null); }
   };
+
+  // Write-back Emp→Viabilidade: quantas unidades seriam atualizadas e quantas criadas no estudo.
+  const wbTotal = writeBackItems?.length ?? 0;
+  const wbCreates = writeBackItems?.filter(i => i.kind === 'create').length ?? 0;
+  const wbUpdates = writeBackItems?.filter(i => i.kind === 'update').length ?? 0;
 
   // Divergências de Viabilidade = itens que o sync criaria/atualizaria
   const studyDiverge = studyReport
@@ -407,8 +414,8 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
               {
                 label: 'Enviar ao estudo', icon: Upload, direction: 'out',
                 onClick: handleWriteBack,
-                disabled: !writeBackReport || writeBackReport.instancesUpdated === 0, busy: writingBack,
-                title: !writeBackReport || writeBackReport.instancesUpdated === 0 ? 'Nada a enviar' : 'Enviar dados estruturais das unidades ao estudo',
+                disabled: wbTotal === 0, busy: writingBack,
+                title: wbTotal === 0 ? 'Nada a enviar' : `Enviar ${wbTotal} unidade(s) ao estudo (${wbCreates} nova(s), ${wbUpdates} atualização(ões))`,
               },
             ] : undefined}
           />
@@ -541,12 +548,12 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
                 <div className="text-xs text-rose-600 font-medium flex items-start gap-1.5">
                   <AlertTriangle className="w-4 h-4 shrink-0" /> {writeBackError}
                 </div>
-              ) : writeBackReport ? (
+              ) : writeBackItems ? (
                 <>
-                  <DiffRow label="Unidades a enviar (estrutural)" value={writeBackReport.instancesUpdated} warn={writeBackReport.instancesUpdated > 0} />
-                  <DiffRow label="Sem instância de origem" value={writeBackReport.unitsWithoutInstance} muted />
+                  <DiffRow label="Unidades a atualizar no estudo" value={wbUpdates} warn={wbUpdates > 0} />
+                  <DiffRow label="Unidades a criar no estudo" value={wbCreates} warn={wbCreates > 0} />
                   <p className="text-[9px] text-gray-400 font-medium leading-relaxed pt-1">
-                    Envia nome, pavimento, área privativa, posição e orientação. Preço, status e tipologia nunca são propagados de volta.
+                    Envia nome, pavimento, área privativa, posição e orientação — criando bloco/unidade no estudo quando não existirem lá. Preço, status e tipologia nunca são propagados.
                   </p>
                 </>
               ) : null}
@@ -626,6 +633,13 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
           não tem escrita reversa automática. Ajuste manualmente no estudo quando necessário.
         </p>
       </div>
+
+      <WriteBackPreviewSheet
+        open={writeBackSheetOpen}
+        onClose={() => setWriteBackSheetOpen(false)}
+        items={writeBackItems ?? []}
+        onApply={handleWriteBackApply}
+      />
     </div>
   );
 };

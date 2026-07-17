@@ -257,33 +257,23 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // organização ativa: organization_members.role ('owner' | 'admin' | 'member')
   // mais o JSONB de permissões, que é de onde sai a separação por disciplina.
   const isDev = currentProfile?.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br' || currentProfile?.group === 'DESENVOLVEDOR';
-  const [orgRole, setOrgRole] = React.useState<string | null>(null);
-  const [orgPermissions, setOrgPermissions] = React.useState<Partial<UserPermissions>>({});
+  const [memberships, setMemberships] = React.useState<
+    { organization_id: string; role: string; permissions: Partial<UserPermissions> }[]
+  >([]);
   const [accessLoading, setAccessLoading] = React.useState(true);
 
-  const isOrgAdmin = isDev || orgRole === 'owner' || orgRole === 'admin';
-  // 'engenheiro'/'financeiro' não existem como role no banco (só owner/admin/member).
-  // Mapeamos as disciplinas para as permissões equivalentes já usadas no resto do
-  // sistema: dados técnicos ↔ acervo de engenharia, financeiro ↔ contratos e NFs.
-  const isEngenheiro = orgPermissions.canViewTechnicalData === true;
-  const isFinanceiro = orgPermissions.canViewFinancial === true;
-
   const fetchMemberAccess = async () => {
-    if (!activeOrganizationId || !currentProfile?.email) {
-      setOrgRole(null);
-      setOrgPermissions({});
+    if (!currentProfile?.email) {
+      setMemberships([]);
       setAccessLoading(false);
       return;
     }
     setAccessLoading(true);
     try {
-      const access = await documentService.getMemberAccess(activeOrganizationId, currentProfile.email);
-      setOrgRole(access.role);
-      setOrgPermissions(access.permissions);
+      setMemberships(await documentService.listMemberships(currentProfile.email));
     } catch (err) {
       console.error('[OpuraDocsModule] Erro ao carregar permissões do membro:', err);
-      setOrgRole(null);
-      setOrgPermissions({});
+      setMemberships([]);
     } finally {
       setAccessLoading(false);
     }
@@ -291,16 +281,48 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   React.useEffect(() => {
     fetchMemberAccess();
-  }, [activeOrganizationId, currentProfile?.email]);
+  }, [currentProfile?.email]);
+
+  // Memberships em jogo: a da org ativa, ou todas em "Todas as Organizações".
+  const scopedMemberships = React.useMemo(
+    () => (activeOrganizationId
+      ? memberships.filter(m => m.organization_id === activeOrganizationId)
+      : memberships),
+    [memberships, activeOrganizationId]
+  );
+
+  // Uma membership libera a categoria? owner/admin veem tudo; para os demais, a
+  // disciplina sai do JSONB de permissões — 'engenheiro'/'financeiro' não existem
+  // como role no banco (só owner/admin/member). Dados técnicos ↔ acervo de
+  // engenharia, financeiro ↔ contratos e NFs.
+  const membershipAllows = (
+    m: { role: string; permissions: Partial<UserPermissions> },
+    cat: typeof CATEGORIES[number]
+  ) => {
+    if (m.role === 'owner' || m.role === 'admin') return true;
+    if (m.permissions.canViewTechnicalData === true && cat.roles.includes('engenheiro')) return true;
+    if (m.permissions.canViewFinancial === true && cat.roles.includes('financeiro')) return true;
+    return false;
+  };
+
+  const isOrgAdmin = isDev || scopedMemberships.some(m => m.role === 'owner' || m.role === 'admin');
 
   // Verificar permissão sobre a aba ativa
   const canAccessTab = (catId: OpuraDocumentCategoria) => {
-    if (isOrgAdmin) return true;
+    if (isDev) return true;
     const cat = CATEGORIES.find(c => c.id === catId);
     if (!cat) return false;
-    if (isEngenheiro && cat.roles.includes('engenheiro')) return true;
-    if (isFinanceiro && cat.roles.includes('financeiro')) return true;
-    return false;
+    return scopedMemberships.some(m => membershipAllows(m, cat));
+  };
+
+  // Orgs que permitem a categoria — escopo da listagem em "Todas as Organizações".
+  // A aba abre se QUALQUER org libera, mas a busca só pode varrer as que liberam:
+  // o RLS restringe por organização, não por categoria, então sem este recorte um
+  // admin numa org veria os documentos de outra sob a permissão errada.
+  const allowedOrgIdsForTab = (catId: OpuraDocumentCategoria): string[] => {
+    const cat = CATEGORIES.find(c => c.id === catId);
+    if (!cat) return [];
+    return scopedMemberships.filter(m => membershipAllows(m, cat)).map(m => m.organization_id);
   };
 
   // Se o usuário não puder ler a aba ativa default (engenharia), redireciona para a primeira permitida.
@@ -312,7 +334,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       const allowed = CATEGORIES.find(c => canAccessTab(c.id));
       if (allowed) setActiveTab(allowed.id);
     }
-  }, [accessLoading, orgRole, orgPermissions]);
+  }, [accessLoading, scopedMemberships]);
 
   // Carregar lista de diretórios (pastas virtuais)
   const fetchFolders = async () => {
@@ -331,14 +353,21 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   // Carregar lista de documentos
   const fetchDocs = async () => {
+    // Espera a membership: sem ela não há como saber quais orgs entram no escopo,
+    // e uma busca prematura voltaria vazia e pareceria acervo zerado.
+    if (accessLoading) return;
     setLoading(true);
     try {
       const isGlobal = selectedProjectId === 'all';
       const projFilter = isGlobal ? undefined : selectedProjectId;
+      // Em "Todas as Organizações" o recorte por org vem das memberships que
+      // liberam a aba. O dev não passa escopo: enxerga tudo que o RLS devolver.
+      const orgScope = activeOrganizationId || isDev ? undefined : allowedOrgIdsForTab(activeTab);
       const data = await documentService.listDocuments(activeOrganizationId ?? undefined, {
         projectId: projFilter,
         categoria: activeTab,
         folderId: (selectedDisciplineCode && !currentFolderId) || isGlobal ? undefined : currentFolderId,
+        organizationIds: orgScope,
       });
       setDocuments(data);
     } catch (err) {
@@ -456,7 +485,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     fetchPendingApprovals();
     fetchOrgMembers();
     fetchDmsSettings();
-  }, [activeOrganizationId, selectedProjectId, activeTab, currentFolderId, selectedDisciplineCode, currentProfile]);
+  }, [activeOrganizationId, selectedProjectId, activeTab, currentFolderId, selectedDisciplineCode, currentProfile, accessLoading, memberships]);
 
   // Sincronizar parâmetros de rota de notificação (Onda 3)
   React.useEffect(() => {
@@ -1589,16 +1618,22 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 <FolderPlus className="w-[15px] h-[15px] text-blue-600" />
                 Nova pasta
               </button>
-              <button
-                onClick={() => {
-                  setNewDocCategory(activeTab);
-                  setUploadModalOpen(true);
-                }}
-                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-              >
-                <Plus className="w-[15px] h-[15px]" />
-                Novo documento
-              </button>
+              {/* O upload grava em uma org específica e handleUploadSubmit rejeita
+                  sem ela; ao contrário do modal de pasta, não há seletor de
+                  organização no formulário. Em "Todas as Organizações" o botão
+                  sairia oferecendo uma ação que sempre falha. */}
+              {activeOrganizationId && (
+                <button
+                  onClick={() => {
+                    setNewDocCategory(activeTab);
+                    setUploadModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                >
+                  <Plus className="w-[15px] h-[15px]" />
+                  Novo documento
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1983,30 +2018,20 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-2 text-gray-500">Carregando...</p>
           </div>
-        ) : activeOrganizationId && !CATEGORIES.some(c => canAccessTab(c.id)) ? (
+        ) : !CATEGORIES.some(c => canAccessTab(c.id)) ? (
           /* Sem nenhuma categoria liberada: antes a tela ficava muda (todas as abas
-             viravam null) e parecia um acervo vazio, não uma restrição de acesso. */
+             viravam null) e parecia um acervo vazio, não uma restrição de acesso.
+             Cobre também quem não é membro de organização alguma — caso em que o
+             módulo antes pedia "selecione uma organização" e nunca saía disso. */
           <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
             <div className="p-4 bg-slate-50 text-slate-400 rounded-full">
               <Lock className="w-12 h-12" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-700">Sem acesso ao acervo desta organização</h3>
+              <h3 className="font-bold text-slate-700">Sem acesso ao acervo de documentos</h3>
               <p className="text-slate-400 text-sm mt-1 max-w-sm">
                 Seu usuário não tem permissão para nenhuma categoria de documentos. Peça a um
                 administrador para liberar dados técnicos ou financeiros no seu perfil de acesso.
-              </p>
-            </div>
-          </div>
-        ) : !activeOrganizationId ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-            <div className="p-4 bg-slate-50 text-slate-400 rounded-full">
-              <FolderOpen className="w-12 h-12" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-700">Nenhuma Organização Selecionada</h3>
-              <p className="text-slate-400 text-sm mt-1 max-w-sm">
-                Selecione uma organização no menu superior para visualizar os documentos.
               </p>
             </div>
           </div>

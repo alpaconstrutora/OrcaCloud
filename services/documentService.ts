@@ -73,12 +73,29 @@ export const documentService = {
       status?: string;
       folderId?: string | null;
       folderIds?: string[];
+      /**
+       * Escopo de organizações para o modo "Todas as Organizações" (organizationId
+       * ausente). O RLS restringe as linhas às orgs do usuário, mas não sabe que a
+       * categoria pedida só é permitida em ALGUMAS delas — quem sabe disso é o
+       * chamador, via memberships. Sem isto, um admin numa org veria documentos de
+       * outra org sob a permissão errada. Ignorado quando organizationId vem setado.
+       */
+      organizationIds?: string[];
     }
   ): Promise<OpuraDocument[]> {
     if (!organizationId) {
       // Regra 1: Não retorna array vazio de forma silenciosa se puder usar RLS
       // Porém para a query ser correta, selecionamos tudo e o RLS filtra.
     }
+
+    // Aplica o escopo de organização de forma uniforme: org ativa (eq) ou, em
+    // "Todas as Organizações", o conjunto permitido para a categoria (in).
+    const scopeOrgIds = filters?.organizationIds;
+    const scopeOrg = (q: any, column: string): any => {
+      if (organizationId) return q.eq(column, organizationId);
+      if (scopeOrgIds && scopeOrgIds.length > 0) return q.in(column, scopeOrgIds);
+      return q;
+    };
 
     let targetProjectIds: string[] = [];
     if (filters?.projectId) {
@@ -134,9 +151,7 @@ export const documentService = {
       .from('opura_documents')
       .select('*, active_version:opura_document_versions!fk_active_version(*)');
 
-    if (organizationId) {
-      query = query.eq('organization_id', organizationId);
-    }
+    query = scopeOrg(query, 'organization_id');
 
     if (targetProjectIds.length > 0) {
       query = query.in('project_id', targetProjectIds);
@@ -183,9 +198,7 @@ export const documentService = {
           .from('contracts')
           .select('id, title, number, contract_type, status, start_date, end_date, signed_contract_url, minuta_versions, responsible_email, created_at, project_id, organization_id');
 
-        if (organizationId) {
-          contractQuery = contractQuery.eq('organization_id', organizationId);
-        }
+        contractQuery = scopeOrg(contractQuery, 'organization_id');
         if (targetProjectIds.length > 0) {
           contractQuery = contractQuery.in('project_id', targetProjectIds);
         } else if (filters?.projectId) {
@@ -257,9 +270,7 @@ export const documentService = {
             )
           `);
 
-        if (organizationId) {
-          invoiceQuery = invoiceQuery.eq('purchase_orders.organization_id', organizationId);
-        }
+        invoiceQuery = scopeOrg(invoiceQuery, 'purchase_orders.organization_id');
 
         if (targetProjectIds.length > 0) {
           invoiceQuery = invoiceQuery.in('purchase_orders.project_id', targetProjectIds);
@@ -323,9 +334,7 @@ export const documentService = {
             project_id
           `);
 
-        if (organizationId) {
-          riskQuery = riskQuery.eq('org_id', organizationId);
-        }
+        riskQuery = scopeOrg(riskQuery, 'org_id');
         if (targetProjectIds.length > 0) {
           riskQuery = riskQuery.in('project_id', targetProjectIds);
         } else if (filters?.projectId) {
@@ -388,9 +397,7 @@ export const documentService = {
           `)
           .eq('cat_emitida', true);
 
-        if (organizationId) {
-          accidentQuery = accidentQuery.eq('org_id', organizationId);
-        }
+        accidentQuery = scopeOrg(accidentQuery, 'org_id');
         if (targetProjectIds.length > 0) {
           accidentQuery = accidentQuery.in('project_id', targetProjectIds);
         } else if (filters?.projectId) {
@@ -441,9 +448,13 @@ export const documentService = {
     if (!filters?.categoria || filters.categoria === 'comercial') {
       try {
         // 1. Propostas comerciais
-        const { data: proposalsData, error: proposalsError } = await supabase
-          .from('services_proposals')
-          .select(`
+        // Antes filtrava com .eq(..., organizationId) sem guard: em "Todas as
+        // Organizações" o valor chega undefined e o filtro ia malformado para o
+        // PostgREST. scopeOrg cobre os dois modos.
+        const proposalsQuery = scopeOrg(
+          supabase
+            .from('services_proposals')
+            .select(`
             id,
             proposal_number,
             total_value,
@@ -454,8 +465,11 @@ export const documentService = {
               converted_project_id,
               engineering_project_id
             )
-          `)
-          .eq('services_opportunities.organization_id', organizationId);
+          `),
+          'services_opportunities.organization_id'
+        );
+
+        const { data: proposalsData, error: proposalsError } = await proposalsQuery;
 
         if (!proposalsError && proposalsData) {
           let filteredProposals = proposalsData;
@@ -505,9 +519,10 @@ export const documentService = {
 
       try {
         // 2. Documentos de oportunidade
-        const { data: oppDocsData, error: oppDocsError } = await supabase
-          .from('opportunity_documents')
-          .select(`
+        const oppDocsQuery = scopeOrg(
+          supabase
+            .from('opportunity_documents')
+            .select(`
             id,
             name,
             description,
@@ -519,8 +534,11 @@ export const documentService = {
               organization_id,
               project_id
             )
-          `)
-          .eq('investor_opportunities.organization_id', organizationId);
+          `),
+          'investor_opportunities.organization_id'
+        );
+
+        const { data: oppDocsData, error: oppDocsError } = await oppDocsQuery;
 
         if (!oppDocsError && oppDocsData) {
           let filteredOppDocs = oppDocsData;
@@ -1202,31 +1220,35 @@ export const documentService = {
     return data || [];
   },
 
-  // Papel + permissões do usuário DENTRO da organização ativa.
+  // Memberships do usuário — uma por organização.
+  //
   // `currentProfile.role` vem do enum de login (UserProfile), que só sabe o grupo
   // do gateway — nunca 'owner'/'admin'. O vocabulário que o GED usa para liberar
   // abas vive em organization_members.role, e a separação por disciplina
   // (engenheiro/financeiro) sai do JSONB de permissões da própria membership.
-  async getMemberAccess(
-    organizationId: string,
+  //
+  // Retorna a lista inteira (não um acesso já achatado) porque em "Todas as
+  // Organizações" o direito é por org: o usuário pode ser admin numa e member
+  // restrito noutra. Achatar aqui perderia essa dimensão e o chamador acabaria
+  // exibindo documentos de uma org sob a permissão de outra.
+  async listMemberships(
     email: string
-  ): Promise<{ role: string | null; permissions: Partial<UserPermissions> }> {
+  ): Promise<{ organization_id: string; role: string; permissions: Partial<UserPermissions> }[]> {
     const { data, error } = await supabase
       .from('organization_members')
-      .select('role, permissions')
-      .eq('organization_id', organizationId)
-      .ilike('email', email)
-      .maybeSingle();
+      .select('organization_id, role, permissions')
+      .ilike('email', email);
 
     if (error) {
-      console.error('[DocumentService] Erro ao obter acesso do membro:', error);
+      console.error('[DocumentService] Erro ao listar memberships do usuário:', error);
       throw new Error(`Erro ao obter permissões do usuário: ${error.message}`);
     }
 
-    return {
-      role: data?.role ? String(data.role).toLowerCase() : null,
-      permissions: (data?.permissions as Partial<UserPermissions>) || {},
-    };
+    return (data || []).map((m: any) => ({
+      organization_id: m.organization_id,
+      role: String(m.role || '').toLowerCase(),
+      permissions: (m.permissions as Partial<UserPermissions>) || {},
+    }));
   },
 
   async listOrganizationMembers(organizationId: string): Promise<{ name: string; email: string }[]> {

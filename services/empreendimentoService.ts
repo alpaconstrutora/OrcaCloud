@@ -7,13 +7,17 @@ import {
     EmpreendimentoFloor, EmpreendimentoFloorInsert, EmpreendimentoFloorUpdate,
     EmpreendimentoUnit, EmpreendimentoUnitInsert, EmpreendimentoUnitUpdate,
     EmpreendimentoCommonArea, EmpreendimentoCommonAreaInsert, EmpreendimentoSyncReport,
-    UnitStatus, CommonAreaCategory,
-    ImovibStudy, ImovibUnit, ImovibUnitInstance,
+    UnitStatus,
+    ImovibUnitInstanceInsert,
 } from '../types';
 import {
     mapCommercialToEmpr, mapEmprToCommercial, UNMAPPABLE_COMMERCIAL_STATUSES,
     mapPositionToCommercial, mapViewToCommercial, mapSunToCommercial,
 } from '../utils/empreendimentoComercial';
+import { buildPlan, PlanOptions } from './sync/planner';
+import { applyPlan } from './sync/applier';
+import { loadImovibSide } from './sync/imovibAdapter';
+import { SyncPlan, TargetState } from './sync/types';
 
 // Resumo de divergências entre as unidades do empreendimento e suas properties no Comercial.
 export interface CommercialDivergenceSummary {
@@ -46,16 +50,8 @@ export interface CommercialPullReport {
     unlinked: number;
 }
 
-// Traduz status da instância Imovib (com acento) para o enum do empreendimento.
-const translateStatus = (s?: string): UnitStatus => {
-    switch (s) {
-        case 'DISPONÍVEL': case 'DISPONIVEL': return 'DISPONIVEL';
-        case 'RESERVADO': return 'RESERVADO';
-        case 'PERMUTADO': return 'PERMUTADO';
-        case 'VENDIDO': return 'VENDIDO';
-        default: return 'DISPONIVEL';
-    }
-};
+// `translateStatus` e `inferCommonAreaCategory` mudaram para services/sync/imovibAdapter.ts
+// junto com o resto da normalização da origem Imovib — eram usados só pelo planner antigo.
 
 // Endereço do empreendimento → campos estruturados do Comercial. Fonte única: o
 // PropertyModal edita/exibe street/number/neighborhood/city/state (não o texto `address`
@@ -81,16 +77,6 @@ export const buildCommercialAddressFields = (emp: Empreendimento): CommercialAdd
 
     const address = [street, number, neighborhood, city, state].filter(Boolean).join(', ') || emp.name;
     return { address, street, number, neighborhood, city, state, zip_code };
-};
-
-// Infere categoria de área comum a partir do nome da unidade não-vendável.
-const inferCommonAreaCategory = (name: string): CommonAreaCategory => {
-    const n = (name || '').toLowerCase();
-    if (/(piscina|academia|festa|gourmet|playground|quadra|lazer|churrasq|sal[ãa]o|spa|sauna|brinquedo|cinema|coworking)/.test(n)) return 'LAZER';
-    if (/(garagem|vaga|estacion)/.test(n)) return 'GARAGEM';
-    if (/(hall|circula|corredor|escada|elevador)/.test(n)) return 'CIRCULACAO';
-    if (/(t[ée]cnic|casa de m[áa]quinas|barrilete|reservat[óo]rio|medidor|lixo|gerador)/.test(n)) return 'TECNICA';
-    return 'COMUM';
 };
 
 // NOTA: estas constantes precisam ser string LITERAIS (sem concatenação com +),
@@ -711,10 +697,13 @@ export const empreendimentoService = {
     },
 
     // ── Sincronização com o estudo Imovib (vínculo vivo) ─────────────────────
+    //
+    // O motor vive em services/sync/ e é compartilhado com o Planta IA. Aqui ficam só os
+    // wrappers que preservam a assinatura pública destes métodos.
+
     /** Dry-run: calcula o que seria criado/atualizado sem escrever no banco. */
     async previewSync(empreendimentoId: string): Promise<EmpreendimentoSyncReport> {
-        const ctx = await loadSyncContext(empreendimentoId);
-        const plan = buildSyncPlan(ctx, { overwriteCommercialState: false });
+        const { plan } = await planImovibSync(empreendimentoId, { overwriteCommercialState: false });
         return planToReport(plan);
     },
 
@@ -723,40 +712,10 @@ export const empreendimentoService = {
         empreendimentoId: string,
         opts?: { overwriteCommercialState?: boolean },
     ): Promise<EmpreendimentoSyncReport> {
-        const ctx = await loadSyncContext(empreendimentoId);
-        const plan = buildSyncPlan(ctx, { overwriteCommercialState: !!opts?.overwriteCommercialState });
-
-        for (const bp of plan.blocks) {
-            // 1. Garantir a torre
-            let towerId: string;
-            if (bp.existingTowerId) {
-                towerId = bp.existingTowerId;
-                if (Object.keys(bp.towerUpdates).length > 0) {
-                    await this.updateTower(towerId, bp.towerUpdates);
-                }
-            } else {
-                const created = await this.createTower(bp.towerInsert!);
-                towerId = created.id;
-            }
-
-            // 2. Unidades da torre
-            for (const u of bp.units) {
-                if (u.existingUnitId) {
-                    await this.updateUnit(u.existingUnitId, u.fields);
-                } else {
-                    await this.createUnit({ tower_id: towerId, status: 'DISPONIVEL', ...u.fields } as EmpreendimentoUnitInsert);
-                }
-            }
-        }
-
-        // 3. Áreas comuns novas
-        for (const area of plan.commonAreasToCreate) {
-            await this.createCommonArea(area);
-        }
-
-        // 4. Carimbar última sincronização
-        await this.update(empreendimentoId, { last_synced_at: new Date().toISOString() });
-
+        const { plan } = await planImovibSync(empreendimentoId, {
+            overwriteCommercialState: !!opts?.overwriteCommercialState,
+        });
+        await applyPlan(plan);
         return planToReport(plan);
     },
 
@@ -769,15 +728,13 @@ export const empreendimentoService = {
 
     /** Dry-run: calcula quantas instâncias seriam atualizadas, sem escrever. */
     async previewWriteBackToStudy(empreendimentoId: string): Promise<EmpreendimentoWriteBackReport> {
-        const ctx = await loadSyncContext(empreendimentoId);
-        const plan = buildWriteBackPlan(ctx);
+        const plan = await buildWriteBackPlan(empreendimentoId);
         return { instancesUpdated: plan.updates.length, unitsWithoutInstance: plan.unitsWithoutInstance };
     },
 
     /** Aplica a escrita reversa: atualiza as instâncias divergentes no estudo. */
     async writeBackToStudy(empreendimentoId: string): Promise<EmpreendimentoWriteBackReport> {
-        const ctx = await loadSyncContext(empreendimentoId);
-        const plan = buildWriteBackPlan(ctx);
+        const plan = await buildWriteBackPlan(empreendimentoId);
         for (const u of plan.updates) {
             await imovibService.updateUnitInstance(u.instanceId, u.fields);
         }
@@ -786,267 +743,93 @@ export const empreendimentoService = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Helpers de sincronização (puros — usados por preview e apply)
+// Sincronização — cola entre o serviço e o motor em services/sync/
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface SyncContext {
-    empreendimento: Empreendimento;
-    study: ImovibStudy;
-    instances: ImovibUnitInstance[];
-    existingTowers: EmpreendimentoTower[];
-    existingUnits: EmpreendimentoUnit[];
-    existingCommonAreas: EmpreendimentoCommonArea[];
+/**
+ * Estado atual do Empreendimento (o destino). Exportado porque o plantaEmpreendimentoSync
+ * precisa exatamente do mesmo carregamento — é o "target" das duas arestas de entrada.
+ */
+export async function loadTargetState(empreendimentoId: string): Promise<TargetState> {
+    const towers = await empreendimentoService.listTowers(empreendimentoId);
+    let units: EmpreendimentoUnit[] = [];
+    for (const t of towers) {
+        units = units.concat(await empreendimentoService.listUnits(t.id));
+    }
+    const commonAreas = await empreendimentoService.listCommonAreas(empreendimentoId);
+    return { towers, units, commonAreas };
 }
 
-interface UnitPlan {
-    existingUnitId?: string;
-    fields: Partial<EmpreendimentoUnitInsert>;
-    preservedCommercial?: boolean;
-}
-
-interface BlockPlan {
-    existingTowerId?: string;
-    towerInsert?: EmpreendimentoTowerInsert;
-    towerUpdates: EmpreendimentoTowerUpdate;
-    isNewTower: boolean;
-    units: UnitPlan[];
-}
-
-interface SyncPlan {
-    blocks: BlockPlan[];
-    commonAreasToCreate: EmpreendimentoCommonAreaInsert[];
-    orphanTowers: EmpreendimentoTower[];
-    orphanUnits: EmpreendimentoUnit[];
-    preservedUnitNames: string[];
-    warnings: string[];
-}
-
-async function loadSyncContext(empreendimentoId: string): Promise<SyncContext> {
+async function planImovibSync(empreendimentoId: string, opts: PlanOptions): Promise<{ plan: SyncPlan }> {
     const empreendimento = await empreendimentoService.getById(empreendimentoId) as Empreendimento | null;
     if (!empreendimento) throw new Error('Empreendimento não encontrado.');
-    if (!empreendimento.imovib_study_id) {
-        throw new Error('Este empreendimento não está vinculado a um estudo de viabilidade (Imovib).');
-    }
-
-    const study = await imovibService.getStudyById(empreendimento.imovib_study_id, true);
-    if (!study) throw new Error('Estudo de viabilidade vinculado não foi encontrado.');
-
-    // Blindagem multi-tenant: o estudo precisa ser da mesma organização.
-    if (study.organization_id !== empreendimento.organization_id) {
-        throw new Error('O estudo vinculado pertence a outra organização. Sincronização bloqueada.');
-    }
-
-    const instances = await imovibService.getUnitInstances(empreendimento.imovib_study_id);
-
-    const existingTowers = await empreendimentoService.listTowers(empreendimentoId);
-    const towerIds = existingTowers.map(t => t.id);
-    let existingUnits: EmpreendimentoUnit[] = [];
-    for (const tid of towerIds) {
-        existingUnits = existingUnits.concat(await empreendimentoService.listUnits(tid));
-    }
-    const existingCommonAreas = await empreendimentoService.listCommonAreas(empreendimentoId);
-
-    return { empreendimento, study, instances, existingTowers, existingUnits, existingCommonAreas };
+    const [side, target] = await Promise.all([
+        loadImovibSide(empreendimento),
+        loadTargetState(empreendimentoId),
+    ]);
+    return { plan: buildPlan(side, target, opts) };
 }
 
-interface WriteBackPlan {
-    updates: { instanceId: string; fields: Partial<import('../types').ImovibUnitInstanceInsert> }[];
-    unitsWithoutInstance: number;
-}
-
-/** Reusa o SyncContext do forward-sync: mesmas unidades/instâncias, diff na direção oposta. */
-function buildWriteBackPlan(ctx: SyncContext): WriteBackPlan {
-    const instanceById = new Map(ctx.instances.map(i => [i.id, i]));
-    const updates: WriteBackPlan['updates'] = [];
-    let unitsWithoutInstance = 0;
-
-    for (const u of ctx.existingUnits) {
-        if (!u.imovib_instance_id) { unitsWithoutInstance++; continue; }
-        const inst = instanceById.get(u.imovib_instance_id);
-        if (!inst) continue; // órfão — instância sumiu do estudo, nunca escreve de volta
-
-        const fields: Partial<import('../types').ImovibUnitInstanceInsert> = {};
-        if (u.name && u.name !== inst.name) fields.name = u.name;
-        if (u.floor != null && u.floor !== inst.floor) fields.floor = u.floor;
-        if (u.private_area != null && u.private_area !== inst.private_area) fields.private_area = u.private_area;
-        if (u.position_type && u.position_type !== inst.position_type) fields.position_type = u.position_type;
-        if (u.sun_orientation && u.sun_orientation !== inst.sun_orientation) fields.sun_orientation = u.sun_orientation;
-
-        if (Object.keys(fields).length > 0) {
-            updates.push({ instanceId: inst.id, fields });
-        }
-    }
-
-    return { updates, unitsWithoutInstance };
-}
-
-function buildSyncPlan(ctx: SyncContext, opts: { overwriteCommercialState: boolean }): SyncPlan {
-    const { empreendimento, study, instances, existingTowers, existingUnits, existingCommonAreas } = ctx;
-    const blocks = study.blocks || [];
-
-    // Mapa de tipologias (imovib_units) por id, para nome/área comum.
-    const unitMetaById = new Map<string, ImovibUnit>();
-    for (const b of blocks) for (const u of (b.units || [])) unitMetaById.set(u.id, u);
-
-    const towerByBlockId = new Map<string, EmpreendimentoTower>();
-    for (const t of existingTowers) if (t.imovib_block_id) towerByBlockId.set(t.imovib_block_id, t);
-
-    const unitByInstanceId = new Map<string, EmpreendimentoUnit>();
-    for (const u of existingUnits) if (u.imovib_instance_id) unitByInstanceId.set(u.imovib_instance_id, u);
-
-    const commonAreaByName = new Set(existingCommonAreas.map(a => (a.name || '').toLowerCase()));
-
-    const plan: SyncPlan = {
-        blocks: [], commonAreasToCreate: [], orphanTowers: [], orphanUnits: [],
-        preservedUnitNames: [], warnings: [],
-    };
-
-    const instancesByBlock = new Map<string, ImovibUnitInstance[]>();
-    for (const inst of instances) {
-        const arr = instancesByBlock.get(inst.block_id) || [];
-        arr.push(inst);
-        instancesByBlock.set(inst.block_id, arr);
-    }
-
-    for (const block of blocks) {
-        const existingTower = towerByBlockId.get(block.id);
-        const towerUpdates: EmpreendimentoTowerUpdate = {};
-        if (existingTower) {
-            if (existingTower.name !== block.name) towerUpdates.name = block.name;
-            if (existingTower.construction_cost_sqm !== block.construction_cost_sqm) towerUpdates.construction_cost_sqm = block.construction_cost_sqm;
-            if (existingTower.sales_price_sqm !== block.sales_price_sqm) towerUpdates.sales_price_sqm = block.sales_price_sqm;
-        }
-
-        const blockInstances = instancesByBlock.get(block.id) || [];
-        const unitPlans: UnitPlan[] = [];
-
-        if (blockInstances.length > 0) {
-            // Instance-first: 1 unidade por instância
-            for (const inst of blockInstances) {
-                const meta = inst.unit_id ? unitMetaById.get(inst.unit_id) : undefined;
-                const priv = inst.private_area;
-                const common = meta?.common_area;
-                const structural: Partial<EmpreendimentoUnitInsert> = {
-                    imovib_unit_id: inst.unit_id ?? undefined,
-                    imovib_instance_id: inst.id,
-                    name: inst.name,
-                    floor: inst.floor,
-                    typology: meta?.name,
-                    private_area: priv,
-                    common_area: common,
-                    total_area: (priv ?? 0) + (common ?? 0),
-                    position_type: inst.position_type,
-                    sun_orientation: inst.sun_orientation,
-                    is_vendavel: true,
-                };
-
-                const existingUnit = unitByInstanceId.get(inst.id);
-                if (existingUnit) {
-                    // Preserva estado comercial salvo, exceto se overwrite.
-                    const hasLocalCommercial = existingUnit.status !== 'DISPONIVEL'
-                        || existingUnit.price != null
-                        || !!existingUnit.commercial_property_id;
-                    if (opts.overwriteCommercialState || !hasLocalCommercial) {
-                        structural.status = translateStatus(inst.status);
-                        structural.price = inst.price;
-                    } else {
-                        plan.preservedUnitNames.push(existingUnit.name);
-                    }
-                    unitPlans.push({ existingUnitId: existingUnit.id, fields: structural, preservedCommercial: hasLocalCommercial && !opts.overwriteCommercialState });
-                } else {
-                    structural.status = translateStatus(inst.status);
-                    structural.price = inst.price;
-                    unitPlans.push({ fields: structural });
-                }
-            }
-        } else {
-            // Sem instâncias: expandir tipologias só se a torre ainda não tem unidades.
-            const towerHasUnits = existingTower
-                ? existingUnits.some(u => u.tower_id === existingTower.id)
-                : false;
-            const vendaveis = (block.units || []).filter(u => u.is_vendavel !== false);
-            if (!towerHasUnits && vendaveis.length > 0) {
-                for (const meta of vendaveis) {
-                    const qty = Math.max(1, meta.quantity || 1);
-                    for (let i = 0; i < qty; i++) {
-                        unitPlans.push({
-                            fields: {
-                                imovib_unit_id: meta.id,
-                                name: `${meta.name} ${i + 1}`,
-                                typology: meta.name,
-                                private_area: meta.private_area,
-                                common_area: meta.common_area,
-                                total_area: (meta.private_area ?? 0) + (meta.common_area ?? 0),
-                                is_vendavel: true,
-                                status: 'DISPONIVEL',
-                            },
-                        });
-                    }
-                }
-                plan.warnings.push(`Bloco "${block.name}": gerado a partir das tipologias (sem espelho de vendas). Gere as instâncias no Imovib para detalhar por pavimento/posição.`);
-            } else if (towerHasUnits && vendaveis.length > 0) {
-                plan.warnings.push(`Bloco "${block.name}": sem espelho de vendas no estudo e a torre já tem unidades — nada foi regenerado.`);
-            }
-        }
-
-        // Áreas comuns vindas de tipologias não-vendáveis
-        for (const meta of (block.units || [])) {
-            if (meta.is_vendavel === false && !commonAreaByName.has((meta.name || '').toLowerCase())) {
-                plan.commonAreasToCreate.push({
-                    empreendimento_id: empreendimento.id,
-                    name: meta.name,
-                    category: inferCommonAreaCategory(meta.name),
-                    area: meta.common_area || meta.private_area,
-                    is_vendavel: false,
-                });
-                commonAreaByName.add((meta.name || '').toLowerCase());
-            }
-        }
-
-        plan.blocks.push({
-            existingTowerId: existingTower?.id,
-            towerInsert: existingTower ? undefined : {
-                empreendimento_id: empreendimento.id,
-                imovib_block_id: block.id,
-                name: block.name,
-                construction_cost_sqm: block.construction_cost_sqm,
-                sales_price_sqm: block.sales_price_sqm,
-                sort_order: plan.blocks.length,
-            },
-            towerUpdates,
-            isNewTower: !existingTower,
-            units: unitPlans,
-        });
-    }
-
-    // Órfãos: torres/unidades com proveniência que sumiu do estudo (nunca auto-deletar)
-    const studyBlockIds = new Set(blocks.map(b => b.id));
-    const studyInstanceIds = new Set(instances.map(i => i.id));
-    plan.orphanTowers = existingTowers.filter(t => t.imovib_block_id && !studyBlockIds.has(t.imovib_block_id));
-    plan.orphanUnits = existingUnits.filter(u => u.imovib_instance_id && !studyInstanceIds.has(u.imovib_instance_id));
-
-    return plan;
-}
-
+/** Traduz o plano para o relatório que a UI já conhece (contadores). */
 function planToReport(plan: SyncPlan): EmpreendimentoSyncReport {
-    let towersCreated = 0, towersUpdated = 0, unitsCreated = 0, unitsUpdated = 0;
-    for (const bp of plan.blocks) {
-        if (bp.isNewTower) towersCreated++;
-        else if (Object.keys(bp.towerUpdates).length > 0) towersUpdated++;
-        for (const u of bp.units) {
-            if (u.existingUnitId) unitsUpdated++;
-            else unitsCreated++;
-        }
-    }
+    const touched = new Set([...plan.fills, ...plan.conflicts].map(c => `${c.entity}|${c.entityId}`));
+    const countTouched = (entity: 'tower' | 'unit') =>
+        [...touched].filter(k => k.startsWith(`${entity}|`)).length;
+
     return {
-        towersCreated,
-        towersUpdated,
-        unitsCreated,
-        unitsUpdated,
-        commonAreasUpserted: plan.commonAreasToCreate.length,
+        towersCreated: plan.towerCreates.length,
+        // "Atualizado" = tem pelo menos um campo divergindo de fato. Antes, toda unidade com
+        // proveniência entrava na conta, mesmo idêntica ao estudo — era a origem dos números
+        // inflados de divergência na tela.
+        towersUpdated: countTouched('tower'),
+        unitsCreated: plan.towerCreates.reduce((s, tc) => s + tc.units.length, 0) + plan.unitCreates.length,
+        unitsUpdated: countTouched('unit'),
+        commonAreasUpserted: plan.commonAreaCreates.length,
         orphanTowers: plan.orphanTowers,
         orphanUnits: plan.orphanUnits,
         skippedDueToLocalChanges: plan.preservedUnitNames,
         warnings: plan.warnings,
     };
 }
+
+// ── Escrita reversa: diff campo a campo (Empreendimento → instância do estudo) ──
+
+interface WriteBackPlan {
+    updates: { instanceId: string; fields: Partial<ImovibUnitInstanceInsert> }[];
+    unitsWithoutInstance: number;
+}
+
+async function buildWriteBackPlan(empreendimentoId: string): Promise<WriteBackPlan> {
+    const empreendimento = await empreendimentoService.getById(empreendimentoId) as Empreendimento | null;
+    if (!empreendimento) throw new Error('Empreendimento não encontrado.');
+    if (!empreendimento.imovib_study_id) {
+        throw new Error('Este empreendimento não está vinculado a um estudo de viabilidade (Imovib).');
+    }
+
+    const [instances, target] = await Promise.all([
+        imovibService.getUnitInstances(empreendimento.imovib_study_id),
+        loadTargetState(empreendimentoId),
+    ]);
+
+    const instanceById = new Map(instances.map(i => [i.id, i]));
+    const updates: WriteBackPlan['updates'] = [];
+    let unitsWithoutInstance = 0;
+
+    for (const u of target.units) {
+        if (!u.imovib_instance_id) { unitsWithoutInstance++; continue; }
+        const inst = instanceById.get(u.imovib_instance_id);
+        if (!inst) continue; // órfão — instância sumiu do estudo, nunca escreve de volta
+
+        const fields: Partial<ImovibUnitInstanceInsert> = {};
+        if (u.name && u.name !== inst.name) fields.name = u.name;
+        if (u.floor != null && u.floor !== inst.floor) fields.floor = u.floor;
+        if (u.private_area != null && u.private_area !== inst.private_area) fields.private_area = u.private_area;
+        if (u.position_type && u.position_type !== inst.position_type) fields.position_type = u.position_type;
+        if (u.sun_orientation && u.sun_orientation !== inst.sun_orientation) fields.sun_orientation = u.sun_orientation;
+
+        if (Object.keys(fields).length > 0) updates.push({ instanceId: inst.id, fields });
+    }
+
+    return { updates, unitsWithoutInstance };
+}
+

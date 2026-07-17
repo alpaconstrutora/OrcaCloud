@@ -68,6 +68,18 @@ export interface UnitCreate {
  * `syncFromStudy` recarregavam o contexto e recalculavam o plano independentemente: o
  * usuário confirmava um número e o apply escrevia outro (TOCTOU real).
  */
+/**
+ * Uma entidade existente no Empreendimento que estava SEM vínculo e foi casada por nome com
+ * uma entidade da origem. `applyPlan` grava a coluna de proveniência (PROVENANCE[origin]) —
+ * daí em diante ela é reconhecida pelo sync e não duplica mais. É o remédio do bug em que uma
+ * torre criada à mão gerava uma torre-fantasma a cada sincronização.
+ */
+export interface Adoption {
+    entity: 'tower' | 'unit';
+    existingId: string;
+    sourceId: string;
+}
+
 export interface SyncPlan {
     empreendimentoId: string;
     origin: SyncOrigin;
@@ -75,6 +87,7 @@ export interface SyncPlan {
     towerCreates: TowerCreate[];
     unitCreates: UnitCreate[];
     commonAreaCreates: EmpreendimentoCommonAreaInsert[];
+    adoptions: Adoption[];
     fills: FieldChange[];
     conflicts: FieldChange[];
     /** Proveniência que sumiu da origem. Reportados, NUNCA auto-deletados. */
@@ -106,6 +119,13 @@ export interface CanonicalUnit {
 export interface CanonicalTower {
     /** id na origem: imovib_blocks.id | plant_scenarios.id */
     sourceId: string;
+    /**
+     * Nome pelo qual esta torre pode ser ADOTADA por uma torre existente sem proveniência
+     * (casamento por nome, ver planner). Só a aresta Imovib preenche: o bloco tem um nome que
+     * o usuário reconhece ("Torre A"). O cenário do Planta vira "Torre X" local, então não
+     * casa por nome — fica undefined.
+     */
+    matchName?: string;
     fields: Record<string, unknown>;
     createOnly: Record<string, unknown>;
     units: CanonicalUnit[];

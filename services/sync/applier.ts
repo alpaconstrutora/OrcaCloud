@@ -12,10 +12,21 @@
 import { supabase } from '../../lib/supabase';
 import { EmpreendimentoUnitInsert } from '../../types/empreendimento';
 import { changesToUpdates } from './planner';
-import { SyncApplyResult, SyncPlan } from './types';
+import { PROVENANCE, SyncApplyResult, SyncPlan } from './types';
 
 export async function applyPlan(plan: SyncPlan): Promise<SyncApplyResult> {
     const result: SyncApplyResult = { towersCreated: 0, unitsCreated: 0, fieldsApplied: 0, commonAreasCreated: 0 };
+
+    // 0. Adoções: gravar a proveniência nas entidades casadas por nome, ANTES dos diffs — daí
+    //    em diante elas são reconhecidas e nunca mais duplicam. É o remédio do bug da
+    //    torre-fantasma (torre à mão sem vínculo).
+    const { towerKey, unitKey } = PROVENANCE[plan.origin];
+    for (const a of plan.adoptions) {
+        const table = a.entity === 'tower' ? 'empreendimento_towers' : 'empreendimento_units';
+        const key = a.entity === 'tower' ? towerKey : unitKey;
+        const { error } = await supabase.from(table).update({ [key]: a.sourceId }).eq('id', a.existingId);
+        if (error) throw new Error(`Falha ao vincular ${a.entity === 'tower' ? 'a torre' : 'a unidade'} ao estudo: ${error.message}`);
+    }
 
     // 1. Torres novas + as unidades que nascem com elas.
     for (const tc of plan.towerCreates) {

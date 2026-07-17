@@ -132,6 +132,7 @@ export async function loadImovibSide(empreendimento: Empreendimento): Promise<Ca
 
         towers.push({
             sourceId: block.id,
+            matchName: block.name,   // torre à mão com este nome pode ser adotada
             fields: {
                 name: block.name,
                 construction_cost_sqm: block.construction_cost_sqm,

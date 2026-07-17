@@ -39,7 +39,7 @@ const cUnit = (fields: Record<string, unknown>, sourceId = 'inst-1'): CanonicalU
     ({ sourceId, fields, createOnly: {} });
 
 const cTower = (units: CanonicalUnit[], fields: Record<string, unknown> = {}, sourceId = 'block-1'): CanonicalTower =>
-    ({ sourceId, fields, createOnly: { imovib_block_id: sourceId, name: 'Torre A' }, units });
+    ({ sourceId, matchName: (fields.name as string) ?? 'Torre A', fields, createOnly: { imovib_block_id: sourceId, name: (fields.name as string) ?? 'Torre A' }, units });
 
 const side = (towers: CanonicalTower[]): CanonicalSide => ({
     origin: 'imovib', empreendimento: EMP, towers, commonAreaCandidates: [],
@@ -193,6 +193,65 @@ describe('buildPlan — proteção do estado comercial', () => {
         const mesmo = [cTower([cUnit({ price: 500000, status: 'VENDIDO' })], { name: 'Torre A' })];
         const plan = buildPlan(side(mesmo), target({ units: [vendida()] }));
         expect(plan.preservedUnitNames).toHaveLength(0);
+    });
+});
+
+// ── Vínculo por nome + adoção (o bug da torre-fantasma) ──────────────────────
+
+describe('buildPlan — adoção por nome', () => {
+    // Torre criada à mão: mesmo nome do bloco do estudo, mas SEM imovib_block_id.
+    const towerAmao = tower({ id: 'tower-amao', name: 'Torre A', imovib_block_id: undefined, floors_count: 4 });
+    const unitAmao = unit({ id: 'unit-amao', tower_id: 'tower-amao', name: 'Apto 101', imovib_instance_id: undefined });
+
+    it('adota a torre à mão em vez de criar uma duplicata', () => {
+        const plan = buildPlan(
+            side([cTower([cUnit({ name: 'Apto 101', private_area: 62.4 })], { name: 'Torre A' })]),
+            target({ towers: [towerAmao], units: [unitAmao] }),
+        );
+        // O bug era exatamente isto: criava uma torre nova.
+        expect(plan.towerCreates).toHaveLength(0);
+        expect(plan.adoptions).toContainEqual({ entity: 'tower', existingId: 'tower-amao', sourceId: 'block-1' });
+    });
+
+    it('adota também a unidade à mão dentro da torre adotada', () => {
+        const plan = buildPlan(
+            side([cTower([cUnit({ name: 'Apto 101', private_area: 62.4 })], { name: 'Torre A' })]),
+            target({ towers: [towerAmao], units: [unitAmao] }),
+        );
+        expect(plan.unitCreates).toHaveLength(0);
+        expect(plan.adoptions).toContainEqual({ entity: 'unit', existingId: 'unit-amao', sourceId: 'inst-1' });
+    });
+
+    it('não adota quando há duas torres à mão com o mesmo nome (ambíguo)', () => {
+        const gemea = tower({ id: 'tower-gemea', name: 'Torre A', imovib_block_id: undefined });
+        const plan = buildPlan(
+            side([cTower([], { name: 'Torre A' })]),
+            target({ towers: [towerAmao, gemea], units: [] }),
+        );
+        expect(plan.adoptions.filter(a => a.entity === 'tower')).toHaveLength(0);
+        expect(plan.towerCreates).toHaveLength(1);   // cai no fluxo de criação
+        expect(plan.warnings.some(w => /mais de uma torre/.test(w))).toBe(true);
+    });
+
+    it('não adota torre que já tem vínculo com outra origem sem casar por nome à toa', () => {
+        // Torre vinculada ao Planta, sincronizando do Imovib: nomes iguais não devem casar,
+        // porque ela não está "sem vínculo" — só sem vínculo COM O IMOVIB. Mas o nome bate,
+        // então adota (adotar aqui é o certo: é a mesma torre física ganhando 2ª proveniência).
+        const doPlanta = tower({ id: 'tower-planta', name: 'Torre A', imovib_block_id: undefined, planta_ai_scenario_id: 'sc-1' });
+        const plan = buildPlan(
+            side([cTower([], { name: 'Torre A' })]),
+            target({ towers: [doPlanta], units: [] }),
+        );
+        expect(plan.adoptions).toContainEqual({ entity: 'tower', existingId: 'tower-planta', sourceId: 'block-1' });
+    });
+
+    it('torre já vinculada por proveniência não passa pela adoção', () => {
+        const plan = buildPlan(
+            side([cTower([], { name: 'Torre A' })]),
+            target({ towers: [tower({ imovib_block_id: 'block-1' })], units: [] }),
+        );
+        expect(plan.adoptions).toHaveLength(0);
+        expect(plan.towerCreates).toHaveLength(0);
     });
 });
 

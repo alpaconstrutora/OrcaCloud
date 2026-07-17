@@ -7,7 +7,7 @@
 // testá-lo com fixtures e, principalmente, garantir que preview e apply usem O MESMO plano
 // (antes cada um recalculava o seu, e o usuário confirmava um número que não era o aplicado).
 
-import { EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoUnitInsert } from '../../types/empreendimento';
+import { EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoUnit, EmpreendimentoUnitInsert } from '../../types/empreendimento';
 import { classify } from './diff';
 import { specsFor } from './fieldRegistry';
 import {
@@ -57,6 +57,7 @@ export function buildPlan(side: CanonicalSide, target: TargetState, opts: PlanOp
         origin: side.origin,
         builtAt: new Date().toISOString(),
         towerCreates: [], unitCreates: [], commonAreaCreates: [],
+        adoptions: [],
         fills: [], conflicts: [],
         orphanTowers: [], orphanUnits: [],
         preservedUnitNames: [],
@@ -72,12 +73,23 @@ export function buildPlan(side: CanonicalSide, target: TargetState, opts: PlanOp
         target.units.filter(u => u[unitKey]).map(u => [u[unitKey] as string, u]),
     );
 
+    // ── Índices de adoção por nome ──────────────────────────────────────────
+    // Torres existentes SEM proveniência desta origem, agrupadas por nome. Uma torre criada à
+    // mão ("Torre A") cai aqui e pode ser adotada pelo bloco "Torre A" do estudo, em vez de
+    // gerar uma torre-fantasma a cada sync.
+    const adopter = makeTowerAdopter(side, target, towerKey, plan);
+    const adoptedTowerIds = new Set<string>();
+
     const takenNames = new Set(target.towers.map(t => t.name.trim().toUpperCase()));
     const towerSpecs = specsFor(side.origin, 'tower');
     const unitSpecs = specsFor(side.origin, 'unit');
 
     for (const ct of side.towers) {
-        const existingTower = towerBySource.get(ct.sourceId);
+        let existingTower = towerBySource.get(ct.sourceId);
+        if (!existingTower) {
+            const adopted = adopter(ct, adoptedTowerIds);
+            if (adopted) existingTower = adopted;
+        }
 
         if (!existingTower) {
             // ── Torre nova: tudo é `create`, nada a decidir ──────────────────
@@ -125,8 +137,16 @@ export function buildPlan(side: CanonicalSide, target: TargetState, opts: PlanOp
             continue;
         }
 
+        // Adoção de unidades por nome, no escopo desta torre (mesma ideia da torre).
+        const adoptUnit = makeUnitAdopter(ct, towerUnits, unitKey, plan);
+        const adoptedUnitIds = new Set<string>();
+
         for (const cu of ct.units) {
-            const existingUnit = unitBySource.get(cu.sourceId);
+            let existingUnit = unitBySource.get(cu.sourceId);
+            if (!existingUnit) {
+                const adopted = adoptUnit(cu, adoptedUnitIds);
+                if (adopted) existingUnit = adopted;
+            }
             if (!existingUnit) {
                 plan.unitCreates.push({ towerId: existingTower.id, insert: unitInsert(cu) });
                 continue;
@@ -166,6 +186,85 @@ export function buildPlan(side: CanonicalSide, target: TargetState, opts: PlanOp
     plan.orphanUnits = target.units.filter(u => u[unitKey] && !side.liveUnitSourceIds.has(u[unitKey] as string));
 
     return plan;
+}
+
+const upper = (v: unknown): string => String(v ?? '').trim().toUpperCase();
+
+/**
+ * Casa uma torre da origem com uma torre existente SEM proveniência, pelo nome. Só adota
+ * quando o nome é inequívoco DOS DOIS LADOS: um único bloco com aquele nome na origem, e uma
+ * única torre à mão com aquele nome no destino. Empate → não adota (warning): casar errado é
+ * pior que duplicar, porque escreve a proveniência na entidade errada.
+ */
+function makeTowerAdopter(
+    side: CanonicalSide,
+    target: TargetState,
+    towerKey: (typeof PROVENANCE)[SyncPlan['origin']]['towerKey'],
+    plan: SyncPlan,
+): (ct: CanonicalTower, already: Set<string>) => EmpreendimentoTower | null {
+    const unlinkedByName = new Map<string, EmpreendimentoTower[]>();
+    for (const t of target.towers) {
+        if (t[towerKey]) continue; // já vinculada a esta origem
+        const key = upper(t.name);
+        (unlinkedByName.get(key) ?? unlinkedByName.set(key, []).get(key)!).push(t);
+    }
+    const originNameCounts = new Map<string, number>();
+    for (const ct of side.towers) {
+        if (!ct.matchName) continue;
+        const key = upper(ct.matchName);
+        originNameCounts.set(key, (originNameCounts.get(key) ?? 0) + 1);
+    }
+
+    return (ct, already) => {
+        if (!ct.matchName) return null;
+        const key = upper(ct.matchName);
+        if ((originNameCounts.get(key) ?? 0) > 1) {
+            plan.warnings.push(`"${ct.matchName}": há mais de um bloco com esse nome no estudo — vincule a torre manualmente para não casar errado.`);
+            return null;
+        }
+        const candidates = (unlinkedByName.get(key) ?? []).filter(t => !already.has(t.id));
+        if (candidates.length === 0) return null;
+        if (candidates.length > 1) {
+            plan.warnings.push(`"${ct.matchName}": há mais de uma torre sem vínculo com esse nome — vincule manualmente.`);
+            return null;
+        }
+        const tower = candidates[0];
+        already.add(tower.id);
+        plan.adoptions.push({ entity: 'tower', existingId: tower.id, sourceId: ct.sourceId });
+        return tower;
+    };
+}
+
+/** Mesma regra da torre, no escopo das unidades de UMA torre. */
+function makeUnitAdopter(
+    ct: CanonicalTower,
+    towerUnits: EmpreendimentoUnit[],
+    unitKey: (typeof PROVENANCE)[SyncPlan['origin']]['unitKey'],
+    plan: SyncPlan,
+): (cu: CanonicalUnit, already: Set<string>) => EmpreendimentoUnit | null {
+    const unlinkedByName = new Map<string, EmpreendimentoUnit[]>();
+    for (const u of towerUnits) {
+        if (u[unitKey]) continue;
+        const key = upper(u.name);
+        if (!key) continue;
+        (unlinkedByName.get(key) ?? unlinkedByName.set(key, []).get(key)!).push(u);
+    }
+    const originNameCounts = new Map<string, number>();
+    for (const cu of ct.units) {
+        const key = upper(cu.fields.name);
+        if (key) originNameCounts.set(key, (originNameCounts.get(key) ?? 0) + 1);
+    }
+
+    return (cu, already) => {
+        const key = upper(cu.fields.name);
+        if (!key || (originNameCounts.get(key) ?? 0) > 1) return null;
+        const candidates = (unlinkedByName.get(key) ?? []).filter(u => !already.has(u.id));
+        if (candidates.length !== 1) return null;
+        const unit = candidates[0];
+        already.add(unit.id);
+        plan.adoptions.push({ entity: 'unit', existingId: unit.id, sourceId: cu.sourceId });
+        return unit;
+    };
 }
 
 function commercialWouldChange(existing: Record<string, unknown>, cu: CanonicalUnit, allSpecs: ReturnType<typeof specsFor>): boolean {

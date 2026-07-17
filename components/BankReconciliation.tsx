@@ -3246,6 +3246,124 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             </div>
         </div>
 
+            {/* Toolbar acoplada — abas de visão + filtro Tudo/Receitas/Despesas + ação primária (guia §5.2/§19) */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
+                {/* Barra de abas local — escala compacta (guia §19). flex-wrap em vez de
+                    overflow-x-auto: com 9 abas, rolagem horizontal (mesmo sem scrollbar
+                    visível) corta texto no meio sem nenhum indício de que há mais abas —
+                    quebra de linha garante que todas ficam sempre visíveis. */}
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    <button
+                        onClick={() => setActiveView('dashboard')}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Dashboard
+                    </button>
+                    <button
+                        onClick={() => setActiveView('statement')}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'statement' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Extrato
+                    </button>
+                    <button
+                        onClick={() => setActiveView('center')}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'center' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Central
+                    </button>
+                    <button
+                        onClick={() => setActiveView('divergences')}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'divergences' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Divergências
+                    </button>
+                    <button
+                        onClick={() => setActiveView('anomalies')}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'anomalies' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Anomalias
+                    </button>
+                    <button
+                        onClick={() => setActiveView('pending')}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'pending' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Pendentes
+                    </button>
+                    <button
+                        onClick={() => setActiveView('conciliated')}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'conciliated' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Conciliados
+                    </button>
+                    <button
+                        onClick={() => setActiveView('rules')}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'rules' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Regras
+                    </button>
+                    <button
+                        onClick={() => setActiveView('categories')}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'categories' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Categorias
+                    </button>
+                    <button
+                        onClick={() => setActiveView('close')}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'close' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Fechamento
+                    </button>
+                    <button
+                        onClick={() => setActiveView('prolabore')}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'prolabore' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        Pró-labore
+                    </button>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[6px] border border-gray-100">
+                        <button
+                            onClick={() => setFlowFilter('ALL')}
+                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'ALL' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            Tudo
+                        </button>
+                        <button
+                            onClick={() => setFlowFilter('INCOME')}
+                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'INCOME' ? 'bg-emerald-500 text-white' : 'text-emerald-600/60 hover:text-emerald-600'}`}
+                        >
+                            Receitas
+                        </button>
+                        <button
+                            onClick={() => setFlowFilter('EXPENSE')}
+                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'EXPENSE' ? 'bg-red-500 text-white' : 'text-red-400 hover:text-red-500'}`}
+                        >
+                            Despesas
+                        </button>
+                    </div>
+
+                    {/* Botão primário — variante compacta (guia §17) */}
+                    <button
+                        onClick={() => setShowImportDrawer(true)}
+                        disabled={isImporting}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isImporting ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full" />
+                                <span>{importingMessage || 'Importando...'}</span>
+                            </>
+                        ) : (
+                            <>
+                                <Upload className="w-[15px] h-[15px]" />
+                                <span>Importar extrato</span>
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+
             {/* Toolbar — escala compacta (guia §5/§16) */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
                 <div className="flex flex-wrap items-center gap-2">
@@ -3368,124 +3486,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             <Zap className="w-4 h-4" />
                         </button>
                     )}
-                </div>
-            </div>
-
-            {/* Toolbar acoplada — abas de visão + filtro Tudo/Receitas/Despesas + ação primária (guia §5.2/§19) */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
-                {/* Barra de abas local — escala compacta (guia §19). flex-wrap em vez de
-                    overflow-x-auto: com 9 abas, rolagem horizontal (mesmo sem scrollbar
-                    visível) corta texto no meio sem nenhum indício de que há mais abas —
-                    quebra de linha garante que todas ficam sempre visíveis. */}
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    <button
-                        onClick={() => setActiveView('dashboard')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        Dashboard
-                    </button>
-                    <button
-                        onClick={() => setActiveView('statement')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'statement' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        Extrato
-                    </button>
-                    <button
-                        onClick={() => setActiveView('center')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'center' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        Central
-                    </button>
-                    <button
-                        onClick={() => setActiveView('divergences')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'divergences' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        Divergências
-                    </button>
-                    <button
-                        onClick={() => setActiveView('anomalies')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'anomalies' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        Anomalias
-                    </button>
-                    <button
-                        onClick={() => setActiveView('pending')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'pending' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        Pendentes
-                    </button>
-                    <button
-                        onClick={() => setActiveView('conciliated')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'conciliated' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        Conciliados
-                    </button>
-                    <button
-                        onClick={() => setActiveView('rules')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'rules' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        Regras
-                    </button>
-                    <button
-                        onClick={() => setActiveView('categories')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'categories' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        Categorias
-                    </button>
-                    <button
-                        onClick={() => setActiveView('close')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'close' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        Fechamento
-                    </button>
-                    <button
-                        onClick={() => setActiveView('prolabore')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'prolabore' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        Pró-labore
-                    </button>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                    <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[6px] border border-gray-100">
-                        <button
-                            onClick={() => setFlowFilter('ALL')}
-                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'ALL' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                        >
-                            Tudo
-                        </button>
-                        <button
-                            onClick={() => setFlowFilter('INCOME')}
-                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'INCOME' ? 'bg-emerald-500 text-white' : 'text-emerald-600/60 hover:text-emerald-600'}`}
-                        >
-                            Receitas
-                        </button>
-                        <button
-                            onClick={() => setFlowFilter('EXPENSE')}
-                            className={`px-2.5 h-7 rounded-[4px] text-xs font-medium transition-all ${flowFilter === 'EXPENSE' ? 'bg-red-500 text-white' : 'text-red-400 hover:text-red-500'}`}
-                        >
-                            Despesas
-                        </button>
-                    </div>
-
-                    {/* Botão primário — variante compacta (guia §17) */}
-                    <button
-                        onClick={() => setShowImportDrawer(true)}
-                        disabled={isImporting}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isImporting ? (
-                            <>
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full" />
-                                <span>{importingMessage || 'Importando...'}</span>
-                            </>
-                        ) : (
-                            <>
-                                <Upload className="w-[15px] h-[15px]" />
-                                <span>Importar extrato</span>
-                            </>
-                        )}
-                    </button>
                 </div>
             </div>
 

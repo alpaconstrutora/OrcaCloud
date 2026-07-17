@@ -417,7 +417,12 @@ export const ttsService = {
       skipped_no_cfop: 0,
       skipped_exterior: 0,
       companies_matched: [],
+      registered_cnpjs: [],
+      sample_unmatched_cnpjs: [],
+      empty_cnpj_items: 0,
+      direction_counts: { saida: 0, entrada: 0 },
     };
+    const unmatchedCnpjs = new Set<string>();
 
     // 1. Mapa CNPJ(normalizado) → company_id
     const { data: comps, error: compErr } = await supabase
@@ -433,6 +438,7 @@ export const ttsService = {
       const key = onlyDigits((c as { cnpj: string | null }).cnpj);
       if (key) cnpjToCompany.set(key, (c as { id: string }).id);
     }
+    result.registered_cnpjs = Array.from(cnpjToCompany.keys());
     if (cnpjToCompany.size === 0) {
       // Sem CNPJ cadastrado em nenhuma filial não há como atribuir os movimentos.
       return result;
@@ -477,11 +483,15 @@ export const ttsService = {
           result.skipped_exterior++;
           continue;
         }
+        result.direction_counts[parsed.direction]++;
         // filial dona da operação depende da direção
         const cnpj = parsed.direction === 'saida' ? inv.issuer_cnpj : inv.recipient_cnpj;
-        const companyId = cnpjToCompany.get(onlyDigits(cnpj));
+        const cnpjDigits = onlyDigits(cnpj);
+        const companyId = cnpjToCompany.get(cnpjDigits);
         if (!companyId) {
           result.skipped_no_company++;
+          if (!cnpjDigits) result.empty_cnpj_items++;
+          else if (unmatchedCnpjs.size < 12) unmatchedCnpjs.add(cnpjDigits);
           continue;
         }
 
@@ -523,6 +533,7 @@ export const ttsService = {
       base_amount: round2(r.base_amount),
     }));
     result.companies_matched = Array.from(matched);
+    result.sample_unmatched_cnpjs = Array.from(unmatchedCnpjs);
 
     if (rows.length === 0) return result;
 

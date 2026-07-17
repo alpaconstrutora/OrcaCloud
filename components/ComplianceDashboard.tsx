@@ -127,17 +127,25 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
       setBackfilling(true);
       setBackfillMsg(null);
       const r = await ttsService.backfillFromNfe(organizationId);
+      console.log('[TTS backfill] diagnóstico:', r);
       const partes = [
         `${r.movements_created} movimento(s) de ${r.invoices_applied}/${r.invoices_scanned} NF-e`,
       ];
       if (r.skipped_no_company > 0) partes.push(`${r.skipped_no_company} item(ns) sem filial (CNPJ não cadastrado)`);
       if (r.skipped_no_cfop > 0) partes.push(`${r.skipped_no_cfop} sem CFOP`);
       if (r.skipped_exterior > 0) partes.push(`${r.skipped_exterior} de exterior`);
-      setBackfillMsg(
-        r.movements_created === 0
-          ? `Nenhum movimento gerado. ${partes.slice(1).join(' · ') || 'Não há NF-e com CFOP/filial compatível.'}`
-          : `Importado: ${partes.join(' · ')}.`
-      );
+
+      if (r.movements_created === 0) {
+        // Diagnóstico do descasamento de CNPJ (a causa mais comum de 0 movimentos)
+        const diag: string[] = [];
+        diag.push(`Saídas: ${r.direction_counts.saida} · Entradas: ${r.direction_counts.entrada}`);
+        diag.push(`CNPJ cadastrado: ${r.registered_cnpjs.join(', ') || 'nenhum'}`);
+        if (r.empty_cnpj_items > 0) diag.push(`${r.empty_cnpj_items} item(ns) com CNPJ vazio na nota`);
+        if (r.sample_unmatched_cnpjs.length > 0) diag.push(`CNPJ nas notas (amostra): ${r.sample_unmatched_cnpjs.slice(0, 6).join(', ')}`);
+        setBackfillMsg(`Nenhum movimento gerado. ${partes.slice(1).join(' · ')}. ${diag.join(' · ')}.`);
+      } else {
+        setBackfillMsg(`Importado: ${partes.join(' · ')}.`);
+      }
       if (selectedCompanyId) await loadCompanyData(selectedCompanyId);
     } catch (error) {
       console.error('Erro no backfill de NF-e:', error);

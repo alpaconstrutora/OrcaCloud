@@ -177,4 +177,9 @@ export interface TtsBackfillResult {
   skipped_no_cfop: number;         // itens sem CFOP ou CFOP inválido
   skipped_exterior: number;        // itens de exterior (fora do escopo TTS-MG)
   companies_matched: string[];     // ids das filiais que receberam movimentos
+  // Diagnóstico (para entender por que itens não casaram filial)
+  registered_cnpjs: string[];      // CNPJs (dígitos) cadastrados em companies
+  sample_unmatched_cnpjs: string[];// amostra de CNPJs das notas que não casaram
+  empty_cnpj_items: number;        // itens cujo CNPJ relevante veio vazio/nulo
+  direction_counts: { saida: number; entrada: number };
 }

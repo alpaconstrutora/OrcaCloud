@@ -8,7 +8,6 @@ import {
   TtsCalculationInput,
   TtsCalculationResult,
   TtsBackfillResult,
-  TtsDirection,
   TtsScope,
 } from '../types';
 
@@ -47,22 +46,21 @@ function onlyDigits(s: string | null | undefined): string {
 }
 
 /**
- * Deriva direção e escopo de um CFOP (1º dígito):
- *   1 = entrada interna | 2 = entrada interestadual | 3 = entrada exterior
- *   5 = saída interna   | 6 = saída interestadual   | 7 = saída exterior
+ * Deriva SÓ o escopo de um CFOP (1º dígito). O CFOP impresso na NF-e é sempre
+ * do EMITENTE — então ele NÃO diz a direção relativa à nossa empresa (uma nota
+ * de compra traz o CFOP de saída do fornecedor). A direção vem do match de
+ * CNPJ (emitente=saída, destinatário=entrada). O escopo, sim, é simétrico:
+ *   1/5 = interna | 2/6 = interestadual | 3/7 = exterior
  * Retorna null quando o CFOP falta ou não começa por 1/2/3/5/6/7.
  */
-export function cfopToMovement(
-  cfop: string | null | undefined
-): { direction: TtsDirection; scope: TtsScope } | null {
-  const first = onlyDigits(cfop)[0];
-  switch (first) {
-    case '1': return { direction: 'entrada', scope: 'interna' };
-    case '2': return { direction: 'entrada', scope: 'interestadual' };
-    case '3': return { direction: 'entrada', scope: 'exterior' };
-    case '5': return { direction: 'saida', scope: 'interna' };
-    case '6': return { direction: 'saida', scope: 'interestadual' };
-    case '7': return { direction: 'saida', scope: 'exterior' };
+export function cfopScope(cfop: string | null | undefined): TtsScope | null {
+  switch (onlyDigits(cfop)[0]) {
+    case '1':
+    case '5': return 'interna';
+    case '2':
+    case '6': return 'interestadual';
+    case '3':
+    case '7': return 'exterior';
     default: return null;
   }
 }
@@ -392,10 +390,11 @@ export const ttsService = {
   /**
    * Popula tts_fiscal_movements a partir das nfe_invoices/itens existentes.
    *
-   * Direção e escopo saem do CFOP do item (cfopToMovement). A filial é
-   * resolvida por CNPJ: saída → emitente (issuer_cnpj), entrada → destinatário
-   * (recipient_cnpj), casado contra companies.cnpj (normalizado). Itens de
-   * exterior e itens sem CFOP/sem filial são pulados e contabilizados.
+   * DIREÇÃO relativa à nossa empresa vem do MATCH DE CNPJ (não do CFOP, que na
+   * nota é sempre do emitente): emitente=filial → saída; destinatário=filial →
+   * entrada. Uma nota pode gerar as duas (transferência entre filiais). O
+   * ESCOPO (interna/interestadual) vem do CFOP via cfopScope. Itens de exterior,
+   * sem CFOP ou sem nenhuma filial correspondente são pulados e contabilizados.
    *
    * Base: total_value do item (as NF-e ingeridas NÃO trazem base/valor de ICMS
    * segregado — icms_debit/icms_credit ficam 0; o motor recalcula pelas
@@ -468,58 +467,80 @@ export const ttsService = {
     const matched = new Set<string>();
     const appliedInvoiceIds: string[] = [];
 
+    // Acumula um movimento no agregador (uma linha por invoice/filial/mês/dir/escopo).
+    const addToAgg = (
+      invId: string,
+      companyId: string,
+      referenceMonth: string,
+      direction: 'saida' | 'entrada',
+      scope: 'interna' | 'interestadual',
+      cfop: string | null,
+      base: number,
+      accessKey: string | null
+    ) => {
+      const key = `${invId}|${companyId}|${referenceMonth}|${direction}|${scope}`;
+      const existing = agg.get(key);
+      if (existing) {
+        existing.base_amount += base;
+      } else {
+        agg.set(key, {
+          org_id: orgId,
+          company_id: companyId,
+          reference_month: referenceMonth,
+          direction,
+          scope,
+          cfop: onlyDigits(cfop).slice(0, 4) || null,
+          base_amount: base,
+          icms_debit: 0,
+          icms_credit: 0,
+          source: 'nfe',
+          nfe_invoice_id: invId,
+          document_ref: accessKey,
+          description: null,
+          created_by: null,
+        });
+      }
+      matched.add(companyId);
+      result.direction_counts[direction]++;
+    };
+
     for (const inv of (invoices || []) as InvRow[]) {
       result.invoices_scanned++;
       const referenceMonth = `${inv.issue_date.slice(0, 7)}-01`;
+      // Direção relativa à NOSSA empresa vem do CNPJ, não do CFOP (o CFOP da
+      // nota é do emitente): emitente=filial → saída; destinatário=filial → entrada.
+      const issuerDigits = onlyDigits(inv.issuer_cnpj);
+      const recipientDigits = onlyDigits(inv.recipient_cnpj);
+      const issuerCompany = cnpjToCompany.get(issuerDigits);
+      const recipientCompany = cnpjToCompany.get(recipientDigits);
       let invoiceContributed = false;
 
       for (const item of inv.nfe_invoice_items || []) {
-        const parsed = cfopToMovement(item.cfop);
-        if (!parsed) {
+        const scope = cfopScope(item.cfop);
+        if (!scope) {
           result.skipped_no_cfop++;
           continue;
         }
-        if (parsed.scope === 'exterior') {
+        if (scope === 'exterior') {
           result.skipped_exterior++;
           continue;
         }
-        result.direction_counts[parsed.direction]++;
-        // filial dona da operação depende da direção
-        const cnpj = parsed.direction === 'saida' ? inv.issuer_cnpj : inv.recipient_cnpj;
-        const cnpjDigits = onlyDigits(cnpj);
-        const companyId = cnpjToCompany.get(cnpjDigits);
-        if (!companyId) {
-          result.skipped_no_company++;
-          if (!cnpjDigits) result.empty_cnpj_items++;
-          else if (unmatchedCnpjs.size < 12) unmatchedCnpjs.add(cnpjDigits);
-          continue;
-        }
-
-        const key = `${inv.id}|${companyId}|${referenceMonth}|${parsed.direction}|${parsed.scope}`;
         const base = item.total_value || 0;
-        const existing = agg.get(key);
-        if (existing) {
-          existing.base_amount += base;
-        } else {
-          agg.set(key, {
-            org_id: orgId,
-            company_id: companyId,
-            reference_month: referenceMonth,
-            direction: parsed.direction,
-            scope: parsed.scope,
-            cfop: onlyDigits(item.cfop).slice(0, 4) || null,
-            base_amount: base,
-            icms_debit: 0,
-            icms_credit: 0,
-            source: 'nfe',
-            nfe_invoice_id: inv.id,
-            document_ref: inv.access_key,
-            description: null,
-            created_by: null,
-          });
+
+        // Uma nota pode ser saída E entrada (transferência entre filiais da org).
+        if (issuerCompany) {
+          addToAgg(inv.id, issuerCompany, referenceMonth, 'saida', scope, item.cfop, base, inv.access_key);
+          invoiceContributed = true;
         }
-        matched.add(companyId);
-        invoiceContributed = true;
+        if (recipientCompany) {
+          addToAgg(inv.id, recipientCompany, referenceMonth, 'entrada', scope, item.cfop, base, inv.access_key);
+          invoiceContributed = true;
+        }
+        if (!issuerCompany && !recipientCompany) {
+          result.skipped_no_company++;
+          if (!issuerDigits && !recipientDigits) result.empty_cnpj_items++;
+          else if (unmatchedCnpjs.size < 12) unmatchedCnpjs.add(recipientDigits || issuerDigits);
+        }
       }
 
       if (invoiceContributed) {

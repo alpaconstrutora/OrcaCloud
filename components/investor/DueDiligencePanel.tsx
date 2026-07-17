@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Trash2, Pencil, ShieldAlert, FileWarning, Paperclip, Upload, Download } from 'lucide-react';
+import { Plus, Trash2, Pencil, ShieldAlert, FileWarning, Paperclip, Upload, Download, ScanText, Sparkles } from 'lucide-react';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '../ui/modal';
 import Button from '../ui/Button';
 import { useConfirm } from '../ui/confirm';
@@ -41,6 +41,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
     const [findings, setFindings] = React.useState<DueDiligenceFinding[]>([]);
     const [findingUrls, setFindingUrls] = React.useState<Record<string, string>>({});
     const [uploading, setUploading] = React.useState(false);
+    const [readingMatricula, setReadingMatricula] = React.useState(false);
 
     const load = React.useCallback(() => {
         setLoading(true);
@@ -126,6 +127,21 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
         setFindings(prev => prev.filter(f => f.id !== finding.id));
     };
 
+    const handleReadMatricula = async (file: File) => {
+        setReadingMatricula(true);
+        try {
+            const { created, extraction } = await dueDiligenceService.readMatricula(organizationId, opportunityId, file);
+            load();
+            const donos = extraction.proprietarios_atuais?.length ? `\nProprietários atuais: ${extraction.proprietarios_atuais.join(', ')}` : '';
+            alert(`${created.length} item(ns) de due diligence pré-preenchido(s) a partir da matrícula.${donos}\n\nRevise cada item — a IA não valida juridicamente; o veredito é do responsável técnico.`);
+        } catch (err) {
+            console.error('Erro ao ler matrícula', err);
+            alert(`Erro ao ler a matrícula: ${err instanceof Error ? err.message : 'tente novamente'}`);
+        } finally {
+            setReadingMatricula(false);
+        }
+    };
+
     const blocking = dueDiligenceService.hasBlockingPendencies(items);
     const byCategory = CATEGORIES.map(cat => ({
         category: cat,
@@ -139,9 +155,26 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                     <h4 className="text-sm font-black text-gray-900 uppercase tracking-wider">Due Diligence da Aquisição</h4>
                     <p className="text-xs text-gray-500 mt-1">Matriz de pendências — imóvel, proprietário, técnica e ambiental.</p>
                 </div>
-                <Button variant="primary" size="sm" onClick={() => setEditing(emptyItem(organizationId, opportunityId) as DueDiligenceItem)} className="gap-2">
-                    <Plus className="w-4 h-4" /> Novo item
-                </Button>
+                <div className="flex items-center gap-2">
+                    <label className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold cursor-pointer border transition-colors ${readingMatricula ? 'border-gray-200 text-gray-400' : 'border-blue-200 text-blue-700 hover:bg-blue-50'}`}>
+                        <ScanText className="w-4 h-4" />
+                        {readingMatricula ? 'Lendo matrícula...' : 'Ler matrícula (IA)'}
+                        <input
+                            type="file"
+                            accept="application/pdf,image/*"
+                            className="hidden"
+                            disabled={readingMatricula}
+                            onChange={e => {
+                                const file = e.target.files?.[0];
+                                if (file) handleReadMatricula(file);
+                                e.target.value = '';
+                            }}
+                        />
+                    </label>
+                    <Button variant="primary" size="sm" onClick={() => setEditing(emptyItem(organizationId, opportunityId) as DueDiligenceItem)} className="gap-2">
+                        <Plus className="w-4 h-4" /> Novo item
+                    </Button>
+                </div>
             </div>
 
             {blocking && (
@@ -177,7 +210,20 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                                 <tbody className="divide-y divide-gray-100">
                                     {group.items.map(item => (
                                         <tr key={item.id} className="hover:bg-gray-50/30">
-                                            <td className="p-4 font-semibold text-gray-800">{item.title}</td>
+                                            <td className="p-4 font-semibold text-gray-800">
+                                                <span className="flex items-center gap-2">
+                                                    {item.title}
+                                                    {item.ai_extracted && (
+                                                        <span
+                                                            className="inline-flex items-center gap-1 text-xs text-blue-600"
+                                                            title={item.ai_confidence != null ? `Extraído por IA — confiança ${(item.ai_confidence * 100).toFixed(0)}%. Requer validação do RT.` : 'Extraído por IA. Requer validação do RT.'}
+                                                        >
+                                                            <Sparkles className="w-3 h-3" />
+                                                            IA{item.ai_confidence != null ? ` ${(item.ai_confidence * 100).toFixed(0)}%` : ''}
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            </td>
                                             <td className="p-4 text-gray-600">{DD_STATUS_LABELS[item.status]}</td>
                                             <td className={`p-4 font-semibold ${CRITICIDADE_COLOR[item.criticidade]}`}>{DD_CRITICIDADE_LABELS[item.criticidade]}</td>
                                             <td className="p-4 text-gray-500">{item.responsavel_email || '—'}</td>
@@ -292,6 +338,16 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                                 className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
                             />
                         </div>
+                        {editing.ai_extracted && editing.ai_source_excerpt && (
+                            <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3">
+                                <p className="text-xs font-bold text-blue-700 flex items-center gap-1.5 mb-1.5">
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    Trecho de origem na matrícula {editing.ai_confidence != null ? `(confiança ${(editing.ai_confidence * 100).toFixed(0)}%)` : ''}
+                                </p>
+                                <p className="text-xs text-gray-600 italic whitespace-pre-line">"{editing.ai_source_excerpt}"</p>
+                                <p className="text-[11px] text-blue-600/70 mt-2">Confira este trecho contra o documento original — a IA não substitui a validação jurídica.</p>
+                            </div>
+                        )}
                     </ModalBody>
                 )}
                 <ModalFooter>

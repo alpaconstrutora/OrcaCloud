@@ -42,8 +42,29 @@ export interface DueDiligenceItem {
     condicao_aprovacao?: string | null;
     completed_at?: string | null;
     completed_by?: string | null;
+    // Proveniência da leitura de matrícula por IA (pré-preenchimento; RT valida)
+    ai_extracted?: boolean;
+    ai_confidence?: number | null;
+    ai_source_excerpt?: string | null;
+    ai_extracted_at?: string | null;
     created_at?: string;
     updated_at?: string;
+}
+
+export interface MatriculaExtractionResult {
+    registro_imovel?: string;
+    cartorio?: string;
+    proprietarios_atuais: string[];
+    findings: {
+        category: DueDiligenceCategory;
+        title: string;
+        description: string;
+        criticidade: DueDiligenceCriticidade;
+        suggested_status: 'pendente' | 'em_analise' | 'inconforme';
+        impacto: string;
+        source_excerpt: string;
+        confidence: number;
+    }[];
 }
 
 export interface DueDiligenceFinding {
@@ -58,7 +79,7 @@ export interface DueDiligenceFinding {
     created_at?: string;
 }
 
-const ITEM_COLS = 'id, organization_id, opportunity_id, category, title, description, status, criticidade, responsavel_email, due_date, impacto, mitigacao, condicao_aprovacao, completed_at, completed_by, created_at, updated_at';
+const ITEM_COLS = 'id, organization_id, opportunity_id, category, title, description, status, criticidade, responsavel_email, due_date, impacto, mitigacao, condicao_aprovacao, completed_at, completed_by, ai_extracted, ai_confidence, ai_source_excerpt, ai_extracted_at, created_at, updated_at';
 const FINDING_COLS = 'id, organization_id, item_id, document_ref, evidence_url, file_hash, notes, author_email, created_at';
 
 export const dueDiligenceService = {
@@ -146,5 +167,55 @@ export const dueDiligenceService = {
             (i.criticidade === 'critica' || i.criticidade === 'alta') &&
             !['conforme', 'nao_aplicavel'].includes(i.status)
         );
+    },
+
+    /**
+     * Lê uma matrícula (PDF ou imagem) via IA e PRÉ-PREENCHE itens de due diligence.
+     * A IA nunca marca "conforme" — cada item nasce com proveniência (confiança + trecho de
+     * origem) para o jurídico validar. Retorna os itens criados + metadados extraídos.
+     */
+    async readMatricula(
+        organizationId: string,
+        opportunityId: string,
+        file: File,
+    ): Promise<{ created: DueDiligenceItem[]; extraction: MatriculaExtractionResult }> {
+        const fileBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const dataUrl = reader.result as string;
+                resolve(dataUrl.split(',')[1] ?? '');
+            };
+            reader.onerror = () => reject(new Error('Falha ao ler o arquivo'));
+            reader.readAsDataURL(file);
+        });
+
+        const { data, error } = await supabase.functions.invoke('read-matricula', {
+            body: { fileBase64, mediaType: file.type },
+        });
+        if (error) throw new Error(error.message ?? 'Erro ao processar matrícula');
+        if (data?.error) throw new Error(data.error);
+
+        const extraction = data.result as MatriculaExtractionResult;
+        const nowIso = new Date().toISOString();
+
+        const created: DueDiligenceItem[] = [];
+        for (const f of extraction.findings ?? []) {
+            const saved = await this.saveItem({
+                organization_id: organizationId,
+                opportunity_id: opportunityId,
+                category: f.category,
+                title: f.title,
+                description: f.description,
+                status: f.suggested_status,
+                criticidade: f.criticidade,
+                impacto: f.impacto,
+                ai_extracted: true,
+                ai_confidence: f.confidence,
+                ai_source_excerpt: f.source_excerpt,
+                ai_extracted_at: nowIso,
+            });
+            created.push(saved);
+        }
+        return { created, extraction };
     },
 };

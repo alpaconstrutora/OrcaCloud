@@ -318,8 +318,8 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Invoices e boletos aprovados para pagamento.</p>
             </div>
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* KPI Cards — mb-3 (ritmo §20.1): próximo bloco é a toolbar acoplada (§5.2) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                         <KpiCard
                             label="A Pagar"
                             value={formatMoney(summary.aPagar)}
@@ -366,7 +366,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}
                                     placeholder="Buscar fornecedor, arquivo, observação..."
-                                    className="w-full h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-red-500/20 focus:border-red-500 outline-none transition-all"
+                                    className="w-full h-9 pl-9 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                 />
                                 {search && (
                                     <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -376,7 +376,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                             </div>
 
                             {/* Status pills — filtro rápido, não ordenação (§6.4) */}
-                            <div className="flex items-center h-9 gap-1.5">
+                            <div className="flex items-center h-9 gap-1 overflow-x-auto">
                                 {(['all', 'pending', 'approved', 'overdue', 'paid'] as StatusFilter[]).map(s => (
                                     <button
                                         key={s}
@@ -407,7 +407,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                     <select
                                         value={selectedOrgId}
                                         onChange={e => handleOrgChange(e.target.value)}
-                                        className="h-9 pl-9 pr-7 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 cursor-pointer transition-all appearance-none"
+                                        className="h-9 pl-9 pr-7 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all appearance-none"
                                     >
                                         <option value="ALL">Todas as Organizações</option>
                                         {organizations.map(o => (
@@ -420,7 +420,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
 
                             <button
                                 onClick={() => carregar(effectiveOrgId)}
-                                className="h-9 w-9 flex items-center justify-center bg-red-50 text-red-600 rounded-[6px] hover:bg-red-600 hover:text-white transition-all active:scale-95 shrink-0"
+                                className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0"
                                 title="Recarregar"
                             >
                                 <RefreshCw className="w-4 h-4" />
@@ -446,12 +446,12 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                             <div className="flex items-center gap-2 h-9 text-sm text-gray-500">
                                 <span>Vencimento:</span>
                                 <input type="date" value={vencDe} onChange={e => setVencDe(e.target.value)}
-                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all" />
+                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
                                 <span>até</span>
                                 <input type="date" value={vencAte} onChange={e => setVencAte(e.target.value)}
-                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all" />
+                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
                                 {(vencDe || vencAte) && (
-                                    <button onClick={() => { setVencDe(''); setVencAte(''); }} className="text-red-500 hover:text-red-700">
+                                    <button onClick={() => { setVencDe(''); setVencAte(''); }} className="text-gray-400 hover:text-gray-600">
                                         <X className="w-3.5 h-3.5" />
                                     </button>
                                 )}
@@ -460,11 +460,13 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                     </div>
 
                     {/* Tabela — sem bg/border/rounded/overflow-hidden próprios: já está
-                        dentro do card acoplado toolbar+conteúdo (§5.2, ver abertura acima) */}
+                        dentro do card acoplado toolbar+conteúdo (§5.2, ver abertura acima).
+                        Sem redimensionamento de colunas (§6.1, opcional): só 5 colunas de
+                        dado, e a mais variável (Fornecedor/Documento) já usa truncate. */}
                     <div>
                         {loading ? (
                             <div className="text-center py-12">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                                 <p className="mt-2 text-gray-500 text-sm">Carregando...</p>
                             </div>
                         ) : error ? (
@@ -490,7 +492,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                         <th className="w-10 px-4 py-2 text-center">
                                             <input
                                                 type="checkbox"
-                                                className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer disabled:opacity-40"
+                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
                                                 checked={allVisibleSelected}
                                                 disabled={selectableVisible.length === 0}
                                                 onChange={toggleAllVisible}
@@ -572,7 +574,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                     {isSelectable(inv) ? (
                                                         <input
                                                             type="checkbox"
-                                                            className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                             checked={selectedIds.has(inv.id)}
                                                             title="Dica: segure Shift e clique para selecionar um intervalo"
                                                             onChange={(e) => handleRowCheck(inv.id, idx, (e.nativeEvent as MouseEvent).shiftKey)}

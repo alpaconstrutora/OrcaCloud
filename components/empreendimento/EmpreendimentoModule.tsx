@@ -40,8 +40,9 @@ const COLUMNS: ColumnConfig[] = [
 ];
 
 export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, onChangeView }) => {
-  const isWriteDisabled = !activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS';
-  const orgIdParam = isWriteDisabled ? undefined : (activeOrganizationId as string);
+  // "Todas as organizações" não bloqueia o cadastro: o modal pede a org num seletor próprio.
+  const isAllOrgs = !activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS';
+  const orgIdParam = isAllOrgs ? undefined : (activeOrganizationId as string);
 
   const [items, setItems] = React.useState<Empreendimento[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -133,7 +134,8 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
       <>
         <EmpreendimentoDetail
           empreendimento={selected}
-          organizationId={orgIdParam || ''}
+          // Com "Todas as organizações" a org vem da própria entidade aberta.
+          organizationId={selected.organization_id || orgIdParam || ''}
           onBack={() => setSelected(null)}
           onEdit={() => { setEditing(selected); setIsFormOpen(true); }}
           onGoToStudy={selected.imovib_study_id ? () => onChangeView('imovib') : undefined}
@@ -144,9 +146,9 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
             } catch { /* noop */ }
           }}
         />
-        {isFormOpen && (editing?.organization_id || orgIdParam) && (
+        {isFormOpen && (
           <EmpreendimentoForm
-            organizationId={(editing?.organization_id || orgIdParam) as string}
+            organizationId={editing?.organization_id || selected.organization_id || orgIdParam || ''}
             editing={editing}
             onClose={() => { setIsFormOpen(false); setEditing(null); }}
             onSaved={handleSaved}
@@ -176,9 +178,8 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
             rounded-xl, estilo pesado deprecado) */}
         <button
           onClick={() => { setEditing(null); setIsFormOpen(true); }}
-          disabled={isWriteDisabled}
-          title={isWriteDisabled ? 'Selecione uma organização específica' : 'Novo empreendimento'}
-          className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          title="Novo empreendimento"
+          className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
         >
           <Plus className="w-[15px] h-[15px]" /> Novo empreendimento
         </button>
@@ -237,7 +238,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
           <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum empreendimento encontrado</h3>
           <p className="text-sm text-gray-500">
-            {search ? 'Tente ajustar sua busca.' : isWriteDisabled ? 'Selecione uma organização específica para cadastrar.' : 'Cadastre seu primeiro empreendimento no botão acima.'}
+            {search ? 'Tente ajustar sua busca.' : 'Cadastre seu primeiro empreendimento no botão acima.'}
           </p>
         </div>
       ) : (
@@ -317,9 +318,9 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
         </div>
       )}
 
-      {isFormOpen && orgIdParam && (
+      {isFormOpen && (
         <EmpreendimentoForm
-          organizationId={orgIdParam}
+          organizationId={editing?.organization_id || orgIdParam || ''}
           editing={editing}
           onClose={() => { setIsFormOpen(false); setEditing(null); }}
           onSaved={handleSaved}

@@ -5,13 +5,15 @@ import Button from '../ui/Button';
 import CityStateSelect from '../CityStateSelect';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { imovibService } from '../../services/imovibService';
+import { organizationService } from '../../services/organizationService';
 import { supabase } from '../../lib/supabase';
 import {
-  Empreendimento, EmpreendimentoStatus, EmpreendimentoTipo, EmpreendimentoInsert, ImovibStudy,
+  Empreendimento, EmpreendimentoStatus, EmpreendimentoTipo, EmpreendimentoInsert, ImovibStudy, Organization,
 } from '../../types';
 import { PlantStudy } from '../../types/plantaAi';
 
 interface Props {
+  /** Vazio quando o usuário está com "Todas as organizações" — o modal pede a org num seletor. */
   organizationId: string;
   editing?: Empreendimento | null;
   onClose: () => void;
@@ -38,6 +40,11 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
   const [saving, setSaving] = React.useState(false);
   const [studies, setStudies] = React.useState<ImovibStudy[]>([]);
   const [plantStudies, setPlantStudies] = React.useState<PlantStudy[]>([]);
+  // Org efetiva do registro. Vem da prop quando há uma org ativa específica;
+  // com "Todas as organizações" a prop chega vazia e o usuário escolhe aqui.
+  const [orgId, setOrgId] = React.useState<string>(editing?.organization_id || organizationId || '');
+  const [organizations, setOrganizations] = React.useState<Organization[]>([]);
+  const needsOrgPicker = !editing && !organizationId;
   const [form, setForm] = React.useState({
     name: editing?.name ?? '',
     code: editing?.code ?? '',
@@ -74,25 +81,33 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
   });
 
   React.useEffect(() => {
-    imovibService.getStudies(organizationId).then(setStudies).catch(() => setStudies([]));
+    if (!needsOrgPicker) return;
+    organizationService.listOrganizations().then(setOrganizations).catch(() => setOrganizations([]));
+  }, [needsOrgPicker]);
+
+  React.useEffect(() => {
+    // Os vínculos (Imovib / Planta IA) são por organização: sem org escolhida não há o que listar.
+    if (!orgId) { setStudies([]); setPlantStudies([]); return; }
+    imovibService.getStudies(orgId).then(setStudies).catch(() => setStudies([]));
     // Estudos de arquitetura (Planta IA) — vínculo direto, independente do Imovib.
     supabase
       .from('plant_studies')
       .select('id, organization_id, name, status, created_at, updated_at')
-      .eq('organization_id', organizationId)
+      .eq('organization_id', orgId)
       .order('name')
       .then(({ data }) => setPlantStudies((data || []) as PlantStudy[]));
-  }, [organizationId]);
+  }, [orgId]);
 
   const set = (k: keyof typeof form, v: string) => setForm(prev => ({ ...prev, [k]: v }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) { alert('Informe o nome do empreendimento.'); return; }
+    if (!orgId) { alert('Selecione a organização do empreendimento.'); return; }
     setSaving(true);
     try {
       const payload: Partial<EmpreendimentoInsert> = {
-        organization_id: organizationId,
+        organization_id: orgId,
         name: form.name.trim(),
         code: form.code || undefined,
         status: form.status,
@@ -155,6 +170,23 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Identificação */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {needsOrgPicker && (
+              <div className="md:col-span-3">
+                <label className={labelCls}>Organização *</label>
+                <select
+                  className={inputCls}
+                  value={orgId}
+                  onChange={e => {
+                    setOrgId(e.target.value);
+                    // Vínculos são por org: trocar a org invalida os estudos já escolhidos.
+                    setForm(prev => ({ ...prev, imovib_study_id: '', planta_ai_study_id: '' }));
+                  }}
+                >
+                  <option value="">— Selecione —</option>
+                  {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+              </div>
+            )}
             <div className="md:col-span-2">
               <label className={labelCls}>Nome *</label>
               <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} />

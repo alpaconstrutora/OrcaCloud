@@ -1,10 +1,15 @@
 import React from 'react';
 import {
     Plus, Loader2, AlertTriangle, CheckCircle2, Clock, Archive, Pause,
-    Trash2, Save, X, Pencil,
+    Trash2, Save, X, Pencil, TrendingUp, Lock,
 } from 'lucide-react';
-import { salesPlanService, type SalesPlan, type SalesPlanStatus } from '../services/salesPlanService';
+import {
+    salesPlanService, simulatePayment, computeRentability,
+    type SalesPlan, type SalesPlanStatus, type UnitCostBasis,
+} from '../services/salesPlanService';
 import { commercialPriceTableService, type CommercialPriceTable } from '../services/commercialPriceTableService';
+import { commercialService } from '../services/commercialService';
+import type { Property } from '../types';
 import type { IndexName } from '../services/contractIndexService';
 
 interface Props {
@@ -40,6 +45,8 @@ const emptyPlan = (organizationId: string, buildingId: string): Partial<SalesPla
 const fmtDate = (d?: string | null) =>
     d ? new Date(d + (d.length === 10 ? 'T00:00:00' : '')).toLocaleDateString('pt-BR') : '—';
 
+const fmtMoney = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+
 export const SalesPlanManager: React.FC<Props> = ({ organizationId, buildingId, buildingName }) => {
     const [plans, setPlans] = React.useState<SalesPlan[]>([]);
     const [priceTables, setPriceTables] = React.useState<CommercialPriceTable[]>([]);
@@ -47,6 +54,7 @@ export const SalesPlanManager: React.FC<Props> = ({ organizationId, buildingId, 
     const [error, setError] = React.useState<string | null>(null);
     const [editing, setEditing] = React.useState<Partial<SalesPlan> | null>(null);
     const [saving, setSaving] = React.useState(false);
+    const [tab, setTab] = React.useState<'plans' | 'rentability'>('plans');
 
     const reload = React.useCallback(async () => {
         setLoading(true);
@@ -106,16 +114,97 @@ export const SalesPlanManager: React.FC<Props> = ({ organizationId, buildingId, 
     const setField = <K extends keyof SalesPlan>(k: K, v: SalesPlan[K]) =>
         setEditing(prev => (prev ? { ...prev, [k]: v } : prev));
 
+    // ── Rentabilidade (F2) ─────────────────────────────────────────────────
+    const [units, setUnits] = React.useState<Property[]>([]);
+    const [unitsLoaded, setUnitsLoaded] = React.useState(false);
+    const [selUnitId, setSelUnitId] = React.useState('');
+    const [comp, setComp] = React.useState({
+        discountPct: 0, downPct: 20, installments: 60, keysPct: 0,
+        correctionPct: 0, opportunityPct: 1,
+    });
+    const [cost, setCost] = React.useState<UnitCostBasis | null>(null);
+    const [costErr, setCostErr] = React.useState<string | null>(null);
+    const [costLoading, setCostLoading] = React.useState(false);
+
+    // Troca de prédio invalida a lista de unidades e a seleção.
+    React.useEffect(() => {
+        setUnitsLoaded(false);
+        setUnits([]);
+        setSelUnitId('');
+    }, [buildingId]);
+
+    // Carrega as unidades do prédio só quando a aba é aberta pela 1ª vez.
+    React.useEffect(() => {
+        if (tab !== 'rentability' || unitsLoaded) return;
+        let alive = true;
+        (async () => {
+            try {
+                const all = await commercialService.listProperties(organizationId);
+                if (!alive) return;
+                setUnits(all.filter(p => p.parent_id === buildingId && p.type !== 'BUILDING'));
+            } catch { /* silencioso: a UI mostra "nenhuma unidade" */ }
+            finally { if (alive) setUnitsLoaded(true); }
+        })();
+        return () => { alive = false; };
+    }, [tab, unitsLoaded, organizationId, buildingId]);
+
+    // Busca o custo da unidade selecionada. A RPC recusa corretor → costErr.
+    React.useEffect(() => {
+        if (!selUnitId) { setCost(null); setCostErr(null); return; }
+        let alive = true;
+        setCostLoading(true); setCostErr(null);
+        salesPlanService.getUnitCostBasis(selUnitId)
+            .then(c => { if (alive) setCost(c); })
+            .catch(e => { if (alive) { setCost(null); setCostErr(e?.message ?? 'Erro ao obter custo.'); } })
+            .finally(() => { if (alive) setCostLoading(false); });
+        return () => { alive = false; };
+    }, [selUnitId]);
+
+    const selUnit = units.find(u => u.id === selUnitId);
+    const unitPrice = selUnit ? (selUnit.current_price ?? selUnit.price ?? 0) : 0;
+
+    const sim = React.useMemo(() => simulatePayment({
+        unitPrice,
+        discountPct: comp.discountPct,
+        downPaymentPct: comp.downPct,
+        monthlyInstallments: comp.installments,
+        keysPct: comp.keysPct,
+        correctionRateMonthly: comp.correctionPct / 100,
+        opportunityRateMonthly: comp.opportunityPct / 100,
+    }), [unitPrice, comp]);
+
+    const rent = cost?.hasCost && cost.costBasis != null
+        ? computeRentability(sim, cost.costBasis)
+        : null;
+
     if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
 
     return (
         <div className="space-y-6">
             {error && (
-                <div className="bg-rose-50 border border-rose-200 rounded-2xl px-4 py-3 text-xs text-rose-700 font-medium flex items-start gap-2">
+                <div className="bg-rose-50 border border-rose-200 rounded-[10px] px-4 py-3 text-sm text-rose-700 font-medium flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {error}
                 </div>
             )}
 
+            {/* Barra de abas (§19.1) */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    {([['plans', 'Planos'], ['rentability', 'Rentabilidade']] as const).map(([id, label]) => (
+                        <button
+                            key={id}
+                            onClick={() => setTab(id)}
+                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                tab === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {tab === 'plans' && <>
             {/* Lista de planos */}
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
@@ -241,6 +330,94 @@ export const SalesPlanManager: React.FC<Props> = ({ organizationId, buildingId, 
                     </div>
                 </div>
             )}
+            </>}
+
+            {tab === 'rentability' && (
+                <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-6">
+                    <div>
+                        <h3 className="font-black text-gray-900 text-sm flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4 text-blue-600" /> Rentabilidade — {buildingName}
+                        </h3>
+                        <p className="text-sm text-gray-400 font-medium mt-0.5 flex items-center gap-1.5">
+                            <Lock className="w-3.5 h-3.5" /> Custo e margem são visíveis só para gestão — o corretor nunca vê.
+                        </p>
+                    </div>
+
+                    {/* Seleção de unidade + composição */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Field label="Unidade">
+                            <select value={selUnitId} onChange={e => setSelUnitId(e.target.value)} className={inputCls}>
+                                <option value="">
+                                    {unitsLoaded ? (units.length ? 'Selecione uma unidade' : 'Nenhuma unidade neste prédio') : 'Carregando…'}
+                                </option>
+                                {units.map(u => (
+                                    <option key={u.id} value={u.id}>
+                                        {u.name} — {fmtMoney(u.current_price ?? u.price ?? 0)}
+                                    </option>
+                                ))}
+                            </select>
+                        </Field>
+                        <div className="flex items-end">
+                            <p className="text-sm font-normal text-gray-500">
+                                Preço de tabela: <span className="font-medium text-gray-800">{selUnit ? fmtMoney(unitPrice) : '—'}</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                        <NumField label="Desconto (%)" value={comp.discountPct} onChange={v => setComp(c => ({ ...c, discountPct: v }))} />
+                        <NumField label="Entrada (%)" value={comp.downPct} onChange={v => setComp(c => ({ ...c, downPct: v }))} />
+                        <NumField label="Parcelas (x)" value={comp.installments} onChange={v => setComp(c => ({ ...c, installments: v }))} step={1} />
+                        <NumField label="Chaves (%)" value={comp.keysPct} onChange={v => setComp(c => ({ ...c, keysPct: v }))} />
+                        <NumField label="Correção a.m. (%)" value={comp.correctionPct} onChange={v => setComp(c => ({ ...c, correctionPct: v }))} step={0.01} />
+                        <NumField label="Custo de capital a.m. (%)" value={comp.opportunityPct} onChange={v => setComp(c => ({ ...c, opportunityPct: v }))} step={0.01} />
+                    </div>
+
+                    {!selUnit ? (
+                        <p className="text-sm text-gray-400 font-medium py-4 text-center">Selecione uma unidade para ver a rentabilidade.</p>
+                    ) : (
+                        <>
+                            {/* Financeiro da proposta (sempre visível) */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <Metric label="Valor após desconto" value={fmtMoney(sim.totalValue)} />
+                                <Metric label="VPL da proposta" value={fmtMoney(sim.presentValue)} color="text-blue-600" />
+                                <Metric label="Desconto financeiro" value={`${sim.financialDiscountPct.toFixed(1)}%`} sub={fmtMoney(sim.financialDiscount)} color="text-amber-600" />
+                                <Metric label="Desconto econômico" value={`${sim.economicDiscountPct.toFixed(1)}%`} sub={fmtMoney(sim.economicDiscount)} color="text-amber-700" />
+                            </div>
+
+                            {/* Custo e margem (gestão) */}
+                            {costLoading ? (
+                                <div className="flex items-center gap-2 text-sm text-gray-400 font-medium py-3">
+                                    <Loader2 className="w-4 h-4 animate-spin" /> Calculando custo…
+                                </div>
+                            ) : costErr ? (
+                                <div className="bg-rose-50 border border-rose-200 rounded-[10px] px-4 py-3 text-sm text-rose-700 font-medium flex items-start gap-2">
+                                    <Lock className="w-4 h-4 shrink-0 mt-0.5" /> {costErr}
+                                </div>
+                            ) : cost && !cost.hasCost ? (
+                                <div className="bg-amber-50 border border-amber-200 rounded-[10px] px-4 py-3 text-sm text-amber-700 font-medium flex items-start gap-2">
+                                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                                    Unidade sem custo cadastrado. Informe o custo/m² na unidade do empreendimento vinculada.
+                                </div>
+                            ) : rent ? (
+                                <div className="border-t border-gray-100 pt-5">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <Metric label="Custo da unidade" value={fmtMoney(rent.costBasis)} sub={cost?.costPerSqm ? `${fmtMoney(cost.costPerSqm)}/m² · ${cost.areaSqm}m²` : undefined} />
+                                        <Metric label="Margem bruta" value={`${rent.grossMarginPct.toFixed(1)}%`} sub={fmtMoney(rent.grossMargin)} color={rent.grossMargin >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
+                                        <Metric label="Margem econômica (VPL)" value={`${rent.economicMarginPct.toFixed(1)}%`} sub={fmtMoney(rent.economicMargin)} color={rent.economicMargin >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
+                                        <Metric label="Markup s/ custo" value={`${rent.markupPct.toFixed(1)}%`} color={rent.markupPct >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
+                                    </div>
+                                    {rent.economicMargin < 0 && (
+                                        <p className="text-sm text-rose-600 font-medium mt-3 flex items-center gap-1.5">
+                                            <AlertTriangle className="w-3.5 h-3.5" /> Prejuízo econômico: o VPL da proposta é menor que o custo da unidade.
+                                        </p>
+                                    )}
+                                </div>
+                            ) : null}
+                        </>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
@@ -258,6 +435,14 @@ const NumField: React.FC<{ label: string; value?: number; onChange: (v: number) 
     <Field label={label}>
         <input type="number" step={step} value={value ?? ''} onChange={e => onChange(Number(e.target.value))} className={inputCls} />
     </Field>
+);
+
+const Metric: React.FC<{ label: string; value: string; sub?: string; color?: string }> = ({ label, value, sub, color = 'text-gray-900' }) => (
+    <div className="bg-gray-50 rounded-[10px] p-4">
+        <p className="text-xs font-semibold text-gray-500 mb-1">{label}</p>
+        <p className={`text-lg font-bold ${color}`}>{value}</p>
+        {sub && <p className="text-xs text-gray-400 font-medium mt-0.5">{sub}</p>}
+    </div>
 );
 
 export default SalesPlanManager;

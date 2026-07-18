@@ -171,6 +171,48 @@ export function simulatePayment(comp: PaymentComposition): SimulationResult {
 }
 
 // --------------------------------------------------------------------------
+// F2 — Rentabilidade gerencial. Custo x VPL x margem.
+// O custo vem da RPC (fn_unit_cost_basis), que RECUSA corretores no banco — o
+// corretor NUNCA ve custo/margem. O calculo de margem e' PURO (abaixo).
+// --------------------------------------------------------------------------
+
+export interface UnitCostBasis {
+    hasCost: boolean;
+    costBasis: number | null;   // custo total da unidade (R$)
+    costPerSqm: number | null;  // custo/m2 usado
+    areaSqm: number | null;
+    source: string;
+}
+
+export interface Rentability {
+    costBasis: number;
+    grossMargin: number;        // nominal apos desconto: totalValue - custo
+    grossMarginPct: number;     // sobre totalValue
+    economicMargin: number;     // VPL - custo (a margem que sobrevive ao tempo)
+    economicMarginPct: number;  // sobre presentValue
+    markupPct: number;          // (VPL - custo) / custo
+}
+
+/**
+ * Margem a partir de uma simulacao ja pronta + o custo da unidade. PURO.
+ * A distincao que importa: grossMargin ignora o valor do tempo; economicMargin
+ * usa o VPL, entao uma venda parcelada "no lucro" nominal pode estar no prejuizo
+ * economico se o custo de capital comer a margem.
+ */
+export function computeRentability(sim: SimulationResult, costBasis: number): Rentability {
+    const grossMargin = round2(sim.totalValue - costBasis);
+    const economicMargin = round2(sim.presentValue - costBasis);
+    return {
+        costBasis: round2(costBasis),
+        grossMargin,
+        grossMarginPct: sim.totalValue > 0 ? round2((grossMargin / sim.totalValue) * 100) : 0,
+        economicMargin,
+        economicMarginPct: sim.presentValue > 0 ? round2((economicMargin / sim.presentValue) * 100) : 0,
+        markupPct: costBasis > 0 ? round2((economicMargin / costBasis) * 100) : 0,
+    };
+}
+
+// --------------------------------------------------------------------------
 // Validacao de politica — o SERVIDOR e' a autoridade. Aqui so' o wrapper da RPC.
 // --------------------------------------------------------------------------
 
@@ -266,5 +308,25 @@ export const salesPlanService = {
         });
         if (error) throw error;
         return data as PolicyValidation;
+    },
+
+    /**
+     * Custo da unidade para a analise de rentabilidade (F2). A RPC recusa
+     * corretores (RAISE EXCEPTION) — o erro sobe e a UI trata. Nao ha caminho em
+     * que um corretor receba custo por aqui.
+     */
+    async getUnitCostBasis(propertyId: string): Promise<UnitCostBasis> {
+        const { data, error } = await supabase.rpc('fn_unit_cost_basis', {
+            p_property_id: propertyId,
+        });
+        if (error) throw error;
+        const d = data as Record<string, unknown>;
+        return {
+            hasCost: !!d.has_cost,
+            costBasis: d.cost_basis != null ? Number(d.cost_basis) : null,
+            costPerSqm: d.cost_per_sqm != null ? Number(d.cost_per_sqm) : null,
+            areaSqm: d.area_sqm != null ? Number(d.area_sqm) : null,
+            source: String(d.source ?? ''),
+        };
     },
 };

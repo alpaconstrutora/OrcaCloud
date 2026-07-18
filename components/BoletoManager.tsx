@@ -418,7 +418,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             setProjectMap(Object.fromEntries((projs || []).map((p) => [p.id, p.name])));
             setSupplierMap(Object.fromEntries((sups || []).map((s) => [s.id, s.name])));
             setCcList((ccs || []).map(c => ({ id: c.id, name: c.name })));
-            setProjectList((projs || []).filter(p => p.name !== 'Gestão Comercial').map(p => ({ id: p.id, name: p.name })));
+            // Projeto de sistema já sai no projectService — utils/systemProjects.ts
+            setProjectList((projs || []).map(p => ({ id: p.id, name: p.name })));
             setSupplierList((sups || []).map(s => ({ id: s.id, name: getSupplierDisplayName(s, appSettingsService.get().supplierNameDisplay) })));
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));

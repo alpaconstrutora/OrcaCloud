@@ -10,6 +10,7 @@ import {
     Supplier,
     Company,
 } from '../types';
+import { excludeSystemProjects, onlySystemProjects } from '../utils/systemProjects';
 import { ProjectData } from '../services/projectService';
 import { projectService } from '../services/projectService';
 import { clientService } from '../services/clientService';
@@ -81,7 +82,17 @@ interface UIState {
 
 interface ProjectState {
     projectId: string | null;
+    /**
+     * Obras de verdade. NÃO contém projetos de sistema (ex: "Gestão Comercial")
+     * — eles são separados em `systemProjects`. Ver `utils/systemProjects.ts`.
+     * Quem lê daqui não precisa filtrar nada.
+     */
     projects: ProjectData[];
+    /**
+     * Projetos centralizadores criados pelo sistema, fora de `projects`.
+     * Só o financeiro comercial deve precisar disto.
+     */
+    systemProjects: ProjectData[];
     projectsLoading: boolean;
     organizations: Organization[];
     clients: Client[];
@@ -178,6 +189,7 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
     // Project State
     projectId: typeof window !== 'undefined' ? localStorage.getItem('orca_currentProjectId') : null,
     projects: [],
+    systemProjects: [],
     projectsLoading: true, // true até o primeiro fetch completar — evita flash de estado vazio
     organizations: [],
     clients: [],
@@ -229,7 +241,12 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
         else localStorage.removeItem('orca_currentProjectId');
         set({ projectId });
     },
-    setProjects: (projects) => set({ projects }),
+    // Filtra aqui também: se um caller passar a lista crua do banco, o projeto
+    // de sistema não pode reentrar em `projects` por esta porta.
+    setProjects: (projects) => set({
+        projects: excludeSystemProjects(projects),
+        systemProjects: onlySystemProjects(projects),
+    }),
     setOrganizations: (organizations) => set({ organizations }),
     setClients: (clients) => set({ clients }),
     setBudget: (budget) => set({ budget }),
@@ -244,11 +261,17 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
             
             // Se activeOrganizationId for null, buscamos todos os projetos permitidos via RLS
             // Se for explicitamente passado, filtramos por ele.
-            const list = await projectService.listProjects(undefined, activeOrganizationId || undefined, true);
-            set({ projects: list as unknown as ProjectData[] });
+            const list = await projectService.listProjects(undefined, activeOrganizationId || undefined, true) as unknown as ProjectData[];
+            // Projetos de sistema (ex: "Gestão Comercial") saem de `projects` na
+            // origem — assim nenhuma tela precisa lembrar de filtrá-los, e tela
+            // nova nasce correta. Ver utils/systemProjects.ts.
+            set({
+                projects: excludeSystemProjects(list),
+                systemProjects: onlySystemProjects(list),
+            });
         } catch (err) {
             console.error("Error listing projects:", err);
-            set({ projects: [] });
+            set({ projects: [], systemProjects: [] });
         } finally {
             set({ projectsLoading: false });
         }

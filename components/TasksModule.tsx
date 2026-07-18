@@ -17,6 +17,7 @@ import TaskSpaceBottomSheet from './TaskSpaceBottomSheet'
 import TaskSpaceFolderView from './TaskSpaceFolderView'
 import MobilePreviewFrame from './MobilePreviewFrame'
 import TasksMobileApp from './TasksMobileApp'
+import { isSystemProject, excludeSystemProjects, SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects'
 
 type ViewMode = 'list' | 'board'
 
@@ -152,13 +153,13 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       .from('projects')
       .select('id, name, settings')
       .filter('settings->>classification', 'eq', 'OBRA')
-      .neq('name', 'Gestão Comercial')
+      .not('name', 'in', SYSTEM_PROJECT_NAMES_SQL) // utils/systemProjects.ts
       .order('name')
     if (orgId) {
       query = query.filter('settings->>organizationId', 'eq', orgId)
     }
     const { data } = await query
-    const filtered = (data ?? []).filter((p: { settings?: { isSystemProject?: boolean } | null }) => !p.settings?.isSystemProject)
+    const filtered = excludeSystemProjects(data ?? [])
     setObrasLocal(filtered.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name })))
   }, [])
 
@@ -245,8 +246,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
         const s = p.settings
         if (!s) return false
         if (s.classification !== 'OBRA') return false
-        if (s.isSystemProject) return false
-        if (p.name === 'Gestão Comercial') return false
+        if (isSystemProject(p)) return false
         if (orgId && s.organizationId && s.organizationId !== orgId) return false
         return true
       })

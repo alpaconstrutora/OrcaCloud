@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { FinancialInfo, ProjectSettings } from '../types';
+import { isSystemProject } from '../utils/systemProjects';
 
 export const financialSyncService = {
     /**
@@ -18,7 +19,7 @@ export const financialSyncService = {
 
         // Vault comercial é isento do hard-lock de período fechado (decisão de produto):
         // marca source_system='COMMERCIAL' para a trigger trg_block_period_internal_tx liberar.
-        const sourceSystem = project.name === 'Gestão Comercial' ? 'COMMERCIAL' : 'PROJECT';
+        const sourceSystem = isSystemProject(project) ? 'COMMERCIAL' : 'PROJECT';
 
         const internalTxs: Record<string, unknown>[] = [];
 

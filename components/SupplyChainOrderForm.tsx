@@ -92,7 +92,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 setSuppliers(suppliersList);
                 const NON_OBRA = new Set(['ORCAMENTO', 'DIARIO', 'PLANEJAMENTO']);
                 const obras = projectsList.filter((p: { id: string; name: string; settings?: { classification?: string } }) =>
-                    p.name !== 'Gestão Comercial' &&
+                    // Projeto de sistema já sai no projectService — utils/systemProjects.ts
                     !NON_OBRA.has(p.settings?.classification ?? '')
                 );
                 setProjects(obras);

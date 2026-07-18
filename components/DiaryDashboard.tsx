@@ -54,8 +54,7 @@ const DiaryDashboard: React.FC<DiaryDashboardProps> = ({ projects }) => {
     // Filter projects that are specifically classified as DIARIO or are OBRA with diary entries
     const diaryProjects = useMemo(() =>
         projects.filter(p =>
-            (p.settings?.classification === 'DIARIO' || (p.settings?.classification === 'OBRA' && (p.settings?.diaryEntries?.length || 0) > 0)) &&
-            p.name !== 'Gestão Comercial'
+            (p.settings?.classification === 'DIARIO' || (p.settings?.classification === 'OBRA' && (p.settings?.diaryEntries?.length || 0) > 0))
         ),
         [projects]);
 

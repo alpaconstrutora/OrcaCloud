@@ -57,11 +57,10 @@ const ProjectSelector: React.FC<{
 
   const obras = filtered.filter(p => {
     const s = (p as { settings?: { classification?: string; isSystemProject?: boolean; standard?: string; location?: string } }).settings
+    // Projeto de sistema já sai no store — utils/systemProjects.ts
     return s?.classification === 'OBRA'
-      && !s?.isSystemProject
       && s?.standard !== 'Vendas'
       && s?.location !== 'Sistema'
-      && p.name !== 'Gestão Comercial'
   })
 
   if (!obras.length) {

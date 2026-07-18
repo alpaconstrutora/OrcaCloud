@@ -1519,7 +1519,6 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
 
                     <div className="border border-gray-200 rounded-xl overflow-hidden max-h-[40vh] overflow-y-auto">
                       {projects.filter(p =>
-                        p.name !== 'Gestão Comercial' &&
                         ((p.settings?.classification === 'OBRA') || (formData.classification === 'PLANEJAMENTO' && p.settings?.classification === 'ORCAMENTO')) &&
                         (p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (p.settings?.client || '').toLowerCase().includes(searchTerm.toLowerCase()))
@@ -1539,7 +1538,6 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           </thead>
                           <tbody className="divide-y divide-gray-100 italic">
                             {projects.filter(p =>
-                              p.name !== 'Gestão Comercial' &&
                               ((p.settings?.classification === 'OBRA') || (formData.classification === 'PLANEJAMENTO' && p.settings?.classification === 'ORCAMENTO')) &&
                               (p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                                 (p.settings?.client || '').toLowerCase().includes(searchTerm.toLowerCase()))

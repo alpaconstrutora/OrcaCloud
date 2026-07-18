@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Upload, MapPin, Loader2, AlertCircle } from 'lucide-react';
 import { qualityConditionService } from '../../services/qualityConditionService';
 import { supabase } from '../../lib/supabase';
+import { excludeSystemProjects, SYSTEM_PROJECT_NAMES_SQL } from '../../utils/systemProjects';
 import type {
   ActorReference, TaxonomySystem, TaxonomyPathology,
   Severity, ProbableOrigin
@@ -44,16 +45,15 @@ const DetectConditionModal: React.FC<Props> = ({
 
   React.useEffect(() => {
     // Se a prop vier preenchida usa ela; senão busca do banco (mesmo padrão do ProjectList)
-    const filter = (list: Project[]) => list.filter(p => p.name !== 'Gestão Comercial');
     if (obrasProp && obrasProp.length > 0) {
-      setObras(filter(obrasProp));
+      setObras(excludeSystemProjects(obrasProp));
     } else if (organizationId) {
       supabase
         .from('projects')
         .select('id, name')
         .or(`settings->>organizationId.eq.${organizationId},settings->>organizationId.is.null`)
         .filter('settings->>classification', 'eq', 'OBRA')
-        .neq('name', 'Gestão Comercial')
+        .not('name', 'in', SYSTEM_PROJECT_NAMES_SQL) // utils/systemProjects.ts
         .order('name')
         .then(({ data }) => setObras(data ?? []));
     }

@@ -243,10 +243,9 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
     useEffect(() => {
         projectService.listProjects(undefined, activeOrganizationId ?? undefined).then(list => {
             const filtered = (list ?? []).filter(p =>
+                // Projeto de sistema já sai no projectService — utils/systemProjects.ts
                 ((p.settings as any)?.classification === 'PLANEJAMENTO' ||
-                (p.settings as any)?.classification === 'OBRA') &&
-                !(p.settings as any)?.isSystemProject &&
-                p.name !== 'Gestão Comercial'
+                (p.settings as any)?.classification === 'OBRA')
             );
             setProjects(filtered.map(p => ({
                 id: p.id!,

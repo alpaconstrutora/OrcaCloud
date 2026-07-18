@@ -9,6 +9,7 @@ import { useToast } from '../hooks/useToast';
 import { useConfirm } from './ui/confirm';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
 import Button from './ui/Button';
+import { SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects';
 import type {
     ReconciliationDivergences, BankWithoutInternal, InternalWithoutBank, ValueMismatch,
 } from '../types/financial';
@@ -112,7 +113,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                 supabase.from('financial_categories').select('name').order('name', { ascending: true }),
                 supabase.from('projects').select('id, name')
                     .filter('settings->>organizationId', 'eq', organizationId)
-                    .neq('name', 'Gestão Comercial')
+                    .not('name', 'in', SYSTEM_PROJECT_NAMES_SQL) // utils/systemProjects.ts
                     .order('name', { ascending: true }),
                 supabase.from('cost_centers').select('id, name').eq('organization_id', organizationId).order('name', { ascending: true }),
                 supabase.from('clients').select('id, name').or(orgOrNull).order('name', { ascending: true }),

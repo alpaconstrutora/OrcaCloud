@@ -1,6 +1,7 @@
 ﻿import { supabase } from '../lib/supabase';
 import { ProjectSettings, BudgetEntry } from '../types';
 import { cloneBudgetForPersistence, cloneSettingsForPersistence } from '../utils/budgetPersistence';
+import { isSystemProject, excludeSystemProjects } from '../utils/systemProjects';
 
 export interface ProjectData {
     id?: string;
@@ -25,7 +26,7 @@ export const projectService = {
         const orgId = settingsForSave?.organizationId;
         const classification = settingsForSave?.classification;
 
-        if (orgId && rest.name !== 'Gestão Comercial') {
+        if (orgId && !isSystemProject({ name: rest.name, settings: settingsForSave })) {
             const { data: existing } = await supabase
                 .from('projects')
                 .select('id, name, settings')
@@ -148,11 +149,22 @@ export const projectService = {
         };
     },
 
+    /**
+     * Lista projetos. Por padrão NÃO retorna projetos de sistema (ex: "Gestão
+     * Comercial") — ver utils/systemProjects.ts. Quem precisa deles usa
+     * `includeSystemProjects = true`; hoje ninguém precisa por esta via, porque
+     * o financeiro comercial busca o projeto direto no Supabase.
+     *
+     * Este corte existe aqui, e não em cada chamador, porque espalhar o filtro
+     * pelas ~31 chamadas é justamente o que fez o projeto comercial reaparecer
+     * em tela nova toda vez que alguém esquecia de replicá-lo.
+     */
     async listProjects(
         clientId?: string,
         organizationId?: string,
         includeOrphans: boolean = false,
         empresaId?: string,
+        includeSystemProjects: boolean = false,
     ) {
         let query = supabase
             .from('projects')
@@ -176,7 +188,8 @@ export const projectService = {
 
         const { data, error } = await query;
         if (error) throw error;
-        return data;
+        const rows = data ?? [];
+        return includeSystemProjects ? rows : excludeSystemProjects(rows);
     },
 
     async linkInvestor(projectId: string, investorId: string | null) {
@@ -189,8 +202,8 @@ export const projectService = {
 
     async deleteProject(id: string) {
         // Bloqueio de segurança para o Gestão Comercial
-        const { data: projectToDel } = await supabase.from('projects').select('name').eq('id', id).maybeSingle();
-        if (projectToDel && projectToDel.name === 'Gestão Comercial') {
+        const { data: projectToDel } = await supabase.from('projects').select('name, settings').eq('id', id).maybeSingle();
+        if (isSystemProject(projectToDel)) {
             throw new Error('Não é possível excluir a obra do sistema "Gestão Comercial". Ela é vital para o armazenamento no banco de dados e sincronização.');
         }
 

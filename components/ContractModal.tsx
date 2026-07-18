@@ -318,8 +318,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     };
 
     const NON_OBRA = new Set(['ORCAMENTO', 'DIARIO', 'PLANEJAMENTO']);
+    // Projeto de sistema já sai no store/projectService — utils/systemProjects.ts
     const obrasList = projects.filter(p =>
-        p.name !== 'Gestão Comercial' &&
         !NON_OBRA.has(p.settings?.classification ?? '')
     );
     const orcamentosList = projects.filter(p => p.settings?.classification === 'ORCAMENTO');

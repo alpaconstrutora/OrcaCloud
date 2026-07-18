@@ -611,7 +611,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                         </div>
                                         <div className="max-h-60 overflow-y-auto">
                                             {projects
-                                                .filter(p => p.settings?.classification !== 'COMERCIAL' && p.name !== 'Gestão Comercial')
+                                                .filter(p => p.settings?.classification !== 'COMERCIAL')
                                                 .map((p) => (
                                                     <button
                                                         key={p.id}

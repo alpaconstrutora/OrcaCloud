@@ -278,8 +278,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const filteredProjects = React.useMemo(() => {
         let result = projects
             .filter(p => {
-                if (p.name === 'Gestão Comercial') return false;
-
+                // Projeto de sistema já sai no store — utils/systemProjects.ts
                 const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     (p.settings?.client || '').toLowerCase().includes(searchTerm.toLowerCase());
 

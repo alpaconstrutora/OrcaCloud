@@ -77,7 +77,50 @@ de conformidade por causa disso. Ver `CHECKLIST DE AUDITORIA COMPLETA` em
 
 ---
 
-## REGRA OBRIGATÓRIA #2 — Layout de interação (`UI_PATTERNS.md`)
+## REGRA OBRIGATÓRIA #2 — Projetos de sistema nunca aparecem como obra
+
+**Gatilho:** qualquer código que liste, filtre ou conte projetos/obras.
+
+"Gestão Comercial" é um projeto criado pelo sistema
+(`services/commercialFinanceService.ts`) para pendurar as parcelas e transações
+da área comercial. Ele é gravado com `classification: 'OBRA'`, então toda
+consulta que pede "as obras" o traz junto — e ele aparece em tabela como se
+fosse uma obra real.
+
+**Não escreva `p.name !== 'Gestão Comercial'`.** Essa foi a defesa antiga: 28
+ocorrências em 18 arquivos, e mesmo assim o bug voltava, porque **toda tela nova
+nasce errada** — quem escreve não tem como adivinhar que precisa daquele filtro.
+
+O corte agora é na origem, e é seguro por padrão:
+
+| De onde vêm os projetos | O que fazer |
+|---|---|
+| `useStore().projects` | **nada** — já vem sem projetos de sistema |
+| `projectService.listProjects()` | **nada** — já filtra (passe `includeSystemProjects=true` se precisar deles) |
+| `supabase.from('projects')` direto | `.not('name', 'in', SYSTEM_PROJECT_NAMES_SQL)` |
+| precisa DO projeto de sistema | `useStore().systemProjects` ou `isSystemProject()` |
+
+Fonte da verdade e razão de cada decisão: **`utils/systemProjects.ts`**.
+
+**Verificação (exit ≠ 0 se achar comparação literal):**
+
+```bash
+bash scripts/check-system-projects.sh          # repo inteiro
+bash scripts/check-system-projects.sh <arquivo>
+```
+
+### Por que isso existe
+
+2026-07-18: a tela de seleção de obra do ÒPURA CNO foi construída lendo
+`projects` do store e listou duas linhas "Gestão Comercial" como obras. Era a
+enésima repetição do mesmo bug — o usuário pediu para resolver de forma
+definitiva, não mais um filtro pontual. A correção foi mover o corte para o
+store + `projectService`, fazer o backfill de `settings.isSystemProject`
+(migration `20270718000001`) e travar o padrão antigo no script acima.
+
+---
+
+## REGRA OBRIGATÓRIA #3 — Layout de interação (`UI_PATTERNS.md`)
 
 Antes de decidir entre modal, painel lateral (`Sheet`) ou página dedicada para
 qualquer nova interação, ler `UI_PATTERNS.md`. Painel lateral é o padrão para

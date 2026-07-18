@@ -36,6 +36,7 @@ import SmartReconciliationCenter from './SmartReconciliationCenter';
 import ProlaboreReconciliationPanel from './ProlaboreReconciliationPanel';
 import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
 import BankStatementImportDrawer from './BankStatementImportDrawer';
+import { SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects';
 
 type ReconciliationView = 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'statement' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close' | 'prolabore';
 
@@ -1102,7 +1103,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 .from('projects')
                 .select('id, name')
                 .filter('settings->>organizationId', 'eq', orgId)
-                .neq('name', 'Gestão Comercial')
+                .not('name', 'in', SYSTEM_PROJECT_NAMES_SQL) // utils/systemProjects.ts
                 .order('name', { ascending: true });
             if (data) {
                 const uniqueProjects = Array.from(new Map(data.map(p => [p.name, p])).values());

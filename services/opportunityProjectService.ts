@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { projectMilestonesService, ProjectMilestone } from './projectMilestonesService';
 import { financialReportService } from './financialReportService';
+import { SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects';
 
 export interface ProjectPitchBasic {
     id: string;
@@ -47,7 +48,7 @@ export const opportunityProjectService = {
             .from('projects')
             .select('id, name, settings')
             .filter('settings->>organizationId', 'eq', organizationId)
-            .neq('name', 'Gestão Comercial')
+            .not('name', 'in', SYSTEM_PROJECT_NAMES_SQL) // utils/systemProjects.ts
             .order('name', { ascending: true });
         if (error) throw error;
         // Exclude non-obra projects (orçamentos, diários, planejamentos)

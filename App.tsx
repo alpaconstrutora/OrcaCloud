@@ -297,7 +297,7 @@ import { ContractModal } from './components/ContractModal';
 import SupplyChainOrderForm from './components/SupplyChainOrderForm';
 import { INITIAL_PROJECT_SETTINGS } from './constants';
 import { BudgetEntry, ProjectSettings, Organization, Contract, Client } from './types';
-import { Loader2, Shield } from 'lucide-react';
+import { Loader2, Shield, WifiOff } from 'lucide-react';
 import { useStore } from './store/useStore';
 import { useToast } from './hooks/useToast';
 import { usePersistenceSync } from './hooks/usePersistenceSync';
@@ -586,6 +586,19 @@ const App: React.FC = () => {
   // ── Layout principal ─────────────────────────────────────────────────────────
   const showOverlay = loadingSession || !profileSynchronized || isValidating || projectsLoading;
 
+  // Escape hatch: se o overlay continuar ativo por muito tempo, o backend
+  // provavelmente está indisponível (ex.: Postgres travado → 522/503). Sem
+  // isto o app fica preso em "Sincronizando..." para sempre, sem avisar o
+  // usuário. Após OVERLAY_STUCK_MS mostramos uma tela de erro com "Tentar
+  // novamente" em vez do loading infinito.
+  const OVERLAY_STUCK_MS = 15000;
+  const [overlayStuck, setOverlayStuck] = React.useState(false);
+  React.useEffect(() => {
+    if (!showOverlay) { setOverlayStuck(false); return; }
+    const timer = setTimeout(() => setOverlayStuck(true), OVERLAY_STUCK_MS);
+    return () => clearTimeout(timer);
+  }, [showOverlay]);
+
   return (
     <Layout
       activeView={activeView}
@@ -612,10 +625,27 @@ const App: React.FC = () => {
           display: 'flex', alignItems: 'center', justifyContent: 'center'
         }}
       >
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Sincronizando Opura...</p>
-        </div>
+        {overlayStuck ? (
+          <div className="flex flex-col items-center gap-4 max-w-sm text-center px-6">
+            <WifiOff className="w-10 h-10 text-red-500" />
+            <p className="text-sm font-black uppercase tracking-[0.15em] text-slate-600">Falha de conexão com o servidor</p>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Não foi possível sincronizar com o ÒPURA. O servidor pode estar
+              temporariamente indisponível. Verifique sua conexão e tente novamente.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-1 px-6 py-2 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Sincronizando Opura...</p>
+          </div>
+        )}
       </div>
 
       {/* Roteamento de conteúdo */}

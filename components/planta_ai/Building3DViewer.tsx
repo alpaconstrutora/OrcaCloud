@@ -6,7 +6,7 @@
 // isso @ts-nocheck. O componente é validado em runtime.
 import React, { useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Grid, Edges } from '@react-three/drei';
+import { OrbitControls, Grid, Edges, Html } from '@react-three/drei';
 import { RotateCcw, Maximize, Minimize } from 'lucide-react';
 import { computeFloorLayout } from './plantaGeometry';
 
@@ -26,7 +26,7 @@ interface Props {
   isFullscreen?: boolean;
   /** Pavimentos reais materializados: cada andar com suas unidades exatas (x/y/width/height/color).
    *  Quando presente, o 3D empilha estes em vez de extrudar a grade paramétrica uniforme. */
-  realFloors?: { floorNumber: number; units: { x: number; y: number; width: number; height: number; color: string }[] }[];
+  realFloors?: { floorNumber: number; units: { code?: string; x: number; y: number; width: number; height: number; color: string }[] }[];
   /** Núcleo real (plant_floors.geometry_json.core). Só usado com realFloors. */
   realCore?: { x: number; y: number; width: number; height: number };
 }
@@ -118,21 +118,46 @@ function BuildingScene({
                 <meshStandardMaterial color="#d1d5db" roughness={0.9} />
               </mesh>
 
-              {/* Unidades */}
+              {/* Unidades — caixa + rótulo com o código (identifica a unidade no 3D) */}
               {floor.units.map((u, ui) => (
-                <mesh
-                  key={ui}
-                  position={[
-                    u.x + u.width / 2,
-                    slabThickness + unitBoxHeight / 2,
-                    u.y + u.height / 2,
-                  ]}
-                  castShadow
-                >
-                  <boxGeometry args={[u.width * 0.96, unitBoxHeight, u.height * 0.96]} />
-                  <meshStandardMaterial color={u.color} roughness={0.7} />
-                  <Edges color="#6b7280" threshold={15} />
-                </mesh>
+                <React.Fragment key={ui}>
+                  <mesh
+                    position={[
+                      u.x + u.width / 2,
+                      slabThickness + unitBoxHeight / 2,
+                      u.y + u.height / 2,
+                    ]}
+                    castShadow
+                  >
+                    <boxGeometry args={[u.width * 0.96, unitBoxHeight, u.height * 0.96]} />
+                    <meshStandardMaterial color={u.color} roughness={0.7} />
+                    <Edges color="#6b7280" threshold={15} />
+                  </mesh>
+                  {u.code && (
+                    <Html
+                      position={[u.x + u.width / 2, slabThickness + unitBoxHeight / 2, u.y + u.height / 2]}
+                      center
+                      occlude="blending"
+                      distanceFactor={22}
+                      zIndexRange={[10, 0]}
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      <div style={{
+                        background: 'rgba(255,255,255,0.92)',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 6,
+                        padding: '1px 6px',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: '#334155',
+                        whiteSpace: 'nowrap',
+                        fontFamily: 'inherit',
+                      }}>
+                        {u.code}
+                      </div>
+                    </Html>
+                  )}
+                </React.Fragment>
               ))}
             </group>
           );

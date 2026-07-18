@@ -104,7 +104,7 @@ export default function FloorViewerTab({ scenario, terrain, rules }: FloorViewer
           .filter(u => u.floor_id === f.id)
           .map(u => {
             const g = (u.geometry_json || {}) as any;
-            return { x: g.x ?? 0, y: g.y ?? 0, width: g.width ?? 5, height: g.height ?? 5, color: g.color || '#bfdbfe' };
+            return { code: u.unit_code || '—', x: g.x ?? 0, y: g.y ?? 0, width: g.width ?? 5, height: g.height ?? 5, color: g.color || '#bfdbfe' };
           }),
       }));
   }, [hasReal, realFloors, realUnits]);

@@ -1,7 +1,11 @@
 import { supabase } from '../lib/supabase';
 import { PlantScenario, PlantStudy } from '../types/plantaAi';
 import { commercialService } from './commercialService';
+import { empreendimentoService } from './empreendimentoService';
 import { PropertyStatus } from '../types/imovib';
+
+/** Número de um campo regulatório em formato BR ("0,1" → 0.1). parseFloat direto pararia na vírgula. */
+const regNum = (v?: string): number => (v ? parseFloat(String(v).replace(',', '.')) || 0 : 0);
 
 export class PlantaAiIntegration {
   /**
@@ -272,12 +276,9 @@ export class PlantaAiIntegration {
         
       if (imovibErr || !imovib) throw new Error(`Estudo Imovib não encontrado: ${imovibErr?.message}`);
 
-      // Busca a zona urbanística se existir
-      const { data: zone } = await supabase
-        .from('imovib_regulatory_zones')
-        .select('*')
-        .eq('study_id', imovibStudyId)
-        .maybeSingle();
+      // Zona urbanística: o mapa regulatório mora no empreendimento (fonte única). Resolve
+      // pelo empreendimento vinculado ao estudo Imovib; sem empreendimento, fica sem zona.
+      const zone = (await empreendimentoService.listRegulatoryZonesByImovibStudy(imovibStudyId))[0] ?? null;
 
       // 2. Cria o estudo no Planta AI mapeando cidade e endereço
       const { data: newPlantStudy, error: insertErr } = await supabase
@@ -361,11 +362,7 @@ export class PlantaAiIntegration {
         
       if (imovibErr || !imovib) throw new Error(`Estudo Imovib não encontrado: ${imovibErr?.message}`);
 
-      const { data: zone } = await supabase
-        .from('imovib_regulatory_zones')
-        .select('*')
-        .eq('study_id', imovibStudyId)
-        .maybeSingle();
+      const zone = (await empreendimentoService.listRegulatoryZonesByImovibStudy(imovibStudyId))[0] ?? null;
 
       // Atualiza Terreno
       await supabase.from('plant_terrains')
@@ -384,8 +381,8 @@ export class PlantaAiIntegration {
           occupancy_rate: imovib.occupancy_rate_max || imovib.occupancy_rate || 0,
           floor_area_ratio_basic: imovib.ca_basic || 0,
           floor_area_ratio_max: imovib.ca_max || 0,
-          permeability_rate: zone?.taxa_permeabilidade_minima ? parseFloat(zone.taxa_permeabilidade_minima) : 0,
-          max_height: zone?.gabarito_altura_maxima ? parseFloat(zone.gabarito_altura_maxima) : 0,
+          permeability_rate: regNum(zone?.taxa_permeabilidade_minima),
+          max_height: regNum(zone?.gabarito_altura_maxima),
         })
         .eq('study_id', plantaAiStudyId);
 

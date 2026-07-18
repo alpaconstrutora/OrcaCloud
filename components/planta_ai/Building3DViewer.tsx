@@ -24,6 +24,11 @@ interface Props {
   floorHeight?: number;
   onToggleFullscreen?: () => void;
   isFullscreen?: boolean;
+  /** Pavimentos reais materializados: cada andar com suas unidades exatas (x/y/width/height/color).
+   *  Quando presente, o 3D empilha estes em vez de extrudar a grade paramétrica uniforme. */
+  realFloors?: { floorNumber: number; units: { x: number; y: number; width: number; height: number; color: string }[] }[];
+  /** Núcleo real (plant_floors.geometry_json.core). Só usado com realFloors. */
+  realCore?: { x: number; y: number; width: number; height: number };
 }
 
 /**
@@ -45,15 +50,25 @@ function BuildingScene({
   minRearSetback = 0,
   floorsCount = 1,
   floorHeight = 3,
+  realFloors,
+  realCore,
 }: Props) {
   const w = buildingWidth;
   const d = buildingDepth;
   const tW = terrainWidth;
   const tD = terrainDepth;
-  const floors = Math.max(1, Math.round(floorsCount));
-  const buildingHeight = floors * floorHeight;
 
   const layout = computeFloorLayout(w, d, unitsPerFloor);
+
+  // Fonte dos pavimentos: reais materializados (cada andar com suas unidades exatas) quando
+  // presentes, senão o paramétrico (mesma grade uniforme extrudada por floorsCount).
+  const useReal = !!(realFloors && realFloors.length);
+  const stackFloors = useReal
+    ? [...realFloors].sort((a, b) => a.floorNumber - b.floorNumber)
+    : Array.from({ length: Math.max(1, Math.round(floorsCount)) }).map((_, f) => ({ floorNumber: f + 1, units: layout.units }));
+  const floors = stackFloors.length;
+  const buildingHeight = floors * floorHeight;
+  const core = useReal && realCore ? realCore : layout.core;
 
   // Centraliza o terreno na origem
   const cx = tW / 2;
@@ -93,10 +108,10 @@ function BuildingScene({
 
       {/* Prédio: pavimentos empilhados */}
       <group position={[leftSetback, 0, frontSetback]}>
-        {Array.from({ length: floors }).map((_, f) => {
+        {stackFloors.map((floor, f) => {
           const yBase = f * floorHeight;
           return (
-            <group key={f} position={[0, yBase, 0]}>
+            <group key={floor.floorNumber ?? f} position={[0, yBase, 0]}>
               {/* Laje do pavimento */}
               <mesh position={[w / 2, slabThickness / 2, d / 2]} receiveShadow castShadow>
                 <boxGeometry args={[w, slabThickness, d]} />
@@ -104,9 +119,9 @@ function BuildingScene({
               </mesh>
 
               {/* Unidades */}
-              {layout.units.map((u) => (
+              {floor.units.map((u, ui) => (
                 <mesh
-                  key={u.index}
+                  key={ui}
                   position={[
                     u.x + u.width / 2,
                     slabThickness + unitBoxHeight / 2,
@@ -130,10 +145,10 @@ function BuildingScene({
           const coreTotalHeight = buildingHeight + coreOverrun;
           return (
             <mesh
-              position={[layout.core.x + layout.core.width / 2, coreTotalHeight / 2, layout.core.y + layout.core.height / 2]}
+              position={[core.x + core.width / 2, coreTotalHeight / 2, core.y + core.height / 2]}
               castShadow
             >
-              <boxGeometry args={[layout.core.width, coreTotalHeight, layout.core.height]} />
+              <boxGeometry args={[core.width, coreTotalHeight, core.height]} />
               <meshStandardMaterial color="#9ca3af" roughness={0.8} />
               <Edges color="#6b7280" />
             </mesh>

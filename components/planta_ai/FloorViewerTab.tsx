@@ -91,6 +91,25 @@ export default function FloorViewerTab({ scenario, terrain, rules }: FloorViewer
   const realBuildingDepth = hasReal ? (floorGeo.buildingDepth ?? geometry?.buildingDepth) : geometry?.buildingDepth;
   const realCore = hasReal ? floorGeo.core : undefined;
 
+  // Pavimentos reais para o 3D: todos os andares (não só o selecionado), cada um com suas
+  // unidades exatas, para o viewer empilhar em vez de repetir a grade paramétrica.
+  const real3DFloors = useMemo(() => {
+    if (!hasReal) return undefined;
+    return realFloors
+      .slice()
+      .sort((a, b) => a.floor_number - b.floor_number)
+      .map(f => ({
+        floorNumber: f.floor_number,
+        units: realUnits
+          .filter(u => u.floor_id === f.id)
+          .map(u => {
+            const g = (u.geometry_json || {}) as any;
+            return { x: g.x ?? 0, y: g.y ?? 0, width: g.width ?? 5, height: g.height ?? 5, color: g.color || '#bfdbfe' };
+          }),
+      }));
+  }, [hasReal, realFloors, realUnits]);
+  const real3DCore = hasReal ? ((realFloors[0]?.geometry_json || {}) as any).core : undefined;
+
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       containerRef.current?.requestFullscreen().catch(err => {
@@ -134,7 +153,7 @@ export default function FloorViewerTab({ scenario, terrain, rules }: FloorViewer
           <div>
             <h2 className="text-lg font-bold text-gray-900 tracking-tight">Plantas Baixas: {scenario.name}</h2>
             <p className="text-xs text-gray-500 font-medium">
-              {hasReal ? 'Unidades reais materializadas (2D) • 3D paramétrico' : 'Visualizador Paramétrico 2D / 3D'}
+              {hasReal ? 'Unidades reais materializadas (2D e 3D)' : 'Visualizador Paramétrico 2D / 3D'}
             </p>
           </div>
         </div>
@@ -271,8 +290,8 @@ export default function FloorViewerTab({ scenario, terrain, rules }: FloorViewer
               <div className={`${viewMode === 'split' ? 'w-1/2' : 'w-full'} h-full`}>
                 <Suspense fallback={<Viewer3DFallback />}>
                   <Building3DViewer
-                    buildingWidth={geometry?.buildingWidth}
-                    buildingDepth={geometry?.buildingDepth}
+                    buildingWidth={realBuildingWidth}
+                    buildingDepth={realBuildingDepth}
                     unitsPerFloor={scenario.units_per_floor}
                     terrainWidth={geometry?.terrainWidth}
                     terrainDepth={geometry?.terrainDepth}
@@ -280,7 +299,9 @@ export default function FloorViewerTab({ scenario, terrain, rules }: FloorViewer
                     frontSetback={geometry?.frontSetback}
                     minRightSetback={rules?.right_setback || 1.5}
                     minRearSetback={rules?.rear_setback || 3}
-                    floorsCount={scenario.floors_count || 1}
+                    floorsCount={hasReal ? realFloors.length : (scenario.floors_count || 1)}
+                    realFloors={real3DFloors}
+                    realCore={real3DCore}
                     onToggleFullscreen={viewMode === '3d' ? toggleFullscreen : undefined}
                     isFullscreen={isFullscreen}
                   />

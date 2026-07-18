@@ -15,6 +15,12 @@ function translatePropertyDeleteError(error: { code?: string; message?: string }
     if (msg.includes('parent_id')) {
         return 'Este imóvel tem unidades vinculadas a ele. Exclua as unidades primeiro ou confirme a exclusão do edifício inteiro.';
     }
+    if (msg.includes('commercial_deals')) {
+        return 'Este imóvel tem negociações vinculadas. Exclua as negociações antes (ou confirme a exclusão em cadeia).';
+    }
+    if (msg.includes('post_sales')) {
+        return 'Há registros de pós-venda vinculados a uma negociação deste imóvel. Remova-os antes de excluir.';
+    }
     // broker_portal_* usa ON DELETE RESTRICT — reserva/proposta de corretor trava o delete
     if (msg.includes('broker')) {
         return 'Este imóvel tem reservas ou propostas de corretor vinculadas. Cancele-as no Portal do Corretor antes de excluir.';
@@ -140,12 +146,12 @@ export const commercialService = {
      * O que será destruído ao excluir esta property — para a tela poder avisar
      * ANTES, em vez de deixar vazar o erro cru de FK do Postgres.
      *
-     * Contexto: `commercial_properties.parent_id` é auto-referencial e, no banco,
-     * NÃO tem ON DELETE CASCADE (a migration 20260226000001 criou assim no repo,
-     * mas o efeito não está no schema real). Logo, excluir um edifício com
-     * unidades filhas falha com 23503. Mesmo que tivesse cascade, seria pior:
-     * `commercial_deals.property_id` é CASCADE, então as negociações sumiriam
-     * em silêncio junto.
+     * Contexto: NENHUMA das FKs que apontam para commercial_properties tem
+     * cascade no banco real, apesar de o repo declarar que têm:
+     *   • `commercial_properties.parent_id` (migration 20260226000001 diz CASCADE)
+     *   • `commercial_deals.property_id`    (migration 20240219000000 diz CASCADE)
+     * Ambas falham com 23503. Por isso a exclusão em cadeia é feita aqui, na
+     * ordem de dependência, e não delegada ao banco.
      */
     async getPropertyDeleteImpact(id: string): Promise<{ children: number; deals: number }> {
         const { data: kids } = await supabase
@@ -164,13 +170,37 @@ export const commercialService = {
 
     /**
      * `cascade` só deve vir true depois de a tela ter mostrado o impacto e o
-     * usuário ter confirmado — apagar as filhas é irreversível e leva junto as
-     * negociações delas (FK CASCADE em commercial_deals).
+     * usuário ter confirmado — é irreversível e leva junto as negociações.
+     *
+     * Ordem de dependência (nenhuma FK cascateia de verdade, ver acima):
+     *   1. negociações das properties alvo — via deleteDeal, que ESTORNA as
+     *      parcelas no financeiro. Um DELETE direto aqui deixaria recebíveis
+     *      órfãos, e deleteDeal ainda protege: lança se houver parcela PAGA.
+     *   2. unidades filhas
+     *   3. a própria property
      */
     async deleteProperty(id: string, cascade = false) {
+        const targets = [id];
+
         if (cascade) {
-            // Apaga as filhas primeiro: sem CASCADE no parent_id, o delete do
-            // pai falharia enquanto elas existissem.
+            const { data: kids } = await supabase
+                .from('commercial_properties')
+                .select('id')
+                .eq('parent_id', id);
+            targets.push(...(kids || []).map(k => k.id as string));
+        }
+
+        // 1. Negociações (uma a uma, para reusar o estorno de parcelas)
+        const { data: deals } = await supabase
+            .from('commercial_deals')
+            .select('id')
+            .in('property_id', targets);
+        for (const d of deals || []) {
+            await commercialService.deleteDeal(d.id as string);
+        }
+
+        // 2. Unidades filhas
+        if (cascade && targets.length > 1) {
             const { error: childErr } = await supabase
                 .from('commercial_properties')
                 .delete()
@@ -178,6 +208,7 @@ export const commercialService = {
             if (childErr) throw new Error(translatePropertyDeleteError(childErr));
         }
 
+        // 3. A property
         const { error } = await supabase
             .from('commercial_properties')
             .delete()

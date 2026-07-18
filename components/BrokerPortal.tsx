@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useState, useMemo } from 'react';
-import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, User, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X } from 'lucide-react';
+import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, User, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X, Download, Share2 } from 'lucide-react';
+import { downloadProposalPdf } from '../services/proposalPdfService';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import BrokerProposalSimulator from './broker/BrokerProposalSimulator';
 import BrokerLeadManager from './broker/BrokerLeadManager';
@@ -246,6 +247,33 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
         } catch (error) {
             console.error("Erro ao salvar proposta:", error);
             alert('Erro ao enviar proposta. Por favor, tente novamente.');
+        }
+    };
+
+    // ── Ações de proposta (F3): PDF + link público ─────────────────────────────
+    const [shareMsg, setShareMsg] = useState<string | null>(null);
+    const toast = (m: string) => { setShareMsg(m); setTimeout(() => setShareMsg(null), 4000); };
+
+    const handleProposalPdf = (p: Partial<BrokerProposal>, unitLabel: string) => {
+        downloadProposalPdf({
+            id: p.id, property_name: unitLabel, buyer_name: p.buyer_name,
+            unit_price: p.unit_price, discount_pct: p.discount_pct, total_value: p.total_value,
+            down_payment: p.down_payment, monthly_installments: p.monthly_installments,
+            monthly_value: p.monthly_value, balloon_value: p.balloon_value,
+            financing_value: p.financing_value, notes: p.notes, created_at: p.created_at,
+            version: (p as { version?: number }).version,
+        });
+    };
+
+    const handleProposalShare = async (id?: string) => {
+        if (!id || id.startsWith('prop-')) { toast('Salve a proposta antes de compartilhar.'); return; }
+        try {
+            const token = await brokerService.shareProposal(id);
+            const url = `${window.location.origin}/proposta/${token}`;
+            try { await navigator.clipboard.writeText(url); toast('Link copiado para a área de transferência.'); }
+            catch { toast(url); }
+        } catch {
+            toast('Não foi possível gerar o link.');
         }
     };
 
@@ -593,21 +621,41 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                                 </p>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="text-sm font-black text-gray-900">{formatCurrency(p.total_value || 0)}</p>
-                                            <span className={`inline-block mt-1 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${p.status === 'ENVIADA' ? 'bg-blue-50 text-blue-600' :
-                                                p.status === 'APROVADA' ? 'bg-emerald-50 text-emerald-600' :
-                                                    p.status === 'REJEITADA' ? 'bg-red-50 text-red-600' :
-                                                        'bg-gray-100 text-gray-500'
-                                                }`}>
-                                                {p.status}
-                                            </span>
+                                        <div className="flex items-center gap-3">
+                                            <div className="text-right">
+                                                <p className="text-sm font-black text-gray-900">{formatCurrency(p.total_value || 0)}</p>
+                                                <span className={`inline-block mt-1 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider ${p.status === 'ENVIADA' ? 'bg-blue-50 text-blue-600' :
+                                                    p.status === 'APROVADA' ? 'bg-emerald-50 text-emerald-600' :
+                                                        p.status === 'REJEITADA' ? 'bg-red-50 text-red-600' :
+                                                            'bg-gray-100 text-gray-500'
+                                                    }`}>
+                                                    {p.status}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                                                <button onClick={() => handleProposalPdf(p, `Unidade ${unit?.number || unit?.name || '-'}`)}
+                                                    title="Baixar PDF"
+                                                    className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all">
+                                                    <Download className="w-4 h-4" />
+                                                </button>
+                                                <button onClick={() => handleProposalShare(p.id)}
+                                                    title="Gerar link público"
+                                                    className="p-2 rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-all">
+                                                    <Share2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 );
                             })}
                         </div>
                     )}
+                </div>
+            )}
+
+            {shareMsg && (
+                <div className="fixed bottom-6 right-6 z-[300] flex items-center gap-2 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium bg-gray-900 text-white animate-in slide-in-from-bottom-4 duration-300">
+                    <Link2 className="w-4 h-4 shrink-0" /> {shareMsg}
                 </div>
             )}
 

@@ -9,8 +9,19 @@ import {
 } from '../services/salesPlanService';
 import { commercialPriceTableService, type CommercialPriceTable } from '../services/commercialPriceTableService';
 import { commercialService } from '../services/commercialService';
+import { financialApprovalService } from '../services/financialApprovalService';
 import type { Property } from '../types';
 import type { IndexName } from '../services/contractIndexService';
+
+interface Scenario {
+    discountPct: number; downPct: number; installments: number;
+    keysPct: number; correctionPct: number; opportunityPct: number;
+}
+const DEFAULT_SCENARIO: Scenario = {
+    discountPct: 0, downPct: 20, installments: 60, keysPct: 0, correctionPct: 0, opportunityPct: 1,
+};
+type ApprovalLevels = { required_levels: number; level1_label: string; level2_label: string };
+const SCENARIO_LABEL = ['A', 'B', 'C'];
 
 interface Props {
     organizationId: string;
@@ -114,14 +125,12 @@ export const SalesPlanManager: React.FC<Props> = ({ organizationId, buildingId, 
     const setField = <K extends keyof SalesPlan>(k: K, v: SalesPlan[K]) =>
         setEditing(prev => (prev ? { ...prev, [k]: v } : prev));
 
-    // ── Rentabilidade (F2) ─────────────────────────────────────────────────
+    // ── Rentabilidade + Cenários + Alçadas (F2 + F3) ────────────────────────
     const [units, setUnits] = React.useState<Property[]>([]);
     const [unitsLoaded, setUnitsLoaded] = React.useState(false);
     const [selUnitId, setSelUnitId] = React.useState('');
-    const [comp, setComp] = React.useState({
-        discountPct: 0, downPct: 20, installments: 60, keysPct: 0,
-        correctionPct: 0, opportunityPct: 1,
-    });
+    const [scenarios, setScenarios] = React.useState<Scenario[]>([{ ...DEFAULT_SCENARIO }]);
+    const [approvals, setApprovals] = React.useState<(ApprovalLevels | null)[]>([]);
     const [cost, setCost] = React.useState<UnitCostBasis | null>(null);
     const [costErr, setCostErr] = React.useState<string | null>(null);
     const [costLoading, setCostLoading] = React.useState(false);
@@ -163,19 +172,36 @@ export const SalesPlanManager: React.FC<Props> = ({ organizationId, buildingId, 
     const selUnit = units.find(u => u.id === selUnitId);
     const unitPrice = selUnit ? (selUnit.current_price ?? selUnit.price ?? 0) : 0;
 
-    const sim = React.useMemo(() => simulatePayment({
-        unitPrice,
-        discountPct: comp.discountPct,
-        downPaymentPct: comp.downPct,
-        monthlyInstallments: comp.installments,
-        keysPct: comp.keysPct,
-        correctionRateMonthly: comp.correctionPct / 100,
-        opportunityRateMonthly: comp.opportunityPct / 100,
-    }), [unitPrice, comp]);
+    // Uma simulação + margem por cenário.
+    const results = React.useMemo(() => scenarios.map(s => {
+        const sim = simulatePayment({
+            unitPrice,
+            discountPct: s.discountPct,
+            downPaymentPct: s.downPct,
+            monthlyInstallments: s.installments,
+            keysPct: s.keysPct,
+            correctionRateMonthly: s.correctionPct / 100,
+            opportunityRateMonthly: s.opportunityPct / 100,
+        });
+        const rent = cost?.hasCost && cost.costBasis != null ? computeRentability(sim, cost.costBasis) : null;
+        return { sim, rent };
+    }), [unitPrice, scenarios, cost]);
 
-    const rent = cost?.hasCost && cost.costBasis != null
-        ? computeRentability(sim, cost.costBasis)
-        : null;
+    // Alçada por cenário — reusa fn_resolve_approval_levels. O valor de gatilho é
+    // o desconto ECONÔMICO (R$): é o que a incorporadora "abre mão", não o % nominal.
+    React.useEffect(() => {
+        if (!selUnit) { setApprovals([]); return; }
+        let alive = true;
+        Promise.all(results.map(r =>
+            financialApprovalService.resolveRequiredLevels(organizationId, r.sim.economicDiscount).catch(() => null)
+        )).then(a => { if (alive) setApprovals(a); });
+        return () => { alive = false; };
+    }, [results, selUnit, organizationId]);
+
+    const addScenario = () => setScenarios(s => s.length >= 3 ? s : [...s, { ...s[s.length - 1] }]);
+    const removeScenario = (i: number) => setScenarios(s => s.length <= 1 ? s : s.filter((_, k) => k !== i));
+    const patchScenario = (i: number, patch: Partial<Scenario>) =>
+        setScenarios(s => s.map((sc, k) => k === i ? { ...sc, ...patch } : sc));
 
     if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
 
@@ -343,7 +369,7 @@ export const SalesPlanManager: React.FC<Props> = ({ organizationId, buildingId, 
                         </p>
                     </div>
 
-                    {/* Seleção de unidade + composição */}
+                    {/* Seleção de unidade */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Field label="Unidade">
                             <select value={selUnitId} onChange={e => setSelUnitId(e.target.value)} className={inputCls}>
@@ -364,56 +390,52 @@ export const SalesPlanManager: React.FC<Props> = ({ organizationId, buildingId, 
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                        <NumField label="Desconto (%)" value={comp.discountPct} onChange={v => setComp(c => ({ ...c, discountPct: v }))} />
-                        <NumField label="Entrada (%)" value={comp.downPct} onChange={v => setComp(c => ({ ...c, downPct: v }))} />
-                        <NumField label="Parcelas (x)" value={comp.installments} onChange={v => setComp(c => ({ ...c, installments: v }))} step={1} />
-                        <NumField label="Chaves (%)" value={comp.keysPct} onChange={v => setComp(c => ({ ...c, keysPct: v }))} />
-                        <NumField label="Correção a.m. (%)" value={comp.correctionPct} onChange={v => setComp(c => ({ ...c, correctionPct: v }))} step={0.01} />
-                        <NumField label="Custo de capital a.m. (%)" value={comp.opportunityPct} onChange={v => setComp(c => ({ ...c, opportunityPct: v }))} step={0.01} />
-                    </div>
+                    {/* Estado do custo */}
+                    {selUnit && costLoading && (
+                        <div className="flex items-center gap-2 text-sm text-gray-400 font-medium">
+                            <Loader2 className="w-4 h-4 animate-spin" /> Calculando custo…
+                        </div>
+                    )}
+                    {selUnit && costErr && (
+                        <div className="bg-rose-50 border border-rose-200 rounded-[10px] px-4 py-3 text-sm text-rose-700 font-medium flex items-start gap-2">
+                            <Lock className="w-4 h-4 shrink-0 mt-0.5" /> {costErr}
+                        </div>
+                    )}
+                    {selUnit && cost && !cost.hasCost && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-[10px] px-4 py-3 text-sm text-amber-700 font-medium flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                            Unidade sem custo cadastrado — a margem não aparece. Informe o custo/m² na unidade do empreendimento vinculada.
+                        </div>
+                    )}
 
                     {!selUnit ? (
-                        <p className="text-sm text-gray-400 font-medium py-4 text-center">Selecione uma unidade para ver a rentabilidade.</p>
+                        <p className="text-sm text-gray-400 font-medium py-4 text-center">Selecione uma unidade para comparar cenários.</p>
                     ) : (
                         <>
-                            {/* Financeiro da proposta (sempre visível) */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <Metric label="Valor após desconto" value={fmtMoney(sim.totalValue)} />
-                                <Metric label="VPL da proposta" value={fmtMoney(sim.presentValue)} color="text-blue-600" />
-                                <Metric label="Desconto financeiro" value={`${sim.financialDiscountPct.toFixed(1)}%`} sub={fmtMoney(sim.financialDiscount)} color="text-amber-600" />
-                                <Metric label="Desconto econômico" value={`${sim.economicDiscountPct.toFixed(1)}%`} sub={fmtMoney(sim.economicDiscount)} color="text-amber-700" />
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-black text-gray-800">Cenários</h4>
+                                {scenarios.length < 3 && (
+                                    <button onClick={addScenario}
+                                        className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium text-[13px] transition-all active:scale-95">
+                                        <Plus className="w-[15px] h-[15px]" /> Cenário
+                                    </button>
+                                )}
                             </div>
-
-                            {/* Custo e margem (gestão) */}
-                            {costLoading ? (
-                                <div className="flex items-center gap-2 text-sm text-gray-400 font-medium py-3">
-                                    <Loader2 className="w-4 h-4 animate-spin" /> Calculando custo…
-                                </div>
-                            ) : costErr ? (
-                                <div className="bg-rose-50 border border-rose-200 rounded-[10px] px-4 py-3 text-sm text-rose-700 font-medium flex items-start gap-2">
-                                    <Lock className="w-4 h-4 shrink-0 mt-0.5" /> {costErr}
-                                </div>
-                            ) : cost && !cost.hasCost ? (
-                                <div className="bg-amber-50 border border-amber-200 rounded-[10px] px-4 py-3 text-sm text-amber-700 font-medium flex items-start gap-2">
-                                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                                    Unidade sem custo cadastrado. Informe o custo/m² na unidade do empreendimento vinculada.
-                                </div>
-                            ) : rent ? (
-                                <div className="border-t border-gray-100 pt-5">
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        <Metric label="Custo da unidade" value={fmtMoney(rent.costBasis)} sub={cost?.costPerSqm ? `${fmtMoney(cost.costPerSqm)}/m² · ${cost.areaSqm}m²` : undefined} />
-                                        <Metric label="Margem bruta" value={`${rent.grossMarginPct.toFixed(1)}%`} sub={fmtMoney(rent.grossMargin)} color={rent.grossMargin >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
-                                        <Metric label="Margem econômica (VPL)" value={`${rent.economicMarginPct.toFixed(1)}%`} sub={fmtMoney(rent.economicMargin)} color={rent.economicMargin >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
-                                        <Metric label="Markup s/ custo" value={`${rent.markupPct.toFixed(1)}%`} color={rent.markupPct >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
-                                    </div>
-                                    {rent.economicMargin < 0 && (
-                                        <p className="text-sm text-rose-600 font-medium mt-3 flex items-center gap-1.5">
-                                            <AlertTriangle className="w-3.5 h-3.5" /> Prejuízo econômico: o VPL da proposta é menor que o custo da unidade.
-                                        </p>
-                                    )}
-                                </div>
-                            ) : null}
+                            <div className={`grid grid-cols-1 ${scenarios.length === 2 ? 'lg:grid-cols-2' : scenarios.length >= 3 ? 'lg:grid-cols-3' : ''} gap-4`}>
+                                {scenarios.map((s, i) => (
+                                    <ScenarioCard
+                                        key={i}
+                                        idx={i}
+                                        scenario={s}
+                                        result={results[i]}
+                                        approval={approvals[i]}
+                                        cost={cost}
+                                        canRemove={scenarios.length > 1}
+                                        onChange={patch => patchScenario(i, patch)}
+                                        onRemove={() => removeScenario(i)}
+                                    />
+                                ))}
+                            </div>
                         </>
                     )}
                 </div>
@@ -442,6 +464,89 @@ const Metric: React.FC<{ label: string; value: string; sub?: string; color?: str
         <p className="text-xs font-semibold text-gray-500 mb-1">{label}</p>
         <p className={`text-lg font-bold ${color}`}>{value}</p>
         {sub && <p className="text-xs text-gray-400 font-medium mt-0.5">{sub}</p>}
+    </div>
+);
+
+// Linha de alçada por cenário. approval=undefined → ainda resolvendo;
+// approval=null → nenhuma faixa configurada casou (aprovação direta).
+const ApprovalLine: React.FC<{ approval: ApprovalLevels | null | undefined }> = ({ approval }) => {
+    if (approval === undefined) return <p className="text-xs text-gray-400 font-medium">Resolvendo alçada…</p>;
+    if (approval === null) return (
+        <p className="text-sm font-normal text-emerald-600 flex items-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Aprovação direta (sem faixa)
+        </p>
+    );
+    const labels = approval.required_levels >= 2
+        ? `${approval.level1_label} + ${approval.level2_label}`
+        : approval.level1_label;
+    return (
+        <p className="text-sm font-normal text-amber-700 flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5" /> Requer {approval.required_levels} nível(is): {labels}
+        </p>
+    );
+};
+
+const ScenarioCard: React.FC<{
+    idx: number;
+    scenario: Scenario;
+    result?: { sim: ReturnType<typeof simulatePayment>; rent: ReturnType<typeof computeRentability> | null };
+    approval: ApprovalLevels | null | undefined;
+    cost: UnitCostBasis | null;
+    canRemove: boolean;
+    onChange: (patch: Partial<Scenario>) => void;
+    onRemove: () => void;
+}> = ({ idx, scenario: s, result, approval, cost, canRemove, onChange, onRemove }) => {
+    const sim = result?.sim;
+    const rent = result?.rent ?? null;
+    return (
+        <div className="border border-gray-200 rounded-[10px] p-4 space-y-4">
+            <div className="flex items-center justify-between">
+                <span className="text-sm font-black text-gray-800">Cenário {SCENARIO_LABEL[idx] ?? idx + 1}</span>
+                {canRemove && (
+                    <button onClick={onRemove} title="Remover cenário" className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-50 hover:text-rose-600">
+                        <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+                <NumField label="Desconto (%)" value={s.discountPct} onChange={v => onChange({ discountPct: v })} />
+                <NumField label="Entrada (%)" value={s.downPct} onChange={v => onChange({ downPct: v })} />
+                <NumField label="Parcelas (x)" value={s.installments} onChange={v => onChange({ installments: v })} step={1} />
+                <NumField label="Chaves (%)" value={s.keysPct} onChange={v => onChange({ keysPct: v })} />
+                <NumField label="Correção a.m. (%)" value={s.correctionPct} onChange={v => onChange({ correctionPct: v })} step={0.01} />
+                <NumField label="Custo capital a.m. (%)" value={s.opportunityPct} onChange={v => onChange({ opportunityPct: v })} step={0.01} />
+            </div>
+
+            {sim && (
+                <div className="space-y-2 border-t border-gray-100 pt-3">
+                    <Row label="Valor após desconto" value={fmtMoney(sim.totalValue)} />
+                    <Row label="VPL da proposta" value={fmtMoney(sim.presentValue)} color="text-blue-600" />
+                    <Row label="Desconto econômico" value={`${sim.economicDiscountPct.toFixed(1)}% · ${fmtMoney(sim.economicDiscount)}`} color="text-amber-700" />
+                    {rent ? (
+                        <>
+                            <Row label="Margem econômica (VPL)" value={`${rent.economicMarginPct.toFixed(1)}% · ${fmtMoney(rent.economicMargin)}`} color={rent.economicMargin >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
+                            <Row label="Markup s/ custo" value={`${rent.markupPct.toFixed(1)}%`} color={rent.markupPct >= 0 ? 'text-emerald-600' : 'text-rose-600'} />
+                            {rent.economicMargin < 0 && (
+                                <p className="text-xs text-rose-600 font-medium flex items-center gap-1.5">
+                                    <AlertTriangle className="w-3.5 h-3.5" /> Prejuízo econômico
+                                </p>
+                            )}
+                        </>
+                    ) : cost && !cost.hasCost ? (
+                        <Row label="Margem" value="sem custo" color="text-gray-400" />
+                    ) : null}
+                    <div className="pt-1"><ApprovalLine approval={approval} /></div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const Row: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color = 'text-gray-800' }) => (
+    <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-normal text-gray-500">{label}</span>
+        <span className={`text-sm font-medium ${color}`}>{value}</span>
     </div>
 );
 

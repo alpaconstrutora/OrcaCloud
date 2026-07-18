@@ -375,17 +375,21 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 )}
                             </div>
 
-                            {/* Status pills — filtro rápido, não ordenação (§6.4) */}
-                            <div className="flex items-center h-9 gap-1 overflow-x-auto">
-                                {(['all', 'pending', 'approved', 'overdue', 'paid'] as StatusFilter[]).map(s => (
-                                    <button
-                                        key={s}
-                                        onClick={() => setStatusFilter(s)}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider whitespace-nowrap transition-all ${statusFilter === s ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                                    >
-                                        {s === 'all' ? 'Todos' : s === 'overdue' ? 'Atrasado' : STATUS_PT[s]}
-                                    </button>
-                                ))}
+                            {/* Status pills — filtro rápido em controle segmentado, não ordenação (§6.4).
+                                Padrão "Tudo/Receitas/Despesas" de UI UX tabela.md §5. */}
+                            <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                {(['all', 'pending', 'approved', 'overdue', 'paid'] as StatusFilter[]).map(s => {
+                                    const activeColor = s === 'overdue' ? 'text-red-600' : s === 'paid' ? 'text-emerald-600' : s === 'pending' ? 'text-amber-600' : s === 'approved' ? 'text-blue-600' : 'text-gray-900';
+                                    return (
+                                        <button
+                                            key={s}
+                                            onClick={() => setStatusFilter(s)}
+                                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${statusFilter === s ? `bg-white shadow-sm ${activeColor}` : 'text-gray-400 hover:text-gray-600'}`}
+                                        >
+                                            {s === 'all' ? 'Todos' : s === 'overdue' ? 'Atrasado' : STATUS_PT[s]}
+                                        </button>
+                                    );
+                                })}
                             </div>
 
                             <button

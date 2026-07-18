@@ -108,11 +108,31 @@ export const brokerService = {
 
     async saveProposal(proposal: Partial<BrokerProposal>) {
         if (proposal.id && !proposal.id.startsWith('prop-')) {
+            // Versionamento (F3): antes de alterar, guarda a versão atual em
+            // revision_history e incrementa version. version/revision_history são
+            // controlados aqui — o payload do caller não os define.
+            const { version, revision_history, ...clean } = proposal as Partial<BrokerProposal> & {
+                version?: number; revision_history?: unknown[];
+            };
+            const { data: current } = await supabase
+                .from('broker_portal_proposals')
+                .select('version, revision_history, unit_price, discount_pct, total_value, down_payment, monthly_installments, monthly_value, balloon_value, financing_value, payment_plan, status, updated_at')
+                .eq('id', proposal.id)
+                .single();
+
+            const prevVersion = (current?.version as number) ?? 1;
+            const history = Array.isArray(current?.revision_history) ? current!.revision_history : [];
+            const snapshot = current
+                ? { v: prevVersion, at: current.updated_at, ...current, version: undefined, revision_history: undefined }
+                : null;
+
             const { data, error } = await supabase
                 .from('broker_portal_proposals')
                 .update({
-                    ...proposal,
-                    updated_at: new Date().toISOString()
+                    ...clean,
+                    version: prevVersion + 1,
+                    revision_history: snapshot ? [...history, snapshot] : history,
+                    updated_at: new Date().toISOString(),
                 })
                 .eq('id', proposal.id)
                 .select()
@@ -150,6 +170,36 @@ export const brokerService = {
 
             return saved;
         }
+    },
+
+    /**
+     * Gera (ou reusa) o token do link público da proposta. O token é o segredo —
+     * quem tem o link vê a proposta pela RPC fn_proposal_public (sem login).
+     * Idempotente: se já houver token, retorna o existente.
+     */
+    async shareProposal(id: string): Promise<string> {
+        const { data: existing } = await supabase
+            .from('broker_portal_proposals')
+            .select('share_token')
+            .eq('id', id)
+            .single();
+        const current = (existing?.share_token as string | null) ?? null;
+        if (current) return current;
+
+        const token = crypto.randomUUID();
+        const { error } = await supabase
+            .from('broker_portal_proposals')
+            .update({ share_token: token })
+            .eq('id', id);
+        if (error) throw error;
+        return token;
+    },
+
+    /** Leitura pública da proposta pelo token (acesso anon via RPC SECURITY DEFINER). */
+    async getProposalByToken(token: string): Promise<Record<string, unknown> | null> {
+        const { data, error } = await supabase.rpc('fn_proposal_public', { p_token: token });
+        if (error) throw error;
+        return (data as Record<string, unknown>) ?? null;
     },
 
     async deleteProposal(id: string) {

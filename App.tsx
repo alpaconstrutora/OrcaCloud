@@ -146,6 +146,7 @@ const ClientPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
 };
 
 import PublicOrderView from './components/PublicOrderView';
+import PublicProposalView from './components/PublicProposalView';
 import { PublicEspecificacoesView } from './components/PublicEspecificacoesView';
 import { clientPortalService } from './services/clientPortalService';
 import { brokerPortalService } from './services/brokerPortalService';
@@ -532,6 +533,14 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   if (orderShareToken) return <PublicOrderView token={orderShareToken} />;
+
+  // ── Guard público: proposta de venda via share_token (F3 do PV) ──────────────
+  const proposalShareToken = React.useMemo(() => {
+    const match = window.location.pathname.match(/^\/proposta\/([0-9a-f-]{36})$/i);
+    return match ? match[1] : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (proposalShareToken) return <PublicProposalView token={proposalShareToken} />;
 
   // ── Guard público: aprovação de especificações de arquitetura do cliente ────
   const officesShareProjectId = React.useMemo(() => {

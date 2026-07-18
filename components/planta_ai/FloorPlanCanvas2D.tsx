@@ -3,6 +3,18 @@ import { ZoomIn, ZoomOut, Maximize, Minimize, RotateCcw, Focus } from 'lucide-re
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { computeFloorLayout } from './plantaGeometry';
 
+/** Unidade real materializada (plant_units.geometry_json + código/área) — quando presente,
+ *  o canvas desenha estas em vez de recalcular a grade paramétrica uniforme. */
+export interface RealUnitCell {
+  code: string;
+  area: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+}
+
 interface Props {
   buildingWidth?: number;
   buildingDepth?: number;
@@ -17,6 +29,10 @@ interface Props {
   minRearSetback?: number;
   onToggleFullscreen?: () => void;
   isFullscreen?: boolean;
+  /** Unidades reais do pavimento selecionado (materializadas). Se vazio/ausente, cai no paramétrico. */
+  realUnits?: RealUnitCell[];
+  /** Núcleo real do pavimento (plant_floors.geometry_json.core). Só usado com realUnits. */
+  realCore?: { x: number; y: number; width: number; height: number };
 }
 
 export default function FloorPlanCanvas2D({
@@ -32,7 +48,9 @@ export default function FloorPlanCanvas2D({
   minRearSetback = 0,
   isRotated: initialRotated,
   onToggleFullscreen,
-  isFullscreen = false
+  isFullscreen = false,
+  realUnits,
+  realCore
 }: Props) {
   // Auto-rotate if terrain is much deeper than it is wide
   const [isRotated, setIsRotated] = useState(
@@ -83,9 +101,23 @@ export default function FloorPlanCanvas2D({
   // Layout paramétrico compartilhado com o viewer 3D (grade de unidades + núcleo)
   const layout = computeFloorLayout(w, h, unitsPerFloor);
 
+  // Fonte das unidades: reais materializadas (precisas) quando existirem, senão a grade paramétrica.
+  const useReal = !!(realUnits && realUnits.length);
+  const cells = useReal
+    ? realUnits!.map((u, i) => ({
+        key: `real-${i}`, x: u.x, y: u.y, width: u.width, height: u.height,
+        color: u.color || '#bfdbfe', areaLabel: u.area, codeLabel: u.code,
+        labelY: u.y + (isRotated ? u.height - 2 : 4),
+      }))
+    : layout.units.map((u) => ({
+        key: `unit-${u.index}`, x: u.x, y: u.y, width: u.width, height: u.height,
+        color: u.color, areaLabel: privateAreaPerUnit, codeLabel: `U-${u.index + 1}`,
+        labelY: u.y + (isRotated ? u.height - 2 : 4),
+      }));
+
   // Draw units
-  const units: React.ReactNode[] = layout.units.map((u) => (
-    <g key={`unit-${u.index}`}>
+  const units: React.ReactNode[] = cells.map((u) => (
+    <g key={u.key}>
       <rect
         x={u.x}
         y={u.y}
@@ -96,7 +128,7 @@ export default function FloorPlanCanvas2D({
         stroke={u.color.replace('200', '500')}
         strokeWidth={0.1}
       />
-      {privateAreaPerUnit > 0 && (
+      {u.areaLabel > 0 && (
         <g transform={`translate(${u.x + u.width / 2}, ${u.y + u.height / 2})`}>
           <text
             transform={`rotate(${counterRot})`}
@@ -105,25 +137,26 @@ export default function FloorPlanCanvas2D({
             fontSize={fSizeMd}
             fill="#4b5563"
           >
-            {Math.round(privateAreaPerUnit)} m²
+            {Math.round(u.areaLabel)} m²
           </text>
         </g>
       )}
-      <g transform={`translate(${u.x + 2}, ${u.y + (isRotated ? u.height - 2 : 4)})`}>
+      <g transform={`translate(${u.x + 2}, ${u.labelY})`}>
         <text
            transform={`rotate(${counterRot})`}
            fontSize={fSizeSm}
            fill="#6b7280"
            dominantBaseline={isRotated ? "auto" : "hanging"}
         >
-           U-{u.index + 1}
+           {u.codeLabel}
         </text>
       </g>
     </g>
   ));
 
-  // Core (Circulation / Elevators)
-  const { x: coreX, y: coreY, width: coreWidth, height: coreHeight } = layout.core;
+  // Core (Circulation / Elevators) — real quando materializado, senão o paramétrico.
+  const core = useReal && realCore ? realCore : layout.core;
+  const { x: coreX, y: coreY, width: coreWidth, height: coreHeight } = core;
 
   return (
     <div className="w-full h-full relative flex items-center justify-center p-0 overflow-hidden bg-gray-50 rounded-xl">

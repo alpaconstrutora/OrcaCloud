@@ -838,6 +838,17 @@ export const empreendimentoService = {
         return this.listRegulatoryZones(emp.id);
     },
 
+    /** Mesma coisa, pelo vínculo com um estudo da Planta IA — usado pelo motor de geração de
+     *  cenários (aba "Regras" foi removida: os campos eram 100% duplicados do Mapa Regulatório,
+     *  achado do usuário em 2026-07-17). Sem empreendimento vinculado, [] — sem regras, sem gerar. */
+    async listRegulatoryZonesByPlantaStudy(plantaAiStudyId: string): Promise<EmpreendimentoRegulatoryZone[]> {
+        const { data: emp, error: empErr } = await supabase
+            .from('empreendimentos').select('id').eq('planta_ai_study_id', plantaAiStudyId).maybeSingle();
+        if (empErr) throw new Error(`Falha ao resolver empreendimento do estudo: ${empErr.message}`);
+        if (!emp) return [];
+        return this.listRegulatoryZones(emp.id);
+    },
+
     async createRegulatoryZone(zone: EmpreendimentoRegulatoryZoneInsert): Promise<EmpreendimentoRegulatoryZone> {
         const { data, error } = await supabase
             .from('empreendimento_regulatory_zones').insert(zone).select(REGULATORY_ZONE_COLS).single();

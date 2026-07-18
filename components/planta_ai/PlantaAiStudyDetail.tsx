@@ -9,13 +9,14 @@ import { plantaAiMaterializeService } from '../../services/plantaAiMaterializeSe
 import { PlantBriefing } from '../../types/plantaAi';
 import { useConfirm } from '../ui/confirm';
 import TerrainForm from './forms/TerrainForm';
-import UrbanRulesForm from './forms/UrbanRulesForm';
 import BriefingForm from './forms/BriefingForm';
 import ScenarioVisualizer2D from './ScenarioVisualizer2D';
 import FloorViewerTab from './FloorViewerTab';
 import View3DTab from './View3DTab';
 import EstudoTorresUnidades from '../torres/EstudoTorresUnidades';
 import EstudoMapaRegulatorio from '../EstudoMapaRegulatorio';
+import { empreendimentoService } from '../../services/empreendimentoService';
+import { zoneToUrbanRuleset } from '../../services/sync/regulatoryAdapter';
 import { PlantTerrain, PlantUrbanRuleset } from '../../types/plantaAi';
 
 interface Props {
@@ -24,7 +25,7 @@ interface Props {
 }
 
 export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
-  const [activeTab, setActiveTab] = useState<'Terreno' | 'Regras' | 'Briefing' | 'Cenários' | 'Torres & Unidades' | 'Mapa Regulatório' | 'Plantas' | '3D'>('Terreno');
+  const [activeTab, setActiveTab] = useState<'Terreno' | 'Briefing' | 'Cenários' | 'Torres & Unidades' | 'Mapa Regulatório' | 'Plantas' | '3D'>('Terreno');
   const [study, setStudy] = useState<PlantStudy | null>(null);
   const [scenarios, setScenarios] = useState<PlantScenario[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -58,8 +59,10 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
   async function fetchContext() {
     const { data: tData } = await supabase.from('plant_terrains').select('*').eq('study_id', studyId).single();
     if (tData) setTerrain(tData as PlantTerrain);
-    const { data: rData } = await supabase.from('plant_urban_rulesets').select('*').eq('study_id', studyId).single();
-    if (rData) setRules(rData as PlantUrbanRuleset);
+    // Regras vem do Mapa Regulatório do empreendimento vinculado — não mais de um formulário
+    // próprio (plant_urban_rulesets): os campos eram 100% duplicados do mapa compartilhado.
+    const zones = await empreendimentoService.listRegulatoryZonesByPlantaStudy(studyId).catch(() => []);
+    setRules(zoneToUrbanRuleset(zones[0], studyId));
     const { data: bData } = await supabase.from('plant_briefings').select('*').eq('study_id', studyId).maybeSingle();
     if (bData) setBriefing(bData as PlantBriefing);
   }
@@ -87,11 +90,16 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
     setIsGenerating(true);
     // Busca dados para o motor
     const { data: terrain } = await supabase.from('plant_terrains').select('*').eq('study_id', studyId).single();
-    const { data: rules } = await supabase.from('plant_urban_rulesets').select('*').eq('study_id', studyId).single();
+    const zones = await empreendimentoService.listRegulatoryZonesByPlantaStudy(studyId).catch(() => []);
+    const rules = zoneToUrbanRuleset(zones[0], studyId);
     const { data: briefing } = await supabase.from('plant_briefings').select('*').eq('study_id', studyId).single();
-    
+
     if (!terrain || !rules || !briefing) {
-      alert("Preencha o terreno, regras e briefing antes de gerar os cenários.");
+      alert(
+        !rules
+          ? "Sem regras urbanísticas: vincule este estudo a um empreendimento com o Mapa Regulatório preenchido, e preencha o terreno e o briefing."
+          : "Preencha o terreno e o briefing antes de gerar os cenários."
+      );
       setIsGenerating(false);
       return;
     }
@@ -165,7 +173,7 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
    */
   async function materialize(scenario: PlantScenario) {
     if (!terrain || !rules) {
-      alert('Preencha Terreno e Regras antes de materializar as unidades.');
+      alert('Preencha o Terreno e vincule o empreendimento com o Mapa Regulatório preenchido antes de materializar as unidades.');
       return;
     }
     setMaterializingId(scenario.id);
@@ -255,7 +263,7 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
 
       <div className="border-b border-gray-200 mb-6">
         <nav className="-mb-px flex space-x-8">
-          {['Terreno', 'Regras', 'Briefing', 'Cenários', 'Torres & Unidades', 'Mapa Regulatório', 'Plantas', '3D'].map((tab) => (
+          {['Terreno', 'Briefing', 'Cenários', 'Torres & Unidades', 'Mapa Regulatório', 'Plantas', '3D'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -275,7 +283,6 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
 
       <div className="bg-white p-6 shadow sm:rounded-md min-h-[400px]">
         {activeTab === 'Terreno' && <TerrainForm studyId={studyId} />}
-        {activeTab === 'Regras' && <UrbanRulesForm studyId={studyId} />}
         {activeTab === 'Briefing' && <BriefingForm studyId={studyId} />}
         
         {activeTab === 'Cenários' && (

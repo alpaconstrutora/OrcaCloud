@@ -2,10 +2,8 @@ import { supabase } from '../lib/supabase';
 import { PlantScenario, PlantStudy } from '../types/plantaAi';
 import { commercialService } from './commercialService';
 import { empreendimentoService } from './empreendimentoService';
+import { zoneToUrbanRuleset } from './sync/regulatoryAdapter';
 import { PropertyStatus } from '../types/imovib';
-
-/** Número de um campo regulatório em formato BR ("0,1" → 0.1). parseFloat direto pararia na vírgula. */
-const regNum = (v?: string): number => (v ? parseFloat(String(v).replace(',', '.')) || 0 : 0);
 
 export class PlantaAiIntegration {
   /**
@@ -38,8 +36,10 @@ export class PlantaAiIntegration {
         .eq('study_id', studyId)
         .single();
 
-      // 3. Busca regras urbanísticas e briefing
-      const { data: ruleset } = await supabase.from('plant_urban_rulesets').select('*').eq('study_id', studyId).maybeSingle();
+      // 3. Regras urbanísticas: vêm do Mapa Regulatório do empreendimento vinculado (não mais
+      // de plant_urban_rulesets — a aba "Regras" foi removida, os campos eram duplicados).
+      const regZones = await empreendimentoService.listRegulatoryZonesByPlantaStudy(studyId).catch(() => []);
+      const ruleset = zoneToUrbanRuleset(regZones[0], studyId);
       const { data: briefing } = await supabase.from('plant_briefings').select('*').eq('study_id', studyId).maybeSingle();
 
       // 4. Verifica se já existe um estudo de viabilidade vinculado
@@ -276,10 +276,6 @@ export class PlantaAiIntegration {
         
       if (imovibErr || !imovib) throw new Error(`Estudo Imovib não encontrado: ${imovibErr?.message}`);
 
-      // Zona urbanística: o mapa regulatório mora no empreendimento (fonte única). Resolve
-      // pelo empreendimento vinculado ao estudo Imovib; sem empreendimento, fica sem zona.
-      const zone = (await empreendimentoService.listRegulatoryZonesByImovibStudy(imovibStudyId))[0] ?? null;
-
       // 2. Cria o estudo no Planta AI mapeando cidade e endereço
       const { data: newPlantStudy, error: insertErr } = await supabase
         .from('plant_studies')
@@ -308,20 +304,12 @@ export class PlantaAiIntegration {
         slope_type: 'Plano'
       });
 
-      // 4. Cria as Regras Urbanísticas
-      await supabase.from('plant_urban_rulesets').insert({
-        study_id: newPlantStudy.id,
-        allowed_use: imovib.zoning_info || 'Residencial',
-        zone_name: imovib.zoning,
-        occupancy_rate: imovib.occupancy_rate_max || imovib.occupancy_rate || 0,
-        floor_area_ratio_basic: imovib.ca_basic || 0,
-        floor_area_ratio_max: imovib.ca_max || 0,
-        permeability_rate: zone?.taxa_permeabilidade_minima ? parseFloat(zone.taxa_permeabilidade_minima) : 0,
-        max_height: zone?.gabarito_altura_maxima ? parseFloat(zone.gabarito_altura_maxima) : 0,
-        confidence_level: 'Baixo'
-      });
+      // Regras urbanísticas: não são mais escritas em plant_urban_rulesets (a aba "Regras" foi
+      // removida — o motor lê o Mapa Regulatório do empreendimento vinculado). Se o empreendimento
+      // que referencia este estudo Imovib também for vinculado ao novo estudo Planta, o mapa já
+      // está lá, sem cópia nenhuma.
 
-      // 5. Cria o Briefing
+      // 4. Cria o Briefing
       await supabase.from('plant_briefings').insert({
         study_id: newPlantStudy.id,
         development_type: imovib.segment || 'Residencial',
@@ -362,8 +350,6 @@ export class PlantaAiIntegration {
         
       if (imovibErr || !imovib) throw new Error(`Estudo Imovib não encontrado: ${imovibErr?.message}`);
 
-      const zone = (await empreendimentoService.listRegulatoryZonesByImovibStudy(imovibStudyId))[0] ?? null;
-
       // Atualiza Terreno
       await supabase.from('plant_terrains')
         .update({
@@ -373,18 +359,8 @@ export class PlantaAiIntegration {
         })
         .eq('study_id', plantaAiStudyId);
 
-      // Atualiza Regras Urbanísticas
-      await supabase.from('plant_urban_rulesets')
-        .update({
-          allowed_use: imovib.zoning_info || 'Residencial',
-          zone_name: imovib.zoning,
-          occupancy_rate: imovib.occupancy_rate_max || imovib.occupancy_rate || 0,
-          floor_area_ratio_basic: imovib.ca_basic || 0,
-          floor_area_ratio_max: imovib.ca_max || 0,
-          permeability_rate: regNum(zone?.taxa_permeabilidade_minima),
-          max_height: regNum(zone?.gabarito_altura_maxima),
-        })
-        .eq('study_id', plantaAiStudyId);
+      // Regras urbanísticas: não são mais atualizadas em plant_urban_rulesets — o motor lê o
+      // Mapa Regulatório do empreendimento vinculado, que já é a fonte única.
 
       // Atualiza Briefing
       await supabase.from('plant_briefings')

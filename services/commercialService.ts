@@ -3,7 +3,24 @@ import { Property, PropertyDeal, PropertyStatus } from '../types';
 import { commercialFinanceService } from './commercialFinanceService';
 import { projectService } from './projectService';
 
+/**
+ * Traduz a violação de FK (23503) ao excluir um imóvel para uma frase acionável.
+ * Sem isso o usuário via o texto cru do Postgres ("violates foreign key
+ * constraint commercial_properties_parent_id_fkey"), que não diz o que fazer.
+ */
+function translatePropertyDeleteError(error: { code?: string; message?: string }): string {
+    const msg = error?.message || 'Erro desconhecido';
+    if (error?.code !== '23503') return msg;
 
+    if (msg.includes('parent_id')) {
+        return 'Este imóvel tem unidades vinculadas a ele. Exclua as unidades primeiro ou confirme a exclusão do edifício inteiro.';
+    }
+    // broker_portal_* usa ON DELETE RESTRICT — reserva/proposta de corretor trava o delete
+    if (msg.includes('broker')) {
+        return 'Este imóvel tem reservas ou propostas de corretor vinculadas. Cancele-as no Portal do Corretor antes de excluir.';
+    }
+    return `Não foi possível excluir: há registros vinculados a este imóvel. (${msg})`;
+}
 
 export const commercialService = {
     async listProperties(organizationId?: string, projectId?: string, purpose?: 'SALE' | 'RENTAL' | 'BOTH') {
@@ -119,14 +136,54 @@ export const commercialService = {
         return data as Property[];
     },
 
-    async deleteProperty(id: string) {
-        // Now handled by database-level ON DELETE CASCADE on parent_id
+    /**
+     * O que será destruído ao excluir esta property — para a tela poder avisar
+     * ANTES, em vez de deixar vazar o erro cru de FK do Postgres.
+     *
+     * Contexto: `commercial_properties.parent_id` é auto-referencial e, no banco,
+     * NÃO tem ON DELETE CASCADE (a migration 20260226000001 criou assim no repo,
+     * mas o efeito não está no schema real). Logo, excluir um edifício com
+     * unidades filhas falha com 23503. Mesmo que tivesse cascade, seria pior:
+     * `commercial_deals.property_id` é CASCADE, então as negociações sumiriam
+     * em silêncio junto.
+     */
+    async getPropertyDeleteImpact(id: string): Promise<{ children: number; deals: number }> {
+        const { data: kids } = await supabase
+            .from('commercial_properties')
+            .select('id')
+            .eq('parent_id', id);
+        const childIds = (kids || []).map(k => k.id as string);
+
+        const { count } = await supabase
+            .from('commercial_deals')
+            .select('id', { count: 'exact', head: true })
+            .in('property_id', [id, ...childIds]);
+
+        return { children: childIds.length, deals: count || 0 };
+    },
+
+    /**
+     * `cascade` só deve vir true depois de a tela ter mostrado o impacto e o
+     * usuário ter confirmado — apagar as filhas é irreversível e leva junto as
+     * negociações delas (FK CASCADE em commercial_deals).
+     */
+    async deleteProperty(id: string, cascade = false) {
+        if (cascade) {
+            // Apaga as filhas primeiro: sem CASCADE no parent_id, o delete do
+            // pai falharia enquanto elas existissem.
+            const { error: childErr } = await supabase
+                .from('commercial_properties')
+                .delete()
+                .eq('parent_id', id);
+            if (childErr) throw new Error(translatePropertyDeleteError(childErr));
+        }
+
         const { error } = await supabase
             .from('commercial_properties')
             .delete()
             .eq('id', id);
 
-        if (error) throw error;
+        if (error) throw new Error(translatePropertyDeleteError(error));
     },
 
     async listDeals(propertyId?: string) {

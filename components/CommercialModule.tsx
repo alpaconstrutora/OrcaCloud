@@ -9,6 +9,8 @@ import PropertyModal from './PropertyModal';
 import DealModal from './DealModal';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import Button from './ui/Button';
+import { usePersistedState } from './ui/TableUtils';
+import { useConfirm } from './ui/confirm';
 
 interface CommercialModuleProps {
     organizationId?: string;
@@ -25,12 +27,20 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
     const [clients, setClients] = useState<Client[]>([]);
     const [projects, setProjects] = useState<ProjectData[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
+    // §3: filtro sobrevive a navegação/reload
+    const [searchTerm, setSearchTerm] = usePersistedState<string>('commercial:search', '');
     const [viewMode, setViewMode] = useState<'grid' | 'list' | 'tower'>(
         (localStorage.getItem('commercial_view_mode') as any) || 'tower'
     );
     const [selectedProperties, setSelectedProperties] = useState<string[]>([]);
     const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+    const confirm = useConfirm();
+    // §13: toast no lugar de alert() nativo
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
 
     // Modals Control
     const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
@@ -96,7 +106,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
 
     const handleSaveProperty = async (data: any) => {
         if (!organizationId && !data.organization_id) {
-            alert('Erro: Nenhuma organização ativa selecionada. Por favor, selecione uma empresa no menu lateral.');
+            notify('Nenhuma organização ativa selecionada. Selecione uma empresa no menu lateral.', 'error');
             return;
         }
 
@@ -208,7 +218,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                         }
                     }
 
-                    alert(`Edifício e ${totalCount} unidades processados com sucesso!`);
+                    notify(`Edifício e ${totalCount} unidades processados com sucesso!`);
                 }
             }
             // Fallback legado
@@ -235,7 +245,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                     });
                 }
                 await commercialService.savePropertiesBatch(units);
-                alert(`Edifício e ${_bulkConfig.count} unidades cadastrados com sucesso!`);
+                notify(`Edifício e ${_bulkConfig.count} unidades cadastrados com sucesso!`);
             }
             // Se for atualização de um Edifício existente, propagar alteração de endereço para as unidades
             else if (editingProperty && propertyToSave.type === 'BUILDING') {
@@ -260,10 +270,10 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                     });
                     console.log(`[Commercial] Cascading update for building units of building ${savedProperty.id} (Address/Client)`);
                 }
-                alert('Edifício e unidades atualizados com sucesso!');
+                notify('Edifício e unidades atualizados com sucesso!');
             }
             else {
-                alert(editingProperty ? 'Imóvel atualizado com sucesso!' : 'Imóvel cadastrado com sucesso!');
+                notify(editingProperty ? 'Imóvel atualizado com sucesso!' : 'Imóvel cadastrado com sucesso!');
             }
 
             setIsPropertyModalOpen(false);
@@ -271,7 +281,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
             loadData();
         } catch (err: any) {
             console.error('[Commercial] Save Error:', err);
-            alert('Erro ao salvar imóvel: ' + (err.message || 'Erro desconhecido'));
+            notify(err.message || 'Erro ao salvar imóvel.', 'error');
         }
     };
 
@@ -283,36 +293,62 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
             // (Esta responsabilidade agora é do commercialService.ts)
 
 
-            alert('Negociação registrada com sucesso!');
+            notify('Negociação registrada com sucesso!');
             setIsDealModalOpen(false);
             setEditingDeal(undefined);
             loadData();
         } catch (err: any) {
-            alert('Erro ao registrar negócio: ' + (err.message || 'Erro desconhecido'));
+            notify(err.message || 'Erro ao registrar negócio.', 'error');
         }
     };
 
     const handleDeleteDeal = async (id: string) => {
-        if (window.confirm('Tem certeza que deseja excluir esta negociação?')) {
-            try {
-                await commercialService.deleteDeal(id);
-                alert('Negociação excluída!');
-                loadData();
-            } catch (err: any) {
-                alert('Erro ao excluir: ' + (err.message || 'Erro desconhecido'));
-            }
+        const ok = await confirm({
+            title: 'Excluir negociação?',
+            message: 'Tem certeza que deseja excluir esta negociação?',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        try {
+            await commercialService.deleteDeal(id);
+            notify('Negociação excluída!');
+            loadData();
+        } catch (err: any) {
+            notify(err.message || 'Erro ao excluir negociação.', 'error');
         }
     };
 
     const handleDeleteProperty = async (id: string) => {
-        if (window.confirm('Tem certeza que deseja excluir este imóvel?')) {
-            try {
-                await commercialService.deleteProperty(id);
-                alert('Imóvel excluído!');
-                loadData();
-            } catch (err: any) {
-                alert('Erro ao excluir: ' + (err.message || 'Erro desconhecido'));
-            }
+        // Mede o estrago ANTES de perguntar: excluir um edifício leva junto as
+        // unidades filhas e as negociações delas (FK CASCADE em commercial_deals).
+        let impact = { children: 0, deals: 0 };
+        try {
+            impact = await commercialService.getPropertyDeleteImpact(id);
+        } catch (err) {
+            console.error('[Commercial] falha ao medir impacto da exclusão:', err);
+        }
+
+        const parts: string[] = [];
+        if (impact.children > 0) parts.push(`${impact.children} unidade${impact.children > 1 ? 's' : ''}`);
+        if (impact.deals > 0) parts.push(`${impact.deals} negociaç${impact.deals > 1 ? 'ões' : 'ão'}`);
+
+        const ok = await confirm({
+            title: impact.children > 0 ? 'Excluir edifício e tudo dentro dele?' : 'Excluir imóvel?',
+            message: parts.length
+                ? `Isto vai apagar ${parts.join(' e ')} vinculada(s) a este imóvel. Não pode ser desfeito.`
+                : 'Tem certeza que deseja excluir este imóvel?',
+            variant: 'danger',
+            confirmLabel: impact.children > 0 ? 'Excluir tudo' : 'Excluir',
+        });
+        if (!ok) return;
+
+        try {
+            await commercialService.deleteProperty(id, impact.children > 0);
+            notify('Imóvel excluído!');
+            loadData();
+        } catch (err: any) {
+            notify(err.message || 'Erro ao excluir imóvel.', 'error');
         }
     };
 
@@ -367,15 +403,16 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
         occupancyRate: filteredProperties.length > 0 ? ((filteredProperties.filter(p => p.status === PropertyStatus.SOLD || p.status === PropertyStatus.RENTED).length / filteredProperties.length) * 100).toFixed(1) : '0.0'
     };
 
+    // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
     const getStatusColor = (status: PropertyStatus) => {
         switch (status) {
-            case PropertyStatus.AVAILABLE: return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
-            case PropertyStatus.SOLD: return 'bg-red-500/10 text-red-500 border-red-500/20';
-            case PropertyStatus.RENTED: return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
-            case PropertyStatus.RESERVED: return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
-            case PropertyStatus.EXCHANGED: return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
-            case PropertyStatus.STUDY: return 'bg-slate-500/10 text-slate-500 border-slate-500/20';
-            default: return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
+            case PropertyStatus.AVAILABLE: return 'text-emerald-600';
+            case PropertyStatus.SOLD: return 'text-red-600';
+            case PropertyStatus.RENTED: return 'text-purple-600';
+            case PropertyStatus.RESERVED: return 'text-amber-600';
+            case PropertyStatus.EXCHANGED: return 'text-blue-600';
+            case PropertyStatus.STUDY: return 'text-slate-600';
+            default: return 'text-gray-600';
         }
     };
 
@@ -397,11 +434,11 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
         try {
             setLoading(true);
             await commercialService.updatePropertiesBatch(selectedProperties, updates);
-            alert(`${selectedProperties.length} imóveis atualizados com sucesso!`);
+            notify(`${selectedProperties.length} imóveis atualizados com sucesso!`);
             setSelectedProperties([]);
             loadData();
         } catch (err: any) {
-            alert('Erro na atualização em massa: ' + (err.message || 'Erro desconhecido'));
+            notify(err.message || 'Erro na atualização em massa.', 'error');
         } finally {
             setLoading(false);
         }
@@ -459,7 +496,8 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                     />
                 </div>
                 <div className="absolute top-6 right-6 z-10 flex flex-col gap-2 scale-90 origin-top-right">
-                    <span className={`px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest border ${getStatusColor(property.status)} backdrop-blur-xl shadow-xl`}>
+                    {/* Sobre a foto: o contraste vem do container branco, não de pílula no texto (§8) */}
+                    <span className={`bg-white/90 backdrop-blur-md px-3 py-1 rounded-[6px] shadow-sm text-sm font-normal ${getStatusColor(property.status)}`}>
                         {getStatusLabel(property.status)}
                     </span>
                     <div className="flex gap-2">
@@ -731,64 +769,50 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                                                     className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                                                     onClick={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }}
                                                 >
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-mono text-sm font-bold text-gray-700">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                                         {property.name}
                                                     </td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                         {property.client_id ? (
                                                             <div className="flex items-center gap-2 text-blue-600">
                                                                 <User className="w-3.5 h-3.5" />
-                                                                <span className="text-xs font-black uppercase tracking-widest leading-none">
+                                                                <span className="text-sm font-normal">
                                                                     {clients.find(c => c.id === property.client_id)?.name || 'Carregando...'}
                                                                 </span>
                                                             </div>
                                                         ) : (
-                                                            <span className="text-xs font-bold text-gray-300 uppercase tracking-widest italic">Sem vínculo</span>
+                                                            <span className="text-sm font-normal text-gray-400">Sem vínculo</span>
                                                         )}
                                                     </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-medium text-gray-700">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                                         {property.block || '-'}
                                                     </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-medium text-gray-700">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                                         {property.floor || '-'}
                                                     </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-medium text-gray-600">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                         {property.private_area ? `${property.private_area}m²` : '-'}
                                                     </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-medium text-gray-400">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                         {property.common_area ? `${property.common_area}m²` : '-'}
                                                     </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 font-bold text-blue-600">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-blue-600">
                                                         {property.total_area ? `${property.total_area}m²` : '-'}
                                                     </td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-black text-gray-900">
+                                                    {/* §7: font-medium é permitido — e só — em valor financeiro */}
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price || 0)}
                                                     </td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        <span className={`px-2 py-1 rounded-full text-xs font-black uppercase tracking-wider ${property.status === PropertyStatus.AVAILABLE ? 'bg-green-100 text-green-800' :
-                                                            property.status === PropertyStatus.SOLD ? 'bg-blue-50 text-blue-700' :
-                                                                property.status === PropertyStatus.RESERVED ? 'bg-amber-100 text-amber-800' :
-                                                                    property.status === PropertyStatus.EXCHANGED ? 'bg-blue-100 text-blue-800' :
-                                                                        'bg-gray-100 text-gray-800'
-                                                            }`}>
+                                                        <span className={`text-sm font-normal ${getStatusColor(property.status)}`}>
                                                             {getStatusLabel(property.status)}
                                                         </span>
                                                     </td>
+                                                    {/* §9.1: editar é a ação dominante e já acontece no clique da linha —
+                                                        a coluna fica só com o que sobra (exclusão, isolada de propósito). */}
                                                     <td className="px-6 py-2.5 text-right">
-                                                        <div className="flex items-center justify-end gap-3">
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); setEditingProperty(property); setIsPropertyModalOpen(true); }}
-                                                                className="text-blue-600 hover:text-blue-800 text-button font-black uppercase tracking-widest p-1.5 hover:bg-blue-50 rounded-lg transition-all flex items-center gap-1.5"
-                                                            >
-                                                                <Edit className="w-3.5 h-3.5" />
-                                                                Editar
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleDeleteProperty(property.id); }}
-                                                                className="text-red-400 hover:text-red-600 text-button font-black uppercase tracking-widest p-1.5 hover:bg-red-50 rounded-lg transition-all"
-                                                            >
-                                                                Excluir
-                                                            </button>
+                                                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                            <ActionIconButton kind="delete" onClick={() => handleDeleteProperty(property.id)} />
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -912,7 +936,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                                                 <ActionIconButton kind="delete" onClick={() => handleDeleteDeal(deal.id)} />
                                             </div>
                                             <div className="flex items-center gap-2 mb-6">
-                                                <span className={`px-5 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${deal.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                                                <span className={`text-sm font-normal ${deal.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-600'}`}>
                                                     {deal.status === 'COMPLETED' ? 'Concluído' :
                                                         deal.status === 'PENDING' ? 'Pendente' :
                                                             deal.status === 'CANCELLED' ? 'Cancelado' : 'Em Negociação'}
@@ -972,14 +996,20 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
 
                                     <button
                                         onClick={async () => {
-                                            if (!confirm('Sincronizar todas as negociações com o Financeiro?')) return;
+                                            const ok = await confirm({
+                                                title: 'Sincronizar com o Financeiro?',
+                                                message: 'Todas as negociações serão recriadas no Financeiro.',
+                                                variant: 'warning',
+                                                confirmLabel: 'Sincronizar',
+                                            });
+                                            if (!ok) return;
                                             const { commercialFinanceService } = await import('../services/commercialFinanceService');
                                             try {
-                                                if (!organizationId) { alert('Organização não selecionada.'); return; }
+                                                if (!organizationId) { notify('Organização não selecionada.', 'error'); return; }
                                                 const count = await commercialFinanceService.syncAllOrganizationDeals(organizationId);
-                                                alert(`${count} negociações foram recriadas no Financeiro!`);
+                                                notify(`${count} negociações foram recriadas no Financeiro!`);
                                             } catch (err: any) {
-                                                alert('Erro: ' + err.message);
+                                                notify(err.message || 'Erro ao sincronizar.', 'error');
                                             }
                                         }}
                                         className="h-full bg-emerald-50 border-4 border-dashed border-emerald-200 rounded-[2.5rem] p-10 flex flex-col items-center justify-center group hover:bg-emerald-100 hover:border-emerald-300 transition-all"
@@ -1017,48 +1047,50 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
 
                                             return (
                                                 <tr key={deal.id} className="hover:bg-blue-50/30 transition-colors group cursor-pointer" onClick={() => { setEditingDeal(deal); setIsDealModalOpen(true); }}>
-                                                    <td className="px-8 py-6">
-                                                        <span className="font-black text-gray-900 group-hover:text-blue-600 transition-colors">{property?.name || '---'}</span>
+                                                    <td className="px-6 py-2.5 text-sm font-normal text-gray-700 group-hover:text-blue-600 transition-colors">
+                                                        {property?.name || '---'}
                                                     </td>
-                                                    <td className="px-8 py-6 font-bold text-gray-600">
+                                                    <td className="px-6 py-2.5 text-sm font-normal text-gray-600">
                                                         {client?.name || 'Não vinculado'}
                                                     </td>
-                                                    <td className="px-8 py-6">
+                                                    <td className="px-6 py-2.5">
                                                         {linkedProject ? (
-                                                            <div className="flex items-center gap-1.5 text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded-lg text-xs uppercase tracking-wider w-fit">
+                                                            <span className="flex items-center gap-1.5 text-sm font-normal text-blue-600">
                                                                 <Layers className="w-3.5 h-3.5" />
                                                                 {linkedProject.name}
-                                                            </div>
+                                                            </span>
                                                         ) : parentBuilding ? (
-                                                            <div title="Vínculo automático via Imóvel (Empreendimento)" className="flex items-center gap-1.5 text-gray-500 font-bold bg-gray-100 px-2 py-1 rounded-lg text-xs uppercase tracking-wider w-fit">
+                                                            <span title="Vínculo automático via Imóvel (Empreendimento)" className="flex items-center gap-1.5 text-sm font-normal text-gray-500">
                                                                 <Building2 className="w-3.5 h-3.5" />
                                                                 {parentBuilding.name}
-                                                            </div>
+                                                            </span>
                                                         ) : (
-                                                            <span className="text-gray-400 italic text-xs uppercase font-bold tracking-widest">Não vinculada</span>
+                                                            <span className="text-sm font-normal text-gray-400">Não vinculada</span>
                                                         )}
                                                     </td>
-                                                    <td className="px-8 py-6">
-                                                        <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${deal.type === 'SALE' ? 'bg-blue-600 text-white' : deal.type === 'RENTAL' ? 'bg-purple-600 text-white' : 'bg-amber-600 text-white'}`}>
+                                                    <td className="px-6 py-2.5">
+                                                        <span className={`text-sm font-normal ${deal.type === 'SALE' ? 'text-blue-600' : deal.type === 'RENTAL' ? 'text-purple-600' : 'text-amber-600'}`}>
                                                             {deal.type === 'SALE' ? 'Venda' : deal.type === 'RENTAL' ? 'Locação' : 'Serviço'}
                                                         </span>
                                                     </td>
-                                                    <td className="px-8 py-6 font-mono font-black text-gray-900">
+                                                    {/* §7: font-medium é permitido — e só — em valor financeiro */}
+                                                    <td className="px-6 py-2.5 text-sm font-medium text-gray-800">
                                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value)}
                                                     </td>
-                                                    <td className="px-8 py-6 text-table-body font-bold text-gray-400 uppercase tracking-tighter">
+                                                    <td className="px-6 py-2.5 text-sm font-normal text-gray-600">
                                                         {new Date(deal.date).toLocaleDateString('pt-BR')}
                                                     </td>
-                                                    <td className="px-8 py-6 font-mono font-bold text-blue-600">
+                                                    <td className="px-6 py-2.5 text-sm font-normal text-blue-600">
                                                         {deal.contract_number || '---'}
                                                     </td>
-                                                    <td className="px-8 py-6">
-                                                        <span className={`px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${deal.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                                                    <td className="px-6 py-2.5">
+                                                        <span className={`text-sm font-normal ${deal.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-600'}`}>
                                                             {deal.status === 'COMPLETED' ? 'Concluído' : 'Pendente'}
                                                         </span>
                                                     </td>
-                                                    <td className="px-8 py-6 text-right">
-                                                        <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    {/* §9: coluna de ações sempre visível — nunca opacity-0/group-hover */}
+                                                    <td className="px-6 py-2.5 text-right">
+                                                        <div className="flex justify-end gap-1.5">
                                                             <ActionIconButton kind="edit" onClick={(e) => { e.stopPropagation(); setEditingDeal(deal); setIsDealModalOpen(true); }} />
                                                             <ActionIconButton kind="delete" onClick={(e) => { e.stopPropagation(); handleDeleteDeal(deal.id); }} />
                                                         </div>
@@ -1169,6 +1201,16 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                 initialData={editingDeal}
                 defaultType={dealTypeFilter}
             />
+
+            {/* §13 Toast */}
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <Tag className="w-4 h-4 shrink-0" />
+                    {notification.message}
+                </div>
+            )}
         </div >
     );
 };

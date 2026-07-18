@@ -410,20 +410,36 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     };
 
     const handleDeleteProperty = async (id: string) => {
+        // Mede o estrago ANTES de perguntar: excluir um edifício leva junto as
+        // unidades filhas e as negociações delas (FK CASCADE em commercial_deals).
+        let impact = { children: 0, deals: 0 };
+        try {
+            impact = await commercialService.getPropertyDeleteImpact(id);
+        } catch (err) {
+            console.error('[Sales] falha ao medir impacto da exclusão:', err);
+        }
+
+        const parts: string[] = [];
+        if (impact.children > 0) parts.push(`${impact.children} unidade${impact.children > 1 ? 's' : ''}`);
+        if (impact.deals > 0) parts.push(`${impact.deals} negociaç${impact.deals > 1 ? 'ões' : 'ão'}`);
+
         const ok = await confirm({
-            title: 'Excluir imóvel?',
-            message: 'Tem certeza que deseja excluir este imóvel?',
+            title: impact.children > 0 ? 'Excluir edifício e tudo dentro dele?' : 'Excluir imóvel?',
+            message: parts.length
+                ? `Isto vai apagar ${parts.join(' e ')} vinculada(s) a este imóvel. Não pode ser desfeito.`
+                : 'Tem certeza que deseja excluir este imóvel?',
             variant: 'danger',
-            confirmLabel: 'Excluir',
+            confirmLabel: impact.children > 0 ? 'Excluir tudo' : 'Excluir',
         });
         if (!ok) return;
+
         try {
-            await commercialService.deleteProperty(id);
+            await commercialService.deleteProperty(id, impact.children > 0);
             notify('Imóvel excluído!');
             loadData();
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
-            notify('Erro ao excluir: ' + error.message, 'error');
+            notify(error.message || 'Erro ao excluir imóvel.', 'error');
         }
     };
 

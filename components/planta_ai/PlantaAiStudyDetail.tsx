@@ -6,6 +6,7 @@ import { useStore } from '../../store/useStore';
 import { PlantaAiEngine } from '../../services/plantaAiEngine';
 import { PlantaAiIntegration } from '../../services/plantaAiIntegration';
 import { plantaAiMaterializeService } from '../../services/plantaAiMaterializeService';
+import { plantaAiFromTowersService } from '../../services/plantaAiFromTowersService';
 import { PlantBriefing } from '../../types/plantaAi';
 import { useConfirm } from '../ui/confirm';
 import TerrainForm from './forms/TerrainForm';
@@ -29,6 +30,7 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
   const [study, setStudy] = useState<PlantStudy | null>(null);
   const [scenarios, setScenarios] = useState<PlantScenario[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingFromTowers, setIsGeneratingFromTowers] = useState(false);
   const [selectedScenarioForView, setSelectedScenarioForView] = useState<PlantScenario | null>(null);
   const [terrain, setTerrain] = useState<PlantTerrain | null>(null);
   const [rules, setRules] = useState<PlantUrbanRuleset | null>(null);
@@ -174,6 +176,37 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
       setActiveTab('Cenários');
     }
     setIsGenerating(false);
+  }
+
+  /**
+   * Caminho alternativo (mais preciso) de geração: em vez do motor paramétrico do briefing,
+   * constrói um cenário por torre a partir das Torres & Unidades reais do empreendimento
+   * vinculado — cada plant_unit sai da unidade real (área/tipologia/dorm/vagas), já
+   * materializada em plant_floors/plant_units. Só disponível com empreendimento vinculado.
+   */
+  async function generateFromTowers() {
+    if (!linkedEmp) {
+      alert('Vincule este estudo a um empreendimento (com Torres & Unidades cadastradas) antes de gerar a planta a partir delas.');
+      return;
+    }
+    setIsGeneratingFromTowers(true);
+    try {
+      const r = await plantaAiFromTowersService.generateFromTowers(studyId, linkedEmp.id, terrain, rules);
+      await fetchScenarios();
+      await refreshRealTowerData(linkedEmp.id);
+      setActiveTab('Cenários');
+      const parts = [
+        `${r.towersProcessed} torre(s)`,
+        `${r.scenariosCreated + r.scenariosUpdated} cenário(s)`,
+        `${r.floorsUpserted} pavimento(s)`,
+        `${r.unitsUpserted} unidade(s)`,
+      ];
+      alert(`Planta gerada a partir de Torres & Unidades: ${parts.join(', ')}.` + (r.warnings.length ? `\n\n${r.warnings.join('\n')}` : ''));
+    } catch (err: any) {
+      alert('Erro ao gerar a partir de Torres & Unidades: ' + (err.message || err));
+    } finally {
+      setIsGeneratingFromTowers(false);
+    }
   }
 
   async function sendToViabilidade(scenarioId: string) {
@@ -326,13 +359,25 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
           <div>
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-bold">Cenários Gerados</h2>
-              <button 
-                onClick={generateScenarios}
-                disabled={isGenerating}
-                className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-400"
-              >
-                {isGenerating ? 'Gerando...' : 'Gerar / Atualizar Cenários'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={generateFromTowers}
+                  disabled={isGeneratingFromTowers || !linkedEmp}
+                  title={linkedEmp
+                    ? 'Gera um cenário preciso por torre a partir das unidades reais cadastradas em Torres & Unidades'
+                    : 'Disponível apenas com um empreendimento vinculado'}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:bg-gray-400"
+                >
+                  {isGeneratingFromTowers ? 'Gerando...' : 'Gerar a partir de Torres & Unidades'}
+                </button>
+                <button
+                  onClick={generateScenarios}
+                  disabled={isGenerating}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-400"
+                >
+                  {isGenerating ? 'Gerando...' : 'Gerar / Atualizar Cenários (Briefing)'}
+                </button>
+              </div>
             </div>
             
             {scenarios.length === 0 ? (

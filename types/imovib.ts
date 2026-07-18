@@ -167,38 +167,8 @@ export interface ImovibCapexItem {
 
 export type ImovibCapexItemInsert = Omit<ImovibCapexItem, 'id' | 'created_at' | 'updated_at'>;
 
-export interface ImovibRegulatoryZone {
-    id: string;
-    study_id: string;
-    macroarea?: string;
-    zona?: string;
-    ca_minimo?: string;
-    ca_basico?: string;
-    ca_maximo?: string;
-    taxa_ocupacao_maxima?: string;
-    taxa_permeabilidade_minima?: string;
-    gabarito_altura_maxima?: string;
-    // Campos unificados do ruleset urbanístico da Planta (migration 20270218000001) — o mapa
-    // regulatório compartilhado passa a conter tudo, disponível em todos os módulos.
-    uso_permitido?: string;
-    recuo_frente?: string;
-    recuo_lateral_direita?: string;
-    recuo_lateral_esquerda?: string;
-    recuo_fundos?: string;
-    gabarito_pavimentos?: string;
-    regra_vagas?: string;
-    vagas_por_unidade?: string;
-    area_minima_unidade?: string;
-    lei_referencia?: string;
-    documento_fonte?: string;
-    nivel_confianca?: string;
-    observacoes?: string;
-    created_at: string;
-    updated_at: string;
-}
-
-export type ImovibRegulatoryZoneInsert = Omit<ImovibRegulatoryZone, 'id' | 'created_at' | 'updated_at'>;
-export type ImovibRegulatoryZoneUpdate = Partial<ImovibRegulatoryZoneInsert>;
+// ImovibRegulatoryZone removido: o Mapa Regulatório mora no empreendimento
+// (EmpreendimentoRegulatoryZone em types/empreendimento.ts, migration 20270218000002).
 
 export interface ImovibStudy {
     id: string;

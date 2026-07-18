@@ -5,7 +5,6 @@ import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeO
 import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
 import { useConfirm } from './ui/confirm';
-import Button from './ui/Button';
 import ClientCategoriesSettings from './ClientCategoriesSettings';
 import SupplierCategoriesSettings from './SupplierCategoriesSettings';
 import FinancialCategoriesManager from './FinancialCategoriesManager';
@@ -124,7 +123,7 @@ const Settings: React.FC = () => {
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie todas as configurações de sistema, categorias, integrações e banco de dados.</p>
             </div>
 
-            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full mb-3">
                 <button
                     onClick={() => setActiveTab('geral')}
                     className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'geral' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
@@ -164,7 +163,7 @@ const Settings: React.FC = () => {
             </div>
 
             {activeTab === 'database' && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start gap-4">
                     <div className="p-3 bg-blue-50 rounded-lg">
                         <Database className="w-6 h-6 text-blue-600" />
@@ -178,7 +177,7 @@ const Settings: React.FC = () => {
                 </div>
 
                 <div className="mt-6 border-t border-gray-100 pt-6">
-                    <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div className="flex items-center justify-between bg-gray-50 p-4 rounded-[10px] border border-gray-200">
                         <div>
                             <span className="block text-sm font-medium text-gray-700">Migração Inicial</span>
                             <span className="text-xs text-gray-500">Envia itens do MOCK_CONSTANTS para a tabela 'sinapi_items'</span>
@@ -186,15 +185,15 @@ const Settings: React.FC = () => {
                         <button
                             onClick={runMigration}
                             disabled={status === 'MIGRATING'}
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {status === 'MIGRATING' && <Loader2 className="w-4 h-4 animate-spin" />}
+                            {status === 'MIGRATING' && <Loader2 className="w-[15px] h-[15px] animate-spin" />}
                             Configurar Base
                         </button>
                     </div>
 
                     {status !== 'IDLE' && (
-                        <div className={`mt-4 p-4 rounded-md flex items-center gap-3 ${status === 'SUCCESS' ? 'bg-green-50 text-green-700' : status === 'ERROR' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
+                        <div className={`mt-4 p-4 rounded-[10px] flex items-center gap-3 ${status === 'SUCCESS' ? 'bg-green-50 text-green-700' : status === 'ERROR' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
                             {status === 'SUCCESS' ? <CheckCircle className="w-5 h-5" /> : status === 'ERROR' ? <AlertTriangle className="w-5 h-5" /> : <Loader2 className="w-5 h-5 animate-spin" />}
                             <span className="text-sm font-medium">{message}</span>
                         </div>
@@ -209,7 +208,7 @@ const Settings: React.FC = () => {
                     <ClientCategoriesSettings />
 
                     {/* Numeração de Pedidos */}
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
                         <div className="p-3 bg-indigo-50 rounded-lg">
@@ -226,31 +225,31 @@ const Settings: React.FC = () => {
                 </div>
                 <div className="mt-6 border-t border-gray-100 pt-6 grid grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-widest mb-1.5">Prefixo</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prefixo</label>
                         <input
                             type="text"
                             value={appSettings.orderPrefix}
                             onChange={e => setAppSettings(s => ({ ...s, orderPrefix: e.target.value }))}
                             placeholder="PO-"
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                         />
                         <p className="text-xs text-gray-400 mt-1">Ex: <span className="font-mono">{appSettings.orderPrefix}123456</span></p>
                     </div>
                     <div>
-                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-widest mb-1.5">Sufixo de Duplicata</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Sufixo de Duplicata</label>
                         <input
                             type="text"
                             value={appSettings.orderDuplicateSuffix}
                             onChange={e => setAppSettings(s => ({ ...s, orderDuplicateSuffix: e.target.value }))}
                             placeholder="-DUP"
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                         />
                         <p className="text-xs text-gray-400 mt-1">Ex: <span className="font-mono">{appSettings.orderPrefix}123456{appSettings.orderDuplicateSuffix}</span></p>
                     </div>
                 </div>
                 <div className="flex justify-end mt-4">
-                    <button onClick={handleAppSettingsSave} className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-black hover:bg-indigo-700 transition-all">
-                        {appSettingsSaved ? <CheckCircle className="w-4 h-4" /> : <Hash className="w-4 h-4" />}
+                    <button onClick={handleAppSettingsSave} className="flex items-center gap-1.5 h-9 px-3.5 bg-indigo-600 text-white rounded-[6px] hover:bg-indigo-700 font-medium text-[13px] transition-all active:scale-95">
+                        {appSettingsSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <Hash className="w-[15px] h-[15px]" />}
                         {appSettingsSaved ? 'Salvo!' : 'Salvar'}
                     </button>
                 </div>
@@ -259,7 +258,7 @@ const Settings: React.FC = () => {
             )}
 
             {activeTab === 'email' && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
                         <div className="p-3 bg-blue-50 rounded-lg">
@@ -277,41 +276,41 @@ const Settings: React.FC = () => {
                 <div className="mt-4 mb-3 flex flex-wrap gap-2">
                     <span className="text-xs text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
                     {TEMPLATE_VARS.email.map(v => (
-                        <span key={v} className="font-mono text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-100">{v}</span>
+                        <span key={v} className="font-mono text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-[6px] border border-blue-100">{v}</span>
                     ))}
                 </div>
                 <div className="border-t border-gray-100 pt-6 space-y-4">
                     <div>
-                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-widest mb-1.5">Assunto</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Assunto</label>
                         <input
                             type="text"
                             value={appSettings.emailStatusChangeSubject}
                             onChange={e => setAppSettings(s => ({ ...s, emailStatusChangeSubject: e.target.value }))}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                         />
                     </div>
                     <div>
-                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-widest mb-1.5">Corpo</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Corpo</label>
                         <textarea
                             rows={3}
                             value={appSettings.emailStatusChangeBody}
                             onChange={e => setAppSettings(s => ({ ...s, emailStatusChangeBody: e.target.value }))}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono resize-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono resize-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                         />
                     </div>
                 </div>
                 <div className="flex justify-end mt-4">
-                    <Button onClick={handleAppSettingsSave} className="gap-2">
-                        {appSettingsSaved ? <CheckCircle className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
+                    <button onClick={handleAppSettingsSave} className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95">
+                        {appSettingsSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <Mail className="w-[15px] h-[15px]" />}
                         {appSettingsSaved ? 'Salvo!' : 'Salvar'}
-                    </Button>
+                    </button>
                 </div>
             </div>
             )}
 
             {activeTab === 'whatsapp' && (
                 <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start gap-4">
                     <div className="p-3 bg-green-50 rounded-lg">
                         <MessageCircle className="w-6 h-6 text-green-600" />
@@ -319,7 +318,7 @@ const Settings: React.FC = () => {
                     <div className="flex-1">
                         <div className="flex items-center gap-3">
                             <h2 className="text-lg font-semibold text-gray-800">WhatsApp Business (API Oficial)</h2>
-                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider ${isWaActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            <span className={`text-sm font-normal ${isWaActive ? 'text-green-700' : 'text-gray-500'}`}>
                                 {isWaActive ? 'Configurado' : 'Não configurado'}
                             </span>
                         </div>
@@ -332,25 +331,25 @@ const Settings: React.FC = () => {
 
                 <div className="mt-6 border-t border-gray-100 pt-6 space-y-4">
                     <div>
-                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-widest mb-1.5">Phone Number ID</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Phone Number ID</label>
                         <input
                             type="text"
                             value={waForm.phoneNumberId}
                             onChange={e => setWaForm(f => ({ ...f, phoneNumberId: e.target.value }))}
                             placeholder="ex: 123456789012345"
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
                         />
                         <p className="text-xs text-gray-400 mt-1">Encontrado em Meta for Developers → seu app → WhatsApp → API Setup.</p>
                     </div>
                     <div>
-                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-widest mb-1.5">Access Token</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Access Token</label>
                         <div className="relative">
                             <input
                                 type={showToken ? 'text' : 'password'}
                                 value={waForm.accessToken}
                                 onChange={e => setWaForm(f => ({ ...f, accessToken: e.target.value }))}
                                 placeholder="••••••••••••••••"
-                                className="w-full px-4 py-3 pr-12 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+                                className="w-full px-4 py-3 pr-12 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
                             />
                             <button
                                 type="button"
@@ -374,16 +373,16 @@ const Settings: React.FC = () => {
                         <button
                             onClick={handleWaSave}
                             disabled={!waForm.phoneNumberId || !waForm.accessToken}
-                            className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm font-black hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-green-600 text-white rounded-[6px] hover:bg-green-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                            {waSaved ? <CheckCircle className="w-4 h-4" /> : <MessageCircle className="w-4 h-4" />}
+                            {waSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <MessageCircle className="w-[15px] h-[15px]" />}
                             {waSaved ? 'Salvo!' : 'Salvar'}
                         </button>
                     </div>
                 </div>
             </div>
             {/* Templates WhatsApp */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
                         <div className="p-3 bg-green-50 rounded-lg">
@@ -402,44 +401,44 @@ const Settings: React.FC = () => {
                 {/* Template: Pedido Enviado */}
                 <div className="mt-6 border-t border-gray-100 pt-6 space-y-2">
                     <div className="flex items-center justify-between mb-1">
-                        <label className="text-form-label font-bold text-gray-700 uppercase tracking-widest">Pedido Enviado ao Fornecedor</label>
+                        <label className="text-xs font-semibold text-slate-500">Pedido Enviado ao Fornecedor</label>
                     </div>
                     <div className="flex flex-wrap gap-2 mb-2">
                         <span className="text-xs text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
                         {TEMPLATE_VARS.whatsappOrderSent.map(v => (
-                            <span key={v} className="font-mono text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-md border border-green-100">{v}</span>
+                            <span key={v} className="font-mono text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-[6px] border border-green-100">{v}</span>
                         ))}
                     </div>
                     <textarea
                         rows={8}
                         value={appSettings.whatsappOrderSentTemplate}
                         onChange={e => setAppSettings(s => ({ ...s, whatsappOrderSentTemplate: e.target.value }))}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono resize-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono resize-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
                     />
                 </div>
 
                 {/* Template: Mudança de Status */}
                 <div className="mt-6 space-y-2">
                     <div className="flex items-center justify-between mb-1">
-                        <label className="text-form-label font-bold text-gray-700 uppercase tracking-widest">Mudança de Status</label>
+                        <label className="text-xs font-semibold text-slate-500">Mudança de Status</label>
                     </div>
                     <div className="flex flex-wrap gap-2 mb-2">
                         <span className="text-xs text-gray-400 font-bold uppercase tracking-widest self-center">Variáveis:</span>
                         {TEMPLATE_VARS.whatsappStatusChange.map(v => (
-                            <span key={v} className="font-mono text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-md border border-green-100">{v}</span>
+                            <span key={v} className="font-mono text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-[6px] border border-green-100">{v}</span>
                         ))}
                     </div>
                     <textarea
                         rows={5}
                         value={appSettings.whatsappStatusChangeTemplate}
                         onChange={e => setAppSettings(s => ({ ...s, whatsappStatusChangeTemplate: e.target.value }))}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono resize-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono resize-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
                     />
                 </div>
 
                 <div className="flex justify-end mt-4">
-                    <button onClick={handleAppSettingsSave} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm font-black hover:bg-green-700 transition-all">
-                        {appSettingsSaved ? <CheckCircle className="w-4 h-4" /> : <MessageCircle className="w-4 h-4" />}
+                    <button onClick={handleAppSettingsSave} className="flex items-center gap-1.5 h-9 px-3.5 bg-green-600 text-white rounded-[6px] hover:bg-green-700 font-medium text-[13px] transition-all active:scale-95">
+                        {appSettingsSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <MessageCircle className="w-[15px] h-[15px]" />}
                         {appSettingsSaved ? 'Salvo!' : 'Salvar'}
                     </button>
                 </div>
@@ -454,14 +453,14 @@ const Settings: React.FC = () => {
                     <ContractTypesSettings />
 
                     {/* Para separar visualmente sem destoar, envolvemos num container branco parecido */}
-                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                    <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
                         <FinancialCategoriesManager />
                     </div>
                 </div>
             )}
 
             {activeTab === 'indices' && (
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
                     <ContractIndexManager />
                 </div>
             )}

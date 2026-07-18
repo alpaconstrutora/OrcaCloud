@@ -4,20 +4,24 @@
 // em ambas as direções. Roll-up de VGV e status por empreendimento.
 import React from 'react';
 import {
-  Loader2, ExternalLink, Unlink, RefreshCw, Upload, TrendingUp,
-  CheckCircle2, AlertCircle, Clock, ArrowRightLeft, Building2,
+  Loader2, Unlink, RefreshCw, Upload, TrendingUp,
+  AlertCircle, ArrowRightLeft, Building2,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { empreendimentoService, buildCommercialAddressFields } from '../../services/empreendimentoService';
 import { commercialService } from '../../services/commercialService';
 import { Empreendimento, EmpreendimentoUnit, UnitStatus } from '../../types';
-import Button from '../ui/Button';
+import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import {
   UNMAPPABLE_COMMERCIAL_STATUSES, mapCommercialToEmpr, mapEmprToCommercial,
   UNIT_STATUS_LABEL, UNIT_STATUS_STYLE, COMM_STATUS_LABEL, COMM_STATUS_STYLE,
   mapPositionToCommercial, mapViewToCommercial, mapSunToCommercial,
 } from '../../utils/empreendimentoComercial';
+
+// §8: as paletas de status são pares `bg-* text-*`; aqui só o token de cor de
+// texto interessa — badge é texto colorido simples, sem pílula nem fundo.
+const textColor = (style?: string) => style?.split(' ').find(c => c.startsWith('text-')) ?? 'text-gray-600';
 
 interface Props {
   empreendimento: Empreendimento;
@@ -51,6 +55,12 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
   const [publishingAll, setPublishingAll] = React.useState(false);
   const [regrouping, setRegrouping] = React.useState(false);
   const [orphanIds, setOrphanIds] = React.useState<Set<string>>(new Set());
+  // §13: toast no lugar de alert() nativo
+  const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const notify = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4500);
+  };
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -96,7 +106,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
       if (freshErr) throw freshErr;
       if (fresh?.commercial_property_id) {
         await load();
-        alert(`"${unit.name}" já está publicada no Comercial — a lista foi atualizada.`);
+        notify(`"${unit.name}" já está publicada no Comercial — a lista foi atualizada.`);
         return;
       }
 
@@ -129,9 +139,9 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
       } as any);
       await empreendimentoService.updateUnit(unit.id, { commercial_property_id: prop.id });
       await load();
-      alert(`✓ "${unit.name}" publicada no Comercial com sucesso.`);
+      notify(`"${unit.name}" publicada no Comercial com sucesso.`);
     } catch (err: any) {
-      alert(`Erro ao publicar unidade: ${err.message}`);
+      notify(`Erro ao publicar unidade: ${err.message}`, 'error');
     } finally { setBusyId(null); }
   };
 
@@ -147,9 +157,9 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
       const buildingId = await empreendimentoService.ensureCommercialBuilding(e, organizationId);
       const n = await empreendimentoService.regroupCommercialUnits(e.id, organizationId, buildingId);
       await load();
-      alert(n > 0 ? `✓ ${n} unidade(s) reagrupada(s) sob o edifício.` : 'Todas as unidades já estavam agrupadas no edifício.');
+      notify(n > 0 ? `${n} unidade(s) reagrupada(s) sob o edifício.` : 'Todas as unidades já estavam agrupadas no edifício.');
     } catch (err: any) {
-      alert(`Erro ao reagrupar: ${err.message}`);
+      notify(`Erro ao reagrupar: ${err.message}`, 'error');
     } finally { setRegrouping(false); }
   };
 
@@ -165,7 +175,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
       await empreendimentoService.updateUnit(unit.id, { commercial_property_id: null });
       await load();
     } catch (err: any) {
-      alert(`Erro ao desvincular: ${err.message}`);
+      notify(`Erro ao desvincular: ${err.message}`, 'error');
     } finally { setBusyId(null); }
   };
 
@@ -185,7 +195,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
       await Promise.all(orphanUnits.map(u => empreendimentoService.updateUnit(u.id, { commercial_property_id: null })));
       await load();
     } catch (err: any) {
-      alert(`Erro ao limpar vínculos órfãos: ${err.message}`);
+      notify(`Erro ao limpar vínculos órfãos: ${err.message}`, 'error');
     } finally { setBusyId(null); }
   };
 
@@ -194,7 +204,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
   // também a dispara; aqui fica só a confirmação e o aviso.
   const handleSyncFromCommercial = async () => {
     const linked = units.filter(u => u.commercial_property_id && commSnaps[u.commercial_property_id!]);
-    if (!linked.length) { alert('Nenhuma unidade vinculada ao Comercial.'); return; }
+    if (!linked.length) { notify('Nenhuma unidade vinculada ao Comercial.', 'error'); return; }
     const skipped = linked.filter(u => UNMAPPABLE_COMMERCIAL_STATUSES.has(commSnaps[u.commercial_property_id!].status));
     const syncable = linked.length - skipped.length;
     if (!await confirm({
@@ -209,10 +219,10 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
       const r = await empreendimentoService.pullStatusFromCommercial(e.id, organizationId);
       await load();
       if (r.skippedUnmappable) {
-        alert(`✓ ${r.statusUpdated} unidade(s) sincronizadas.\n⚠ ${r.skippedUnmappable} pulada(s): status Locado ou Manutenção não existe no Empreendimento — ajuste manualmente.`);
+        notify(`${r.statusUpdated} unidade(s) sincronizadas. ${r.skippedUnmappable} pulada(s): status Locado ou Manutenção não existe no Empreendimento — ajuste manualmente.`);
       }
     } catch (err: any) {
-      alert(`Erro ao sincronizar: ${err.message}`);
+      notify(`Erro ao sincronizar: ${err.message}`, 'error');
     } finally { setSyncingAll(false); }
   };
 
@@ -223,7 +233,7 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
   const handleSyncAddress = async () => {
     const linked = units.filter(u => u.commercial_property_id && commSnaps[u.commercial_property_id!]);
     const addressFields = buildCommercialAddressFields(e);
-    if (!linked.length && !e.commercial_building_id) { alert('Nenhuma unidade publicada no Comercial.'); return; }
+    if (!linked.length && !e.commercial_building_id) { notify('Nenhuma unidade publicada no Comercial.', 'error'); return; }
     if (!await confirm({
       title: 'Atualizar endereço no Comercial?',
       message: `${linked.length} imóvel(eis) + o edifício-pai passarão a usar:\n"${addressFields.address}"`,
@@ -237,16 +247,16 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
         ...linked.map(u => u.commercial_property_id!),
       ];
       await supabase.from('commercial_properties').update(addressFields).in('id', ids);
-      alert(`✓ Endereço atualizado em ${ids.length} imóvel(eis).`);
+      notify(`Endereço atualizado em ${ids.length} imóvel(eis).`);
     } catch (err: any) {
-      alert(`Erro ao atualizar endereço: ${err.message}`);
+      notify(`Erro ao atualizar endereço: ${err.message}`, 'error');
     } finally { setSyncingAddress(false); }
   };
 
   // Publica todas as unidades ainda não vinculadas
   const handlePublishAll = async () => {
     const localUnpublished = units.filter(u => !u.commercial_property_id);
-    if (!localUnpublished.length) { alert('Todas as unidades já estão publicadas no Comercial.'); return; }
+    if (!localUnpublished.length) { notify('Todas as unidades já estão publicadas no Comercial.'); return; }
     if (!await confirm({
       title: 'Publicar no Comercial?',
       message: `${localUnpublished.length} unidade(s) serão criadas no Comercial (Venda de Ativos), agrupadas sob o edifício do empreendimento.`,
@@ -260,12 +270,12 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
       const r = await empreendimentoService.publishAllToCommercial(e.id, organizationId);
       await load();
       if (!r.published) {
-        alert('Todas as unidades já estão publicadas no Comercial — a lista foi atualizada.');
+        notify('Todas as unidades já estão publicadas no Comercial — a lista foi atualizada.');
         return;
       }
-      alert(`✓ ${r.published} unidade${r.published > 1 ? 's' : ''} publicada${r.published > 1 ? 's' : ''} no Comercial com sucesso.`);
+      notify(`${r.published} unidade${r.published > 1 ? 's' : ''} publicada${r.published > 1 ? 's' : ''} no Comercial com sucesso.`);
     } catch (err: any) {
-      alert(`Erro ao publicar: ${err.message}`);
+      notify(`Erro ao publicar: ${err.message}`, 'error');
     } finally { setPublishingAll(false); }
   };
 
@@ -288,24 +298,27 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
   const linkedCount = units.filter(u => !!u.commercial_property_id).length;
 
   if (loading) return (
-    <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>
+    <div className="text-center py-12">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+      <p className="mt-2 text-gray-500">Carregando...</p>
+    </div>
   );
 
   return (
     <div className="space-y-6">
       {/* Alerta de vínculos órfãos */}
       {orphanIds.size > 0 && (
-        <div className="flex items-center justify-between gap-3 bg-rose-50 border border-rose-200 rounded-2xl px-4 py-3">
+        <div className="flex items-center justify-between gap-3 bg-rose-50 border border-rose-200 rounded-[10px] px-4 py-3">
           <div className="flex items-center gap-2 text-rose-700">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            <span className="text-xs font-bold">
+            <span className="text-sm font-medium">
               {orphanIds.size} unidade{orphanIds.size > 1 ? 's' : ''} vinculada{orphanIds.size > 1 ? 's' : ''} a imóve{orphanIds.size > 1 ? 'is' : 'l'} que não existe{orphanIds.size > 1 ? 'm' : ''} mais no Comercial.
             </span>
           </div>
           <button
             onClick={handleClearOrphans}
             disabled={busyId === '__orphans__'}
-            className="shrink-0 px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg bg-rose-600 hover:bg-rose-700 text-white disabled:opacity-40 flex items-center gap-1.5"
+            className="shrink-0 flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] bg-rose-600 hover:bg-rose-700 text-white font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40"
           >
             {busyId === '__orphans__' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Unlink className="w-3 h-3" />}
             Limpar vínculos
@@ -322,43 +335,43 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
       </div>
 
       {/* Barras de status */}
-      <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider">Status das Unidades</h3>
+      <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm">
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+          <h3 className="font-black text-gray-800 text-sm">Status das unidades</h3>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <button
               onClick={handleSyncAddress}
               disabled={syncingAddress || linkedCount === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 disabled:opacity-40 border border-gray-200"
+              className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40"
               title="Propaga o endereço atual do empreendimento para todos os imóveis publicados no Comercial"
             >
-              {syncingAddress ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-              Sync Endereço
+              {syncingAddress ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <RefreshCw className="w-[15px] h-[15px]" />}
+              Sync endereço
             </button>
             <button
               onClick={handleRegroup}
               disabled={regrouping || linkedCount === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 disabled:opacity-40 border border-gray-200"
+              className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40"
               title="Agrupa as unidades publicadas sob o edifício do empreendimento no Comercial"
             >
-              {regrouping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Building2 className="w-3 h-3" />}
+              {regrouping ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Building2 className="w-[15px] h-[15px]" />}
               Reagrupar
             </button>
             <button
               onClick={handleSyncFromCommercial}
               disabled={syncingAll || linkedCount === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-700 disabled:opacity-40"
+              className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] bg-violet-50 hover:bg-violet-100 text-violet-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40"
             >
-              {syncingAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRightLeft className="w-3 h-3" />}
+              {syncingAll ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <ArrowRightLeft className="w-[15px] h-[15px]" />}
               Sync do Comercial
             </button>
             <button
               onClick={handlePublishAll}
               disabled={publishingAll || units.filter(u => !u.commercial_property_id).length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40"
+              className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] bg-blue-600 hover:bg-blue-700 text-white font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40"
             >
-              {publishingAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
-              Publicar Todas
+              {publishingAll ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Upload className="w-[15px] h-[15px]" />}
+              Publicar todas
             </button>
           </div>
         </div>
@@ -384,21 +397,21 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
 
       {/* Tabela de unidades */}
       {units.length > 0 && (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-          <table className="w-full text-left text-xs">
+        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+          <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider bg-gray-50/50">
-                <th className="py-3 px-4">Unidade</th>
-                <th className="py-3 px-4">Torre</th>
-                <th className="py-3 px-4">Pav.</th>
-                <th className="py-3 px-4">Área Priv.</th>
-                <th className="py-3 px-4">Dormitórios</th>
-                <th className="py-3 px-4">Vagas</th>
-                <th className="py-3 px-4">Banheiros</th>
-                <th className="py-3 px-4">Preço</th>
-                <th className="py-3 px-4">Status (Empr.)</th>
-                <th className="py-3 px-4">Status (Comercial)</th>
-                <th className="py-3 px-4 text-center">Ações</th>
+              <tr className="border-b border-gray-200 text-gray-500 font-semibold text-xs bg-gray-50">
+                <th className="py-2 px-4">Unidade</th>
+                <th className="py-2 px-4">Torre</th>
+                <th className="py-2 px-4">Pav.</th>
+                <th className="py-2 px-4">Área priv.</th>
+                <th className="py-2 px-4">Dormitórios</th>
+                <th className="py-2 px-4">Vagas</th>
+                <th className="py-2 px-4">Banheiros</th>
+                <th className="py-2 px-4">Preço</th>
+                <th className="py-2 px-4">Status (Empr.)</th>
+                <th className="py-2 px-4">Status (Comercial)</th>
+                <th className="py-2 px-4 text-right text-table-header font-semibold text-gray-500">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -412,16 +425,17 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                 const priceDiverge = snap && u.price != null && Math.abs(snap.price - u.price) > 0.01;
                 return (
                   <tr key={u.id} className={`border-b border-gray-50 hover:bg-gray-50/30 ${isOrphan ? 'bg-rose-50/40' : ''}`}>
-                    <td className="py-3 px-4 font-bold text-gray-800">{u.name}</td>
-                    <td className="py-3 px-4 text-gray-500">{u._tower_name}</td>
-                    <td className="py-3 px-4 text-gray-500">{u.floor ?? '—'}</td>
-                    <td className="py-3 px-4 text-gray-500">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>
-                    <td className="py-3 px-4 text-gray-500">{u.bedrooms ?? '—'}</td>
-                    <td className="py-3 px-4 text-gray-500">{u.parking_spaces ?? '—'}</td>
-                    <td className="py-3 px-4 text-gray-500">{u.bathrooms ?? '—'}</td>
-                    <td className="py-3 px-4">
+                    <td className="py-2.5 px-4 text-sm font-normal text-gray-700">{u.name}</td>
+                    <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u._tower_name}</td>
+                    <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.floor ?? '—'}</td>
+                    <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>
+                    <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bedrooms ?? '—'}</td>
+                    <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.parking_spaces ?? '—'}</td>
+                    <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bathrooms ?? '—'}</td>
+                    <td className="py-2.5 px-4">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-gray-700 font-semibold">{u.price != null ? fmt(u.price) : '—'}</span>
+                        {/* §7: font-medium é permitido — e só — em valor financeiro */}
+                        <span className="text-sm font-medium text-gray-800">{u.price != null ? fmt(u.price) : '—'}</span>
                         {priceDiverge && (
                           <span title={`Comercial: ${fmt(snap!.price)}`}>
                             <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
@@ -429,15 +443,15 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-4">
-                      <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${UNIT_STATUS_STYLE[u.status]}`}>
+                    <td className="py-2.5 px-4">
+                      <span className={`text-sm font-normal ${textColor(UNIT_STATUS_STYLE[u.status])}`}>
                         {UNIT_STATUS_LABEL[u.status]}
                       </span>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-2.5 px-4">
                       {snap ? (
                         <div className="flex items-center gap-1.5">
-                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${COMM_STATUS_STYLE[snap.status] || 'bg-gray-100 text-gray-600'}`}>
+                          <span className={`text-sm font-normal ${textColor(COMM_STATUS_STYLE[snap.status])}`}>
                             {COMM_STATUS_LABEL[snap.status] || snap.status}
                           </span>
                           {isUnmappable && (
@@ -452,40 +466,32 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                           )}
                         </div>
                       ) : isOrphan ? (
-                        <span className="flex items-center gap-1.5 text-rose-600 text-xs font-bold">
+                        <span className="flex items-center gap-1.5 text-sm font-normal text-rose-600">
                           <AlertCircle className="w-3.5 h-3.5" /> Vínculo quebrado
                         </span>
                       ) : (
-                        <span className="text-gray-300 text-xs">Não publicado</span>
+                        <span className="text-sm font-normal text-gray-400">Não publicado</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1">
+                    <td className="py-2.5 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                         {busy ? (
                           <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                        ) : isOrphan ? (
-                          <button
+                        ) : snap || isOrphan ? (
+                          <ActionIconButton
+                            kind="delete"
+                            icon={<Unlink className="w-4 h-4" />}
+                            title={isOrphan ? 'Remover vínculo quebrado' : 'Desvincular do Comercial'}
                             onClick={() => handleUnlink(u)}
-                            className="p-1.5 hover:bg-rose-100 text-rose-500 rounded-lg"
-                            title="Remover vínculo quebrado"
-                          >
-                            <Unlink className="w-3.5 h-3.5" />
-                          </button>
-                        ) : snap ? (
-                          <button
-                            onClick={() => handleUnlink(u)}
-                            className="p-1.5 hover:bg-rose-50 text-rose-400 rounded-lg"
-                            title="Desvincular do Comercial"
-                          >
-                            <Unlink className="w-3.5 h-3.5" />
-                          </button>
+                          />
                         ) : (
+                          /* §9: ação dominante da linha = botão de texto, não ícone */
                           <button
                             onClick={() => handlePublish(u)}
-                            className="flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-black uppercase tracking-wider"
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
                             title="Publicar no Comercial"
                           >
-                            <Upload className="w-3 h-3" /> Publicar
+                            Publicar
                           </button>
                         )}
                       </div>
@@ -499,9 +505,20 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
       )}
 
       {units.length === 0 && (
-        <div className="text-center py-16 text-gray-400">
-          <TrendingUp className="w-10 h-10 mx-auto mb-3 text-gray-200" />
-          <p className="text-xs font-semibold">Nenhuma unidade cadastrada. Adicione torres e unidades primeiro.</p>
+        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
+          <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma unidade cadastrada</h3>
+          <p className="text-sm text-gray-500">Adicione torres e unidades primeiro.</p>
+        </div>
+      )}
+
+      {/* §13 Toast */}
+      {notification && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+          notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {notification.message}
         </div>
       )}
     </div>
@@ -510,8 +527,8 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
 
 // ── Helpers visuais ──────────────────────────────────────────────────────────
 const KpiCard: React.FC<{ label: string; value: string; sub?: string; color?: string }> = ({ label, value, sub, color = 'text-gray-800' }) => (
-  <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
-    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">{label}</span>
+  <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm">
+    <span className="text-xs font-semibold text-gray-500 block mb-1">{label}</span>
     <span className={`text-lg font-bold block ${color}`}>{value}</span>
     {sub && <span className="text-xs text-gray-400 font-medium">{sub}</span>}
   </div>

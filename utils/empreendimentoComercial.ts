@@ -1,7 +1,7 @@
 // utils/empreendimentoComercial.ts
 // Fonte única da tradução de status EN (Comercial) ↔ PT (Empreendimento) e
 // dos rótulos/estilos usados no Espelho de Vendas e no Centro de Sincronização.
-import { UnitStatus, UnitPositionType, UnitSunOrientation, UnitViewType } from '../types';
+import { UnitStatus, RentalUnitStatus, UnitPositionType, UnitSunOrientation, UnitViewType } from '../types';
 
 // Status do Comercial que não têm equivalente em UnitStatus — não mapeáveis.
 export const UNMAPPABLE_COMMERCIAL_STATUSES = new Set(['RENTED', 'MAINTENANCE']);
@@ -28,14 +28,46 @@ export const mapEmprToCommercial = (s: UnitStatus): string => {
   }
 };
 
-// Empreendimento (PT) → status do imóvel de LOCAÇÃO (EN). Vendido/Permutado não
-// fazem sentido num inventário de aluguel, então caem para Disponível — a
-// ocupação real (Locado) é gerida no módulo de Locações, não no Empreendimento.
-export const mapEmprToRentalStatus = (s: UnitStatus): string => {
+// ── Eixo de LOCAÇÃO (rental_status) ↔ status do imóvel de aluguel ────────────
+// Desde a migration 20270815000003 o Empreendimento tem `rental_status` próprio,
+// então este par é uma BIJEÇÃO (não perde mais informação como a versão antiga,
+// que recebia UnitStatus e achatava Vendido/Permutado em Disponível).
+
+// Status de locação que não têm equivalente em RentalUnitStatus — não mapeáveis.
+// Venda não existe no eixo de aluguel; nunca traduzir silenciosamente.
+export const UNMAPPABLE_RENTAL_STATUSES = new Set(['SOLD', 'EXCHANGED']);
+
+// Empreendimento (PT) → status do imóvel de LOCAÇÃO (EN).
+export const mapEmprToRentalStatus = (s: RentalUnitStatus): string => {
   switch (s) {
-    case 'RESERVADO': return 'RESERVED';
-    default:          return 'AVAILABLE';
+    case 'DISPONIVEL': return 'AVAILABLE';
+    case 'RESERVADO':  return 'RESERVED';
+    case 'LOCADO':     return 'RENTED';
+    case 'MANUTENCAO': return 'MAINTENANCE';
   }
+};
+
+// Locação (EN) → Empreendimento (PT). Retorna null para status sem equivalente
+// (SOLD / EXCHANGED / desconhecido) — espelho de mapCommercialToEmpr.
+export const mapRentalToEmpr = (s: string): RentalUnitStatus | null => {
+  switch (s) {
+    case 'AVAILABLE':   return 'DISPONIVEL';
+    case 'RESERVED':    return 'RESERVADO';
+    case 'RENTED':      return 'LOCADO';
+    case 'MAINTENANCE': return 'MANUTENCAO';
+    default:            return null;
+  }
+};
+
+export const RENTAL_STATUS_LABEL: Record<RentalUnitStatus, string> = {
+  DISPONIVEL: 'Disponível', RESERVADO: 'Reservado', LOCADO: 'Locado', MANUTENCAO: 'Manutenção',
+};
+// Mesmas cores do lado comercial (COMM_STATUS_STYLE) para leitura consistente.
+export const RENTAL_STATUS_STYLE: Record<RentalUnitStatus, string> = {
+  DISPONIVEL: 'bg-emerald-500/10 text-emerald-600',
+  RESERVADO:  'bg-amber-500/10 text-amber-600',
+  LOCADO:     'bg-teal-500/10 text-teal-600',
+  MANUTENCAO: 'bg-gray-500/10 text-gray-600',
 };
 
 export const UNIT_STATUS_LABEL: Record<UnitStatus, string> = {

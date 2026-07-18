@@ -8,10 +8,11 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import {
   EmpreendimentoTower, EmpreendimentoUnit, FloorTipo, EmpreendimentoUnitInsert,
-  UnitPositionType, UnitSunOrientation, UnitViewType,
+  UnitPositionType, UnitSunOrientation, UnitViewType, RentalUnitStatus,
 } from '../../types';
 import {
   POSITION_LABEL, VIEW_LABEL, SUN_LABEL, POSITION_STYLE, VIEW_STYLE, SUN_STYLE,
+  RENTAL_STATUS_LABEL,
 } from '../../utils/empreendimentoComercial';
 import Button from '../ui/Button';
 import { useConfirm } from '../ui/confirm';
@@ -45,6 +46,8 @@ const emptyBulkForm = () => ({
   typology: '', private_area: '', common_area: '', bedrooms: '', bathrooms: '', suites: '', parking_spaces: '',
   position_type: '' as UnitPositionType | '', view_type: '' as UnitViewType | '',
   sun_orientation: '' as UnitSunOrientation | '',
+  // Eixo de locação (independente do de venda) — ver migration 20270815000003
+  rental_price: '', rental_status: '' as RentalUnitStatus | '',
 });
 
 const fmtArea = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
@@ -75,7 +78,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
     floors_count: tower.floors_count?.toString() ?? '',
     units_per_floor: tower.units_per_floor?.toString() ?? '',
     start_floor: '1', prefix: '', typology: '',
-    private_area: '', common_area: '', parking_spaces: '', price: '',
+    private_area: '', common_area: '', parking_spaces: '', price: '', rental_price: '',
   });
   const [generating, setGenerating] = React.useState(false);
 
@@ -191,7 +194,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       position_type: (f.position_type || undefined) as UnitPositionType | undefined,
       view_type: (f.view_type || undefined) as UnitViewType | undefined,
       sun_orientation: (f.sun_orientation || undefined) as UnitSunOrientation | undefined,
-      status: 'DISPONIVEL', is_vendavel: true,
+      status: 'DISPONIVEL', rental_status: 'DISPONIVEL', is_vendavel: true,
     };
   };
 
@@ -253,9 +256,10 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         floor: u.floor ?? undefined, floor_tipo: u.floor_tipo ?? undefined,
         typology: u.typology ?? undefined, private_area: u.private_area ?? undefined,
         common_area: u.common_area ?? undefined, total_area: u.total_area ?? undefined,
-        price: u.price ?? undefined, bedrooms: u.bedrooms ?? undefined,
+        price: u.price ?? undefined, rental_price: u.rental_price ?? undefined,
+        bedrooms: u.bedrooms ?? undefined,
         bathrooms: u.bathrooms ?? undefined, suites: u.suites ?? undefined, parking_spaces: u.parking_spaces ?? undefined,
-        status: 'DISPONIVEL', is_vendavel: true, sort_order: units.length,
+        status: 'DISPONIVEL', rental_status: 'DISPONIVEL', is_vendavel: true, sort_order: units.length,
       });
       await load();
     } catch (err: any) { alert(`Erro ao duplicar: ${err.message}`); }
@@ -280,7 +284,8 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   const handleBulkSave = async () => {
     const hasAny = bulkForm.floor || bulkForm.floor_tipo || bulkForm.typology.trim()
       || bulkForm.private_area || bulkForm.common_area || bulkForm.bedrooms || bulkForm.bathrooms || bulkForm.suites || bulkForm.parking_spaces
-      || bulkForm.position_type || bulkForm.view_type || bulkForm.sun_orientation;
+      || bulkForm.position_type || bulkForm.view_type || bulkForm.sun_orientation
+      || bulkForm.rental_price || bulkForm.rental_status;
     if (!hasAny) { alert('Preencha pelo menos um campo para aplicar em lote.'); return; }
     setBulkSaving(true);
     // Monta o patch de uma unidade aplicando só os campos preenchidos no bulkForm
@@ -296,6 +301,8 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       if (bulkForm.position_type) upd.position_type = bulkForm.position_type;
       if (bulkForm.view_type) upd.view_type = bulkForm.view_type;
       if (bulkForm.sun_orientation) upd.sun_orientation = bulkForm.sun_orientation;
+      if (bulkForm.rental_price) upd.rental_price = Number(bulkForm.rental_price);
+      if (bulkForm.rental_status) upd.rental_status = bulkForm.rental_status;
       const priv = bulkForm.private_area ? Number(bulkForm.private_area) : unit.private_area;
       const comum = bulkForm.common_area ? Number(bulkForm.common_area) : unit.common_area;
       if (bulkForm.private_area) upd.private_area = priv;
@@ -345,8 +352,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
             private_area: priv, common_area: common,
             total_area: priv !== undefined || common !== undefined ? (priv ?? 0) + (common ?? 0) : undefined,
             price: genForm.price ? Number(genForm.price) : undefined,
+            rental_price: genForm.rental_price ? Number(genForm.rental_price) : undefined,
             parking_spaces: genForm.parking_spaces ? Number(genForm.parking_spaces) : undefined,
-            status: 'DISPONIVEL', is_vendavel: true, sort_order: units.length + toCreate.length,
+            status: 'DISPONIVEL', rental_status: 'DISPONIVEL', is_vendavel: true, sort_order: units.length + toCreate.length,
           });
         }
       }
@@ -448,6 +456,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
                 { label: 'Área Comum (m²)', key: 'common_area', type: 'number' },
                 { label: 'Vagas', key: 'parking_spaces', type: 'number' },
                 { label: 'Preço Padrão (R$)', key: 'price', type: 'number' },
+                { label: 'Aluguel Padrão (R$)', key: 'rental_price', type: 'number' },
               ].map(({ label, key, type, placeholder }) => (
                 <div key={key}>
                   <label className="text-xs font-semibold text-slate-500 block mb-1">{label}</label>
@@ -714,6 +723,13 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
               className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-semibold outline-none focus:border-blue-400">
               <option value="">Orientação...</option>
               {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
+            </select>
+            {/* Eixo de locação — aluguel-alvo herdado ao publicar em Locações */}
+            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Aluguel-alvo R$" value={bulkForm.rental_price} onChange={e => setBulkForm(p => ({ ...p, rental_price: e.target.value }))} />
+            <select value={bulkForm.rental_status} onChange={e => setBulkForm(p => ({ ...p, rental_status: e.target.value as RentalUnitStatus | '' }))}
+              className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-semibold outline-none focus:border-blue-400">
+              <option value="">Status locação...</option>
+              {(Object.keys(RENTAL_STATUS_LABEL) as RentalUnitStatus[]).map(t => <option key={t} value={t}>{RENTAL_STATUS_LABEL[t]}</option>)}
             </select>
             <Button size="sm" onClick={handleBulkSave} disabled={bulkSaving}>
               {bulkSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}

@@ -12,7 +12,7 @@ import React from 'react';
 import {
   Loader2, RefreshCw, ShoppingBag, BarChart3, Building2, ArrowLeftRight,
   CheckCircle2, AlertTriangle, ArrowRight, Link2Off, Clock, Upload, Ruler,
-  Download, Send,
+  Download, Send, KeyRound,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { empreendimentoService, CommercialDivergenceSummary } from '../../services/empreendimentoService';
@@ -44,6 +44,8 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
   const [studyReport, setStudyReport] = React.useState<EmpreendimentoSyncReport | null>(null);
   const [studyError, setStudyError] = React.useState<string | null>(null);
   const [comm, setComm] = React.useState<CommercialDivergenceSummary | null>(null);
+  // Locações — eixo independente do de Vendas (rental_status/rental_price)
+  const [rental, setRental] = React.useState<CommercialDivergenceSummary | null>(null);
   const [writeBackItems, setWriteBackItems] = React.useState<WriteBackItem[] | null>(null);
   const [writeBackError, setWriteBackError] = React.useState<string | null>(null);
   const [writingBack, setWritingBack] = React.useState(false);
@@ -65,6 +67,8 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
 
   // Comercial em lote
   const [commBusy, setCommBusy] = React.useState<'publish' | 'pull' | null>(null);
+  // Locações em lote
+  const [rentalBusy, setRentalBusy] = React.useState<'publish' | 'pull' | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -130,6 +134,13 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
       empreendimentoService.getCommercialDivergenceSummary(e.id, organizationId)
         .then(s => setComm(s))
         .catch(err => { console.error('[SyncCenter] erro comercial:', err); setComm(null); })
+    );
+
+    // Locações (eixo próprio — rental_status/rental_price)
+    tasks.push(
+      empreendimentoService.getRentalDivergenceSummary(e.id, organizationId)
+        .then(s => setRental(s))
+        .catch(err => { console.error('[SyncCenter] erro locações:', err); setRental(null); })
     );
 
     await Promise.all(tasks);
@@ -239,6 +250,46 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
     } finally { setCommBusy(null); }
   };
 
+  // ── Empreendimento ⇄ Locações ─────────────────────────────────────────────
+  // Eixo independente do de Vendas: escreve em rental_status/rental_price, então
+  // rodar os dois pulls nunca faz um sobrescrever o outro.
+  const handlePublishAllRental = async () => {
+    if (!rental || rental.unpublished === 0) return;
+    const ok = await confirm({
+      title: 'Publicar em Locações?',
+      message: `${rental.unpublished} unidade(s) ainda não publicada(s) serão criadas em Locações, agrupadas sob o edifício de locação do empreendimento, herdando o aluguel-alvo definido nas unidades.`,
+      confirmLabel: 'Publicar',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setRentalBusy('publish');
+    try {
+      await empreendimentoService.publishAllToRental(e.id, organizationId);
+      await load();
+    } catch (err: any) {
+      setStudyError(`Erro ao publicar em Locações: ${err.message}`);
+    } finally { setRentalBusy(null); }
+  };
+
+  const handlePullFromRental = async () => {
+    if (!rental || rental.statusDiverge === 0) return;
+    const ok = await confirm({
+      title: 'Trazer status de Locações?',
+      message: `${rental.statusDiverge} unidade(s) têm ocupação diferente em Locações. O status de lá é a fonte (é onde a locação acontece) e será aplicado às unidades.`
+        + (rental.unmappable ? `\n\n⚠ ${rental.unmappable} unidade(s) em Vendido/Permutado não têm equivalente no eixo de locação e não serão alteradas.` : ''),
+      confirmLabel: 'Trazer',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setRentalBusy('pull');
+    try {
+      await empreendimentoService.pullStatusFromRental(e.id, organizationId);
+      await load();
+    } catch (err: any) {
+      setStudyError(`Erro ao sincronizar de Locações: ${err.message}`);
+    } finally { setRentalBusy(null); }
+  };
+
   // ── Aresta direta Arquitetura ⇄ Viabilidade ───────────────────────────────
   const handleAxToImovib = async () => {
     if (!e.planta_ai_study_id || !axStudy?.selectedScenarioId) return;
@@ -293,6 +344,10 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
 
   const commDiverge = comm
     ? comm.statusDiverge + comm.priceDiverge + comm.orphans + comm.unmappable
+    : 0;
+
+  const rentalDiverge = rental
+    ? rental.statusDiverge + rental.priceDiverge + rental.orphans + rental.unmappable
     : 0;
 
   const plantaDiverge = plantaReport
@@ -463,6 +518,52 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
             extraOrphans={comm?.orphans ?? 0}
             footer={comm ? `${comm.published}/${comm.total} publicadas` : '—'}
           />
+
+          {/* Linha 4 — aresta Locações ↔ Hub (abaixo do hub, como Arquitetura acima) */}
+          <div className="hidden md:block" />
+          <div className="hidden md:block" />
+          <EdgeConnector
+            orientation="vertical"
+            label="Empreendimento ↔ Locações"
+            tint="teal"
+            active={!!rental && rental.total > 0}
+            activeTitle="Empreendimento ↔ Locações"
+            inactiveTitle="Nenhuma unidade cadastrada nas torres deste empreendimento"
+            actions={rental && rental.total > 0 ? [
+              {
+                label: 'Publicar em Locações', icon: Upload, direction: 'out',
+                onClick: handlePublishAllRental,
+                disabled: rental.unpublished === 0, busy: rentalBusy === 'publish',
+                title: rental.unpublished === 0 ? 'Todas as unidades já estão publicadas' : `Publicar ${rental.unpublished} unidade(s) não publicada(s)`,
+              },
+              {
+                label: 'Trazer status', icon: Download, direction: 'in',
+                onClick: handlePullFromRental,
+                disabled: rental.statusDiverge === 0, busy: rentalBusy === 'pull',
+                title: rental.statusDiverge === 0 ? 'Nenhuma ocupação divergente' : `Aplicar a ocupação de ${rental.statusDiverge} unidade(s)`,
+              },
+            ] : undefined}
+          />
+          <div className="hidden md:block" />
+          <div className="hidden md:block" />
+
+          {/* Linha 5 — Locações */}
+          <div className="hidden md:block" />
+          <div className="hidden md:block" />
+          <VertexCard
+            icon={KeyRound}
+            tint="teal"
+            title="Locações"
+            subtitle="Comercial"
+            linked={!!rental && rental.published > 0}
+            unlinkedLabel={rental && rental.total > 0 ? 'Nenhuma unidade publicada' : 'Sem unidades'}
+            error={null}
+            divergences={rentalDiverge}
+            extraOrphans={rental?.orphans ?? 0}
+            footer={rental ? `${rental.published}/${rental.total} publicadas` : '—'}
+          />
+          <div className="hidden md:block" />
+          <div className="hidden md:block" />
         </div>
 
         {/* Aresta direta Arquitetura ↔ Viabilidade — em faixa própria, de propósito.
@@ -650,6 +751,7 @@ const TINTS: Record<string, { bg: string; text: string; ring: string; soft: stri
   violet:  { bg: 'bg-violet-50',  text: 'text-violet-600',  ring: 'border-violet-100', soft: 'bg-violet-100/60 border-violet-200 text-violet-700 hover:bg-violet-100' },
   emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', ring: 'border-emerald-100', soft: 'bg-emerald-100/60 border-emerald-200 text-emerald-700 hover:bg-emerald-100' },
   indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-600',  ring: 'border-indigo-100', soft: 'bg-indigo-100/60 border-indigo-200 text-indigo-700 hover:bg-indigo-100' },
+  teal:    { bg: 'bg-teal-50',    text: 'text-teal-600',    ring: 'border-teal-100',   soft: 'bg-teal-100/60 border-teal-200 text-teal-700 hover:bg-teal-100' },
 };
 
 /** Botão de saída: neutro de propósito. Ter os 2 sentidos com a mesma pílula branca

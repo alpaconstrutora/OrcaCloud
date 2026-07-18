@@ -15,6 +15,10 @@ export type UnitPositionType = 'FRENTE' | 'LATERAL' | 'FUNDOS';
 export type UnitSunOrientation = 'NORTE' | 'SUL' | 'LESTE' | 'OESTE';
 export type UnitViewType = 'SEM_VISTA' | 'PARCIAL' | 'PLENA';
 export type UnitStatus = 'DISPONIVEL' | 'RESERVADO' | 'PERMUTADO' | 'VENDIDO';
+// Eixo de LOCAÇÃO — separado de UnitStatus (venda) de propósito: uma unidade pode
+// estar publicada em Vendas e em Locações ao mesmo tempo, e um status não pode
+// sobrescrever o outro. Ver migration 20270815000003.
+export type RentalUnitStatus = 'DISPONIVEL' | 'RESERVADO' | 'LOCADO' | 'MANUTENCAO';
 export type CommonAreaCategory = 'LAZER' | 'COMUM' | 'TECNICA' | 'CIRCULACAO' | 'GARAGEM' | 'OUTRO';
 
 export interface Empreendimento {
@@ -146,8 +150,10 @@ export interface EmpreendimentoUnit {
     position_type?: UnitPositionType | null;
     sun_orientation?: UnitSunOrientation | null;
     view_type?: UnitViewType | null;
-    price?: number;
-    status: UnitStatus;
+    price?: number;                            // VGV / preço de VENDA
+    status: UnitStatus;                        // eixo de VENDA
+    rental_price?: number;                     // aluguel-alvo mensal (eixo de LOCAÇÃO, não é o VGV)
+    rental_status?: RentalUnitStatus;           // eixo de LOCAÇÃO — independente de `status`
     is_vendavel?: boolean;
     commercial_property_id?: string | null;   // ponte p/ Venda de Ativos (purpose='SALE')
     rental_property_id?: string | null;        // ponte p/ Locações (purpose='RENTAL') — eixo independente

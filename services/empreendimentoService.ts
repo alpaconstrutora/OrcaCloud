@@ -12,6 +12,7 @@ import {
 } from '../types';
 import {
     mapCommercialToEmpr, mapEmprToCommercial, mapEmprToRentalStatus, UNMAPPABLE_COMMERCIAL_STATUSES,
+    mapRentalToEmpr, UNMAPPABLE_RENTAL_STATUSES,
     mapPositionToCommercial, mapViewToCommercial, mapSunToCommercial,
 } from '../utils/empreendimentoComercial';
 import { buildPlan, PlanOptions } from './sync/planner';
@@ -82,7 +83,7 @@ const TOWER_COLS = 'id, empreendimento_id, project_id, imovib_block_id, planta_a
 
 const FLOOR_COLS = 'id, tower_id, name, tipo, floor_number, repeat_count, units_per_floor, prefix, sort_order, created_at, updated_at';
 
-const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_instance_id, planta_ai_unit_id, name, floor, typology, private_area, common_area, total_area, bedrooms, bathrooms, parking_spaces, position_type, sun_orientation, view_type, price, status, is_vendavel, commercial_property_id, rental_property_id, sort_order, fracao_ideal_decimal, fracao_ideal_thousandths, area_real_total_m2, area_engine_version_id, area_engine_synced_at, created_at, updated_at';
+const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_instance_id, planta_ai_unit_id, name, floor, typology, private_area, common_area, total_area, bedrooms, bathrooms, parking_spaces, position_type, sun_orientation, view_type, price, status, rental_price, rental_status, is_vendavel, commercial_property_id, rental_property_id, sort_order, fracao_ideal_decimal, fracao_ideal_thousandths, area_real_total_m2, area_engine_version_id, area_engine_synced_at, created_at, updated_at';
 
 const COMMON_AREA_COLS = 'id, empreendimento_id, tower_id, name, category, area, floor, description, is_vendavel, sort_order, created_at, updated_at';
 
@@ -490,9 +491,9 @@ export const empreendimentoService = {
     // Vínculo por `rental_property_id` (não `commercial_property_id`), edifício-pai
     // por `commercial_rental_building_id`, properties com purpose='RENTAL'. Uma
     // unidade pode estar publicada em Vendas e em Locações ao mesmo tempo, sem
-    // que um status contamine o outro. Diferença de fundo: o Empreendimento não
-    // guarda ocupação de aluguel (Locado), então NÃO há pull de status de volta —
-    // a ocupação é gerida no módulo de Locações.
+    // que um status contamine o outro — por isso o eixo de locação tem colunas
+    // próprias: `rental_status` (ocupação) e `rental_price` (aluguel-alvo), que o
+    // pull de Vendas nunca toca. Ver migration 20270815000003.
     // ══════════════════════════════════════════════════════════════════════════
 
     /**
@@ -554,13 +555,13 @@ export const empreendimentoService = {
                 purpose: 'RENTAL',
                 parent_id: buildingId,
                 ...addressFields,
-                // Aluguel mensal é definido no módulo de Locações (não herda o preço de
-                // venda da unidade, que é VGV). Começa em 0 e é ajustado lá.
-                price: 0,
+                // Aluguel-alvo definido no Empreendimento (rental_price). NUNCA `price`,
+                // que é o VGV/preço de venda — grandezas diferentes (mensal × total).
+                price: unit.rental_price ?? 0,
                 private_area: unit.private_area,
                 common_area: unit.common_area,
                 total_area: unit.total_area,
-                status: mapEmprToRentalStatus(unit.status),
+                status: mapEmprToRentalStatus(unit.rental_status ?? 'DISPONIVEL'),
                 floor: unit.floor,
                 typology: unit.typology || undefined,
                 block: unit._tower_name,
@@ -603,6 +604,92 @@ export const empreendimentoService = {
             commercialService.saveProperty({ id: p.id, parent_id: buildingId } as any)
         ));
         return toFix.length;
+    },
+
+    /**
+     * Resumo de divergências Empreendimento ↔ Locações (somente leitura).
+     * Espelho de getCommercialDivergenceSummary, no eixo de aluguel: compara
+     * rental_status/rental_price em vez de status/price.
+     */
+    async getRentalDivergenceSummary(
+        empreendimentoId: string,
+        organizationId: string,
+    ): Promise<CommercialDivergenceSummary> {
+        const units = await this.listAllUnitsForEmpreendimento(empreendimentoId);
+        const ids = units.map(u => u.rental_property_id).filter(Boolean) as string[];
+
+        const snaps: Record<string, { status: string; price: number }> = {};
+        if (ids.length) {
+            const { data } = await supabase
+                .from('commercial_properties')
+                .select('id, status, price')
+                .eq('organization_id', organizationId)
+                .in('id', ids);
+            (data || []).forEach((p: any) => { snaps[p.id] = { status: p.status, price: p.price }; });
+        }
+
+        const summary: CommercialDivergenceSummary = {
+            total: units.length, published: 0, unpublished: 0,
+            statusDiverge: 0, priceDiverge: 0, unmappable: 0, orphans: 0,
+        };
+
+        for (const u of units) {
+            if (!u.rental_property_id) { summary.unpublished++; continue; }
+            const snap = snaps[u.rental_property_id];
+            if (!snap) { summary.orphans++; continue; } // property excluída ou de outra org
+            summary.published++;
+            if (UNMAPPABLE_RENTAL_STATUSES.has(snap.status)) {
+                summary.unmappable++;
+            } else if (mapRentalToEmpr(snap.status) !== (u.rental_status ?? 'DISPONIVEL')) {
+                summary.statusDiverge++;
+            }
+            if (u.rental_price != null && Math.abs((snap.price ?? 0) - u.rental_price) > 0.01) summary.priceDiverge++;
+        }
+        return summary;
+    },
+
+    /**
+     * Locações → Empreendimento: traz a ocupação das properties de volta às unidades.
+     * A locação acontece no módulo de Locações (contratos/negócios), então ali é a
+     * fonte do status. Grava SEMPRE em `rental_status` — nunca em `status`, que é o
+     * eixo de venda. Vendido/Permutado não têm equivalente no aluguel e são pulados
+     * (ver mapRentalToEmpr, que devolve null nesses casos).
+     */
+    async pullStatusFromRental(
+        empreendimentoId: string,
+        organizationId: string,
+    ): Promise<CommercialPullReport> {
+        const units = await this.listAllUnitsForEmpreendimento(empreendimentoId);
+        const ids = units.map(u => u.rental_property_id).filter(Boolean) as string[];
+        const report: CommercialPullReport = { statusUpdated: 0, skippedUnmappable: 0, unlinked: 0 };
+        if (!ids.length) {
+            report.unlinked = units.length;
+            return report;
+        }
+
+        const { data, error } = await supabase
+            .from('commercial_properties')
+            .select('id, status')
+            .eq('organization_id', organizationId)
+            .in('id', ids);
+        if (error) throw new Error(`Falha ao ler Locações: ${error.message}`);
+        const snaps: Record<string, string> = {};
+        (data || []).forEach((p: any) => { snaps[p.id] = p.status; });
+
+        const updates: Promise<unknown>[] = [];
+        for (const u of units) {
+            if (!u.rental_property_id) { report.unlinked++; continue; }
+            const status = snaps[u.rental_property_id];
+            if (!status) continue; // property sumiu — órfã, tratada no Espelho de Locações
+            if (UNMAPPABLE_RENTAL_STATUSES.has(status)) { report.skippedUnmappable++; continue; }
+            const mapped = mapRentalToEmpr(status);
+            if (mapped && mapped !== (u.rental_status ?? 'DISPONIVEL')) {
+                updates.push(this.updateUnit(u.id, { rental_status: mapped }));
+                report.statusUpdated++;
+            }
+        }
+        await Promise.all(updates);
+        return report;
     },
 
     // ── Pavimentos template ──────────────────────────────────────────────────

@@ -15,7 +15,7 @@ import FloorViewerTab from './FloorViewerTab';
 import View3DTab from './View3DTab';
 import EstudoTorresUnidades from '../torres/EstudoTorresUnidades';
 import EstudoMapaRegulatorio from '../EstudoMapaRegulatorio';
-import { empreendimentoService } from '../../services/empreendimentoService';
+import { empreendimentoService, loadTargetState } from '../../services/empreendimentoService';
 import { zoneToUrbanRuleset } from '../../services/sync/regulatoryAdapter';
 import { PlantTerrain, PlantUrbanRuleset } from '../../types/plantaAi';
 
@@ -37,6 +37,14 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
   // Empreendimento que aponta para este estudo. O vínculo é gravado do lado do
   // Empreendimento (empreendimentos.planta_ai_study_id), então aqui é leitura reversa.
   const [linkedEmp, setLinkedEmp] = useState<{ id: string; name: string } | null>(null);
+  // Números REAIS de cada cenário já sincronizado com o Empreendimento (torre com
+  // planta_ai_scenario_id) — chave é o scenario.id. Sobrepõe os campos congelados do cenário
+  // (sc.total_units etc, gravados na geração) sempre que existir torre real: Torres & Unidades
+  // é editável dentro deste mesmo estudo agora, então o card não pode mais mostrar um número
+  // que ficou velho assim que alguém mexe numa unidade lá.
+  const [realAgg, setRealAgg] = useState<Record<string, {
+    floorsCount: number; unitsPerFloor: number; totalUnits: number; totalPrivateArea: number;
+  }>>({});
   const confirm = useConfirm();
   const setActiveView = useStore(s => s.setActiveView);
 
@@ -47,6 +55,12 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
     fetchLinkedEmpreendimento();
   }, [studyId]);
 
+  // Recarrega os números reais toda vez que a aba Cenários é aberta — pega qualquer edição
+  // feita em Torres & Unidades (mesmo estudo, mesma aba lateral) desde a última visita.
+  useEffect(() => {
+    if (activeTab === 'Cenários' && linkedEmp) refreshRealTowerData(linkedEmp.id);
+  }, [activeTab, linkedEmp]);
+
   async function fetchLinkedEmpreendimento() {
     const { data } = await supabase
       .from('empreendimentos')
@@ -54,6 +68,29 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
       .eq('planta_ai_study_id', studyId)
       .maybeSingle();
     setLinkedEmp(data ?? null);
+  }
+
+  /** Recalcula os números reais por cenário a partir das torres/unidades do empreendimento —
+   *  mesma conta de buildWriteBackReports (plantaEmpreendimentoSync.ts), só que aqui é
+   *  leitura pura para exibição, sem gravar nada de volta em plant_scenarios. */
+  async function refreshRealTowerData(empreendimentoId: string) {
+    const { towers, units } = await loadTargetState(empreendimentoId);
+    const next: typeof realAgg = {};
+    for (const tower of towers) {
+      if (!tower.planta_ai_scenario_id) continue;
+      const towerUnits = units.filter(u => u.tower_id === tower.id);
+      if (towerUnits.length === 0) continue;
+      const distinctFloors = new Set(towerUnits.map(u => u.floor).filter(f => f != null));
+      const floorsCount = distinctFloors.size || tower.floors_count || 0;
+      const totalUnits = towerUnits.length;
+      next[tower.planta_ai_scenario_id] = {
+        floorsCount,
+        unitsPerFloor: floorsCount > 0 ? Math.round(totalUnits / floorsCount) : totalUnits,
+        totalUnits,
+        totalPrivateArea: towerUnits.reduce((s, u) => s + (u.private_area || 0), 0),
+      };
+    }
+    setRealAgg(next);
   }
 
   async function fetchContext() {
@@ -307,19 +344,29 @@ export default function PlantaAiStudyDetail({ studyId, onBack }: Props) {
                   if (terrain && rules) {
                     geometryData = PlantaAiEngine.calculateEnvelope(terrain, rules).geometryData;
                   }
-                  
+
+                  // Cenário já sincronizado com uma torre real? Mostra o número AO VIVO de
+                  // Torres & Unidades em vez do campo congelado na geração — o mesmo cenário
+                  // que os dois lados enxergam, sem card mostrando dado velho.
+                  const real = realAgg[sc.id];
+
                   return (
                     <div key={sc.id} className={`border rounded-lg overflow-hidden flex flex-col ${sc.id === study.selected_scenario_id ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}>
                       <ScenarioVisualizer2D geometryData={geometryData} />
-                      
+
                       <div className="p-4 flex-1">
                         <h3 className="font-bold text-gray-800">{sc.name}</h3>
                         <div className="mt-4 space-y-2 text-sm text-gray-600">
-                          <p><strong>Unidades:</strong> {sc.total_units} ({sc.units_per_floor} p/andar)</p>
-                          <p><strong>Andares:</strong> {sc.floors_count}</p>
-                          <p><strong>Área Privativa:</strong> {Math.round(sc.total_private_area || 0)} m²</p>
+                          <p><strong>Unidades:</strong> {real?.totalUnits ?? sc.total_units} ({real?.unitsPerFloor ?? sc.units_per_floor} p/andar)</p>
+                          <p><strong>Andares:</strong> {real?.floorsCount ?? sc.floors_count}</p>
+                          <p><strong>Área Privativa:</strong> {Math.round(real?.totalPrivateArea ?? sc.total_private_area ?? 0)} m²</p>
                           <p><strong>VGV Est.:</strong> R$ {(sc.estimated_vgv || 0).toLocaleString('pt-BR')}</p>
                           <p><strong>Score:</strong> {sc.general_score}/100</p>
+                          {real && (
+                            <p className="text-[11px] text-emerald-600 font-medium">
+                              ✓ Unidades, andares e área: dados reais de Torres &amp; Unidades
+                            </p>
+                          )}
                         </div>
 
                         {sc.validations && sc.validations.length > 0 && (

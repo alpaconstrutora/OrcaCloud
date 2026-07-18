@@ -124,7 +124,10 @@ export interface AppRouterProps {
   currentProfile: CurrentProfile;
   settingsWithId: ProjectSettings & { id?: string };
   budget: BudgetEntry[];
+  /** SÓ obras — ver store/useStore.ts e utils/projectClassification.ts */
   projects: ProjectData[];
+  /** Todos os tipos (obra/orçamento/planejamento/diário), para as telas explícitas */
+  allProjects: ProjectData[];
   organizations: Organization[];
   projectId: string | null;
   session: Session | null;
@@ -197,7 +200,7 @@ export interface AppRouterProps {
 
 const AppRouter: React.FC<AppRouterProps> = (props) => {
   const {
-    activeView, setActiveView, currentProfile, settingsWithId, budget, projects, organizations,
+    activeView, setActiveView, currentProfile, settingsWithId, budget, projects, allProjects, organizations,
     projectId, session, activeOrganizationId, setActiveOrganizationId,
     clientProfile, investorProfile, supplierProfile, clients, setClientProfile,
     favorites, contractsVersion, setContractsVersion, managementTab, setManagementTab, projectsLoading,
@@ -223,6 +226,11 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   // Projects mapeados para formato compatível com todos os componentes (id garantido vindo do banco)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const typedProjects = projects.filter(p => p.id).map(p => p as any as (typeof p & { id: string }));
+  // Lista completa (obra + orçamento + planejamento + diário). Passe esta APENAS
+  // para telas que são explicitamente sobre os outros tipos — ProjectList (que
+  // filtra por `classificationFilter`), PlanningDashboard, DiaryDashboard,
+  // LaborDashboard, ProjectOverview. Todo o resto usa `typedProjects` (só obras).
+  const typedAllProjects = allProjects.filter(p => p.id).map(p => p as any as (typeof p & { id: string }));
 
   // Force SupplyChainOrderDetails to remount (and refetch) after returning from edit
   const [orderDetailsKey, setOrderDetailsKey] = React.useState(0);
@@ -572,7 +580,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           <ProjectOverview
             settings={settingsWithId}
             budget={budget}
-            projects={typedProjects}
+            projects={typedAllProjects}
             onNavigate={setActiveView}
             onLoadProject={handleLoadProject}
           />
@@ -611,7 +619,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         <FinancialScheduleL
           settings={settingsWithId}
           budget={budget}
-          projects={typedProjects}
+          projects={typedAllProjects}
           organizations={organizations}
           organizationId={activeOrganizationId || undefined}
           onLoadProject={handleLoadProject}
@@ -649,9 +657,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
               </button>
             </div>
           </div>
-          <PlanningDashboard projects={typedProjects} />
+          <PlanningDashboard projects={typedAllProjects} />
           <ProjectList
-            projects={typedProjects}
+            projects={typedAllProjects}
             onLoadProject={handleLoadProject}
             onEditProject={handleLoadAndEditProject}
             onNewProject={handleNewProject}
@@ -681,7 +689,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Acompanhe e registre o dia a dia das suas obras com precisão.</p>
               </div>
             </div>
-            <DiaryDashboard projects={typedProjects} />
+            <DiaryDashboard projects={typedAllProjects} />
             <div className="flex justify-end gap-4 pr-4">
               <button
                 onClick={() => setActiveView('labor-analytics')}
@@ -701,7 +709,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
               </Button>
             </div>
             <ProjectList
-              projects={typedProjects}
+              projects={typedAllProjects}
               onLoadProject={handleLoadProject}
               onEditProject={handleLoadAndEditProject}
               onNewProject={handleNewProject}
@@ -720,7 +728,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <ProjectDiaryManager
           settings={settingsWithId}
-          projects={typedProjects}
+          projects={typedAllProjects}
           onLoadProject={handleLoadProject}
           onUpdateSettings={handleUpdateSettings}
           organizationId={activeOrganizationId || undefined}
@@ -735,7 +743,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         <ProjectOverview
           settings={settingsWithId}
           budget={budget}
-          projects={typedProjects}
+          projects={typedAllProjects}
           onNavigate={setActiveView}
           onLoadProject={handleLoadProject}
         />
@@ -798,7 +806,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return <LaborModule activeOrganizationId={activeOrganizationId || undefined} projects={typedProjects} activeSection={activeView} onChangeView={setActiveView} />;
 
     case 'labor-analytics':
-      return <LaborDashboard projects={typedProjects} onBack={() => setActiveView('project-diary')} />;
+      return <LaborDashboard projects={typedAllProjects} onBack={() => setActiveView('project-diary')} />;
 
     case 'reports':
       if (settingsWithId.classification === 'DIARIO') {
@@ -1021,7 +1029,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'eng-obras':
       return (
         <ProjectList
-          projects={typedProjects}
+          projects={typedAllProjects}
           onLoadProject={handleLoadProject}
           onEditProject={handleLoadAndEditProject}
           onNewProject={handleNewProject}
@@ -1038,7 +1046,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'eng-orcamentos':
       return (
         <ProjectList
-          projects={typedProjects}
+          projects={typedAllProjects}
           onLoadProject={handleLoadProject}
           onEditProject={handleLoadAndEditProject}
           onNewProject={handleNewProject}
@@ -1106,7 +1114,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           userName={session?.user?.user_metadata?.name || session?.user?.email?.split('@')[0] || ''}
           userRole={currentProfile?.role}
           obras={typedProjects
-            .filter(p => p.settings?.classification === 'OBRA' && p.name !== 'Gestão Comercial')
+            /* typedProjects já é só OBRA e já exclui projeto de sistema */
             .map(p => ({ id: p.id, name: p.name, organizationId: p.settings?.organizationId }))}
         />
       );
@@ -1178,7 +1186,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         <WarrantyModule
           activeOrganizationId={activeOrganizationId ?? undefined}
           projects={typedProjects
-            .filter(p => p.settings?.classification === 'OBRA')
             .map(p => ({ id: p.id, name: p.name }))}
         />
       );
@@ -1383,7 +1390,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           <ProjectOverview
             settings={settingsWithId}
             budget={budget}
-            projects={typedProjects}
+            projects={typedAllProjects}
             onNavigate={setActiveView}
             onLoadProject={handleLoadProject}
           />

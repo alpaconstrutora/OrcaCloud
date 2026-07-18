@@ -14,6 +14,7 @@ import { EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoUnit } fr
 import UnitEditor from './UnitEditor';
 import FloorEditor from './FloorEditor';
 import { TorreCard, TorreEmpty, TorreTotais, TorreTotalMetric } from '../torres/TorreCard';
+import { isObra } from '../../utils/projectClassification';
 
 interface Props {
   empreendimentoId: string;
@@ -50,7 +51,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
 
   const orgProjects = React.useMemo(() => projects.filter(p => {
     const s: any = p.settings || {};
-    return s.classification === 'OBRA' && (!organizationId || s.organizationId === organizationId);
+    return isObra({ settings: s }) && (!organizationId || s.organizationId === organizationId);
   }), [projects, organizationId]);
 
   const load = React.useCallback(async () => {

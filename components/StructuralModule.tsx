@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import { isObra } from '../utils/projectClassification'
 import {
   Layers, Loader2, Plus, Lock, X, Check,
   Construction, Scissors, Calculator, ClipboardList, Building2, ChevronRight,
@@ -437,8 +438,8 @@ const StructuralModule: React.FC<Props> = ({ activeOrganizationId, projects = []
   // Obras visíveis: filtra por org quando uma está selecionada; mostra todas quando em modo "todas as orgs"
   const obras = projects.filter(p => {
     const s = (p as ProjectRow).settings
-    if (!s?.classification || s.classification !== 'OBRA' || s.isSystemProject) return false
-    return activeOrganizationId ? s.organizationId === activeOrganizationId : true
+    if (!isObra(p as ProjectRow) || s?.isSystemProject) return false
+    return activeOrganizationId ? s?.organizationId === activeOrganizationId : true
   })
 
   const selectedProject = obras.find(p => p.id === projectId)

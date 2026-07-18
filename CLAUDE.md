@@ -120,7 +120,58 @@ store + `projectService`, fazer o backfill de `settings.isSystemProject`
 
 ---
 
-## REGRA OBRIGATÓRIA #3 — Layout de interação (`UI_PATTERNS.md`)
+## REGRA OBRIGATÓRIA #3 — Obra nunca vem misturada com orçamento/planejamento
+
+**Gatilho:** qualquer código que liste, filtre, conte ou monte seletor de obras.
+
+A tabela `projects` guarda **quatro coisas diferentes** separadas só por
+`settings.classification`: `OBRA`, `ORCAMENTO`, `PLANEJAMENTO`, `DIARIO`
+(+ o legado `COST_ESTIMATION`).
+
+**Regra de produto: quando a tela fala em "obra", ela mostra SÓ `OBRA`.**
+Orçamento e planejamento aparecem apenas quando a tela pede por eles
+explicitamente (Engenharia › Orçamentos, Planejamento, seletor de "vincular
+orçamento"). Nunca misturados num seletor genérico de obra.
+
+**Não escreva `p.settings?.classification === 'OBRA'`.** O corte é na origem:
+
+| De onde vêm os projetos | O que fazer |
+|---|---|
+| `useStore().projects` | **nada** — já é só OBRA |
+| `projectService.listProjects()` | filtre com `onlyObras()` (o service só tira projeto de sistema) |
+| precisa de orçamento/planejamento/diário | `useStore().allProjects` + `onlyOrcamentos()` / `onlyPlanejamentos()` / `onlyDiarios()` |
+| combinação (ex: obra + planejamento) | `onlyClassifications(lista, 'OBRA', 'PLANEJAMENTO')` |
+
+⚠️ **`AppRouter` passa `typedAllProjects` (lista completa) só para
+`ProjectList`, `PlanningDashboard`, `DiaryDashboard`, `LaborDashboard`,
+`ProjectOverview`, `ProjectDiaryManager` e `FinancialSchedule`.** Todo o resto
+recebe `typedProjects` (só obras). Se uma tela nova precisa dos outros tipos,
+passe `typedAllProjects` explicitamente — e diga no código por quê.
+
+Fonte da verdade: **`utils/projectClassification.ts`**. Projeto **sem**
+classificação **não** conta como obra (`TRATAR_SEM_CLASSIFICACAO_COMO_OBRA =
+false`) — é a única linha que decide isso; diagnóstico do banco em
+`scripts/diagnostico-classificacao-projetos.sql`.
+
+**Verificação (exit ≠ 0 se achar comparação literal):**
+
+```bash
+bash scripts/check-project-classification.sh          # repo inteiro
+bash scripts/check-project-classification.sh <arquivo>
+```
+
+### Por que isso existe
+
+2026-07-18: a tela de seleção de obra do ÒPURA CNO listava obra, orçamento e
+planejamento juntos. Não era um caso isolado — havia **dois padrões conflitantes**
+(61 lugares com `=== 'OBRA'` estrito; outros com uma lista de exclusão que
+deixava passar projeto sem classificação) e dezenas de telas sem filtro nenhum,
+porque cada uma decidia sozinha. O usuário pediu correção definitiva, não mais
+um filtro pontual.
+
+---
+
+## REGRA OBRIGATÓRIA #4 — Layout de interação (`UI_PATTERNS.md`)
 
 Antes de decidir entre modal, painel lateral (`Sheet`) ou página dedicada para
 qualquer nova interação, ler `UI_PATTERNS.md`. Painel lateral é o padrão para

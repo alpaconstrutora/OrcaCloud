@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { isObra } from '../../utils/projectClassification';
 import {
   ArrowLeft, Save, RefreshCw, Layers, Calculator,
   CheckCircle2, AlertTriangle, XCircle, FileText, ShoppingCart
@@ -350,7 +351,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
       const orgProjects = await projectService.listProjects(undefined, element.organization_id)
       
       // Encontra a primeira obra ativa da organização
-      const targetObra = orgProjects?.find((p: any) => p.settings?.classification === 'OBRA')
+      const targetObra = orgProjects?.find(isObra)
       const targetProjectId = targetObra?.id
 
       if (!targetProjectId) {

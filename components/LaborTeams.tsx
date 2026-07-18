@@ -118,7 +118,7 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
                             <div className="relative">
                                 <select value={form.project_id} onChange={e => setForm(p => ({ ...p, project_id: e.target.value }))} className={inputCls + ' appearance-none pr-6'}>
                                     <option value="">Sem obra</option>
-                                    {projects.filter(p => p.settings?.classification === 'OBRA').map(p => (
+                                    {projects.map(p => (
                                         <option key={p.id} value={p.id}>{p.name || p.settings?.name}</option>
                                     ))}
                                 </select>

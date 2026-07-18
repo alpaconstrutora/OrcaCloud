@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { projectMilestonesService, ProjectMilestone } from './projectMilestonesService';
 import { financialReportService } from './financialReportService';
 import { SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects';
+import { onlyObras } from '../utils/projectClassification';
 
 export interface ProjectPitchBasic {
     id: string;
@@ -53,9 +54,7 @@ export const opportunityProjectService = {
         if (error) throw error;
         // Exclude non-obra projects (orçamentos, diários, planejamentos)
         const rows = (data ?? []) as { id: string; name: string; settings?: { classification?: string } }[];
-        return rows.filter(p =>
-            !p.settings?.classification || p.settings.classification === 'OBRA'
-        ).map(({ id, name }) => ({ id, name }));
+        return onlyObras(rows).map(({ id, name }) => ({ id, name }));
     },
 
     async getPitchData(projectId: string, organizationId: string): Promise<ProjectPitchData> {

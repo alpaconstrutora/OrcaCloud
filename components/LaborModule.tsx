@@ -617,7 +617,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ activeOrganizationId, project
                             organizations={organizations.map(o => ({ id: o.id, name: o.name }))}
                             employees={employees}
                             projects={projects
-                                .filter((p: any) => p.settings?.classification === 'OBRA')
+
                                 .map(p => ({ id: p.id, name: p.name || (p as any).title || '' }))}
                         />
                     )}

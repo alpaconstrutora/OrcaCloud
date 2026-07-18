@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { AlertTriangle, Clock, ListTodo, Target } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
+import { onlyPlanejamentos } from '../utils/projectClassification';
 
 interface ScheduleItem {
     slack?: number;
@@ -32,9 +33,8 @@ interface PlanningDashboardProps {
 
 
 const PlanningDashboard: React.FC<PlanningDashboardProps> = ({ projects }) => {
-    const planningProjects = useMemo(() =>
-        projects.filter(p => p.settings?.classification === 'PLANEJAMENTO'),
-        [projects]);
+    // Recebe `allProjects` do AppRouter (tela explicitamente sobre planejamento)
+    const planningProjects = useMemo(() => onlyPlanejamentos(projects), [projects]);
 
     const totalCount = planningProjects.length;
 

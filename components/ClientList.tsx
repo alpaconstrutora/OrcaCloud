@@ -16,6 +16,7 @@ import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
+import { isObra } from '../utils/projectClassification';
 
 interface ClientListProps {
     onClientsChange?: () => void;
@@ -311,7 +312,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     }), [clients]);
 
     const getClientProjects = React.useCallback(
-        (clientId: string) => projects.filter(p => p.settings?.clientId === clientId && p.settings?.classification === 'OBRA'),
+        (clientId: string) => projects.filter(p => p.settings?.clientId === clientId && isObra(p)),
         [projects]
     );
 
@@ -704,7 +705,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                         {(() => {
                                             const clientProjects = projects.filter(p =>
                                                 p.settings?.clientId === client.id &&
-                                                p.settings?.classification === 'OBRA'
+                                                isObra(p)
                                             );
 
                                             if (clientProjects.length > 0) {

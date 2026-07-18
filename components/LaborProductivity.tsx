@@ -132,7 +132,7 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
                             <div className="relative">
                                 <select value={form.project_id} onChange={e => setForm(p => ({ ...p, project_id: e.target.value }))} className={inputCls + ' appearance-none pr-6'}>
                                     <option value="">Sem obra</option>
-                                    {projects.filter(p => p.settings?.classification === 'OBRA').map(p => <option key={p.id} value={p.id}>{p.name || p.settings?.name}</option>)}
+                                    {projects.map(p => <option key={p.id} value={p.id}>{p.name || p.settings?.name}</option>)}
                                 </select>
                                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                             </div>

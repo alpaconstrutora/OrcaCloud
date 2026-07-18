@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { isObra } from '../utils/projectClassification'
 import {
   ClipboardList, LayoutDashboard, BookOpen,
   ChevronRight, Building2, Loader2, LayoutGrid, List,
@@ -58,7 +59,7 @@ const ProjectSelector: React.FC<{
   const obras = filtered.filter(p => {
     const s = (p as { settings?: { classification?: string; isSystemProject?: boolean; standard?: string; location?: string } }).settings
     // Projeto de sistema já sai no store — utils/systemProjects.ts
-    return s?.classification === 'OBRA'
+    return isObra({ settings: s })
       && s?.standard !== 'Vendas'
       && s?.location !== 'Sistema'
   })
@@ -155,7 +156,7 @@ const ProjectSelector: React.FC<{
 function isObraProject(proj: any): boolean {
   const s = proj?.settings
   return (
-    s?.classification === 'OBRA' &&
+    isObra(proj) &&
     !s?.isSystemProject &&
     s?.standard !== 'Vendas' &&
     s?.location !== 'Sistema'

@@ -5,6 +5,7 @@ import { projectService } from '../services/projectService';
 import { investorContributionsService } from '../services/investorContributionsService';
 import ContributionsManager from './investor/ContributionsManager';
 import { Sheet, SheetHeader, SheetTitle, SheetPanel, SheetFooter } from './ui/sheet';
+import { isObra } from '../utils/projectClassification';
 
 interface InvestorModalProps {
     isOpen: boolean;
@@ -49,7 +50,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
         try {
             const allProjects = await projectService.listProjects();
             // Filter only OBRAS
-            const obras = allProjects.filter((p: any) => p.settings?.classification === 'OBRA');
+            const obras = allProjects.filter(isObra);
             setProjects(obras);
 
             // If editing, check which projects are linked to this investor

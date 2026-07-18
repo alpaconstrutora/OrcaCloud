@@ -163,7 +163,7 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                             <div className="relative">
                                 <select value={newEntry.project_id} onChange={e => setNewEntry(p => ({ ...p, project_id: e.target.value }))} className={inputCls + ' appearance-none pr-6'}>
                                     <option value="">Sem obra</option>
-                                    {projects.filter(p => p.settings?.classification === 'OBRA').map(p => (
+                                    {projects.map(p => (
                                         <option key={p.id} value={p.id}>{p.name || p.settings?.name}</option>
                                     ))}
                                 </select>

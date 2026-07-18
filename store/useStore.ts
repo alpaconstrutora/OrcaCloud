@@ -11,6 +11,7 @@ import {
     Company,
 } from '../types';
 import { excludeSystemProjects, onlySystemProjects } from '../utils/systemProjects';
+import { onlyObras } from '../utils/projectClassification';
 import { ProjectData } from '../services/projectService';
 import { projectService } from '../services/projectService';
 import { clientService } from '../services/clientService';
@@ -83,11 +84,27 @@ interface UIState {
 interface ProjectState {
     projectId: string | null;
     /**
-     * Obras de verdade. NÃO contém projetos de sistema (ex: "Gestão Comercial")
-     * — eles são separados em `systemProjects`. Ver `utils/systemProjects.ts`.
-     * Quem lê daqui não precisa filtrar nada.
+     * SÓ OBRAS (Engenharia › Obras). Este é o campo que 99% das telas quer.
+     *
+     * Não contém:
+     *   - orçamento / planejamento / diário → use `allProjects` + os helpers de
+     *     `utils/projectClassification.ts`, e só quando a tela pedir por eles
+     *     explicitamente;
+     *   - projetos de sistema, ex: "Gestão Comercial" → `systemProjects`,
+     *     `utils/systemProjects.ts`.
+     *
+     * Quem lê daqui não precisa filtrar nada — é seguro por padrão.
      */
     projects: ProjectData[];
+    /**
+     * TODOS os projetos, das quatro classificações, sem projetos de sistema.
+     *
+     * Use só quando a tela é explicitamente sobre orçamento/planejamento/diário
+     * (ex: ProjectList com `classificationFilter`, PlanningDashboard,
+     * DiaryDashboard, seletor de "vincular orçamento"). Para qualquer tela que
+     * fale em "obra", use `projects`.
+     */
+    allProjects: ProjectData[];
     /**
      * Projetos centralizadores criados pelo sistema, fora de `projects`.
      * Só o financeiro comercial deve precisar disto.
@@ -189,6 +206,7 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
     // Project State
     projectId: typeof window !== 'undefined' ? localStorage.getItem('orca_currentProjectId') : null,
     projects: [],
+    allProjects: [],
     systemProjects: [],
     projectsLoading: true, // true até o primeiro fetch completar — evita flash de estado vazio
     organizations: [],
@@ -241,12 +259,17 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
         else localStorage.removeItem('orca_currentProjectId');
         set({ projectId });
     },
-    // Filtra aqui também: se um caller passar a lista crua do banco, o projeto
-    // de sistema não pode reentrar em `projects` por esta porta.
-    setProjects: (projects) => set({
-        projects: excludeSystemProjects(projects),
-        systemProjects: onlySystemProjects(projects),
-    }),
+    // Mesmos dois cortes do fetchProjects: se um caller passar a lista crua do
+    // banco, nem projeto de sistema nem orçamento/planejamento podem reentrar
+    // em `projects` por esta porta.
+    setProjects: (projects) => {
+        const semSistema = excludeSystemProjects(projects);
+        set({
+            projects: onlyObras(semSistema),
+            allProjects: semSistema,
+            systemProjects: onlySystemProjects(projects),
+        });
+    },
     setOrganizations: (organizations) => set({ organizations }),
     setClients: (clients) => set({ clients }),
     setBudget: (budget) => set({ budget }),
@@ -262,16 +285,21 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
             // Se activeOrganizationId for null, buscamos todos os projetos permitidos via RLS
             // Se for explicitamente passado, filtramos por ele.
             const list = await projectService.listProjects(undefined, activeOrganizationId || undefined, true) as unknown as ProjectData[];
-            // Projetos de sistema (ex: "Gestão Comercial") saem de `projects` na
-            // origem — assim nenhuma tela precisa lembrar de filtrá-los, e tela
-            // nova nasce correta. Ver utils/systemProjects.ts.
+            // Dois cortes na origem, para tela nova nascer correta sem precisar
+            // lembrar de nada:
+            //   1. projetos de sistema saem de tudo   → utils/systemProjects.ts
+            //   2. `projects` fica só com OBRA        → utils/projectClassification.ts
+            // Orçamento/planejamento/diário continuam em `allProjects`, para as
+            // telas que pedem por eles explicitamente.
+            const semSistema = excludeSystemProjects(list);
             set({
-                projects: excludeSystemProjects(list),
+                projects: onlyObras(semSistema),
+                allProjects: semSistema,
                 systemProjects: onlySystemProjects(list),
             });
         } catch (err) {
             console.error("Error listing projects:", err);
-            set({ projects: [], systemProjects: [] });
+            set({ projects: [], allProjects: [], systemProjects: [] });
         } finally {
             set({ projectsLoading: false });
         }

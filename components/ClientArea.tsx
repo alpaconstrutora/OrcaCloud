@@ -71,6 +71,7 @@ import { storageService } from '../services/storageService';
 import { PurchaseOrder } from '../types';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import { useConfirm } from './ui/confirm';
+import { isObra } from '../utils/projectClassification';
 
 interface ClientAreaProps {
     settings: ProjectSettings;
@@ -153,7 +154,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         }
         let cancelled = false;
         projectService.listProjects(clientProfile.id).then(async (projects) => {
-            const match = (projects || []).find((p: any) => p.settings?.classification === 'OBRA') || (projects || [])[0];
+            const match = (projects || []).find(isObra) || (projects || [])[0];
             if (!match) {
                 if (!cancelled) setLinkedClientProject(null);
                 return;

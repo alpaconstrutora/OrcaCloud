@@ -66,6 +66,7 @@ import {
   UserPermissions,
 } from '../types';
 import { useStore } from '../store/useStore';
+import { isObra } from '../utils/projectClassification';
 
 const COLUMNS: ColumnConfig[] = [
   { key: 'nome', label: 'Documento', sortable: true },
@@ -1098,13 +1099,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
 
 
-  // Filtrar projetos/obras (classification === 'OBRA')
+  // Só obras — ver utils/projectClassification.ts
   const obras = React.useMemo(() => {
     if (!projects || !Array.isArray(projects)) return [];
-    return projects.filter(p => 
-      p && (p.settings?.classification === 'OBRA' || !p.settings?.classification) &&
-      p.name?.toLowerCase() !== 'gestão comercial'
-    );
+    // isObra + projeto de sistema já filtrado no store (utils/systemProjects.ts)
+    return projects.filter(isObra);
   }, [projects]);
 
   // Filtrar documentos localmente por busca simples e filtros avançados

@@ -24,6 +24,7 @@ import HoldingsList from './investor/HoldingsList';
 import OpportunitiesTab from './investor/OpportunitiesTab';
 import ReportsTab from './investor/ReportsTab';
 import { HoldingItem, HistoricalPoint } from './investor/types';
+import { isObra } from '../utils/projectClassification';
 
 interface InvestorDashboardProps {
     activeTab?: 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'fiscal' | 'comunicados' | 'spe' | 'relatorios';
@@ -200,7 +201,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             // Só retorna projetos explicitamente vinculados — nunca expõe dados de outros investidores
             return realProjects.filter(p => p.id && allIds.has(p.id));
         }
-        if (isAdmin) return realProjects.filter(p => p.settings?.classification === 'OBRA');
+        if (isAdmin) return realProjects.filter(p => isObra(p));
         return [];
     }, [realProjects, investorProfile, isAdmin, investorParticipations]);
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import { onlyObras, onlyOrcamentos } from '../utils/projectClassification';
 import Button from './ui/Button';
 import { X, FileText, Calendar, Building2, User, DollarSign, Shield, Tag, Briefcase, Loader2, AlertCircle, HandCoins, MapPin, ClipboardList, Users } from 'lucide-react';
 import HierarchicalSelect from './HierarchicalSelect';
@@ -317,12 +318,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         }
     };
 
-    const NON_OBRA = new Set(['ORCAMENTO', 'DIARIO', 'PLANEJAMENTO']);
-    // Projeto de sistema já sai no store/projectService — utils/systemProjects.ts
-    const obrasList = projects.filter(p =>
-        !NON_OBRA.has(p.settings?.classification ?? '')
-    );
-    const orcamentosList = projects.filter(p => p.settings?.classification === 'ORCAMENTO');
+    // Projeto de sistema já sai no projectService — utils/systemProjects.ts.
+    // O filtro antigo era por exclusão (lista de "não-obra"), o que deixava
+    // passar projeto SEM classificação como se fosse obra — ver
+    // utils/projectClassification.ts.
+    const obrasList = onlyObras(projects);
+    const orcamentosList = onlyOrcamentos(projects);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

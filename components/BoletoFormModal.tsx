@@ -15,6 +15,7 @@ import { onlyDigits } from '../utils/febrabanRules';
 import { formatMoney } from './ui/Format';
 import { useConfirm } from './ui/confirm';
 import type { Boleto, BoletoExtractionResult, Supplier, CostCenter } from '../types';
+import { isObra } from '../utils/projectClassification';
 
 interface BoletoFormModalProps {
     organizationId: string;
@@ -89,7 +90,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             type ProjectRow = { id: string; name: string; settings?: { classification?: string } };
             setProjects(((projs || []) as ProjectRow[])
                 .filter((p) =>
-                    p.settings?.classification === 'OBRA' &&
+                    isObra(p) &&
                     !/gest[aã]o\s+comercial/i.test(p.name ?? '')
                 )
                 .map((p) => ({ id: p.id, name: p.name })));

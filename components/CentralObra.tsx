@@ -1,4 +1,5 @@
 import React from 'react';
+import { onlyObras } from '../utils/projectClassification';
 import {
     ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
@@ -186,11 +187,13 @@ const CentralObra: React.FC<CentralObraProps> = ({ organizationId }) => {
             const { data, error } = await query;
             if (error) { showToast(`Erro ao carregar obras: ${error.message}`, 'error'); return; }
             const all = (data || []) as ProjectLite[];
-            // prioriza classificação OBRA; se nenhuma marcada, mostra todas
-            const obras = all.filter(p => p.settings?.classification === 'OBRA');
-            const list = obras.length > 0 ? obras : all;
-            setProjects(list);
-            setProjectId(prev => prev || list[0]?.id || '');
+            // Só obras (utils/projectClassification.ts). O fallback antigo
+            // ("se nenhuma marcada, mostra todas") foi removido: era ele que
+            // trazia orçamento/planejamento para uma tela chamada Central da
+            // OBRA sempre que a organização não tinha nenhuma obra classificada.
+            const obras = onlyObras(all);
+            setProjects(obras);
+            setProjectId(prev => prev || obras[0]?.id || '');
         })();
     }, [organizationId, showToast]);
 

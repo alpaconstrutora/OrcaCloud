@@ -9,6 +9,7 @@ import {
     Search,
     Activity
 } from 'lucide-react';
+import { onlyDiarios } from '../utils/projectClassification';
 import { 
     BarChart, 
     Bar, 
@@ -78,7 +79,8 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
 
     // 1. Processamento e Consolidação dos Dados
     const rawData = useMemo(() => {
-        const diaryProjects = projects.filter(p => p.settings?.classification === 'DIARIO');
+        // Recebe `allProjects` do AppRouter (tela explicitamente sobre diários)
+        const diaryProjects = onlyDiarios(projects);
         const allEntries: { worker: string; project: string; date: string; hours: number; subLabel?: string; activities?: string }[] = [];
 
         diaryProjects.forEach(proj => {

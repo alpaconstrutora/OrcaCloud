@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../lib/supabase';
 import { storageService } from './storageService';
+import { isObra } from '../utils/projectClassification';
 
 const PRIMARY  = [30,  64,  175] as [number, number, number]; // blue-800
 const LIGHT    = [241, 245, 249] as [number, number, number]; // slate-100
@@ -44,7 +45,7 @@ export async function generateMonthlyReportPdf(organizationId: string): Promise<
     // Filtra em memória: projetos da org (via settings.organizationId) com classificação OBRA
     const orgProjects = ((projectsRes.data ?? []) as any[]).filter(p =>
         p.settings?.organizationId === organizationId &&
-        p.settings?.classification === 'OBRA',
+        isObra(p),
     );
     const contribs = (contribsRes.data ?? []) as any[];
 

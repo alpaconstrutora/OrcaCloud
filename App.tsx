@@ -330,7 +330,7 @@ const App: React.FC = () => {
     budget, setBudget,
     isAIChatOpen, setIsAIChatOpen,
     organizations, setOrganizations,
-    projects, setProjects,
+    projects, allProjects, setProjects,
     managementTab, setManagementTab,
     authError, setAuthError,
     isValidating, setIsValidating,
@@ -627,6 +627,7 @@ const App: React.FC = () => {
         settingsWithId={settingsWithId}
         budget={budget}
         projects={projects}
+        allProjects={allProjects}
         organizations={organizations}
         projectId={projectId}
         session={session as import('@supabase/supabase-js').Session | null}

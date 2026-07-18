@@ -1,4 +1,5 @@
 import React from 'react';
+import { onlyClassifications } from '../utils/projectClassification';
 import { ArrowLeft, Plus, Save, Building2, Calendar, FileText, Package, Filter, HandCoins, Layers, AlertCircle, X } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { QuotationRequest, ProjectSettings, Supplier, QuotationRequestItem, SinapiType, SinapiCategory, BudgetEntry } from '../types';
@@ -58,13 +59,10 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                     supplierService.listSuppliers()
                 ]);
                 if (cancelled) return;
-                // Filter budgets, cost estimations, and obras (including those without classification)
-                const orcamentos = projList.filter((p: any) =>
-                    !p.settings?.classification ||
-                    p.settings?.classification === 'ORCAMENTO' ||
-                    p.settings?.classification === 'COST_ESTIMATION' ||
-                    p.settings?.classification === 'OBRA'
-                );
+                // Cotação nasce de um orçamento OU de uma obra. Antes o filtro
+                // também deixava passar projeto SEM classificação — removido,
+                // ver utils/projectClassification.ts.
+                const orcamentos = onlyClassifications(projList, 'ORCAMENTO', 'COST_ESTIMATION', 'OBRA');
                 setProjects(orcamentos);
                 setSuppliers(supList);
             } catch (err) {

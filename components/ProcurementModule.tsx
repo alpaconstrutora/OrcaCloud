@@ -23,6 +23,7 @@ import {
 } from '../types/procurement';
 import Button from './ui/Button';
 import { formatMoney as fmtBrl, formatDateBR as fmtDate, formatMonthLabel } from './ui/Format';
+import { onlyClassifications } from '../utils/projectClassification';
 
 interface Props {
     activeOrganizationId: string | null;
@@ -242,11 +243,9 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
     // load projects
     useEffect(() => {
         projectService.listProjects(undefined, activeOrganizationId ?? undefined).then(list => {
-            const filtered = (list ?? []).filter(p =>
-                // Projeto de sistema já sai no projectService — utils/systemProjects.ts
-                ((p.settings as any)?.classification === 'PLANEJAMENTO' ||
-                (p.settings as any)?.classification === 'OBRA')
-            );
+            // Suprimentos opera sobre obra E planejamento (pedido nasce do
+            // cronograma). Projeto de sistema já sai no projectService.
+            const filtered = onlyClassifications(list ?? [], 'OBRA', 'PLANEJAMENTO');
             setProjects(filtered.map(p => ({
                 id: p.id!,
                 name: p.name,

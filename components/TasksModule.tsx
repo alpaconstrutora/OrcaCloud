@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { isObra } from '../utils/projectClassification'
 import { Plus, CheckSquare, Calendar, AlertTriangle, ListChecks, Building2, Settings2, Layers, List, Kanban, LayoutGrid, X, Smartphone } from 'lucide-react'
 
 export type GroupByField = 'none' | 'status' | 'assignee' | 'priority' | 'project' | 'source'
@@ -245,7 +246,7 @@ const TasksModule: React.FC<Props> = ({ activeOrganizationId, organizations = []
       .filter(p => {
         const s = p.settings
         if (!s) return false
-        if (s.classification !== 'OBRA') return false
+        if (!isObra(p)) return false
         if (isSystemProject(p)) return false
         if (orgId && s.organizationId && s.organizationId !== orgId) return false
         return true

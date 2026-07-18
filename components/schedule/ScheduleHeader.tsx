@@ -21,6 +21,7 @@ import {
     FileText,
 } from 'lucide-react';
 import Button from '../ui/Button';
+import { isOrcamentoOuLegado } from '../../utils/projectClassification';
 import { ProjectSchedule, ProjectSettings, ItemScheduleDetails } from '../../types';
 import ModernDateInput from '../ModernDateInput';
 
@@ -137,19 +138,19 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     </h1>
                 </div>
                 <div className="flex items-center gap-2 mt-0.5 relative">
-                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Obra:</span>
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Orçamento:</span>
                     <div className="relative">
                         <Button variant="secondary" onClick={() => setIsProjectSelectorOpen(!isProjectSelectorOpen)} className="rounded-full bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100">
-                            {settings.name || 'Selecionar Obra'}
+                            {settings.name || 'Selecionar Orçamento'}
                             <ChevronRight className={`w-3 h-3 transition-transform ${isProjectSelectorOpen ? 'rotate-90' : ''}`} />
                         </Button>
                         {isProjectSelectorOpen && (
                             <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                                 <div className="px-3 py-2 border-b border-gray-50 mb-1">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Minhas Obras</span>
+                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Meus Orçamentos</span>
                                 </div>
                                 <div className="max-h-60 overflow-y-auto">
-                                    {projects.filter(p => p.settings?.classification === 'ORCAMENTO' || p.settings?.classification === 'COST_ESTIMATION').map((p) => (
+                                    {projects.filter(isOrcamentoOuLegado).map((p) => (
                                         <Button key={p.id} variant="ghost" onClick={() => { onLoadProject(p.id, 'schedule'); setIsProjectSelectorOpen(false); }} className={`w-full text-left px-4 py-2 flex items-center justify-between group rounded-none ${p.id === settings.id ? 'text-blue-600 bg-blue-50/50' : 'text-gray-600 hover:bg-gray-50'}`}>
                                             <span className="truncate">{p.name}</span>
                                             {p.id === settings.id && <CheckCircle2 className="w-4 h-4 text-blue-500" />}
@@ -157,7 +158,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                     ))}
                                     {projects.length === 0 && (
                                         <div className="px-4 py-8 text-center">
-                                            <p className="text-xs font-bold text-gray-400 uppercase">Nenhuma obra encontrada</p>
+                                            <p className="text-xs font-bold text-gray-400 uppercase">Nenhum orçamento encontrado</p>
                                         </div>
                                     )}
                                 </div>

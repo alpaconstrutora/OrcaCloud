@@ -10,6 +10,7 @@ import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilter
 import { useConfirm } from './ui/confirm';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
+import { isObra } from '../utils/projectClassification';
 
 const INVESTOR_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
@@ -216,7 +217,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
         return investors.map(i => ({
             ...i,
             _projectNames: projects
-                .filter(p => (p.investor_id ?? p.settings?.investorId) === i.id && p.settings?.classification === 'OBRA')
+                .filter(p => (p.investor_id ?? p.settings?.investorId) === i.id && isObra(p))
                 .map(p => p.name)
                 .join(', '),
         }));
@@ -434,7 +435,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                                 {(() => {
                                                     const investorProjects = projects.filter(p =>
                                                         (p.investor_id ?? p.settings?.investorId) === investor.id &&
-                                                        p.settings?.classification === 'OBRA'
+                                                        isObra(p)
                                                     );
 
                                                     if (investorProjects.length === 0) {
@@ -529,7 +530,7 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
                                         {(() => {
                                             const investorProjects = projects.filter(p =>
                                                 (p.investor_id ?? p.settings?.investorId) === investor.id &&
-                                                p.settings?.classification === 'OBRA'
+                                                isObra(p)
                                             );
 
                                             if (investorProjects.length > 0) {

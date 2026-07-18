@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { isObra, isDiario, onlyDiarios } from '../utils/projectClassification';
 import { BookOpen, AlertTriangle, Calendar, CheckCircle2 } from 'lucide-react';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,9 +53,11 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subtext, icon: Icon, 
 
 const DiaryDashboard: React.FC<DiaryDashboardProps> = ({ projects }) => {
     // Filter projects that are specifically classified as DIARIO or are OBRA with diary entries
+    // Recebe `allProjects` do AppRouter — precisa dos DIARIO, que não estão em
+    // `projects` (só obras). Ver utils/projectClassification.ts.
     const diaryProjects = useMemo(() =>
         projects.filter(p =>
-            (p.settings?.classification === 'DIARIO' || (p.settings?.classification === 'OBRA' && (p.settings?.diaryEntries?.length || 0) > 0))
+            isDiario(p) || (isObra(p) && (p.settings?.diaryEntries?.length || 0) > 0)
         ),
         [projects]);
 
@@ -66,7 +69,7 @@ const DiaryDashboard: React.FC<DiaryDashboardProps> = ({ projects }) => {
 
         diaryProjects.forEach(p => {
             const diaryEntries = p.settings?.diaryEntries || [];
-            if (diaryEntries.length > 0 || p.settings?.classification === 'DIARIO') {
+            if (diaryEntries.length > 0 || isDiario(p)) {
                 if (diaryEntries.length > 0) worksWithEntries++;
                 totalEntries += diaryEntries.length;
 
@@ -90,7 +93,7 @@ const DiaryDashboard: React.FC<DiaryDashboardProps> = ({ projects }) => {
         };
     }, [diaryProjects]);
 
-    if (diaryProjects.length === 0 && projects.filter(p => p.settings?.classification === 'DIARIO').length === 0) return null;
+    if (diaryProjects.length === 0 && onlyDiarios(projects).length === 0) return null;
 
     return (
         <div className="space-y-6 mb-8 animate-in fade-in slide-in-from-top-4 duration-700">

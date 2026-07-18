@@ -10,6 +10,7 @@ import {
     RuleType, RuleScope, ApprovalStatus, PerformanceRow, RuleRunResult,
 } from '../services/incentiveService';
 import { PayrollRubric } from '../services/payrollService';
+import { isObra } from '../utils/projectClassification';
 
 // ─── Tipos de props ─────────────────────────────────────────
 interface EmployeeLite { id: string; name: string; status?: string }
@@ -162,7 +163,7 @@ const LaunchTab: React.FC<{ orgId: string; employees: EmployeeLite[]; teams: Tea
                     .select('id, name, settings')
                     .order('name');
                 if (data) setAllProjects(
-                    data.filter((p: any) => p.id && p.settings?.classification === 'OBRA')
+                    data.filter((p: any) => p.id && isObra(p))
                 );
             } catch { /* ignore */ }
         })();

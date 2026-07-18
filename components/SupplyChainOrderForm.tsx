@@ -1,4 +1,5 @@
 import React from 'react';
+import { onlyObras } from '../utils/projectClassification';
 import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Pencil, Settings } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import HierarchicalSelect from './HierarchicalSelect';
@@ -90,11 +91,10 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 ]);
                 if (cancelled) return;
                 setSuppliers(suppliersList);
-                const NON_OBRA = new Set(['ORCAMENTO', 'DIARIO', 'PLANEJAMENTO']);
-                const obras = projectsList.filter((p: { id: string; name: string; settings?: { classification?: string } }) =>
-                    // Projeto de sistema já sai no projectService — utils/systemProjects.ts
-                    !NON_OBRA.has(p.settings?.classification ?? '')
-                );
+                // Projeto de sistema já sai no projectService — utils/systemProjects.ts.
+                // Antes o filtro era por exclusão e deixava passar projeto sem
+                // classificação — ver utils/projectClassification.ts.
+                const obras = onlyObras(projectsList);
                 setProjects(obras);
 
                 if (orgs && orgs.length > 0) {

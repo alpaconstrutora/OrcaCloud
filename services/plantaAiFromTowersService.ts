@@ -84,7 +84,10 @@ export const plantaAiFromTowersService = {
             const scenarioFields = {
                 study_id: studyId,
                 name: tower.name || 'Torre',
-                scenario_type: 'Real (Torres & Unidades)',
+                // scenario_type tem CHECK constraint no banco (valores do tipo PlantScenario).
+                // Um cenário vindo das Torres & Unidades reais é "Customizado" — não é um dos
+                // 3 presets paramétricos do briefing. A origem fica clara em generation_method.
+                scenario_type: 'Customizado',
                 status: 'Gerado',
                 generation_method: 'A partir de Torres & Unidades',
                 floors_count: floorsCount,

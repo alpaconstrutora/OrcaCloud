@@ -25,6 +25,8 @@ import {
 import { cnoService } from '../services/cnoService';
 import { useStore } from '../store/useStore';
 import { useConfirm } from './ui/confirm';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { KpiCard } from './ui/KpiCard';
 import { DocumentPicker } from './ui/DocumentPicker';
 import { SeroAreasManager } from './SeroAreasManager';
 import { SeroMemorySimulator } from './SeroMemorySimulator';
@@ -42,6 +44,25 @@ import {
 } from '../types';
 import type { OpuraDocument } from '../types/documents';
 
+// §2 — colunas da tela de seleção de obra. Sem coluna `actions`: a única ação da
+// tela (abrir a previdência da obra) é a própria linha — ver §9.1.
+const PROJECT_COLUMNS: ColumnConfig[] = [
+  { key: 'obra',    label: 'Obra',    sortable: true },
+  { key: 'codigo',  label: 'Código',  sortable: true },
+  { key: 'cliente', label: 'Cliente', sortable: true },
+  { key: 'local',   label: 'Local',   sortable: true },
+  { key: 'area',    label: 'Área',    sortable: true },
+  { key: 'status',  label: 'Status',  sortable: true },
+];
+
+// §8 — status da obra em texto colorido simples (sem pílula/fundo/uppercase)
+const OBRA_STATUS_COLORS: Record<string, string> = {
+  'Em andamento': 'text-blue-600',
+  'Concluída':    'text-emerald-600',
+  'Paralisada':   'text-red-600',
+  'Não Iniciado': 'text-gray-600',
+};
+
 interface OpuraCnoModuleProps {
   activeOrganizationId: string | null;
   projectId: string | null;
@@ -53,7 +74,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
   projectId: initialProjectId,
   onChangeView
 }) => {
-  const { projects, session } = useStore();
+  const { projects, projectsLoading, organizations, fetchProjects, session } = useStore();
   const confirm = useConfirm();
   const userEmail = session?.user?.email;
   const [activeTab, setActiveTab] = React.useState<'dashboard' | 'cadastro' | 'areas' | 'pre_moldados' | 'simulador' | 'deducoes' | 'dctfweb' | 'dossie'>('dashboard');
@@ -65,6 +86,11 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
     setTimeout(() => setNotification(null), 4500);
   }, []);
   const [selectedProjectId, setSelectedProjectId] = React.useState<string | null>(initialProjectId);
+
+  // §3 — busca persistida + colunas da tela de seleção de obra
+  const [projectSearch, setProjectSearch] = usePersistedState<string>('opuraCno:projectSearch', '');
+  const projectColumns = useTableColumns(PROJECT_COLUMNS, 'opuraCnoProjectColumns');
+
   const [loading, setLoading] = React.useState(false);
   const [actionLoading, setActionLoading] = React.useState(false);
 
@@ -550,35 +576,225 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
   // Seção de Seleção de Obras
   if (!selectedProjectId) {
+    // Normaliza a obra para as colunas da tabela (§2)
+    const rows = (projects as any[])
+      .filter(p => p.name)
+      .map(p => {
+        const s = p.settings || {};
+        const cidade = [s.city, s.state].filter(Boolean).join('/');
+        return {
+          id: p.id as string | undefined,
+          obra: p.name as string,
+          codigo: (s.code || p.code || '') as string,
+          cliente: (s.obraPropria ? 'Obra própria' : s.client || '') as string,
+          local: cidade,
+          area: Number(s.area) || 0,
+          status: (s.obraStatus || '') as string,
+        };
+      });
+
+    const termo = projectSearch.trim().toLowerCase();
+    const filtered = rows
+      .filter(r =>
+        !termo ||
+        r.obra.toLowerCase().includes(termo) ||
+        r.codigo.toLowerCase().includes(termo) ||
+        r.cliente.toLowerCase().includes(termo) ||
+        r.local.toLowerCase().includes(termo)
+      )
+      .sort((a, b) => {
+        const col = projectColumns.sortColumn;
+        if (col) {
+          const dir = projectColumns.sortDirection === 'desc' ? -1 : 1;
+          if (col === 'area') return (a.area - b.area) * dir;
+          const va = String((a as any)[col] ?? '');
+          const vb = String((b as any)[col] ?? '');
+          return va.localeCompare(vb, 'pt-BR') * dir;
+        }
+        return a.obra.localeCompare(b.obra, 'pt-BR'); // §6.4 — default sem seleção: obra A-Z
+      });
+
+    const areaTotal = rows.reduce((acc, r) => acc + r.area, 0);
+    const emAndamento = rows.filter(r => r.status === 'Em andamento').length;
+    const concluidas = rows.filter(r => r.status === 'Concluída').length;
+    const paralisadas = rows.filter(r => r.status === 'Paralisada').length;
+
     return (
       <div className="space-y-6">
+        {/* §20 — cabeçalho flat: h1 + p mt-1.5, sem card/hero */}
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">ÒPURA CNO & Previdência de Obras</h1>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">ÒPURA CNO &amp; Previdência de Obras</h1>
           <p className="text-gray-400 text-sm mt-1.5 font-medium">Selecione uma obra ativa para gerenciar CNO, regularização fiscal e simular reduções de INSS.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {(projects as any[])
-            .filter(p => p.name)
-            .map(proj => (
-              <div 
-                key={proj.id}
-                onClick={() => setSelectedProjectId(proj.id || null)}
-                className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:border-indigo-100 transition-all cursor-pointer group flex flex-col justify-between h-48"
-              >
-                <div>
-                  <div className="bg-indigo-50 text-indigo-600 w-10 h-10 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <Building2 className="w-5 h-5" />
-                  </div>
-                  <h3 className="font-bold text-gray-800 text-lg group-hover:text-indigo-600 transition-colors line-clamp-1">{proj.name}</h3>
-                  <p className="text-gray-400 text-xs mt-1">Cód. Obra: {proj.code || 'N/D'}</p>
-                </div>
-                <div className="flex items-center gap-2 text-xs font-black uppercase text-indigo-500 tracking-wider">
-                  Gerenciar Previdência
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
+        {/* §4 + §4.2 — Total é o KPI principal; os demais são recortes dele */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <KpiCard
+            shadow={false}
+            size="lg"
+            className="col-span-2"
+            label="Obras disponíveis"
+            value={rows.length}
+            sub={`${areaTotal.toLocaleString('pt-BR')} m² de área cadastrada`}
+            icon={<Building2 className="w-4 h-4" />}
+            color="blue"
+          />
+          <KpiCard shadow={false} size="sm" label="Em andamento" value={emAndamento} icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
+          <KpiCard shadow={false} size="sm" label="Concluídas" value={concluidas} icon={<CheckCircle2 className="w-4 h-4" />} color="emerald" />
+          <KpiCard shadow={false} size="sm" label="Paralisadas" value={paralisadas} icon={<AlertCircle className="w-4 h-4" />} color="amber" />
+        </div>
+
+        {/* §5.2 — toolbar acoplada: toolbar e tabela num único card */}
+        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-gray-100 bg-white space-y-3">
+            <div className="flex flex-col md:flex-row gap-2.5 items-center">
+              <div className="flex-1 relative w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar obra por nome, código, cliente ou cidade..."
+                  value={projectSearch}
+                  onChange={(e) => setProjectSearch(e.target.value)}
+                  className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                />
               </div>
-            ))}
+
+              <button
+                onClick={() => fetchProjects(organizations)}
+                disabled={projectsLoading}
+                title="Atualizar"
+                className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${projectsLoading ? 'animate-spin' : ''}`} />
+              </button>
+
+              <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+              {/* Sem toggle grade/lista: a tela é uma lista de seleção — §5 permite só o ColumnConfig */}
+              <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                <ColumnConfigButton
+                  columns={PROJECT_COLUMNS}
+                  visibleColumns={projectColumns.visibleColumns}
+                  showColumnConfig={projectColumns.showColumnConfig}
+                  onToggleShow={() => projectColumns.setShowColumnConfig(!projectColumns.showColumnConfig)}
+                  onToggleColumn={projectColumns.toggleColumn}
+                  onReset={projectColumns.resetColumns}
+                />
+              </div>
+            </div>
+          </div>
+
+          {projectsLoading ? (
+            /* §11 */
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-gray-500">Carregando...</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            /* §12 — sem card próprio: o card acoplado já supre (§5.2) */
+            <div className="text-center py-12">
+              <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma obra encontrada</h3>
+              <p className="text-sm text-gray-500">Tente ajustar sua busca.</p>
+            </div>
+          ) : (
+            /* §6.5 — cabeçalho fixo: a lista de obras cresce bem além da dobra */
+            <div className="overflow-auto max-h-[70vh]">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  {/* §6.2 — sentence case */}
+                  <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                    {projectColumns.visibleColumns.includes('obra') && (
+                      <SortableHeader colKey="obra" label="Obra" uppercase={false}
+                        sortColumn={projectColumns.sortColumn} sortDirection={projectColumns.sortDirection}
+                        onSort={projectColumns.handleColumnSort}
+                        className="px-6 py-2 border-r border-gray-100" />
+                    )}
+                    {projectColumns.visibleColumns.includes('codigo') && (
+                      <SortableHeader colKey="codigo" label="Código" uppercase={false}
+                        sortColumn={projectColumns.sortColumn} sortDirection={projectColumns.sortDirection}
+                        onSort={projectColumns.handleColumnSort}
+                        className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                    )}
+                    {projectColumns.visibleColumns.includes('cliente') && (
+                      <SortableHeader colKey="cliente" label="Cliente" uppercase={false}
+                        sortColumn={projectColumns.sortColumn} sortDirection={projectColumns.sortDirection}
+                        onSort={projectColumns.handleColumnSort}
+                        className="px-6 py-2 border-r border-gray-100" />
+                    )}
+                    {projectColumns.visibleColumns.includes('local') && (
+                      <SortableHeader colKey="local" label="Local" uppercase={false}
+                        sortColumn={projectColumns.sortColumn} sortDirection={projectColumns.sortDirection}
+                        onSort={projectColumns.handleColumnSort}
+                        className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                    )}
+                    {projectColumns.visibleColumns.includes('area') && (
+                      <SortableHeader colKey="area" label="Área" uppercase={false}
+                        sortColumn={projectColumns.sortColumn} sortDirection={projectColumns.sortDirection}
+                        onSort={projectColumns.handleColumnSort}
+                        className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                    )}
+                    {projectColumns.visibleColumns.includes('status') && (
+                      <SortableHeader colKey="status" label="Status" uppercase={false}
+                        sortColumn={projectColumns.sortColumn} sortDirection={projectColumns.sortDirection}
+                        onSort={projectColumns.handleColumnSort}
+                        className="px-6 py-2" />
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filtered.map(row => (
+                    <tr
+                      key={row.id}
+                      onClick={() => setSelectedProjectId(row.id || null)}
+                      className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                    >
+                      {projectColumns.visibleColumns.includes('obra') && (
+                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                          {/* §9.1 — a linha É a ação; o botão existe só para dar foco de teclado à mesma ação, não é um segundo controle */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSelectedProjectId(row.id || null); }}
+                            className="text-left text-sm font-normal text-gray-700 group-hover:text-blue-600 transition-colors"
+                            title="Gerenciar previdência desta obra"
+                          >
+                            {row.obra}
+                          </button>
+                        </td>
+                      )}
+                      {projectColumns.visibleColumns.includes('codigo') && (
+                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                          {row.codigo || 'N/D'}
+                        </td>
+                      )}
+                      {projectColumns.visibleColumns.includes('cliente') && (
+                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                          {row.cliente || '—'}
+                        </td>
+                      )}
+                      {projectColumns.visibleColumns.includes('local') && (
+                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                          {row.local || '—'}
+                        </td>
+                      )}
+                      {projectColumns.visibleColumns.includes('area') && (
+                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                          {row.area ? `${row.area.toLocaleString('pt-BR')} m²` : '—'}
+                        </td>
+                      )}
+                      {projectColumns.visibleColumns.includes('status') && (
+                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                          {/* §8 — texto colorido, sem pílula */}
+                          <span className={`text-sm font-normal ${OBRA_STATUS_COLORS[row.status] || 'text-gray-400'}`}>
+                            {row.status || '—'}
+                          </span>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     );

@@ -135,8 +135,8 @@ export interface ClientCategory {
 
 export type OrganizationRole = 'admin' | 'member' | 'viewer';
 
-/** Produto Òpura que o membro acessa: Plataforma principal, Pro, Offices ou Compliance */
-export type ProductContext = 'platform' | 'pro' | 'offices' | 'compliance';
+/** Produto Òpura que o membro acessa: Plataforma principal, Pro, Offices ou E-commerce */
+export type ProductContext = 'platform' | 'pro' | 'offices' | 'ecommerce';
 
 /** Mapa de visibilidade: roleId -> moduleKey -> habilitado */
 export type ProductModuleMap = Record<string, Record<string, boolean>>;
@@ -146,7 +146,7 @@ export interface ModuleVisibilityConfig {
     platform?: ProductModuleMap;
     pro?: ProductModuleMap;
     offices?: ProductModuleMap;
-    compliance?: ProductModuleMap;
+    ecommerce?: ProductModuleMap;
 }
 
 export enum ProfileGroup {
@@ -203,10 +203,10 @@ export interface UserPermissions {
     canEditSettings: boolean;
     canManageUsers: boolean;
     
-    // Permissões de Compliance
-    canViewCompliance?: boolean;
-    canEditCompliance?: boolean;
-    canManageComplianceRules?: boolean;
+    // Permissões de E-commerce
+    canViewEcommerce?: boolean;
+    canEditEcommerce?: boolean;
+    canManageEcommerceRules?: boolean;
     
     // Configurações de Visibilidade de Módulos (Feature Flags por Cargo)
     canViewLabor?: boolean;
@@ -218,7 +218,7 @@ export interface UserPermissions {
     canViewQuality?: boolean;
     canViewRentals?: boolean;
     canViewStructural?: boolean;
-    canViewComplianceModule?: boolean;
+    canViewEcommerceModule?: boolean;
 }
 
 export interface OrganizationCustomRole {

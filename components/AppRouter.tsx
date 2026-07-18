@@ -91,9 +91,9 @@ const ProModule             = React.lazy(() => import('./ProModule'));
 const OfficesModule         = React.lazy(() => import('./OfficesModule'));
 const ReformasModule        = React.lazy(() => import('./ReformasModule'));
 const MeasureAIModule       = React.lazy(() => import('./MeasureAIModule'));
-const ComplianceDashboard   = React.lazy(() => import('./ComplianceDashboard'));
-const CompliancePhysicalMap = React.lazy(() => import('./CompliancePhysicalMap'));
-const ComplianceChecklists  = React.lazy(() => import('./ComplianceChecklists'));
+const EcommerceDashboard    = React.lazy(() => import('./EcommerceDashboard'));
+const EcommercePhysicalMap  = React.lazy(() => import('./EcommercePhysicalMap'));
+const EcommerceChecklists   = React.lazy(() => import('./EcommerceChecklists'));
 const OpuraDocsModule       = React.lazy(() => import('./OpuraDocsModule'));
 const OpuraCnoModule        = React.lazy(() => import('./OpuraCnoModule'));
 const ObraTypesManager      = React.lazy(() => import('./ObraTypesManager'));
@@ -504,27 +504,27 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         </React.Suspense>
       );
 
-    case 'compliance-dashboard':
+    case 'ecommerce-dashboard':
       return (
-        <ComplianceDashboard
+        <EcommerceDashboard
           organizationId={activeOrganizationId || ''}
           onNavigate={setActiveView}
         />
       );
 
-    case 'compliance-physical-map':
+    case 'ecommerce-physical-map':
       return (
-        <CompliancePhysicalMap
+        <EcommercePhysicalMap
           organizationId={activeOrganizationId || ''}
-          onBack={() => setActiveView('compliance-dashboard')}
+          onBack={() => setActiveView('ecommerce-dashboard')}
         />
       );
 
-    case 'compliance-checklists':
+    case 'ecommerce-checklists':
       return (
-        <ComplianceChecklists
+        <EcommerceChecklists
           organizationId={activeOrganizationId || ''}
-          onBack={() => setActiveView('compliance-dashboard')}
+          onBack={() => setActiveView('ecommerce-dashboard')}
         />
       );
 

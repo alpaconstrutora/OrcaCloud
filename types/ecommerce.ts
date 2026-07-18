@@ -1,6 +1,6 @@
-// ÒPURA Compliance — Interfaces de Dados (Fase 1)
+// ÒPURA E-commerce — Interfaces de Dados (Fase 1)
 
-export interface CompliancePhysicalLocation {
+export interface EcommercePhysicalLocation {
   id: string;
   org_id: string;
   company_id: string | null;
@@ -18,10 +18,10 @@ export interface CompliancePhysicalLocation {
   updated_at: string;
 }
 
-export type CompliancePhysicalLocationInsert = Omit<CompliancePhysicalLocation, 'id' | 'created_at' | 'updated_at'>;
-export type CompliancePhysicalLocationUpdate = Partial<CompliancePhysicalLocationInsert>;
+export type EcommercePhysicalLocationInsert = Omit<EcommercePhysicalLocation, 'id' | 'created_at' | 'updated_at'>;
+export type EcommercePhysicalLocationUpdate = Partial<EcommercePhysicalLocationInsert>;
 
-export interface ComplianceRule {
+export interface EcommerceRule {
   id: string;
   org_id: string;
   name: string;
@@ -32,18 +32,18 @@ export interface ComplianceRule {
   created_at: string;
 }
 
-export type ComplianceRuleInsert = Omit<ComplianceRule, 'id' | 'created_at'>;
-export type ComplianceRuleUpdate = Partial<ComplianceRuleInsert>;
+export type EcommerceRuleInsert = Omit<EcommerceRule, 'id' | 'created_at'>;
+export type EcommerceRuleUpdate = Partial<EcommerceRuleInsert>;
 
-export type ComplianceChecklistStatus = 'pendente' | 'em_analise' | 'conforme' | 'inconforme';
+export type EcommerceChecklistStatus = 'pendente' | 'em_analise' | 'conforme' | 'inconforme';
 
-export interface ComplianceChecklist {
+export interface EcommerceChecklist {
   id: string;
   org_id: string;
   company_id: string;
   rule_id: string | null;
   title: string;
-  status: ComplianceChecklistStatus;
+  status: EcommerceChecklistStatus;
   due_date: string;
   completed_at?: string | null;
   completed_by?: string | null;
@@ -51,10 +51,10 @@ export interface ComplianceChecklist {
   created_at: string;
 }
 
-export type ComplianceChecklistInsert = Omit<ComplianceChecklist, 'id' | 'created_at'>;
-export type ComplianceChecklistUpdate = Partial<ComplianceChecklistInsert>;
+export type EcommerceChecklistInsert = Omit<EcommerceChecklist, 'id' | 'created_at'>;
+export type EcommerceChecklistUpdate = Partial<EcommerceChecklistInsert>;
 
-export interface ComplianceEvidence {
+export interface EcommerceEvidence {
   id: string;
   org_id: string;
   company_id: string;
@@ -70,8 +70,8 @@ export interface ComplianceEvidence {
   created_at: string;
 }
 
-export type ComplianceEvidenceInsert = Omit<ComplianceEvidence, 'id' | 'created_at'>;
-export type ComplianceEvidenceUpdate = Partial<ComplianceEvidenceInsert>;
+export type EcommerceEvidenceInsert = Omit<EcommerceEvidence, 'id' | 'created_at'>;
+export type EcommerceEvidenceUpdate = Partial<EcommerceEvidenceInsert>;
 
 // ============================================================
 // REGIME TTS-MG — Crédito Presumido de ICMS

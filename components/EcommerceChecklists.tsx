@@ -1,15 +1,15 @@
 import React from 'react';
-import { complianceService } from '../services/complianceService';
+import { ecommerceService } from '../services/ecommerceService';
 import { companyService } from '../services/companyService';
 import { useStore } from '../store/useStore';
-import { ComplianceChecklist, ComplianceEvidence, Company } from '../types';
+import { EcommerceChecklist, EcommerceEvidence, Company } from '../types';
 
-interface ComplianceChecklistsProps {
+interface EcommerceChecklistsProps {
   organizationId: string;
   onBack: () => void;
 }
 
-const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
+const EcommerceChecklists: React.FC<EcommerceChecklistsProps> = ({
   organizationId,
   onBack
 }) => {
@@ -18,7 +18,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
   const [selectedCompanyId, setSelectedCompanyId] = React.useState('');
   const [checklists, setChecklists] = React.useState<any[]>([]);
   const [selectedChecklist, setSelectedChecklist] = React.useState<any | null>(null);
-  const [evidences, setEvidences] = React.useState<ComplianceEvidence[]>([]);
+  const [evidences, setEvidences] = React.useState<EcommerceEvidence[]>([]);
 
   // Campos para o envio de nova evidência
   const [uploading, setUploading] = React.useState(false);
@@ -40,7 +40,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
         const defaultComp = comps[0].id;
         setSelectedCompanyId(defaultComp);
 
-        const checkData = await complianceService.listChecklists(organizationId, defaultComp);
+        const checkData = await ecommerceService.listChecklists(organizationId, defaultComp);
         setChecklists(checkData);
       }
     } catch (error) {
@@ -60,7 +60,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
     setEvidences([]);
     try {
       setLoading(true);
-      const checkData = await complianceService.listChecklists(organizationId, compId);
+      const checkData = await ecommerceService.listChecklists(organizationId, compId);
       setChecklists(checkData);
     } catch (error) {
       console.error('Erro ao trocar empresa no checklist:', error);
@@ -72,7 +72,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
   const handleSelectChecklist = async (checklist: any) => {
     setSelectedChecklist(checklist);
     try {
-      const evs = await complianceService.listEvidences(organizationId, checklist.id);
+      const evs = await ecommerceService.listEvidences(organizationId, checklist.id);
       setEvidences(evs);
     } catch (error) {
       console.error('Erro ao buscar evidências:', error);
@@ -100,7 +100,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
       setUploading(true);
 
       // 1. Upload do arquivo para o Supabase Storage
-      const publicUrl = await complianceService.uploadEvidenceFile(file, organizationId);
+      const publicUrl = await ecommerceService.uploadEvidenceFile(file, organizationId);
 
       // 2. Calcular o hash do arquivo localmente
       const fileHash = await calculateSHA256(file);
@@ -127,7 +127,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
       }
 
       // 4. Salvar os metadados da evidência
-      const newEv = await complianceService.saveEvidence({
+      const newEv = await ecommerceService.saveEvidence({
         org_id: organizationId,
         company_id: selectedCompanyId,
         checklist_id: selectedChecklist.id,
@@ -142,7 +142,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
       });
 
       // 5. Atualizar status do checklist para 'conforme'
-      const updatedChecklist = await complianceService.saveChecklist({
+      const updatedChecklist = await ecommerceService.saveChecklist({
         ...selectedChecklist,
         status: 'conforme',
         completed_at: new Date().toISOString(),
@@ -150,7 +150,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
       });
 
       // Recarregar checklists
-      const checkData = await complianceService.listChecklists(organizationId, selectedCompanyId);
+      const checkData = await ecommerceService.listChecklists(organizationId, selectedCompanyId);
       setChecklists(checkData);
       
       // Atualizar dados na tela
@@ -256,7 +256,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
                   <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Obrigação Selecionada</span>
                   <h2 className="text-lg font-black text-slate-850 mt-1">{selectedChecklist.title}</h2>
                   <p className="text-xs text-slate-500 mt-1">
-                    {selectedChecklist.compliance_rules?.description || 'Envie as evidências e relatórios exigidos para auditoria fiscal.'}
+                    {selectedChecklist.ecommerce_rules?.description || 'Envie as evidências e relatórios exigidos para auditoria fiscal.'}
                   </p>
                 </div>
 
@@ -338,7 +338,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
                                 type="button"
                                 onClick={async () => {
                                   try {
-                                    const url = await complianceService.getEvidenceSignedUrl(ev.evidence_url);
+                                    const url = await ecommerceService.getEvidenceSignedUrl(ev.evidence_url);
                                     window.open(url, '_blank', 'noopener,noreferrer');
                                   } catch (err: any) {
                                     alert(err.message || 'Erro ao abrir anexo.');
@@ -390,4 +390,4 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
   );
 };
 
-export default ComplianceChecklists;
+export default EcommerceChecklists;

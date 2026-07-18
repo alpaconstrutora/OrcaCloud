@@ -1,9 +1,9 @@
 import React from 'react';
-import { complianceService } from '../services/complianceService';
+import { ecommerceService } from '../services/ecommerceService';
 import { companyService } from '../services/companyService';
 import { ttsService } from '../services/ttsService';
 import { useConfirm } from './ui/confirm';
-import { ComplianceChecklist, ComplianceRule, CompliancePhysicalLocation, ComplianceEvidence, Company, TtsCalculationResult } from '../types';
+import { EcommerceChecklist, EcommerceRule, EcommercePhysicalLocation, EcommerceEvidence, Company, TtsCalculationResult } from '../types';
 
 // Competência atual (1º dia do mês) e dias restantes até o fim do ciclo mensal.
 function currentReferenceMonth(): string {
@@ -20,12 +20,12 @@ function formatMoney(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-interface ComplianceDashboardProps {
+interface EcommerceDashboardProps {
   organizationId: string;
   onNavigate: (view: string) => void;
 }
 
-const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
+const EcommerceDashboard: React.FC<EcommerceDashboardProps> = ({
   organizationId,
   onNavigate
 }) => {
@@ -33,9 +33,9 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
   const [companies, setCompanies] = React.useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>('');
   const [checklists, setChecklists] = React.useState<any[]>([]);
-  const [rules, setRules] = React.useState<ComplianceRule[]>([]);
-  const [locations, setLocations] = React.useState<CompliancePhysicalLocation[]>([]);
-  const [evidences, setEvidences] = React.useState<ComplianceEvidence[]>([]);
+  const [rules, setRules] = React.useState<EcommerceRule[]>([]);
+  const [locations, setLocations] = React.useState<EcommercePhysicalLocation[]>([]);
+  const [evidences, setEvidences] = React.useState<EcommerceEvidence[]>([]);
   // interestadualPct = null → ainda não há lançamentos de saída para a competência.
   // Nunca exibimos um número fictício: sem dados, a UI mostra "sem lançamentos".
   const [interestadualPct, setInterestadualPct] = React.useState<number | null>(null);
@@ -53,7 +53,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
   const loadCompanyData = React.useCallback(
     async (companyId: string) => {
       const [checkData, tts] = await Promise.all([
-        complianceService.listChecklists(organizationId, companyId),
+        ecommerceService.listChecklists(organizationId, companyId),
         ttsService.apurarComCalculo(organizationId, companyId, currentReferenceMonth()),
       ]);
       setChecklists(checkData);
@@ -100,9 +100,9 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
       setCompanies(comps);
 
       const [rulesData, locsData, evData] = await Promise.all([
-        complianceService.listRules(organizationId),
-        complianceService.listPhysicalLocations(organizationId),
-        complianceService.listEvidences(organizationId),
+        ecommerceService.listRules(organizationId),
+        ecommerceService.listPhysicalLocations(organizationId),
+        ecommerceService.listEvidences(organizationId),
       ]);
       setRules(rulesData);
       setLocations(locsData);
@@ -114,7 +114,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
         await loadCompanyData(defaultComp);
       }
     } catch (error) {
-      console.error('Erro ao carregar dados do compliance:', error);
+      console.error('Erro ao carregar dados do e-commerce:', error);
     } finally {
       setLoading(false);
     }
@@ -219,7 +219,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            🛡️ ÒPURA Compliance
+            🛡️ ÒPURA E-commerce
           </h1>
           <p className="text-xs font-semibold text-slate-500">
             Painel de controle regulatório e governança fiscal (TTS-MG)
@@ -270,7 +270,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
         {/* Score Card */}
         <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.02)] flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase tracking-widest text-slate-400">Score de Compliance</span>
+            <span className="text-xs font-black uppercase tracking-widest text-slate-400">Score de E-commerce</span>
             {/* §8 — status é texto colorido simples, sem pílula/fundo/uppercase */}
             {score !== null && (
               <span className={`text-sm font-normal ${
@@ -388,7 +388,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
           </div>
 
           <button
-            onClick={() => onNavigate('compliance-checklists')}
+            onClick={() => onNavigate('ecommerce-checklists')}
             className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-button font-bold uppercase tracking-wider transition-all active:scale-95"
           >
             Ver Obrigações
@@ -420,7 +420,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
               <p className="text-xs text-slate-400">Verifique a demarcação das áreas exclusivas das filiais</p>
             </div>
             <button
-              onClick={() => onNavigate('compliance-physical-map')}
+              onClick={() => onNavigate('ecommerce-physical-map')}
               className="text-xs font-black uppercase tracking-wider text-slate-900 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl hover:bg-slate-100"
             >
               Abrir Mapa
@@ -461,7 +461,7 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
               <p className="text-xs text-slate-400">Auditoria operacional e registro fotográfico de notas fiscais</p>
             </div>
             <button
-              onClick={() => onNavigate('compliance-checklists')}
+              onClick={() => onNavigate('ecommerce-checklists')}
               className="text-xs font-black uppercase tracking-wider text-slate-900 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl hover:bg-slate-100"
             >
               Nova Evidência
@@ -500,4 +500,4 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
   );
 };
 
-export default ComplianceDashboard;
+export default EcommerceDashboard;

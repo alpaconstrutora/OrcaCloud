@@ -1,24 +1,24 @@
 import React from 'react';
-import { complianceService } from '../services/complianceService';
+import { ecommerceService } from '../services/ecommerceService';
 import { companyService } from '../services/companyService';
 import { useConfirm } from './ui/confirm';
-import { CompliancePhysicalLocation, Company } from '../types';
+import { EcommercePhysicalLocation, Company } from '../types';
 
-interface CompliancePhysicalMapProps {
+interface EcommercePhysicalMapProps {
   organizationId: string;
   onBack: () => void;
 }
 
-const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
+const EcommercePhysicalMap: React.FC<EcommercePhysicalMapProps> = ({
   organizationId,
   onBack
 }) => {
   const [loading, setLoading] = React.useState(true);
-  const [locations, setLocations] = React.useState<CompliancePhysicalLocation[]>([]);
+  const [locations, setLocations] = React.useState<EcommercePhysicalLocation[]>([]);
   const [companies, setCompanies] = React.useState<Company[]>([]);
   
   // Controle de edição/criação de localização física
-  const [selectedLocation, setSelectedLocation] = React.useState<CompliancePhysicalLocation | null>(null);
+  const [selectedLocation, setSelectedLocation] = React.useState<EcommercePhysicalLocation | null>(null);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [name, setName] = React.useState('');
   const [type, setType] = React.useState('posicao_logistica');
@@ -30,7 +30,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
     try {
       setLoading(true);
       const [locsData, compsData] = await Promise.all([
-        complianceService.listPhysicalLocations(organizationId),
+        ecommerceService.listPhysicalLocations(organizationId),
         companyService.list(organizationId)
       ]);
       setLocations(locsData);
@@ -46,7 +46,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
     loadData();
   }, [loadData]);
 
-  const handleOpenEdit = (loc: CompliancePhysicalLocation) => {
+  const handleOpenEdit = (loc: EcommercePhysicalLocation) => {
     setSelectedLocation(loc);
     setName(loc.name);
     setType(loc.type);
@@ -84,7 +84,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
         payload.coordinates = { grid: `G${locations.length + 1}` };
       }
 
-      await complianceService.savePhysicalLocation(payload);
+      await ecommerceService.savePhysicalLocation(payload);
       setIsModalOpen(false);
       loadData();
     } catch (error: any) {
@@ -102,7 +102,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
     });
     if (!ok) return;
     try {
-      await complianceService.deletePhysicalLocation(id);
+      await ecommerceService.deletePhysicalLocation(id);
       setIsModalOpen(false);
       loadData();
     } catch (error: any) {
@@ -337,4 +337,4 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
   );
 };
 
-export default CompliancePhysicalMap;
+export default EcommercePhysicalMap;

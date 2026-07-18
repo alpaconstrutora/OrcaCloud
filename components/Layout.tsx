@@ -206,15 +206,15 @@ const Layout: React.FC<LayoutProps> = ({
 
     if (profile.group === 'DESENVOLVEDOR' || isDevEmail) {
       return {
-        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, compliance: true
+        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true
       };
     }
 
-    if (!currentMember) return { ...baseMods, compliance: false };
+    if (!currentMember) return { ...baseMods, ecommerce: false };
 
     if (currentMember.role === 'admin') {
       return {
-        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, compliance: true
+        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true
       };
     }
 
@@ -253,7 +253,7 @@ const Layout: React.FC<LayoutProps> = ({
         offices: false,
         pro: checkModule('pro', 'canViewPro', 'pro'),
         rentals: false,
-        compliance: false,
+        ecommerce: false,
       };
     }
 
@@ -266,7 +266,7 @@ const Layout: React.FC<LayoutProps> = ({
         offices: checkModule('offices', 'canViewOffices', 'offices'),
         crm: checkModule('crm', 'canViewSales', 'crm'),
         rentals: checkModule('crm', 'canViewRentals', 'rentals'),
-        compliance: false,
+        ecommerce: false,
       };
     }
 
@@ -281,7 +281,7 @@ const Layout: React.FC<LayoutProps> = ({
       incorporacao: checkModule('incorporacao', 'canViewImovib', 'incorporacao'),
       fiscal: checkModule('fiscal', 'canViewFiscal', 'fiscal'),
       quality: checkModule('quality', 'canViewQuality', 'quality'),
-      compliance: checkModule('compliance', 'canViewCompliance', 'compliance'),
+      ecommerce: checkModule('ecommerce', 'canViewEcommerce', 'ecommerce'),
       
       financeiro: baseMods.financeiro !== false,
       reformas: baseMods.reformas !== false,
@@ -457,7 +457,7 @@ const Layout: React.FC<LayoutProps> = ({
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
   const [isOrganizacaoOpen, setIsOrganizacaoOpen] = React.useState(() => activeView === 'organization');
   React.useEffect(() => { if (activeView === 'organization') setIsOrganizacaoOpen(true); }, [activeView]);
-  const especialidadesViews = ['pro-dashboard','offices-dashboard','reformas-dashboard','opura-cno','compliance-dashboard'];
+  const especialidadesViews = ['pro-dashboard','offices-dashboard','reformas-dashboard','opura-cno','ecommerce-dashboard'];
   const [isEspecialidadesOpen, setIsEspecialidadesOpen] = React.useState(() => especialidadesViews.includes(activeView));
   React.useEffect(() => { if (especialidadesViews.includes(activeView)) setIsEspecialidadesOpen(true); }, [activeView]);
   const operacionalViews = ['operacional','project-diary'];
@@ -795,8 +795,8 @@ const Layout: React.FC<LayoutProps> = ({
                 {(mod.pro       || isDev) && <DropdownItem id="pro-dashboard"      label="ÒPURA Pro"      icon={Briefcase} />}
                 {(mod.offices   || isDev) && <DropdownItem id="offices-dashboard"  label="ÒPURA Offices"  icon={Palette} />}
                 {(mod.reformas  || isDev) && <DropdownItem id="reformas-dashboard" label="ÒPURA Reformas" icon={Hammer} />}
-                {(mod.compliance || isDev) && <DropdownItem id="opura-cno" label="ÒPURA CNO e Previdência" icon={Calculator} />}
-                {(mod.compliance || isDev) && <DropdownItem id="compliance-dashboard" label="ÒPURA Compliance" icon={Shield} />}
+                {(mod.ecommerce || isDev) && <DropdownItem id="opura-cno" label="ÒPURA CNO e Previdência" icon={Calculator} />}
+                {(mod.ecommerce || isDev) && <DropdownItem id="ecommerce-dashboard" label="ÒPURA E-commerce" icon={Shield} />}
               </NavDropdown>
 
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
@@ -819,7 +819,7 @@ const Layout: React.FC<LayoutProps> = ({
                 <DropdownItem id="opura-central-cliente" label="Central de Clientes" icon={Users} />
                 <DropdownItem id="opura-central-fornecedor" label="Central de Fornecedores" icon={Truck} />
                 <DropdownItem id="opura-market" label="ÒPURA Market" icon={Search} />
-                {(mod.compliance || isDev) && <DropdownItem id="opura-governance" label="Governança Corporativa" icon={Shield} />}
+                {(mod.ecommerce || isDev) && <DropdownItem id="opura-governance" label="Governança Corporativa" icon={Shield} />}
               </NavDropdown>
 
               <NavGroup label="Operacional" />
@@ -1049,7 +1049,7 @@ const Layout: React.FC<LayoutProps> = ({
                 </>
               )}
 
-              {(mod.financeiro || mod.fiscal || mod.compliance || isDev) && (
+              {(mod.financeiro || mod.fiscal || mod.ecommerce || isDev) && (
                 <>
                   <NavDropdown
                     label="Financeiro"
@@ -1270,8 +1270,8 @@ const Layout: React.FC<LayoutProps> = ({
                 {(mod.pro       || isDev) && <NavItem id="pro-dashboard"      icon={Briefcase} label="ÒPURA Pro"      forceFull />}
                 {(mod.offices   || isDev) && <NavItem id="offices-dashboard"  icon={Palette}   label="ÒPURA Offices"  forceFull />}
                 {(mod.reformas  || isDev) && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" forceFull />}
-                {(mod.compliance || isDev) && <NavItem id="opura-cno" icon={Calculator} label="ÒPURA CNO e Previdência" forceFull />}
-                {(mod.compliance || isDev) && <NavItem id="compliance-dashboard" icon={Shield} label="ÒPURA Compliance" forceFull />}
+                {(mod.ecommerce || isDev) && <NavItem id="opura-cno" icon={Calculator} label="ÒPURA CNO e Previdência" forceFull />}
+                {(mod.ecommerce || isDev) && <NavItem id="ecommerce-dashboard" icon={Shield} label="ÒPURA E-commerce" forceFull />}
               </div>
 
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
@@ -1296,7 +1296,7 @@ const Layout: React.FC<LayoutProps> = ({
 
               <NavItem id="quality" icon={Activity} label="Qualidade & Entrega" forceFull />
 
-              {(mod.compliance || isDev) && (
+              {(mod.ecommerce || isDev) && (
                 <NavItem id="opura-governance" icon={Shield} label="Governança Corporativa" forceFull />
               )}
               <NavItem id="opura-assets" icon={Package} label="Gestão de Ativos" forceFull />

@@ -26,6 +26,9 @@ import { cnoService } from '../services/cnoService';
 import { useStore } from '../store/useStore';
 import { useConfirm } from './ui/confirm';
 import { DocumentPicker } from './ui/DocumentPicker';
+import { SeroAreasManager } from './SeroAreasManager';
+import { SeroMemorySimulator } from './SeroMemorySimulator';
+import { SeroReductionsManager } from './SeroReductionsManager';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import {
   OpuraCnoRegistration,
@@ -53,7 +56,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
   const { projects, session } = useStore();
   const confirm = useConfirm();
   const userEmail = session?.user?.email;
-  const [activeTab, setActiveTab] = React.useState<'dashboard' | 'cadastro' | 'simulador' | 'deducoes' | 'dctfweb' | 'dossie'>('dashboard');
+  const [activeTab, setActiveTab] = React.useState<'dashboard' | 'cadastro' | 'areas' | 'pre_moldados' | 'simulador' | 'deducoes' | 'dctfweb' | 'dossie'>('dashboard');
 
   // Toast de notificação (§13 do guia — substitui os alert() nativos)
   const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -114,7 +117,12 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
     padrao_construtivo: 'normal' as OpuraCnoRegistration['padrao_construtivo'],
     tipo_obra: '',
     responsavel_tipo: 'construtor' as OpuraCnoRegistration['responsavel_tipo'],
-    art_rrt: ''
+    art_rrt: '',
+    sero_category: 'obra_nova' as any,
+    sero_destination: 'residencial_multifamiliar' as any,
+    sero_type: 'alvenaria' as any,
+    vau_value: 0,
+    used_pre_mixed_concrete: false
   });
 
   // Estados do formulário de simulação
@@ -157,7 +165,12 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
           padrao_construtivo: reg.padrao_construtivo || 'normal',
           tipo_obra: reg.tipo_obra || '',
           responsavel_tipo: reg.responsavel_tipo || 'construtor',
-          art_rrt: reg.art_rrt || ''
+          art_rrt: reg.art_rrt || '',
+          sero_category: reg.sero_category || 'obra_nova',
+          sero_destination: reg.sero_destination || 'residencial_multifamiliar',
+          sero_type: reg.sero_type || 'alvenaria',
+          vau_value: reg.vau_value || 0,
+          used_pre_mixed_concrete: reg.used_pre_mixed_concrete || false
         });
 
         // Declarações DCTFWeb e checklist documental dependem de um CNO cadastrado
@@ -268,7 +281,12 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
           padrao_construtivo: cnoForm.padrao_construtivo,
           tipo_obra: cnoForm.tipo_obra,
           responsavel_tipo: cnoForm.responsavel_tipo,
-          art_rrt: cnoForm.art_rrt
+          art_rrt: cnoForm.art_rrt,
+          sero_category: cnoForm.sero_category,
+          sero_destination: cnoForm.sero_destination,
+          sero_type: cnoForm.sero_type,
+          vau_value: cnoForm.vau_value,
+          used_pre_mixed_concrete: cnoForm.used_pre_mixed_concrete
         });
       } else {
         result = await cnoService.createRegistration({
@@ -285,7 +303,12 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
           padrao_construtivo: cnoForm.padrao_construtivo,
           tipo_obra: cnoForm.tipo_obra || null,
           responsavel_tipo: cnoForm.responsavel_tipo,
-          art_rrt: cnoForm.art_rrt || null
+          art_rrt: cnoForm.art_rrt || null,
+          sero_category: cnoForm.sero_category,
+          sero_destination: cnoForm.sero_destination,
+          sero_type: cnoForm.sero_type,
+          vau_value: cnoForm.vau_value,
+          used_pre_mixed_concrete: cnoForm.used_pre_mixed_concrete
         });
       }
       setRegistration(result);
@@ -594,7 +617,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
       {/* Tabs */}
       <div className="flex border-b border-gray-200 gap-6 overflow-x-auto">
-        {(['dashboard', 'cadastro', 'simulador', 'deducoes', 'dctfweb', 'dossie'] as const).map(tab => (
+        {(['dashboard', 'cadastro', 'areas', 'pre_moldados', 'simulador', 'deducoes', 'dctfweb', 'dossie'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -603,7 +626,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 ? 'border-indigo-600 text-indigo-600'
                 : 'border-transparent text-gray-400 hover:text-gray-600'}`}
           >
-            {tab === 'deducoes' ? 'Deduções (Scanner)' : tab === 'dctfweb' ? 'DCTFWeb / DARF' : tab === 'dossie' ? 'Dossiê Digital' : tab}
+            {tab === 'deducoes' ? 'Deduções (Scanner)' : tab === 'dctfweb' ? 'DCTFWeb / DARF' : tab === 'dossie' ? 'Dossiê Digital' : tab === 'areas' ? 'Áreas SERO' : tab === 'pre_moldados' ? 'Pré-moldados (SERO)' : tab}
           </button>
         ))}
       </div>
@@ -819,6 +842,80 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
               </div>
 
+              
+              <div className="pt-6 border-t border-gray-100">
+                <h4 className="font-bold text-gray-800 mb-4">Enquadramento SERO (Aferição Indireta)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="space-y-1">
+                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Categoria da Obra</label>
+                    <select
+                      value={cnoForm.sero_category}
+                      onChange={(e) => setCnoForm(prev => ({ ...prev, sero_category: e.target.value as any }))}
+                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                    >
+                      <option value="obra_nova">Obra Nova</option>
+                      <option value="acrescimo">Acréscimo/Ampliação</option>
+                      <option value="reforma">Reforma</option>
+                      <option value="demolicao">Demolição</option>
+                    </select>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Destinação</label>
+                    <select
+                      value={cnoForm.sero_destination}
+                      onChange={(e) => setCnoForm(prev => ({ ...prev, sero_destination: e.target.value as any }))}
+                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                    >
+                      <option value="residencial_unifamiliar">Residencial Unifamiliar</option>
+                      <option value="residencial_multifamiliar">Residencial Multifamiliar</option>
+                      <option value="comercial_salas_lojas">Comercial (Salas/Lojas)</option>
+                      <option value="galpao_industrial">Galpão Industrial</option>
+                      <option value="casa_popular">Casa Popular</option>
+                      <option value="conjunto_habitacional_popular">Conjunto Habit. Popular</option>
+                      <option value="edificio_garagens">Edifício de Garagens</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Tipo (Estrutura)</label>
+                    <select
+                      value={cnoForm.sero_type}
+                      onChange={(e) => setCnoForm(prev => ({ ...prev, sero_type: e.target.value as any }))}
+                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                    >
+                      <option value="alvenaria">Alvenaria</option>
+                      <option value="madeira">Madeira</option>
+                      <option value="mista">Mista</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Valor VAU (Atualizado)</label>
+                    <input
+                      type="number"
+                      value={cnoForm.vau_value}
+                      onChange={(e) => setCnoForm(prev => ({ ...prev, vau_value: Number(e.target.value) }))}
+                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      placeholder="Ex: 2450.00"
+                    />
+                  </div>
+                </div>
+                
+                <div className="mt-4 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="concrete_check"
+                    checked={cnoForm.used_pre_mixed_concrete}
+                    onChange={(e) => setCnoForm(prev => ({ ...prev, used_pre_mixed_concrete: e.target.checked }))}
+                    className="w-4 h-4 text-indigo-600 rounded border-gray-300"
+                  />
+                  <label htmlFor="concrete_check" className="text-sm font-semibold text-gray-700 cursor-pointer">
+                    Houve uso de Concreto Usinado ou Massa Asfáltica? (Aplica redutor de 5%)
+                  </label>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
                 <button
                   onClick={handleSaveCnoRegistration}
@@ -832,8 +929,42 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
             </div>
           )}
 
+          
+          {activeTab === 'areas' && (
+            <div className="space-y-6">
+              {!registration ? (
+                <div className="bg-amber-50 p-6 rounded-3xl border border-amber-200">
+                  <p className="text-amber-800 font-semibold">É necessário salvar o Cadastro do CNO primeiro.</p>
+                </div>
+              ) : (
+                <SeroAreasManager 
+                  organizationId={activeOrganizationId!} 
+                  cnoRegistrationId={registration.id} 
+                />
+              )}
+            </div>
+          )}
+
+          {activeTab === 'pre_moldados' && (
+            <div className="space-y-6">
+              {!registration ? (
+                <div className="bg-amber-50 p-6 rounded-3xl border border-amber-200">
+                  <p className="text-amber-800 font-semibold">É necessário salvar o Cadastro do CNO primeiro.</p>
+                </div>
+              ) : (
+                <SeroReductionsManager 
+                  organizationId={activeOrganizationId!} 
+                  cnoRegistrationId={registration.id} 
+                  tipoObra={cnoForm.sero_type}
+                />
+              )}
+            </div>
+          )}
+          
           {/* 3. ABA SIMULADOR DE INSS */}
           {activeTab === 'simulador' && (
+            <div className="space-y-6">
+              <SeroMemorySimulator registration={registration} />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Form da Simulação */}
               <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
@@ -1025,6 +1156,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   </div>
                 )}
               </div>
+            </div>
             </div>
           )}
 

@@ -16,7 +16,13 @@ import {
   OpuraCnoDctfwebInsert,
   OpuraCnoDocument,
   OpuraCnoDocumentInsert,
-  OpuraCnoDocumentUpdate
+  OpuraCnoDocumentUpdate,
+  OpuraCnoArea,
+  OpuraCnoAreaInsert,
+  OpuraCnoAreaUpdate,
+  OpuraCnoReduction,
+  OpuraCnoReductionInsert,
+  OpuraCnoReductionUpdate
 } from '../types';
 import { documentService } from './documentService';
 
@@ -289,6 +295,130 @@ export const cnoService = {
     if (error) {
       console.error('[CnoService] Erro ao deletar dedução de CNO:', error);
       throw new Error(`Erro ao deletar dedução de CNO: ${error.message}`);
+    }
+  },
+
+  // ==========================================
+  // 3.5 ÁREAS DO SERO (opura_cno_areas)
+  // ==========================================
+
+  async listAreas(cnoRegistrationId: string): Promise<OpuraCnoArea[]> {
+    const { data, error } = await supabase
+      .from('opura_cno_areas')
+      .select('*')
+      .eq('cno_registration_id', cnoRegistrationId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('[CnoService] Erro ao listar áreas do CNO:', error);
+      throw new Error(`Erro ao listar áreas do CNO: ${error.message}`);
+    }
+
+    return data || [];
+  },
+
+  async addArea(area: OpuraCnoAreaInsert): Promise<OpuraCnoArea> {
+    const { data, error } = await supabase
+      .from('opura_cno_areas')
+      .insert(area)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[CnoService] Erro ao adicionar área do CNO:', error);
+      throw new Error(`Erro ao adicionar área: ${error.message}`);
+    }
+
+    return data;
+  },
+
+  async updateArea(id: string, updates: OpuraCnoAreaUpdate): Promise<OpuraCnoArea> {
+    const { data, error } = await supabase
+      .from('opura_cno_areas')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[CnoService] Erro ao atualizar área do CNO:', error);
+      throw new Error(`Erro ao atualizar área: ${error.message}`);
+    }
+
+    return data;
+  },
+
+  async deleteArea(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_cno_areas')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('[CnoService] Erro ao deletar área do CNO:', error);
+      throw new Error(`Erro ao deletar área: ${error.message}`);
+    }
+  },
+
+  // ==========================================
+  // 3.6 REDUTORES SERO (opura_cno_reductions) - PRÉ-MOLDADOS
+  // ==========================================
+
+  async listReductions(cnoRegistrationId: string): Promise<OpuraCnoReduction[]> {
+    const { data, error } = await supabase
+      .from('opura_cno_reductions')
+      .select('*')
+      .eq('cno_registration_id', cnoRegistrationId)
+      .order('nf_date', { ascending: false });
+
+    if (error) {
+      console.error('[CnoService] Erro ao listar redutores (notas) do CNO:', error);
+      throw new Error(`Erro ao listar redutores: ${error.message}`);
+    }
+
+    return data || [];
+  },
+
+  async addReduction(reduction: OpuraCnoReductionInsert): Promise<OpuraCnoReduction> {
+    const { data, error } = await supabase
+      .from('opura_cno_reductions')
+      .insert(reduction)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[CnoService] Erro ao adicionar nota de redutor:', error);
+      throw new Error(`Erro ao adicionar nota de redutor: ${error.message}`);
+    }
+
+    return data;
+  },
+
+  async updateReduction(id: string, updates: OpuraCnoReductionUpdate): Promise<OpuraCnoReduction> {
+    const { data, error } = await supabase
+      .from('opura_cno_reductions')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[CnoService] Erro ao atualizar nota de redutor:', error);
+      throw new Error(`Erro ao atualizar nota de redutor: ${error.message}`);
+    }
+
+    return data;
+  },
+
+  async deleteReduction(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('opura_cno_reductions')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('[CnoService] Erro ao deletar nota de redutor:', error);
+      throw new Error(`Erro ao deletar nota de redutor: ${error.message}`);
     }
   },
 

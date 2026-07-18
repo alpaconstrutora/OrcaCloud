@@ -1,3 +1,7 @@
+export type SeroCategory = 'obra_nova' | 'acrescimo' | 'reforma' | 'demolicao';
+export type SeroDestination = 'residencial_unifamiliar' | 'residencial_multifamiliar' | 'comercial_salas_lojas' | 'galpao_industrial' | 'casa_popular' | 'conjunto_habitacional_popular' | 'edificio_garagens';
+export type SeroType = 'alvenaria' | 'madeira' | 'mista';
+
 export interface OpuraCnoRegistration {
   id: string;
   organization_id: string;
@@ -14,6 +18,11 @@ export interface OpuraCnoRegistration {
   tipo_obra: string | null;
   responsavel_tipo: 'proprietario' | 'incorporador' | 'construtor' | null;
   art_rrt: string | null;
+  sero_category: SeroCategory | null;
+  sero_destination: SeroDestination | null;
+  sero_type: SeroType | null;
+  vau_value: number;
+  used_pre_mixed_concrete: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +32,50 @@ export type OpuraCnoRegistrationInsert = Omit<Partial<OpuraCnoRegistration>, 'id
 };
 
 export type OpuraCnoRegistrationUpdate = Partial<Omit<OpuraCnoRegistration, 'id' | 'organization_id' | 'created_at' | 'updated_at'>>;
+
+export interface OpuraCnoArea {
+  id: string;
+  organization_id: string;
+  cno_registration_id: string;
+  area_type: 'principal' | 'complementar';
+  is_covered: boolean;
+  total_area: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type OpuraCnoAreaInsert = Omit<Partial<OpuraCnoArea>, 'id' | 'created_at' | 'updated_at'> & {
+  organization_id: string;
+  cno_registration_id: string;
+  area_type: 'principal' | 'complementar';
+};
+
+export type OpuraCnoAreaUpdate = Partial<Omit<OpuraCnoArea, 'id' | 'organization_id' | 'cno_registration_id' | 'created_at' | 'updated_at'>>;
+
+export interface OpuraCnoReduction {
+  id: string;
+  organization_id: string;
+  cno_registration_id: string;
+  nf_cnpj: string;
+  nf_number: string;
+  nf_serie: string | null;
+  nf_date: string;
+  nf_value: number;
+  percent_used: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type OpuraCnoReductionInsert = Omit<Partial<OpuraCnoReduction>, 'id' | 'created_at' | 'updated_at'> & {
+  organization_id: string;
+  cno_registration_id: string;
+  nf_cnpj: string;
+  nf_number: string;
+  nf_date: string;
+  nf_value: number;
+};
+
+export type OpuraCnoReductionUpdate = Partial<Omit<OpuraCnoReduction, 'id' | 'organization_id' | 'cno_registration_id' | 'created_at' | 'updated_at'>>;
 
 export interface OpuraCnoSimulation {
   id: string;

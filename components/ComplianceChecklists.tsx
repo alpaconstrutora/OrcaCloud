@@ -1,6 +1,7 @@
 import React from 'react';
 import { complianceService } from '../services/complianceService';
 import { companyService } from '../services/companyService';
+import { useStore } from '../store/useStore';
 import { ComplianceChecklist, ComplianceEvidence, Company } from '../types';
 
 interface ComplianceChecklistsProps {
@@ -25,6 +26,10 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
   const [documentRef, setDocumentRef] = React.useState('');
   const [file, setFile] = React.useState<File | null>(null);
 
+  // Operador da evidência = usuário da sessão. A trilha de auditoria só tem
+  // valor legal se apontar para quem de fato registrou o ato — nunca um default.
+  const operatorEmail = useStore(s => s.session?.user?.email) || '';
+
   const loadInitialData = React.useCallback(async () => {
     try {
       setLoading(true);
@@ -34,14 +39,9 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
       if (comps.length > 0) {
         const defaultComp = comps[0].id;
         setSelectedCompanyId(defaultComp);
-        
+
         const checkData = await complianceService.listChecklists(organizationId, defaultComp);
         setChecklists(checkData);
-
-        // Se o checklist estiver vazio, popular com obrigações básicas do TTS
-        if (checkData.length === 0) {
-          await seedDefaultChecklists(defaultComp);
-        }
       }
     } catch (error) {
       console.error('Erro ao buscar checklists iniciais:', error);
@@ -53,56 +53,6 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
   React.useEffect(() => {
     loadInitialData();
   }, [loadInitialData]);
-
-  // Seed para criar obrigações fiscais e operacionais demo
-  const seedDefaultChecklists = async (compId: string) => {
-    try {
-      const today = new Date();
-      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-      const formattedDate = endOfMonth.toISOString().split('T')[0];
-
-      // Criar uma regra fictícia para TTS-MG se não houver
-      const rules = await complianceService.listRules(organizationId);
-      let ruleId = null;
-
-      if (rules.length === 0) {
-        const defaultRule = await complianceService.saveRule({
-          org_id: organizationId,
-          name: 'Meta Faturamento Interestadual TTS-MG',
-          description: 'Atingir no mínimo 30% das vendas totais para outros estados e arquivar as notas.',
-          category: 'tts_mg',
-          metric_threshold: 30.0,
-          recurrence_days: 30
-        });
-        ruleId = defaultRule.id;
-      } else {
-        ruleId = rules[0].id;
-      }
-
-      const defaultChecks = [
-        { title: 'Certidão Negativa de Débitos Estaduais (MG)', status: 'conforme', due_date: formattedDate },
-        { title: 'Relatório Mensal de Faturamento por Filial', status: 'pendente', due_date: formattedDate },
-        { title: 'Segregação física de estoque (Rua A / Box 01)', status: 'conforme', due_date: formattedDate },
-        { title: 'Comprovação de Entrega Física (NF-e Interestadual)', status: 'pendente', due_date: formattedDate }
-      ];
-
-      for (const check of defaultChecks) {
-        await complianceService.saveChecklist({
-          org_id: organizationId,
-          company_id: compId,
-          rule_id: ruleId,
-          title: check.title,
-          status: check.status as any,
-          due_date: check.due_date
-        });
-      }
-
-      const checkData = await complianceService.listChecklists(organizationId, compId);
-      setChecklists(checkData);
-    } catch (err) {
-      console.error('Erro ao popular dados demo de checklists:', err);
-    }
-  };
 
   const handleCompanyChange = async (compId: string) => {
     setSelectedCompanyId(compId);
@@ -141,6 +91,10 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
   const handleUploadEvidence = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !selectedChecklist) return;
+    if (!operatorEmail) {
+      alert('Sessão sem e-mail identificado. Faça login novamente antes de registrar evidências.');
+      return;
+    }
 
     try {
       setUploading(true);
@@ -151,9 +105,12 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
       // 2. Calcular o hash do arquivo localmente
       const fileHash = await calculateSHA256(file);
 
-      // 3. Capturar Geolocalização Simulada ou Real
-      let latitude = -19.9167; // Belo Horizonte por padrão
-      let longitude = -43.9333;
+      // 3. Capturar geolocalização real — se o usuário bloquear ou o browser não
+      // suportar, a evidência fica SEM coordenada. Gravar um ponto padrão (a
+      // versão anterior usava o centro de Belo Horizonte) inventaria um local
+      // que ninguém mediu, dentro de um registro cuja função é servir de prova.
+      let latitude: number | null = null;
+      let longitude: number | null = null;
 
       if (navigator.geolocation) {
         await new Promise<void>((resolve) => {
@@ -163,7 +120,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
               longitude = pos.coords.longitude;
               resolve();
             },
-            () => resolve(), // Continua com valores padrão em caso de bloqueio
+            () => resolve(), // Bloqueado/indisponível → segue sem coordenada
             { timeout: 5000 }
           );
         });
@@ -176,7 +133,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
         checklist_id: selectedChecklist.id,
         operation_type: operationType,
         document_ref: documentRef,
-        operator_email: 'carlos@opura.com', // Usuário simulado do fluxo
+        operator_email: operatorEmail,
         evidence_url: publicUrl,
         file_hash: fileHash,
         latitude,
@@ -189,7 +146,7 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
         ...selectedChecklist,
         status: 'conforme',
         completed_at: new Date().toISOString(),
-        completed_by: 'carlos@opura.com'
+        completed_by: operatorEmail
       });
 
       // Recarregar checklists
@@ -253,6 +210,15 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
             <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Obrigações Regulares</h3>
 
             <div className="space-y-3">
+              {checklists.length === 0 && (
+                <div className="text-center py-12">
+                  <span className="block text-3xl mb-3">📋</span>
+                  <h3 className="text-sm font-bold text-gray-900 mb-1">Nenhuma obrigação cadastrada</h3>
+                  <p className="text-sm text-gray-500">
+                    Cadastre as obrigações regulatórias desta filial para começar a registrar evidências.
+                  </p>
+                </div>
+              )}
               {checklists.map(c => (
                 <div
                   key={c.id}
@@ -265,9 +231,10 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-800 line-clamp-2 pr-2">{c.title}</span>
-                    <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                      c.status === 'conforme' ? 'bg-emerald-50 text-emerald-600' :
-                      c.status === 'inconforme' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
+                    {/* §8 — status é texto colorido simples, sem pílula/fundo/uppercase */}
+                    <span className={`text-sm font-normal shrink-0 ${
+                      c.status === 'conforme' ? 'text-emerald-700' :
+                      c.status === 'inconforme' ? 'text-rose-600' : 'text-amber-700'
                     }`}>
                       {c.status}
                     </span>
@@ -391,7 +358,11 @@ const ComplianceChecklists: React.FC<ComplianceChecklistsProps> = ({
                                 REF: <span className="text-slate-600">{ev.document_ref}</span>
                               </div>
                               <div>
-                                LOCAL: <span className="text-slate-600">{ev.latitude}, {ev.longitude}</span>
+                                LOCAL: <span className="text-slate-600">
+                                  {ev.latitude != null && ev.longitude != null
+                                    ? `${ev.latitude}, ${ev.longitude}`
+                                    : 'não capturado'}
+                                </span>
                               </div>
                               <div>
                                 DATA: <span className="text-slate-600">{new Date(ev.captured_at).toLocaleString('pt-BR')}</span>

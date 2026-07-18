@@ -1,6 +1,7 @@
 import React from 'react';
 import { complianceService } from '../services/complianceService';
 import { companyService } from '../services/companyService';
+import { useConfirm } from './ui/confirm';
 import { CompliancePhysicalLocation, Company } from '../types';
 
 interface CompliancePhysicalMapProps {
@@ -23,6 +24,7 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
   const [type, setType] = React.useState('posicao_logistica');
   const [companyId, setCompanyId] = React.useState('');
   const [status, setStatus] = React.useState('disponivel');
+  const confirm = useConfirm();
 
   const loadData = React.useCallback(async () => {
     try {
@@ -33,11 +35,6 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
       ]);
       setLocations(locsData);
       setCompanies(compsData);
-
-      // Se a tabela estiver vazia, sugerir popular com algumas posições padrão de galpão para fins de visualização do MVP
-      if (locsData.length === 0) {
-        await seedDefaultLocations(compsData);
-      }
     } catch (error) {
       console.error('Erro ao buscar posições de segregação:', error);
     } finally {
@@ -48,38 +45,6 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
   React.useEffect(() => {
     loadData();
   }, [loadData]);
-
-  // Seed para o MVP ter dados visuais de teste na primeira carga
-  const seedDefaultLocations = async (comps: Company[]) => {
-    try {
-      const defaultLocs = [
-        { name: 'Rua A - Box 01', type: 'posicao_logistica', status: 'ocupado', company_id: comps[0]?.id || null, coordinates: { grid: 'A1' } },
-        { name: 'Rua A - Box 02', type: 'posicao_logistica', status: 'ocupado', company_id: comps[0]?.id || null, coordinates: { grid: 'A2' } },
-        { name: 'Rua B - Box 01', type: 'posicao_logistica', status: 'disponivel', company_id: null, coordinates: { grid: 'B1' } },
-        { name: 'Rua B - Box 02', type: 'posicao_logistica', status: 'ocupado', company_id: comps[1]?.id || null, coordinates: { grid: 'B2' } },
-        { name: 'Locker Superior 01', type: 'locker', status: 'disponivel', company_id: null, coordinates: { grid: 'L1' } },
-        { name: 'Locker Superior 02', type: 'locker', status: 'ocupado', company_id: comps[0]?.id || null, coordinates: { grid: 'L2' } },
-        { name: 'Sala Administrativa 01', type: 'sala', status: 'ocupado', company_id: comps[0]?.id || null, coordinates: { grid: 'S1' } },
-        { name: 'Sala Administrativa 02', type: 'sala', status: 'manutencao', company_id: null, coordinates: { grid: 'S2' } }
-      ];
-
-      for (const loc of defaultLocs) {
-        await complianceService.savePhysicalLocation({
-          org_id: organizationId,
-          name: loc.name,
-          type: loc.type,
-          status: loc.status,
-          company_id: loc.company_id,
-          coordinates: loc.coordinates
-        });
-      }
-      // Recarregar
-      const locsData = await complianceService.listPhysicalLocations(organizationId);
-      setLocations(locsData);
-    } catch (err) {
-      console.error('Erro ao popular dados demo de localizações:', err);
-    }
-  };
 
   const handleOpenEdit = (loc: CompliancePhysicalLocation) => {
     setSelectedLocation(loc);
@@ -129,7 +94,13 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Deseja realmente deletar esta área física?')) return;
+    const ok = await confirm({
+      title: 'Excluir área física?',
+      message: 'A demarcação será removida do mapa de segregação. Essa ação não pode ser desfeita.',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
     try {
       await complianceService.deletePhysicalLocation(id);
       setIsModalOpen(false);
@@ -178,6 +149,15 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
             <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Layout de Alocação de Posições</h3>
             
             <div className="border border-slate-200/80 rounded-2xl p-6 bg-slate-50 min-h-[300px] flex flex-wrap gap-4 items-center justify-center">
+              {locations.length === 0 && (
+                <div className="text-center py-12">
+                  <span className="block text-3xl mb-3">🗺️</span>
+                  <h3 className="text-sm font-bold text-gray-900 mb-1">Nenhuma área demarcada</h3>
+                  <p className="text-sm text-gray-500">
+                    Use "Adicionar Posição" para mapear as posições, lockers e salas do galpão.
+                  </p>
+                </div>
+              )}
               {locations.map(loc => {
                 const associatedComp = companies.find(c => c.id === loc.company_id);
                 const colorTheme = loc.status === 'manutencao' ? 'border-rose-200 bg-rose-50 text-rose-700' :
@@ -246,9 +226,10 @@ const CompliancePhysicalMap: React.FC<CompliancePhysicalMapProps> = ({
                       )}
                     </div>
 
-                    <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                      loc.status === 'manutencao' ? 'bg-rose-50 text-rose-600' :
-                      loc.status === 'ocupado' ? 'bg-sky-50 text-sky-600' : 'bg-emerald-50 text-emerald-600'
+                    {/* §8 — status de registro em lista: texto colorido simples */}
+                    <span className={`text-sm font-normal shrink-0 ${
+                      loc.status === 'manutencao' ? 'text-rose-600' :
+                      loc.status === 'ocupado' ? 'text-sky-700' : 'text-emerald-700'
                     }`}>
                       {loc.status}
                     </span>

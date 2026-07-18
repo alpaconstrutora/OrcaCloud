@@ -3,7 +3,7 @@ import { complianceService } from '../services/complianceService';
 import { companyService } from '../services/companyService';
 import { ttsService } from '../services/ttsService';
 import { useConfirm } from './ui/confirm';
-import { ComplianceChecklist, ComplianceRule, Company, TtsCalculationResult } from '../types';
+import { ComplianceChecklist, ComplianceRule, CompliancePhysicalLocation, ComplianceEvidence, Company, TtsCalculationResult } from '../types';
 
 // Competência atual (1º dia do mês) e dias restantes até o fim do ciclo mensal.
 function currentReferenceMonth(): string {
@@ -34,13 +34,17 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>('');
   const [checklists, setChecklists] = React.useState<any[]>([]);
   const [rules, setRules] = React.useState<ComplianceRule[]>([]);
+  const [locations, setLocations] = React.useState<CompliancePhysicalLocation[]>([]);
+  const [evidences, setEvidences] = React.useState<ComplianceEvidence[]>([]);
   // interestadualPct = null → ainda não há lançamentos de saída para a competência.
   // Nunca exibimos um número fictício: sem dados, a UI mostra "sem lançamentos".
   const [interestadualPct, setInterestadualPct] = React.useState<number | null>(null);
   const [ttsResult, setTtsResult] = React.useState<TtsCalculationResult | null>(null);
   const [minShare, setMinShare] = React.useState(30);
   const [diasRestantes] = React.useState(diasAteFimDoMes());
-  const [score, setScore] = React.useState(85);
+  // null = ainda não há base para pontuar. Um score inicial fixo (era 85) fazia
+  // uma org sem nenhum dado exibir "85 — Excelente".
+  const [score, setScore] = React.useState<number | null>(null);
   const [backfilling, setBackfilling] = React.useState(false);
   const [backfillMsg, setBackfillMsg] = React.useState<string | null>(null);
   const confirm = useConfirm();
@@ -57,15 +61,34 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
       const pct = tts.resultado ? tts.resultado.pct_interestadual : null;
       setInterestadualPct(pct);
       setTtsResult(tts.resultado);
-      if (tts.resultado) setMinShare(tts.resultado.min_interstate_share);
+      // Meta desta apuração. Usar o `minShare` do state aqui leria o valor do
+      // ciclo ANTERIOR (o setState abaixo só vale no próximo render), fazendo o
+      // score da primeira carga ser calculado contra o default de 30%.
+      const metaAtual = tts.resultado ? tts.resultado.min_interstate_share : minShare;
+      if (tts.resultado) setMinShare(metaAtual);
 
-      // Score: 50% checklists conformes + 30% métrica interestadual + 20% docs em dia.
-      // Sem dados de apuração, a parcela interestadual entra neutra (não penaliza nem infla).
+      // Score = 60% checklists conformes + 40% métrica interestadual. A antiga
+      // parcela de "20% docs em dia" era a constante 100 — inflava todo score em
+      // 20 pontos sem medir nada. Sem nenhuma das duas bases, não há score.
+      const temChecklists = checkData.length > 0;
+      const temApuracao = pct !== null;
+
+      if (!temChecklists && !temApuracao) {
+        setScore(null);
+        return;
+      }
+
       const conformes = checkData.filter((c) => c.status === 'conforme').length;
-      const pctConformes = checkData.length > 0 ? Math.round((conformes / checkData.length) * 100) : 0;
-      const interestadualScore =
-        pct === null ? 100 : pct >= minShare ? 100 : (pct / minShare) * 100;
-      setScore(Math.round(pctConformes * 0.5 + interestadualScore * 0.3 + 100 * 0.2));
+      const pctConformes = temChecklists ? (conformes / checkData.length) * 100 : 0;
+      const interestadualScore = !temApuracao
+        ? 0
+        : pct >= metaAtual ? 100 : (pct / metaAtual) * 100;
+
+      // Renormaliza sobre as bases disponíveis, para uma org que só tem uma das
+      // duas não ser penalizada pela ausência da outra.
+      const peso = (temChecklists ? 0.6 : 0) + (temApuracao ? 0.4 : 0);
+      const bruto = (temChecklists ? pctConformes * 0.6 : 0) + (temApuracao ? interestadualScore * 0.4 : 0);
+      setScore(Math.round(bruto / peso));
     },
     [organizationId, minShare]
   );
@@ -76,8 +99,14 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
       const comps = await companyService.list(organizationId);
       setCompanies(comps);
 
-      const rulesData = await complianceService.listRules(organizationId);
+      const [rulesData, locsData, evData] = await Promise.all([
+        complianceService.listRules(organizationId),
+        complianceService.listPhysicalLocations(organizationId),
+        complianceService.listEvidences(organizationId),
+      ]);
       setRules(rulesData);
+      setLocations(locsData);
+      setEvidences(evData);
 
       if (comps.length > 0) {
         const defaultComp = comps[0].id;
@@ -170,6 +199,20 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
   const pendenteChecks = checklists.filter(c => c.status === 'pendente').length;
   const riscoChecks = checklists.filter(c => c.status === 'inconforme').length;
 
+  // Ocupação real das áreas físicas demarcadas (antes: "14/20" fixo no JSX)
+  const locOcupado = locations.filter(l => l.status === 'ocupado').length;
+  const locManutencao = locations.filter(l => l.status === 'manutencao').length;
+  const locDisponivel = locations.length - locOcupado - locManutencao;
+  const pctLoc = (n: number) => (locations.length === 0 ? 0 : (n / locations.length) * 100);
+
+  // Últimas evidências de fato registradas (antes: duas NF-e inventadas no JSX)
+  const ultimasEvidencias = evidences.slice(0, 3);
+  const rotuloOperacao: Record<string, string> = {
+    expedicao: 'Expedição',
+    recebimento: 'Recebimento',
+    inventario: 'Inventário',
+  };
+
   return (
     <div className="p-6 space-y-6 bg-[#F8FAFC] min-h-screen">
       {/* Header */}
@@ -228,37 +271,56 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
         <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.02)] flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-black uppercase tracking-widest text-slate-400">Score de Compliance</span>
-            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
-              score >= 90 ? 'bg-emerald-50 text-emerald-600' :
-              score >= 70 ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'
-            }`}>
-              {score >= 90 ? 'Excelente' : score >= 70 ? 'Atenção' : 'Risco'}
-            </span>
+            {/* §8 — status é texto colorido simples, sem pílula/fundo/uppercase */}
+            {score !== null && (
+              <span className={`text-sm font-normal ${
+                score >= 90 ? 'text-emerald-700' :
+                score >= 70 ? 'text-amber-700' : 'text-rose-600'
+              }`}>
+                {score >= 90 ? 'Excelente' : score >= 70 ? 'Atenção' : 'Risco'}
+              </span>
+            )}
           </div>
 
-          <div className="flex items-baseline gap-2">
-            <span className="text-5xl font-black text-slate-800 tracking-tight">{score}</span>
-            <span className="text-sm font-bold text-slate-400">/ 100</span>
-          </div>
+          {score === null ? (
+            <>
+              <div className="flex items-baseline gap-2">
+                <span className="text-5xl font-black tracking-tight text-slate-300">—</span>
+                <span className="text-xs font-bold text-slate-400">sem base de cálculo</span>
+              </div>
+              <span className="text-xs text-slate-500">
+                Cadastre obrigações ou registre a apuração do mês para que o score seja calculado.
+              </span>
+            </>
+          ) : (
+            <>
+              <div className="flex items-baseline gap-2">
+                <span className="text-5xl font-black text-slate-800 tracking-tight">{score}</span>
+                <span className="text-sm font-bold text-slate-400">/ 100</span>
+              </div>
 
-          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-            <div 
-              className={`h-full transition-all duration-500 ${
-                score >= 90 ? 'bg-emerald-500' :
-                score >= 70 ? 'bg-amber-500' : 'bg-rose-500'
-              }`}
-              style={{ width: `${score}%` }}
-            />
-          </div>
-          <span className="text-xs text-slate-500">Mapeamento atualizado em tempo real.</span>
+              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-500 ${
+                    score >= 90 ? 'bg-emerald-500' :
+                    score >= 70 ? 'bg-amber-500' : 'bg-rose-500'
+                  }`}
+                  style={{ width: `${score}%` }}
+                />
+              </div>
+              <span className="text-xs text-slate-500">
+                60% obrigações conformes · 40% meta interestadual (TTS).
+              </span>
+            </>
+          )}
         </div>
 
         {/* TTS-MG Interestadual KPI Card */}
         <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.02)] flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-black uppercase tracking-widest text-slate-400">Saídas Interestaduais (TTS)</span>
-            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-600">
-              Meta Mínima {minShare}%
+            <span className="text-sm font-normal text-slate-600">
+              Meta mínima {minShare}%
             </span>
           </div>
 
@@ -366,20 +428,28 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
           </div>
 
           <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl space-y-2">
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
-              <span>Status dos Lockers & Posições:</span>
-              <span className="text-slate-800 font-bold">14/20 Ocupados</span>
-            </div>
-            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden flex">
-              <div className="bg-emerald-500 h-full" style={{ width: '40%' }} title="Livre" />
-              <div className="bg-sky-500 h-full" style={{ width: '50%' }} title="Ocupado Filial 1" />
-              <div className="bg-rose-500 h-full" style={{ width: '10%' }} title="Manutenção/Bloqueado" />
-            </div>
-            <div className="flex gap-4 text-[9px] font-bold text-slate-500">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Disponível</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-500" /> Segregado</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500" /> Bloqueado</span>
-            </div>
+            {locations.length === 0 ? (
+              <p className="text-xs text-slate-500 py-2">
+                Nenhuma área física demarcada ainda. Abra o mapa para cadastrar as posições, lockers e salas.
+              </p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                  <span>Status dos Lockers &amp; Posições:</span>
+                  <span className="text-slate-800 font-bold">{locOcupado}/{locations.length} Ocupados</span>
+                </div>
+                <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden flex">
+                  <div className="bg-emerald-500 h-full" style={{ width: `${pctLoc(locDisponivel)}%` }} title={`Disponível: ${locDisponivel}`} />
+                  <div className="bg-sky-500 h-full" style={{ width: `${pctLoc(locOcupado)}%` }} title={`Ocupado/segregado: ${locOcupado}`} />
+                  <div className="bg-rose-500 h-full" style={{ width: `${pctLoc(locManutencao)}%` }} title={`Manutenção/bloqueado: ${locManutencao}`} />
+                </div>
+                <div className="flex gap-4 text-[9px] font-bold text-slate-500">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Disponível ({locDisponivel})</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-sky-500" /> Segregado ({locOcupado})</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500" /> Bloqueado ({locManutencao})</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -399,25 +469,29 @@ const ComplianceDashboard: React.FC<ComplianceDashboardProps> = ({
           </div>
 
           <div className="space-y-2.5">
-            <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
-              <div className="space-y-0.5">
-                <span className="block text-xs font-black text-slate-700">Expedição - NF-e #4902</span>
-                <span className="block text-[8px] text-slate-400">Canhoto assinado • Operador: carlos@opura.com</span>
-              </div>
-              <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
-                Auditado
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
-              <div className="space-y-0.5">
-                <span className="block text-xs font-black text-slate-700">Recebimento - NF-e #4889</span>
-                <span className="block text-[8px] text-slate-400">Foto do palete • Operador: carlos@opura.com</span>
-              </div>
-              <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
-                Auditado
-              </span>
-            </div>
+            {ultimasEvidencias.length === 0 ? (
+              <p className="text-xs text-slate-500 py-2">
+                Nenhuma evidência registrada ainda. Anexe comprovantes às obrigações para formar a trilha de auditoria.
+              </p>
+            ) : (
+              ultimasEvidencias.map(ev => (
+                <div key={ev.id} className="flex items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
+                  <div className="space-y-0.5 min-w-0">
+                    <span className="block text-xs font-black text-slate-700 truncate">
+                      {rotuloOperacao[ev.operation_type] || ev.operation_type}
+                      {ev.document_ref ? ` — ${ev.document_ref}` : ''}
+                    </span>
+                    <span className="block text-[8px] text-slate-400 truncate">
+                      {new Date(ev.captured_at).toLocaleString('pt-BR')} • Operador: {ev.operator_email}
+                    </span>
+                  </div>
+                  {/* "Auditado" era rótulo fixo: hoje reflete se o arquivo tem hash de integridade */}
+                  <span className={`text-sm font-normal shrink-0 ${ev.file_hash ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {ev.file_hash ? 'Íntegra' : 'Sem hash'}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

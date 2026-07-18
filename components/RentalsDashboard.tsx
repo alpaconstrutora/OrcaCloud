@@ -264,6 +264,50 @@ export function RentalsDashboard({ selectedBuildingId, organizationId: propOrgan
           </div>
         </div>
       </div>
+
+      {/* 3. RECEBÍVEIS — Inadimplência + Próximos Vencimentos */}
+      <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <h3 className="text-sm font-black text-gray-900 tracking-widest uppercase leading-none flex items-center gap-2">
+            <div className="w-1.5 h-4 bg-blue-600 rounded-full" />
+            Próximos Vencimentos
+          </h3>
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-[1rem] ${metrics.unidadesInadimplentes > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+            <AlertTriangle className="w-4 h-4" />
+            <span className="text-xs font-black uppercase tracking-widest">
+              {metrics.unidadesInadimplentes > 0
+                ? `${metrics.unidadesInadimplentes} contrato${metrics.unidadesInadimplentes > 1 ? 's' : ''} inadimplente${metrics.unidadesInadimplentes > 1 ? 's' : ''}`
+                : 'Sem inadimplência'}
+            </span>
+          </div>
+        </div>
+
+        {metrics.proximasVencimentos.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+            <Clock className="w-8 h-8 mb-2 opacity-40" />
+            <p className="text-sm font-bold">Nenhum vencimento em aberto</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {metrics.proximasVencimentos.map((v) => (
+              <div key={v.id} className="flex items-center justify-between gap-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-gray-900 truncate">{v.property}</p>
+                  <p className="text-xs text-gray-400 font-medium truncate flex items-center gap-1.5">
+                    <Users className="w-3 h-3" /> {v.client}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-black text-gray-900">{formatCurrency(v.value)}</p>
+                  <p className="text-xs text-gray-400 font-bold">
+                    {new Date(v.dueDate + 'T12:00:00').toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -48,7 +48,7 @@ export const rentalsDashboardService = {
       // 2. Fetch deals (type RENTAL)
       let dealsQuery = supabase
         .from('commercial_deals')
-        .select('id, value, status, type, date, property_id')
+        .select('id, value, status, type, date, property_id, origin_channel')
         .eq('type', 'RENTAL');
       if (organizationId) dealsQuery = dealsQuery.eq('organization_id', organizationId);
 
@@ -104,12 +104,75 @@ export const rentalsDashboardService = {
         };
       });
 
-      // 4. Tipologia e Canais (Placeholders ou baseados em dados)
+      // 4. Tipologia (baseada nas unidades) e Canais (origin_channel real dos deals)
       const tipologiaMap = new Map();
       rentalProps.forEach(p => {
           const key = p.type || 'OUTROS';
           tipologiaMap.set(key, (tipologiaMap.get(key) || 0) + 1);
       });
+
+      // Canais: agrupa os deals de locação por origem real (origin_channel);
+      // value = participação percentual (para a barra do dashboard). Sem array fixo.
+      const canaisMap = new Map<string, number>();
+      filteredDeals.forEach(d => {
+          const canal = ((d as any).origin_channel || '').toString().trim() || 'Não informado';
+          canaisMap.set(canal, (canaisMap.get(canal) || 0) + 1);
+      });
+      const totalCanais = Array.from(canaisMap.values()).reduce((s, v) => s + v, 0);
+      const canais = Array.from(canaisMap.entries())
+          .map(([name, count]) => ({ name, value: totalCanais > 0 ? Math.round((count / totalCanais) * 100) : 0 }))
+          .sort((a, b) => b.value - a.value);
+
+      // 5. Inadimplência e próximos vencimentos — via contratos de LOCAÇÃO + vw_receivables
+      let unidadesInadimplentes = 0;
+      let proximasVencimentos: RentalsDashboardMetrics['proximasVencimentos'] = [];
+      if (organizationId) {
+          // Contratos de locação da org (e da obra, quando filtrada)
+          let contractsQuery = supabase
+              .from('contracts')
+              .select('id, title, client_id')
+              .eq('organization_id', organizationId)
+              .eq('domain', 'LOCACAO');
+          if (projectId) contractsQuery = contractsQuery.eq('project_id', projectId);
+          const { data: rentalContracts } = await contractsQuery;
+
+          const contractIds = (rentalContracts || []).map(c => c.id as string);
+          const contractTitleById = new Map<string, string>(
+              (rentalContracts || []).map(c => [c.id as string, (c.title as string) || ''])
+          );
+
+          if (contractIds.length > 0) {
+              // vw_receivables já calcula effective_status='VENCIDO' dinamicamente
+              const { data: receivables } = await supabase
+                  .from('vw_receivables')
+                  .select('id, reference_id, due_date, amount, party_name, description, effective_status')
+                  .eq('organization_id', organizationId)
+                  .in('reference_id', contractIds)
+                  .order('due_date', { ascending: true, nullsFirst: false });
+
+              const rows = receivables || [];
+
+              // Contratos distintos com ao menos 1 parcela vencida
+              const overdue = new Set(
+                  rows.filter(r => r.effective_status === 'VENCIDO').map(r => r.reference_id)
+              );
+              unidadesInadimplentes = overdue.size;
+
+              // Próximos vencimentos: em aberto, com vencimento a partir de hoje
+              const hoje = new Date().toISOString().split('T')[0];
+              const emAberto = ['PREVISTO', 'EMITIDO', 'ENVIADO', 'VENCIDO'];
+              proximasVencimentos = rows
+                  .filter(r => r.due_date && r.due_date >= hoje && emAberto.includes(String(r.effective_status)))
+                  .slice(0, 10)
+                  .map(r => ({
+                      id: r.id as string,
+                      client: (r.party_name as string) || '—',
+                      property: contractTitleById.get(r.reference_id as string) || (r.description as string) || '—',
+                      value: Number(r.amount) || 0,
+                      dueDate: r.due_date as string,
+                  }));
+          }
+      }
 
       return {
         valorTotalPatrimonio,
@@ -118,16 +181,11 @@ export const rentalsDashboardService = {
         taxaOcupacao: unidadesTotal > 0 ? (unidadesOcupadas / unidadesTotal) * 100 : 0,
         unidadesDisponiveis,
         unidadesTotal,
-        unidadesInadimplentes: 0, // Por enquanto zerado
+        unidadesInadimplentes,
         rentCurve,
-        canais: [
-            { name: 'Quinto Andar', value: 40 },
-            { name: 'Zap Imóveis', value: 30 },
-            { name: 'Direto', value: 20 },
-            { name: 'Imobiliárias', value: 10 },
-        ],
+        canais,
         tipologia: Array.from(tipologiaMap.entries()).map(([name, value]) => ({ name, value })),
-        proximasVencimentos: [] // Futuro
+        proximasVencimentos
       };
     } catch (error) {
       console.error('Error fetching rentals dashboard metrics:', error);

@@ -669,7 +669,9 @@ export const contractService = {
             description: deal.notes || undefined,
             contract_type: cfg.contractType,
             nature: cfg.nature,
-            direction: 'OUTGOING' as const,
+            // Locação é receita do locador → INCOMING (parcelas nascem CREDIT/a receber
+            // via syncRecurringToFinance); Vendas/Suprimentos permanecem OUTGOING.
+            direction: (isRental ? 'INCOMING' : 'OUTGOING') as 'INCOMING' | 'OUTGOING',
             domain,
             status,
             original_value: deal.value || 0,
@@ -1820,6 +1822,24 @@ export const contractService = {
         // Re-sync parcelas futuras se parcelado
         if (!updated.is_recurring && updated.payment_term_type === 'Parcelado') {
             await syncParceladoScheduleToFinance(updated as Contract);
+        }
+
+        // Re-sync recorrente (ex.: locação): o reajuste altera apenas o VALOR das
+        // parcelas futuras — mesmas datas. Parcelas passadas/já conciliadas não mudam.
+        // (syncRecurringToFinance não serve aqui: usa original_value e re-inseriria
+        // tudo, duplicando os lançamentos.)
+        if (updated.is_recurring && updated.organization_id) {
+            try {
+                await supabase.from('internal_transactions')
+                    .update({ amount: novoValor })
+                    .eq('organization_id', updated.organization_id)
+                    .eq('source_system', 'CONTRACT_RECURRING')
+                    .eq('reference_id', updated.id)
+                    .eq('status', 'PENDING')
+                    .gte('transaction_date', hoje);
+            } catch (e) {
+                console.error('[CONTRACTS] Erro ao re-sincronizar recorrente após reajuste:', e);
+            }
         }
 
         return updated as Contract;

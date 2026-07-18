@@ -571,6 +571,25 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     </div>
                                 </div>
 
+                                {/* Origem / Canal — alimenta "Fontes de Locação" (e Vendas) */}
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Origem / Canal</label>
+                                    <select
+                                        value={formData.origin_channel || ''}
+                                        onChange={(e) => setFormData({ ...formData, origin_channel: e.target.value })}
+                                        className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner"
+                                    >
+                                        <option value="">Não informado</option>
+                                        <option value="Direto">Direto</option>
+                                        <option value="Indicação">Indicação</option>
+                                        <option value="Portal Imobiliário">Portal Imobiliário</option>
+                                        <option value="Imobiliária / Corretor">Imobiliária / Corretor</option>
+                                        <option value="Redes Sociais">Redes Sociais</option>
+                                        <option value="Site">Site</option>
+                                        <option value="Outros">Outros</option>
+                                    </select>
+                                </div>
+
                                 {/* Forma de Pagamento */}
                                 <div className="space-y-2">
                                     <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Forma de Pagamento</label>

@@ -133,6 +133,8 @@ export interface PropertyDeal {
     installment_value?: number;
     down_payment?: number;
     payment_due_date?: string;
+    /** Origem/canal do negócio (ex.: Direto, Portal, Imobiliária) — alimenta "Fontes de Locação"/Vendas */
+    origin_channel?: string;
     broker_id?: string;
     broker_name?: string;
     broker_commission_pct?: number;

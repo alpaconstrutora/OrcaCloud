@@ -288,7 +288,10 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = isModuleAllowed('canViewPro', 'pro');
     } else if (activeView === 'offices' || activeView === 'offices-dashboard' || activeView.startsWith('offices-')) {
       allowed = isModuleAllowed('canViewOffices', 'offices');
-    } else if (['sales', 'rentals', 'gestao-vendas'].includes(activeView)) {
+    } else if (activeView === 'rentals') {
+      // Locações tem permissão própria; cai em Vendas só como fallback (retrocompatível)
+      allowed = isModuleAllowed('canViewRentals', 'rentals');
+    } else if (['sales', 'gestao-vendas'].includes(activeView)) {
       allowed = isModuleAllowed('canViewSales', 'crm');
     } else if (activeView === 'imovib' || activeView === 'empreendimentos' || activeView === 'laudo-avaliacao') {
       allowed = isModuleAllowed('canViewImovib', 'incorporacao');

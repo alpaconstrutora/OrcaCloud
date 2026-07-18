@@ -252,6 +252,7 @@ const Layout: React.FC<LayoutProps> = ({
         reformas: false, quality: false,
         offices: false,
         pro: checkModule('pro', 'canViewPro', 'pro'),
+        rentals: false,
         compliance: false,
       };
     }
@@ -264,6 +265,7 @@ const Layout: React.FC<LayoutProps> = ({
         quality: false, pro: false,
         offices: checkModule('offices', 'canViewOffices', 'offices'),
         crm: checkModule('crm', 'canViewSales', 'crm'),
+        rentals: checkModule('crm', 'canViewRentals', 'rentals'),
         compliance: false,
       };
     }
@@ -275,6 +277,7 @@ const Layout: React.FC<LayoutProps> = ({
       offices: checkModule('offices', 'canViewOffices', 'offices'),
       pro: checkModule('pro', 'canViewPro', 'pro'),
       crm: checkModule('crm', 'canViewSales', 'crm'),
+      rentals: checkModule('crm', 'canViewRentals', 'rentals'),
       incorporacao: checkModule('incorporacao', 'canViewImovib', 'incorporacao'),
       fiscal: checkModule('fiscal', 'canViewFiscal', 'fiscal'),
       quality: checkModule('quality', 'canViewQuality', 'quality'),
@@ -1078,7 +1081,7 @@ const Layout: React.FC<LayoutProps> = ({
                 </>
               )}
 
-              {(mod.crm || isDev) && (
+              {(mod.crm || ((mod as any).rentals ?? mod.crm) || isDev) && (
                 <>
                   <NavDropdown
                     label="Comercial"
@@ -1087,10 +1090,10 @@ const Layout: React.FC<LayoutProps> = ({
                     onToggle={() => setIsVendasOpen(o => !o)}
                     hasActiveChild={['gestao-vendas','sales','rentals','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health','broker-integrations'].includes(activeView)}
                   >
-                    <DropdownItem id="sales" label="Vendas de Ativos" icon={Building2} />
-                    <DropdownItem id="rentals" label="Locações" icon={Building2} />
-                    <DropdownItem id="service-contracts" label="Contratos de Serviço" icon={FileText} />
-                    <DropdownItem id="services-commercial" label="CRM Serviços" icon={Briefcase} />
+                    {(mod.crm || isDev) && <DropdownItem id="sales" label="Vendas de Ativos" icon={Building2} />}
+                    {(((mod as any).rentals ?? mod.crm) || isDev) && <DropdownItem id="rentals" label="Locações" icon={Building2} />}
+                    {(mod.crm || isDev) && <DropdownItem id="service-contracts" label="Contratos de Serviço" icon={FileText} />}
+                    {(mod.crm || isDev) && <DropdownItem id="services-commercial" label="CRM Serviços" icon={Briefcase} />}
                   </NavDropdown>
                 </>
               )}

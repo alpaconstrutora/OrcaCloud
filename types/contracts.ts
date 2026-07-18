@@ -59,6 +59,10 @@ export interface Contract {
     reajuste_index?: string;
     reajuste_data_base?: string;
     reajuste_proximo?: string;
+    // Locação (domain='LOCACAO') — a garantia formal (caução/fiança/seguro) fica em
+    // `contract_guarantees`; aqui ficam só os campos diretos do contrato de aluguel.
+    guarantor_name?: string;            // Fiador (pessoa física)
+    rescission_penalty_months?: number; // Multa rescisória em nº de aluguéis
     retention_rate: number;
     responsible_email?: string;
     signed_contract_url?: string;

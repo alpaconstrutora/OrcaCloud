@@ -14,7 +14,8 @@ import { laborService } from '../services/laborService';
 import { contractTypeService } from '../services/contractTypeService';
 import { sanitizeFileName } from '../utils/storageUtils';
 import ContractScopeManager from './ContractScopeManager';
-import { Upload, ExternalLink } from 'lucide-react';
+import ContractGuaranteeModal from './ContractGuaranteeModal';
+import { Upload, ExternalLink, KeyRound } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
@@ -74,6 +75,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     });
 
     const [projects, setProjects] = React.useState<{ id: string; name: string; settings?: { classification?: string } }[]>([]);
+    const [showGuaranteeModal, setShowGuaranteeModal] = React.useState(false);
 
     const buildSchedule = (count: number, value: number, startDate: string): ContractInstallment[] => {
         const base = count > 0 ? Math.floor((value / count) * 100) / 100 : 0;
@@ -1266,6 +1268,54 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                             </div>
                         </div>
 
+                        {/* Section: Locação (só quando nature = Locação) */}
+                        {formData.nature === 'Locação' && (
+                            <div className="space-y-6">
+                                <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
+                                    <KeyRound className="w-4 h-4 text-emerald-600" />
+                                    <h3 className="text-sm font-medium text-gray-900 uppercase tracking-widest">Locação</h3>
+                                </div>
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Fiador (opcional)</label>
+                                        <input
+                                            type="text"
+                                            value={formData.guarantor_name || ''}
+                                            onChange={(e) => setFormData({ ...formData, guarantor_name: e.target.value })}
+                                            placeholder="Nome do fiador"
+                                            className="w-full px-6 py-4 bg-white border border-gray-200 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Multa Rescisória (nº de aluguéis)</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.5"
+                                            value={formData.rescission_penalty_months ?? ''}
+                                            onChange={(e) => setFormData({ ...formData, rescission_penalty_months: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+                                            placeholder="Ex.: 3"
+                                            className="w-full px-6 py-4 bg-white border border-gray-200 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Garantia (caução / fiança / seguro)</label>
+                                    {initialData?.id ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowGuaranteeModal(true)}
+                                            className="w-full px-6 py-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <Shield className="w-4 h-4" /> Adicionar / gerenciar garantia
+                                        </button>
+                                    ) : (
+                                        <p className="text-xs font-medium text-gray-400 px-1">Salve o contrato para registrar a caução/fiança.</p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Section: Centros de Custo e Orçamento */}
                         <div className="space-y-6 pb-10">
                             <div className="flex items-center gap-2 border-b border-gray-50 pb-4">
@@ -1496,6 +1546,16 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                 organizationId={organizationId}
                 mode="manage"
                 onClose={() => setScopeManagerOpen(false)}
+            />
+        )}
+
+        {/* Garantia de locação (caução / fiança / seguro) — exige contrato salvo */}
+        {showGuaranteeModal && initialData?.id && organizationId && (
+            <ContractGuaranteeModal
+                isOpen={showGuaranteeModal}
+                onClose={() => setShowGuaranteeModal(false)}
+                onSuccess={() => setShowGuaranteeModal(false)}
+                contract={{ ...formData, id: initialData.id, organization_id: organizationId } as Contract}
             />
         )}
         </>

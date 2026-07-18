@@ -159,8 +159,8 @@ export default function FloorViewerTab({ scenario, terrain, rules }: FloorViewer
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Seletor de pavimento — só quando há unidades reais materializadas */}
-          {hasReal && (viewMode === '2d' || viewMode === 'split') && (
+          {/* Seletor de pavimento — no 2D define o andar exibido; no 3D, o andar cujas unidades ganham rótulo */}
+          {hasReal && (
             <select
               value={selectedFloorNumber ?? ''}
               onChange={(e) => setSelectedFloorNumber(Number(e.target.value))}
@@ -302,6 +302,7 @@ export default function FloorViewerTab({ scenario, terrain, rules }: FloorViewer
                     floorsCount={hasReal ? realFloors.length : (scenario.floors_count || 1)}
                     realFloors={real3DFloors}
                     realCore={real3DCore}
+                    labelFloorNumber={selectedFloorNumber}
                     onToggleFullscreen={viewMode === '3d' ? toggleFullscreen : undefined}
                     isFullscreen={isFullscreen}
                   />

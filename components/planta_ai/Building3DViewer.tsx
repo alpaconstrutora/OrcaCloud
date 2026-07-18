@@ -29,6 +29,8 @@ interface Props {
   realFloors?: { floorNumber: number; units: { code?: string; x: number; y: number; width: number; height: number; color: string }[] }[];
   /** Núcleo real (plant_floors.geometry_json.core). Só usado com realFloors. */
   realCore?: { x: number; y: number; width: number; height: number };
+  /** Pavimento cujas unidades recebem rótulo (código). Só ele, para não poluir com 40 labels. */
+  labelFloorNumber?: number | null;
 }
 
 /**
@@ -52,6 +54,7 @@ function BuildingScene({
   floorHeight = 3,
   realFloors,
   realCore,
+  labelFloorNumber,
 }: Props) {
   const w = buildingWidth;
   const d = buildingDepth;
@@ -133,11 +136,10 @@ function BuildingScene({
                     <meshStandardMaterial color={u.color} roughness={0.7} />
                     <Edges color="#6b7280" threshold={15} />
                   </mesh>
-                  {u.code && (
+                  {u.code && floor.floorNumber === labelFloorNumber && (
                     <Html
                       position={[u.x + u.width / 2, slabThickness + unitBoxHeight / 2, u.y + u.height / 2]}
                       center
-                      occlude="blending"
                       distanceFactor={22}
                       zIndexRange={[10, 0]}
                       style={{ pointerEvents: 'none' }}

@@ -235,9 +235,8 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
     },
     fetchCompanies: async () => {
         const { activeOrganizationId, activeEmpresaId } = get();
-        if (!activeOrganizationId) return;
         try {
-            const list = await companyService.list(activeOrganizationId);
+            const list = await companyService.list(activeOrganizationId ?? undefined);
             set({ companies: list });
             // Auto-select HQ if no active empresa or the saved one no longer exists
             const saved = activeEmpresaId;

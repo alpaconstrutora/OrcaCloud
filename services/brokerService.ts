@@ -5,13 +5,13 @@ import { supplierService } from './supplierService';
 export const brokerService = {
     // --- Broker Profiles (Gestão de Corretores) ---
     async listProfiles(organizationId?: string) {
-        if (!organizationId) return [] as BrokerProfile[];
-        await supplierService.syncRealEstateBrokerProfiles(organizationId);
-        const { data, error } = await supabase
+        if (organizationId) await supplierService.syncRealEstateBrokerProfiles(organizationId);
+        let query = supabase
             .from('broker_profiles')
             .select('id, email, name, phone, cpf, creci, agency_name, organization_id, commission_rate, is_active, settings, created_at, updated_at')
-            .eq('organization_id', organizationId)
             .order('name');
+        if (organizationId) query = query.eq('organization_id', organizationId);
+        const { data, error } = await query;
 
         if (error) {
             console.error('[BROKER PROFILE SERVICE] Error listing profiles:', error);

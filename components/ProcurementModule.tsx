@@ -868,6 +868,12 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId }) => 
 
                         {loadingConsolidation ? (
                             <div className="text-center py-8 text-gray-400 text-sm">Buscando oportunidades…</div>
+                        ) : !activeOrganizationId ? (
+                            <div className="text-center py-8 text-gray-400">
+                                <CheckCircle2 className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                                <p className="text-sm">Selecione uma organização para ver oportunidades de consolidação.</p>
+                                <p className="text-xs mt-1">A consolidação compara obras dentro da mesma empresa; com "Todas as organizações" não há como cruzar os insumos.</p>
+                            </div>
                         ) : opportunities.length === 0 ? (
                             <div className="text-center py-8 text-gray-400">
                                 <CheckCircle2 className="w-10 h-10 mx-auto mb-2 opacity-30" />

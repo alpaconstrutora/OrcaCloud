@@ -448,9 +448,8 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
     useEffect(() => { load(); }, [load]);
 
     const loadSchedules = useCallback(async () => {
-        if (!organizationId) return;
         setSchedLoading(true); setSchedError(null);
-        try { setSchedules(await reportScheduleService.list(organizationId)); }
+        try { setSchedules(await reportScheduleService.list(organizationId || undefined)); }
         catch (e) { setSchedError(e instanceof Error ? e.message : 'Erro'); }
         finally { setSchedLoading(false); }
     }, [organizationId]);

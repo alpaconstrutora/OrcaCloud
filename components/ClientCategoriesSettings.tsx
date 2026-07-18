@@ -30,10 +30,9 @@ const ClientCategoriesSettings: React.FC = () => {
     const tableColumns = useTableColumns(CATEGORY_COLUMNS, 'clientCategoriesColumns');
 
     const loadCategories = React.useCallback(async () => {
-        if (!activeOrganizationId) return;
         setLoading(true);
         try {
-            const data = await clientCategoryService.list(activeOrganizationId);
+            const data = await clientCategoryService.list(activeOrganizationId ?? undefined);
             setCategories(data);
         } catch (error: any) {
             showToast(error.message, 'error');

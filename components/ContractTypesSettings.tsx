@@ -26,7 +26,6 @@ const ContractTypesSettings: React.FC = () => {
     const [editCategory, setEditCategory] = React.useState<ContractTypeCategory>('Geral');
 
     const loadTypes = React.useCallback(async () => {
-        if (!activeOrganizationId) return;
         setLoading(true);
         try {
             const data = await contractTypeService.listTypes(orgId);

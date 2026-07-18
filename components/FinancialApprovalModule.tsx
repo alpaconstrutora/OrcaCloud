@@ -377,6 +377,8 @@ function ApprovalConfigPanel({ organizationId }: ConfigPanelProps) {
                     onClick={openNew}
                     variant="primary"
                     size="md"
+                    disabled={!organizationId}
+                    title={!organizationId ? 'Selecione uma organização específica para criar uma faixa de alçada' : undefined}
                 >
                     <Plus className="w-4 h-4" /> Nova faixa
                 </Button>
@@ -537,8 +539,7 @@ function SoftPendingBanner({ organizationId }: { organizationId: string }) {
     const [summary, setSummary] = useState<ApprovalPendingSummary[]>([]);
 
     useEffect(() => {
-        if (!organizationId) return;
-        approvalService.getPendingSummary(organizationId)
+        approvalService.getPendingSummary(organizationId || null)
             .then(s => setSummary(s.filter(x => x.qtd > 0)))
             .catch(() => {});
     }, [organizationId]);
@@ -582,8 +583,7 @@ export default function FinancialApprovalModule({ organizationId = '', userEmail
     const [config, setConfig] = useState<FinancialApprovalConfig[]>([]);
 
     useEffect(() => {
-        if (!organizationId) return;
-        financialApprovalService.listConfig(organizationId).then(setConfig).catch(() => {});
+        financialApprovalService.listConfig(organizationId || null).then(setConfig).catch(() => {});
     }, [organizationId]);
 
     const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [

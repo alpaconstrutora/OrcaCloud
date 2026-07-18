@@ -106,18 +106,30 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
     }, [organizationId, showToast]);
 
     const loadOptions = useCallback(async () => {
-        if (!organizationId) return;
         try {
-            const orgOrNull = `organization_id.eq.${organizationId},organization_id.is.null`;
+            const orgOrNull = organizationId
+                ? `organization_id.eq.${organizationId},organization_id.is.null`
+                : undefined;
+            let projectsQuery = supabase.from('projects').select('id, name')
+                .not('name', 'in', SYSTEM_PROJECT_NAMES_SQL) // utils/systemProjects.ts
+                .order('name', { ascending: true });
+            if (organizationId) projectsQuery = projectsQuery.filter('settings->>organizationId', 'eq', organizationId);
+
+            let costCentersQuery = supabase.from('cost_centers').select('id, name').order('name', { ascending: true });
+            if (organizationId) costCentersQuery = costCentersQuery.eq('organization_id', organizationId);
+
+            let clientsQuery = supabase.from('clients').select('id, name').order('name', { ascending: true });
+            if (orgOrNull) clientsQuery = clientsQuery.or(orgOrNull);
+
+            let suppliersQuery = supabase.from('suppliers').select('id, name').order('name', { ascending: true });
+            if (orgOrNull) suppliersQuery = suppliersQuery.or(orgOrNull);
+
             const [cats, projs, ccs, cls, sups] = await Promise.all([
                 supabase.from('financial_categories').select('name').order('name', { ascending: true }),
-                supabase.from('projects').select('id, name')
-                    .filter('settings->>organizationId', 'eq', organizationId)
-                    .not('name', 'in', SYSTEM_PROJECT_NAMES_SQL) // utils/systemProjects.ts
-                    .order('name', { ascending: true }),
-                supabase.from('cost_centers').select('id, name').eq('organization_id', organizationId).order('name', { ascending: true }),
-                supabase.from('clients').select('id, name').or(orgOrNull).order('name', { ascending: true }),
-                supabase.from('suppliers').select('id, name').or(orgOrNull).order('name', { ascending: true }),
+                projectsQuery,
+                costCentersQuery,
+                clientsQuery,
+                suppliersQuery,
             ]);
             if (cats.data) setCategories(cats.data.map(c => c.name).filter(Boolean));
             if (projs.data) setProjects(Array.from(new Map(projs.data.map(p => [p.name, p])).values()));

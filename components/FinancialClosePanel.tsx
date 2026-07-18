@@ -110,6 +110,18 @@ const FinancialClosePanel: React.FC<FinancialClosePanelProps> = ({ organizationI
 
     const years = [now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2];
 
+    if (!organizationId) {
+        return (
+            <div className="min-h-[300px] flex items-center justify-center">
+                <div className="text-center space-y-2 max-w-sm">
+                    <CalendarCheck className="w-10 h-10 text-gray-200 mx-auto" />
+                    <p className="text-sm font-semibold text-gray-600">Selecione uma organização para ver o fechamento mensal.</p>
+                    <p className="text-xs text-gray-400">O fechamento é por empresa — com "Todas as organizações" não há um período único para travar/destravar.</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-5 min-h-[500px]">
             {/* Header / seletor */}

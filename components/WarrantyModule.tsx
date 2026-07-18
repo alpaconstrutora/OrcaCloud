@@ -156,6 +156,8 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                     onClick={() => { setShowModal(true); onOpenClaim?.(); }}
                     variant="primary"
                     size="lg"
+                    disabled={!activeOrganizationId}
+                    title={!activeOrganizationId ? 'Selecione uma organização específica para abrir um chamado' : undefined}
                     className="rounded-[1.25rem] shadow-xl shadow-blue-900/20"
                 >
                     <Plus className="w-4 h-4" />
@@ -201,9 +203,11 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                     <div className="flex flex-col items-center justify-center h-40 gap-2">
                         <Shield className="w-10 h-10 text-gray-200" />
                         <p className="text-sm text-gray-400 font-medium">Nenhum chamado de garantia encontrado.</p>
-                        <button onClick={() => setShowModal(true)} className="text-button text-blue-600 font-semibold hover:underline">
-                            Abrir primeiro chamado
-                        </button>
+                        {activeOrganizationId && (
+                            <button onClick={() => setShowModal(true)} className="text-button text-blue-600 font-semibold hover:underline">
+                                Abrir primeiro chamado
+                            </button>
+                        )}
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -237,11 +241,12 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ activeOrganizationId, p
                 />
             )}
 
-            {/* Detalhe do chamado */}
-            {selected && activeOrganizationId && (
+            {/* Detalhe do chamado — nunca bloquear a leitura por causa de "Todas as organizações";
+                a organização do próprio chamado já resolve o escopo. */}
+            {selected && (
                 <WarrantyClaimDetail
                     claim={selected}
-                    organizationId={activeOrganizationId}
+                    organizationId={activeOrganizationId || selected.organization_id}
                     projects={projects}
                     onClose={() => setSelected(null)}
                     onRefresh={() => { load(); setSelected(null); }}

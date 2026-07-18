@@ -644,8 +644,7 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
     const [refreshKey, setRefreshKey] = useState(0);
 
     useEffect(() => {
-        if (!organizationId) return;
-        processService.listTemplates(organizationId).then(setTemplates).catch(() => {});
+        processService.listTemplates(organizationId || null).then(setTemplates).catch(() => {});
     }, [organizationId, refreshKey]);
 
     const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [

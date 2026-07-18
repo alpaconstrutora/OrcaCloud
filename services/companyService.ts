@@ -13,13 +13,14 @@ import {
 } from '../types';
 
 export const companyService = {
-    async list(orgId: string): Promise<Company[]> {
-        const { data, error } = await supabase
+    async list(orgId?: string): Promise<Company[]> {
+        let query = supabase
             .from('companies')
             .select('id, code, org_id, razao_social, nome_fantasia, cnpj, status, tipo, is_headquarters, cor_sistema, logo_url, modulos_habilitados, regime_tributario, simples_anexo_iv, created_at, updated_at')
-            .eq('org_id', orgId)
             .order('is_headquarters', { ascending: false })
             .order('razao_social');
+        if (orgId) query = query.eq('org_id', orgId);
+        const { data, error } = await query;
         if (error) throw error;
         return data as Company[];
     },

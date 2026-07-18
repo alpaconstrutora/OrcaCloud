@@ -89,9 +89,8 @@ export default function OpuraGovernanceModule({
   // ── Carregar Empresas ────────────────────────────────────────
   useEffect(() => {
     async function loadCompanies() {
-      if (!activeOrganizationId) return;
       try {
-        const data = await companyService.list(activeOrganizationId);
+        const data = await companyService.list(activeOrganizationId ?? undefined);
         setCompanies(data || []);
         if (data && data.length > 0) {
           setSelectedCompanyId(data[0].id);

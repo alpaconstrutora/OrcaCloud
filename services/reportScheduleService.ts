@@ -22,12 +22,13 @@ const COLS = 'id,organization_id,name,frequency,day_of_week,day_of_month,hour,re
 
 export const reportScheduleService = {
 
-    async list(organizationId: string): Promise<ReportSchedule[]> {
-        const { data, error } = await supabase
+    async list(organizationId?: string): Promise<ReportSchedule[]> {
+        let query = supabase
             .from('report_schedules')
             .select(COLS)
-            .eq('organization_id', organizationId)
             .order('created_at', { ascending: true });
+        if (organizationId) query = query.eq('organization_id', organizationId);
+        const { data, error } = await query;
         if (error) throw error;
         return (data ?? []) as ReportSchedule[];
     },

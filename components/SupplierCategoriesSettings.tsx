@@ -24,7 +24,6 @@ const SupplierCategoriesSettings: React.FC = () => {
     const [editValue, setEditValue] = React.useState('');
 
     const loadCategories = React.useCallback(async () => {
-        if (!activeOrganizationId) return;
         setLoading(true);
         try {
             const data = await supplierCategoryService.listCategories(orgId);
@@ -34,7 +33,7 @@ const SupplierCategoriesSettings: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [activeOrganizationId, showToast]);
+    }, [orgId, showToast]);
 
     React.useEffect(() => {
         loadCategories();

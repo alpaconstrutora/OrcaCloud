@@ -297,7 +297,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
   // Carregar rateio de depreciação contábil por obra
   const loadRateioData = React.useCallback(async () => {
-    if (!activeOrganizationId) return;
+    if (!activeOrganizationId) {
+      setDeprRateio([]);
+      return;
+    }
     try {
       const loadedRateio = await assetService.calculateDepreciationRateio(
         activeOrganizationId,
@@ -1857,6 +1860,14 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       </tbody>
                     </table>
                   </div>
+                </div>
+              ) : !activeOrganizationId ? (
+                <div className="py-20 text-center text-gray-400 space-y-3">
+                  <TrendingDown className="w-12 h-12 text-gray-200 mx-auto" />
+                  <p className="font-semibold text-sm">Selecione uma organização para ver o rateio contábil.</p>
+                  <p className="text-xs text-gray-400 max-w-md mx-auto">
+                    O rateio de depreciação é calculado por empresa (plano de contas próprio); com "Todas as organizações" selecionado não há como consolidar o cálculo.
+                  </p>
                 </div>
               ) : (
                 <div className="py-20 text-center text-gray-400 space-y-3">

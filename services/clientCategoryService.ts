@@ -3,23 +3,25 @@ import { ClientCategory } from '../types';
 
 export const clientCategoryService = {
     async list(organizationId?: string): Promise<ClientCategory[]> {
-        if (!organizationId) {
-            return [];
-        }
-
-        let { data, error } = await supabase
+        let query = supabase
             .from('client_categories')
             .select('*')
-            .eq('organization_id', organizationId)
             .order('name');
+
+        if (organizationId) {
+            query = query.eq('organization_id', organizationId);
+        }
+
+        let { data, error } = await query;
 
         if (error) {
             console.error('[clientCategoryService.list] Erro:', error);
             throw new Error(`Erro ao listar categorias: ${error.message}`);
         }
 
-        // Auto-popular defaults se a organização ainda não tiver nenhuma categoria
-        if (!data || data.length === 0) {
+        // Auto-popular defaults só quando há uma organização específica selecionada
+        // (sem organizationId — "Todas as organizações" — não há para qual organização inserir)
+        if (organizationId && (!data || data.length === 0)) {
             const defaults = [
                 { name: 'Vendas', organization_id: organizationId },
                 { name: 'Locação', organization_id: organizationId },

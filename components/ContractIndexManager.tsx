@@ -56,9 +56,8 @@ const ContractIndexManager: React.FC = () => {
     };
 
     const loadValues = useCallback(async () => {
-        if (!activeOrganizationId) return;
         setLoading(true);
-        try { setValues(await contractIndexService.list(selectedIndex, activeOrganizationId)); }
+        try { setValues(await contractIndexService.list(selectedIndex, activeOrganizationId ?? undefined)); }
         finally { setLoading(false); }
     }, [selectedIndex, activeOrganizationId]);
 

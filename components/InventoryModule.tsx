@@ -444,13 +444,17 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                 <div className="flex gap-2">
                     <button
                         onClick={() => setMovementModal('in')}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors"
+                        disabled={!activeOrganizationId}
+                        title={!activeOrganizationId ? 'Selecione uma organização específica para registrar movimentações' : undefined}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <ArrowDownCircle className="w-4 h-4" /> Entrada
                     </button>
                     <Button
                         variant="danger"
                         onClick={() => setMovementModal('out')}
+                        disabled={!activeOrganizationId}
+                        title={!activeOrganizationId ? 'Selecione uma organização específica para registrar movimentações' : undefined}
                     >
                         <ArrowUpCircle className="w-4 h-4" /> Saída
                     </Button>
@@ -779,6 +783,8 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                 <Button
                                     variant="secondary"
                                     onClick={() => setMovementModal('adjust')}
+                                    disabled={!activeOrganizationId}
+                                    title={!activeOrganizationId ? 'Selecione uma organização específica para registrar ajuste' : undefined}
                                     className="!py-1.5 !px-3 text-sm text-yellow-600 border-yellow-200 bg-yellow-50 hover:bg-yellow-100 transition-colors"
                                 >
                                     <Plus className="w-3.5 h-3.5 mr-1" /> Ajuste
@@ -859,6 +865,8 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                             <div className="flex justify-end">
                                 <Button
                                     onClick={() => setTransferModal(true)}
+                                    disabled={!activeOrganizationId}
+                                    title={!activeOrganizationId ? 'Selecione uma organização específica para criar transferência' : undefined}
                                 >
                                     <Plus className="w-4 h-4 mr-2" /> Nova Transferência
                                 </Button>
@@ -946,6 +954,8 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                             <div className="flex justify-end">
                                 <Button
                                     onClick={() => setWarehouseModal(true)}
+                                    disabled={!activeOrganizationId}
+                                    title={!activeOrganizationId ? 'Selecione uma organização específica para criar almoxarifado' : undefined}
                                 >
                                     <Plus className="w-4 h-4 mr-2" /> Novo Almoxarifado
                                 </Button>

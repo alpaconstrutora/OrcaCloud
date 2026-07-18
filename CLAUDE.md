@@ -179,6 +179,70 @@ qualquer nova interação, ler `UI_PATTERNS.md`. Painel lateral é o padrão par
 
 ---
 
+## REGRA OBRIGATÓRIA #5 — "Todas as organizações" nunca esconde uma leitura
+
+**Gatilho:** qualquer componente que carregue dados usando
+`activeOrganizationId`/`organizationId` (lista, detalhe, aba, dashboard).
+
+Quando o seletor de organização está em **"Todas as organizações"**,
+`activeOrganizationId` chega `null` (`store/useStore.ts`). O bug mais repetido
+do projeto é escrever:
+
+```ts
+const load = useCallback(async () => {
+    if (!activeOrganizationId) return;   // nunca chama o service
+    ...
+}, [activeOrganizationId]);
+```
+
+Isso já foi "corrigido" pontualmente dezenas de vezes (Settings > Categorias,
+SalesModule, QualityModule, investor/OpportunitiesTab, FinancialIntelligence,
+ProcessosModule, OpuraGovernanceModule, ProlaboreReconciliationPanel,
+WarrantyModule, InventoryModule, brokerService...) e sempre volta em tela
+nova, porque quem escreve o componente novo não tem como adivinhar que
+precisa tratar esse caso.
+
+### Regra de decisão
+
+1. **Ler/abrir** (lista, detalhe, aba) → **NUNCA bloquear**. Ou o service
+   aceita `organizationId?: string | null` e só aplica `.eq(...)` quando
+   presente (deixando a RLS filtrar pelas organizações do usuário), ou a
+   entidade já aberta na tela carrega a própria org — derive dela:
+   `const effectiveOrgId = organizationId || entity.organization_id;`
+2. **Criar do zero** (sem entidade-pai de onde tirar a org) → legítimo exigir
+   org, mas com **botão `disabled` + `title` explicando**, nunca botão morto
+   ou ação que silenciosamente não faz nada.
+3. **Operação inerentemente por-empresa** (fechamento de período contábil,
+   rateio de depreciação, organograma, faixas de alçada) → pode exigir uma
+   org específica, mas com **mensagem explícita** pedindo para selecionar uma
+   organização — nunca uma tela em branco ou, pior, um estado padrão
+   enganoso (ex: "pronto para fechar" quando na verdade não há dado nenhum
+   carregado).
+
+**Verificação** (lista candidatos para revisão manual — não é pass/fail
+automático, porque distinguir leitura de criação exige julgamento):
+
+```bash
+bash scripts/check-org-selector-guard.sh          # repo inteiro
+bash scripts/check-org-selector-guard.sh <arquivo>
+```
+
+### Por que isso existe
+
+2026-07-18: usuário reportou 3 tabelas de "Configurações do Sistema" (Tipos de
+Clientes, Categorias de Fornecedores, Tipos de Contrato) aparecendo vazias.
+Causa raiz: os 3 componentes tinham `if (!activeOrganizationId) return` no
+carregamento — com "Todas as organizações" selecionado, a lista nunca era
+buscada. Ao investigar o padrão, uma varredura no repo achou o mesmo bug (ou
+variações dele) em mais de 15 arquivos adicionais — companyService,
+reportScheduleService, financial_approval_config, processTemplates, DivergencesPanel,
+ProlaboreReconciliationPanel, WarrantyModule (clique morto no detalhe de um
+chamado), botões de ação sem `disabled`/`title` em InventoryModule. Todos
+corrigidos na mesma sessão seguindo a regra de decisão acima; script de
+verificação criado para tornar a auditoria mecânica daqui em diante.
+
+---
+
 ## Outros documentos de referência do projeto
 
 - `GUIA_TABLE_UTILS.md` — `useTableColumns`/`ColumnConfigButton`/`SortableHeader`

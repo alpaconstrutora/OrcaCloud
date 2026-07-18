@@ -120,15 +120,21 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
 
     const tableColumns = useTableColumns(COLUMNS, 'prolaboreReconciliationColumns');
 
+    // Em "Todas as organizações" (organizationId vazio), a empresa selecionada
+    // no seletor abaixo é quem define o escopo efetivo — mesmo padrão do resto
+    // do app (ver feedback_todas_organizacoes_nao_esconder).
+    const selectedCompany = companies.find(c => c.id === companyId);
+    const effectiveOrganizationId = organizationId || selectedCompany?.org_id || '';
+
     useEffect(() => {
-        companyService.list(organizationId).then(list => {
+        companyService.list(organizationId || undefined).then(list => {
             setCompanies(list);
             if (list.length > 0 && !companyId) setCompanyId(list[0].id);
         }).catch(() => {});
     }, [organizationId]);
 
     const loadTransactions = useCallback(async () => {
-        if (!organizationId) return;
+        if (!effectiveOrganizationId) return;
         setLoading(true);
         try {
             const { start, end } = monthRange(competenceMonth);
@@ -138,14 +144,14 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                 supabase
                     .from('internal_transactions')
                     .select('id, transaction_date, amount, description, category, party_name, approval_status')
-                    .eq('organization_id', organizationId)
+                    .eq('organization_id', effectiveOrganizationId)
                     .or(orFilter)
                     .gte('transaction_date', start)
                     .lte('transaction_date', end),
                 supabase
                     .from('bank_transactions')
                     .select('id, transaction_date, amount, description_raw, description_normalized, counterparty_name, category, status, prolabore_approved_at, prolabore_approved_by')
-                    .eq('organization_id', organizationId)
+                    .eq('organization_id', effectiveOrganizationId)
                     .or(orFilter)
                     .neq('status', 'MATCHED') // já conciliado — o internal_transactions correspondente representa o lançamento
                     .gte('transaction_date', start)
@@ -170,7 +176,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
         } finally {
             setLoading(false);
         }
-    }, [organizationId, competenceMonth]);
+    }, [effectiveOrganizationId, competenceMonth]);
 
     useEffect(() => { loadTransactions(); }, [loadTransactions]);
 
@@ -186,9 +192,9 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
     useEffect(() => { loadManualEntries(); }, [loadManualEntries]);
 
     useEffect(() => {
-        if (!organizationId || !competenceMonth) { setPeriodLocked(null); return; }
-        financialCloseService.isClosed(organizationId, competenceMonth).then(setPeriodLocked).catch(() => setPeriodLocked(null));
-    }, [organizationId, competenceMonth]);
+        if (!effectiveOrganizationId || !competenceMonth) { setPeriodLocked(null); return; }
+        financialCloseService.isClosed(effectiveOrganizationId, competenceMonth).then(setPeriodLocked).catch(() => setPeriodLocked(null));
+    }, [effectiveOrganizationId, competenceMonth]);
 
     useEffect(() => {
         if (!companyId || !competenceMonth) { setReconciledInfo(null); return; }
@@ -230,7 +236,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
     /** Aprova um único lançamento sem toast/reload — reusado pela aprovação individual e em lote. */
     const approveOne = async (row: ProlaboreRow, approvedBy: string): Promise<void> => {
         if (row.source === 'internal') {
-            const cfg = await financialApprovalService.resolveRequiredLevels(organizationId, row.amount);
+            const cfg = await financialApprovalService.resolveRequiredLevels(effectiveOrganizationId, row.amount);
             const labels = { level1_label: cfg?.level1_label || 'Financeiro', level2_label: cfg?.level2_label };
             if (!row.approval_status || row.approval_status === 'RASCUNHO') {
                 await financialApprovalService.submitForApproval(row.id);
@@ -299,7 +305,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
         try {
             const { data: { user } } = await supabase.auth.getUser();
             await remuneracaoSocietariaService.addManualEntry({
-                organizationId, companyId, competenceMonth, amount,
+                organizationId: effectiveOrganizationId, companyId, competenceMonth, amount,
                 description: manualDescription || undefined,
                 createdByEmail: user?.email || 'sistema',
             });
@@ -390,9 +396,9 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
         }
         setPeriodActing(true);
         try {
-            if (periodLocked) await financialCloseService.reopenPeriod(organizationId, y, m);
-            else await financialCloseService.closePeriod(organizationId, y, m);
-            setPeriodLocked(await financialCloseService.isClosed(organizationId, competenceMonth));
+            if (periodLocked) await financialCloseService.reopenPeriod(effectiveOrganizationId, y, m);
+            else await financialCloseService.closePeriod(effectiveOrganizationId, y, m);
+            setPeriodLocked(await financialCloseService.isClosed(effectiveOrganizationId, competenceMonth));
         } catch (e) {
             showToast(e instanceof Error ? e.message : 'Erro ao alterar o fechamento do período', 'error');
         } finally {
@@ -411,7 +417,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
         try {
             const { data: { user } } = await supabase.auth.getUser();
             const payroll = await remuneracaoSocietariaService.recordBankReconciledTotal(
-                organizationId, companyId, competenceMonth, totals.aprovado, user?.email || 'sistema',
+                effectiveOrganizationId, companyId, competenceMonth, totals.aprovado, user?.email || 'sistema',
             );
             setReconciledInfo({ total: payroll.bank_reconciled_total || 0, at: payroll.bank_reconciled_at || '', by: payroll.bank_reconciled_by_email || '' });
             showToast('Total lançado em RH com sucesso.');

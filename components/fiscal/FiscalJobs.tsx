@@ -3,6 +3,7 @@ import { ListChecks, Search, AlertTriangle, RotateCw, Zap, Archive, X } from 'lu
 import { listProcessingJobs, replayDeadLetter, dismissDeadLetter, listParsingErrors } from '../../services/nfeService';
 import type { ProcessingJobWithDoc, ParsingError } from '../../types/fiscal';
 import { KpiCard } from '../ui/KpiCard';
+import ActionIconButton from '../ui/ActionIconButton';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useConfirm } from '../ui/confirm';
@@ -259,12 +260,8 @@ export function FiscalJobs({ organizationId, onToast }: Props) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Fila de processamento</h1>
-        <p className="text-gray-400 text-sm mt-1.5 font-medium">Visibilidade operacional dos jobs e gerenciamento de dead letter.</p>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+      {/* Título vive no FiscalModule e muda com a aba ativa (§19.1) — não repetir aqui. */}
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-3">
         <KpiCard shadow={false} size="lg" className="col-span-2" label="Jobs totais" value={counts.all} icon={<ListChecks className="w-4 h-4" />} color="blue" />
         <KpiCard shadow={false} size="sm" label="Concluídos" value={counts.completed} icon={<Zap className="w-4 h-4" />} color="emerald" />
         <KpiCard shadow={false} size="sm" label="Falhas" value={counts.failed} icon={<AlertTriangle className="w-4 h-4" />} color="amber" />
@@ -441,7 +438,7 @@ export function FiscalJobs({ organizationId, onToast }: Props) {
                     )}
                     {tableColumns.visibleColumns.includes('actions') && (
                       <td className="px-6 py-2.5 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => setSelectedJob(job)}
                             className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
@@ -449,14 +446,13 @@ export function FiscalJobs({ organizationId, onToast }: Props) {
                             Ver detalhes
                           </button>
                           {(job.status === 'dead_letter' || job.status === 'failed') && !job.dismissed_at && (
-                            <button
+                            <ActionIconButton
+                              kind="history"
+                              title="Replay"
+                              icon={<RotateCw className={`w-4 h-4 ${replaying === job.id ? 'animate-spin' : ''}`} />}
                               disabled={replaying === job.id}
                               onClick={() => handleReplayClick(job)}
-                              title="Replay"
-                              className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-100 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50"
-                            >
-                              <RotateCw className={`w-4 h-4 ${replaying === job.id ? 'animate-spin' : ''}`} />
-                            </button>
+                            />
                           )}
                         </div>
                       </td>

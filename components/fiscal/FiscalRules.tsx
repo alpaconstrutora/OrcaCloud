@@ -133,16 +133,13 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast }: Pr
   });
 
   const inputCls = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all';
-  const labelCls = 'text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1';
+  // §21 — rótulo de campo em sentence case, sem uppercase/tracking
+  const labelCls = 'text-xs font-semibold text-slate-500 block mb-1';
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Regras de classificação</h1>
-        <p className="text-gray-400 text-sm mt-1.5 font-medium">Regras heurísticas configuráveis — NCM, CFOP e palavras-chave. Sem código hardcoded.</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Título vive no FiscalModule e muda com a aba ativa (§19.1) — não repetir aqui. */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
         <KpiCard label="NCM" value={countByType('ncm')} icon={<Tags className="w-5 h-5" />} color="blue" />
         <KpiCard label="Palavra-chave" value={countByType('keyword')} icon={<Tags className="w-5 h-5" />} color="purple" />
         <KpiCard label="CFOP" value={countByType('cfop')} icon={<Tags className="w-5 h-5" />} color="teal" />

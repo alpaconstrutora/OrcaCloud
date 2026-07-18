@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, ListChecks, Tags, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { FileText, ListChecks, Tags, AlertCircle, CheckCircle2, UploadCloud } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { getPipelineHealth } from '../../services/nfeService';
 import { FISCAL_CSS } from './fiscalCss';
@@ -35,6 +35,15 @@ const NAV: { id: FiscalPage; label: string; icon: React.ReactNode }[] = [
   { id: 'admin', label: 'Fila & Jobs', icon: <ListChecks className="w-4 h-4" /> },
   { id: 'rules', label: 'Classificação', icon: <Tags className="w-4 h-4" /> },
 ];
+
+// Título da tela acompanha a aba ativa — guia §19.1. Antes o <h1> era fixo
+// ("Módulo Fiscal") e cada aba filha repetia um <h1> próprio logo abaixo: dois
+// títulos empilhados, e o de cima mentindo sobre o que estava na tela.
+const VIEW_HEADERS: Record<FiscalPage, { title: string; subtitle: string }> = {
+  documents: { title: 'Documentos fiscais', subtitle: 'NF-e ingeridas, processadas e vinculadas a títulos financeiros.' },
+  admin: { title: 'Fila de processamento', subtitle: 'Visibilidade operacional dos jobs e gerenciamento de dead letter.' },
+  rules: { title: 'Regras de classificação', subtitle: 'Regras heurísticas configuráveis — NCM, CFOP e palavras-chave. Sem código hardcoded.' },
+};
 
 interface Props {
   /** Navega para Suprimentos > Pedidos > detalhe do pedido. */
@@ -73,60 +82,26 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
           escopo desta migração. A classe .fiscal-root só fornece as CSS custom
           properties (--fred, --fgreen etc.) que esses dois componentes consomem. */}
       <style dangerouslySetInnerHTML={{ __html: FISCAL_CSS }} />
-      <div className="fiscal-root h-full flex flex-col overflow-hidden" style={{ background: '#f9fafb' }}>
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Header do módulo */}
-          <div className="bg-white border-b border-gray-100 px-7 pt-5 shrink-0">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Módulo Fiscal</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Pipeline de NF-e e classificação de documentos.</p>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <select
-                  value={moduleOrgId}
-                  onChange={e => setModuleOrgId(e.target.value)}
-                  title="Organização"
-                  className="h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all min-w-[200px]"
-                >
-                  <option value="">Todas as organizações</option>
-                  {organizations.map(org => (
-                    <option key={org.id} value={org.id}>{org.name}</option>
-                  ))}
-                </select>
-                {health && (
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${rateColor}`} />
-                      Sucesso {rate}%
-                    </span>
-                    {(health.dead_letter ?? 0) > 0 && (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600">
-                        <AlertCircle className="w-3.5 h-3.5" /> {health.dead_letter} dead letter
-                      </span>
-                    )}
-                    {(health.queued ?? 0) > 0 && (
-                      <span className="text-xs font-medium text-gray-500">{health.queued} na fila</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+      <div className="fiscal-root h-full overflow-y-auto" style={{ background: '#f9fafb' }}>
+        {/* Container raiz — space-y-6 (§20). O header fixo em card branco que existia
+            aqui foi removido: título de tela é bloco flat, não banda/hero (§20). */}
+        <div className="px-7 py-6 space-y-6">
+          {/* Cabeçalho de tela — §20; título muda junto com a aba ativa (§19.1) */}
+          <div>
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">{VIEW_HEADERS[page].title}</h1>
+            <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[page].subtitle}</p>
+          </div>
 
-            {isConsolidated && page === 'rules' && (
-              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-[10px] px-4 py-2.5 text-sm font-medium mb-4">
-                Visão consolidada — selecione uma organização específica acima para criar regras.
-              </div>
-            )}
-
-            {/* Navegação de abas do módulo — escala compacta (§16/§19) */}
-            <div className="inline-flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 mb-0">
+          {/* Toolbar de abas — §19.1 (trilho bg-gray-50, aba ativa bg-white text-blue-600,
+              flex-wrap); mb-3 pelo ritmo de cromo do §20.1 */}
+          <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
               {NAV.map(n => (
                 <button
                   key={n.id}
                   onClick={() => setPage(n.id)}
-                  className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all ${
-                    page === n.id ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-700'
+                  className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                    page === n.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
                   }`}
                 >
                   {n.icon} {n.label}
@@ -135,31 +110,81 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
             </div>
           </div>
 
-          {/* Conteúdo da aba ativa */}
-          <div className="flex-1 overflow-y-auto px-7 py-6">
-            {page === 'documents' && (
-              <FiscalDocuments
-                organizationId={orgId}
-                onToast={showToast}
-                onOpenUpload={orgId ? () => setUploadOpen(true) : undefined}
-                onViewOrder={onViewOrder}
-                onViewPayable={onViewPayable}
-              />
-            )}
-            {page === 'admin' && (
-              <FiscalJobs
-                organizationId={orgId}
-                onToast={showToast}
-              />
-            )}
-            {page === 'rules' && (
-              <FiscalRules
-                organizationId={orgId}
-                writeOrganizationId={orgId}
-                onToast={showToast}
-              />
+          {/* Toolbar de botões — §5.3: escopo à esquerda, ação primária à direita.
+              O seletor de organização é o controle de escopo do módulo (define QUAL
+              conjunto as três abas leem), por isso vive aqui e não no cabeçalho. */}
+          <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={moduleOrgId}
+                onChange={e => setModuleOrgId(e.target.value)}
+                title="Organização"
+                className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer min-w-[200px]"
+              >
+                <option value="">Todas as organizações</option>
+                {organizations.map(org => (
+                  <option key={org.id} value={org.id}>{org.name}</option>
+                ))}
+              </select>
+              {health && (
+                <>
+                  <span className="inline-flex items-center gap-1.5 h-9 text-xs font-medium text-gray-500">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${rateColor}`} />
+                    Sucesso {rate}%
+                  </span>
+                  {(health.dead_letter ?? 0) > 0 && (
+                    <span className="inline-flex items-center gap-1.5 h-9 text-xs font-medium text-red-600">
+                      <AlertCircle className="w-3.5 h-3.5" /> {health.dead_letter} dead letter
+                    </span>
+                  )}
+                  {(health.queued ?? 0) > 0 && (
+                    <span className="inline-flex items-center h-9 text-xs font-medium text-gray-500">{health.queued} na fila</span>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Ação primária — §17 variante compacta; mora na toolbar de botões (§5.3),
+                não solta ao lado do <h1>. Só na aba Documentos e com org definida. */}
+            {page === 'documents' && orgId && (
+              <button
+                onClick={() => setUploadOpen(true)}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+              >
+                <UploadCloud className="w-[15px] h-[15px]" />
+                Enviar NF-e
+              </button>
             )}
           </div>
+
+          {isConsolidated && page === 'rules' && (
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-[10px] px-4 py-2.5 text-sm font-medium">
+              Visão consolidada — selecione uma organização específica acima para criar regras.
+            </div>
+          )}
+
+          {/* Conteúdo da aba ativa */}
+          {page === 'documents' && (
+            <FiscalDocuments
+              organizationId={orgId}
+              onToast={showToast}
+              onViewOrder={onViewOrder}
+              onViewPayable={onViewPayable}
+            />
+          )}
+          {page === 'admin' && (
+            <FiscalJobs
+              organizationId={orgId}
+              onToast={showToast}
+            />
+          )}
+          {page === 'rules' && (
+            <FiscalRules
+              organizationId={orgId}
+              writeOrganizationId={orgId}
+              onToast={showToast}
+            />
+          )}
         </div>
       </div>
 

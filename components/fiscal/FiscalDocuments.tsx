@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  FileText, Search, RefreshCw, CheckCircle2, Clock, AlertTriangle, ArrowLeft, Plus, UploadCloud,
+  FileText, Search, RefreshCw, CheckCircle2, Clock, ArrowLeft, Plus,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { listNfeInvoices, getNfeInvoiceWithItems, approveAndLink, linkExistingTransaction, createOrderFromNfe, deleteNfeInvoice } from '../../services/nfeService';
@@ -18,8 +18,6 @@ import { useConfirm } from '../ui/confirm';
 interface Props {
   organizationId: string | null;
   onToast: (msg: string, type: 'ok' | 'err') => void;
-  /** Ausente (undefined) quando nenhuma organização está selecionada — some o botão. */
-  onOpenUpload?: () => void;
   /** Navega para Suprimentos > Pedidos > detalhe do pedido. */
   onViewOrder?: (orderId: string) => void;
   /** Navega para a aba Contas a Pagar, escopada pela obra do título vinculado. */
@@ -201,7 +199,8 @@ function ApproveModal({
   }
 
   const inputCls = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all';
-  const labelCls = 'text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1';
+  // §21 — rótulo de campo em sentence case, sem uppercase/tracking
+  const labelCls = 'text-xs font-semibold text-slate-500 block mb-1';
 
   return (
     <Modal open onClose={onClose} size="md">
@@ -238,7 +237,7 @@ function ApproveModal({
 
             <div>
               <label className={labelCls}>
-                Pedido de compra <span className="font-normal normal-case text-gray-400">(habilita 3-way match)</span>
+                Pedido de compra <span className="font-normal text-gray-400">(habilita 3-way match)</span>
               </label>
               <div className="flex gap-2 mb-2">
                 {([['none', 'Sem vínculo'], ['existing', 'Vincular existente'], ['new', 'Criar novo']] as const).map(([mode, label]) => (
@@ -465,7 +464,7 @@ function DocumentDetail({
               ['Status pagamento', invoice.payment_status],
             ] as [string, string][]).map(([k, v]) => (
               <div key={k}>
-                <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-1">{k}</div>
+                <div className="text-xs font-semibold text-slate-500 mb-1">{k}</div>
                 <div className="text-sm font-medium text-gray-800">{v}</div>
               </div>
             ))}
@@ -473,7 +472,7 @@ function DocumentDetail({
 
           {invoice.linked_transaction_id && (
             <div className="mt-5 p-4 rounded-[10px] bg-emerald-50 border border-emerald-200">
-              <div className="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold mb-1.5">Vínculo financeiro</div>
+              <div className="text-xs font-semibold text-emerald-700 mb-1.5">Vínculo financeiro</div>
               <div className="text-sm text-emerald-900">
                 Título gerado em {fmtDate(invoice.approved_at ?? '')}
                 {linkedProject && <> · Obra: <strong>{linkedProject.name}</strong></>}
@@ -488,7 +487,7 @@ function DocumentDetail({
           )}
 
           <div className="mt-5">
-            <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-1">Chave de acesso</div>
+            <div className="text-xs font-semibold text-slate-500 mb-1">Chave de acesso</div>
             <div className="text-xs text-gray-500 break-all font-normal">{invoice.access_key}</div>
           </div>
         </div>
@@ -550,7 +549,7 @@ function DocumentDetail({
 
       {tab === 'logs' && (
         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6">
-          <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-3">Log de processamento</div>
+          <div className="text-xs font-semibold text-slate-500 mb-3">Log de processamento</div>
           <div className="text-xs text-gray-400 font-mono">
             Logs detalhados disponíveis na tabela parsing_errors do banco de dados.
           </div>
@@ -575,7 +574,7 @@ function DocumentDetail({
 }
 
 // ── Lista de NF-es ────────────────────────────────────────────────────────────
-export function FiscalDocuments({ organizationId, onToast, onOpenUpload, onViewOrder, onViewPayable }: Props) {
+export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPayable }: Props) {
   const [invoices, setInvoices] = useState<NfeInvoice[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [orderNumbers, setOrderNumbers] = useState<Record<string, string>>({});
@@ -688,83 +687,82 @@ export function FiscalDocuments({ organizationId, onToast, onOpenUpload, onViewO
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Documentos fiscais</h1>
-        <p className="text-gray-400 text-sm mt-1.5 font-medium">
-          {counts.all} NF-e registradas • {counts.completed} processadas • {counts.linked} com título gerado
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPIs — grade simétrica (§4.2: são 4 métricas independentes, não um total
+          decomposto). mb-3 pelo ritmo de cromo do §20.1. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
         <KpiCard label="Total ingerido" value={counts.all} icon={<FileText className="w-5 h-5" />} color="blue" />
         <KpiCard label="Valor total" value={fmt(totalValue)} icon={<FileText className="w-5 h-5" />} color="indigo" />
         <KpiCard label="Taxa de sucesso" value={`${successRate}%`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
         <KpiCard label="Aguard. aprovação" value={pendingLink} icon={<Clock className="w-5 h-5" />} color={pendingLink > 0 ? 'amber' : 'gray'} />
       </div>
 
-      <div className="flex flex-col md:flex-row gap-2.5 items-center">
-        <div className="flex-1 relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar por fornecedor ou CNPJ..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-          />
-        </div>
-        <button onClick={loadData} className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95">
-          <RefreshCw className="w-4 h-4" />
-        </button>
-        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
-        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-          <ColumnConfigButton
-            columns={COLUMNS.filter(c => c.key !== 'actions')}
-            visibleColumns={tableColumns.visibleColumns}
-            showColumnConfig={tableColumns.showColumnConfig}
-            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-            onToggleColumn={tableColumns.toggleColumn}
-            onReset={tableColumns.resetColumns}
-          />
-        </div>
-        {onOpenUpload && (
-          <button
-            onClick={onOpenUpload}
-            className="h-9 px-4 rounded-[6px] text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-all inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap"
-          >
-            <UploadCloud className="w-4 h-4" /> Enviar NF-e
-          </button>
-        )}
-      </div>
+      {/* Toolbar acoplada à tabela — §5.2: border/rounded/shadow só no pai; a
+          toolbar interna não tem moldura própria, só o border-b. */}
+      <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-gray-100 bg-white">
+          <div className="flex flex-col md:flex-row gap-2.5 items-center">
+            <div className="flex-1 relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar por fornecedor ou CNPJ..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
 
-      <div className="inline-flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1">
-        {FILTERS.map(f => (
-          <button
-            key={f.k}
-            onClick={() => setFilter(f.k)}
-            className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all ${filter === f.k ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            {f.label} <span className="opacity-60 text-xs ml-1">{f.count}</span>
-          </button>
-        ))}
-      </div>
+            {/* Filtros rápidos (§5) — reduzem o conjunto, por isso ficam na barra de
+                busca e não na toolbar de abas (§19.1), que é navegação. */}
+            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+              {FILTERS.map(f => (
+                <button
+                  key={f.k}
+                  onClick={() => setFilter(f.k)}
+                  className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                    filter === f.k ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  {f.label} <span className="opacity-60 text-xs ml-1">{f.count}</span>
+                </button>
+              ))}
+            </div>
 
-      {loading ? (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-500 text-sm">Carregando...</p>
+            <button onClick={loadData} title="Recarregar" className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0">
+              <RefreshCw className="w-4 h-4" />
+            </button>
+            <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+              <ColumnConfigButton
+                columns={COLUMNS.filter(c => c.key !== 'actions')}
+                visibleColumns={tableColumns.visibleColumns}
+                showColumnConfig={tableColumns.showColumnConfig}
+                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                onToggleColumn={tableColumns.toggleColumn}
+                onReset={tableColumns.resetColumns}
+              />
+            </div>
+          </div>
         </div>
-      ) : shown.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
-          <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum documento encontrado</h3>
-          <p className="text-sm text-gray-500">Faça upload de XMLs para começar ou ajuste os filtros.</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
+
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-gray-500 text-sm">Carregando...</p>
+          </div>
+        ) : shown.length === 0 ? (
+          /* Empty state sem bg/border/rounded próprios — o card acoplado já supre (§5.2) */
+          <div className="text-center py-12">
+            <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum documento encontrado</h3>
+            <p className="text-sm text-gray-500">Faça upload de XMLs para começar ou ajuste os filtros.</p>
+          </div>
+        ) : (
+          /* Cabeçalho fixo (§6.5) — a lista de NF-e cresce sem teto ao longo do tempo */
+          <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+              <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                 {tableColumns.visibleColumns.includes('code') && (
                   <SortableHeader colKey="code" label="Código" uppercase={false}
                     sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort}
@@ -886,8 +884,9 @@ export function FiscalDocuments({ organizationId, onToast, onOpenUpload, onViewO
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,19 @@
 import { supabase } from '../lib/supabase';
 import { ClientCategory } from '../types';
+import { DEFAULT_CLIENT_CATEGORIES } from '../constants/clientCategories';
+
+const withDefaultCategories = (categories: ClientCategory[], organizationId?: string): ClientCategory[] => {
+    const existing = new Set(categories.map(c => c.name.trim().toLocaleLowerCase('pt-BR')));
+    const defaults: ClientCategory[] = DEFAULT_CLIENT_CATEGORIES
+        .filter(name => !existing.has(name.toLocaleLowerCase('pt-BR')))
+        .map(name => ({
+            id: `default-${name.toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, '-')}`,
+            name,
+            organization_id: organizationId,
+        }));
+
+    return [...categories, ...defaults].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+};
 
 export const clientCategoryService = {
     async list(organizationId?: string): Promise<ClientCategory[]> {
@@ -12,38 +26,14 @@ export const clientCategoryService = {
             query = query.eq('organization_id', organizationId);
         }
 
-        let { data, error } = await query;
+        const { data, error } = await query;
 
         if (error) {
             console.error('[clientCategoryService.list] Erro:', error);
             throw new Error(`Erro ao listar categorias: ${error.message}`);
         }
 
-        // Auto-popular defaults só quando há uma organização específica selecionada
-        // (sem organizationId — "Todas as organizações" — não há para qual organização inserir)
-        if (organizationId && (!data || data.length === 0)) {
-            const defaults = [
-                { name: 'Vendas', organization_id: organizationId },
-                { name: 'Locação', organization_id: organizationId },
-                { name: 'Serviços', organization_id: organizationId },
-                { name: 'Condomínio', organization_id: organizationId },
-            ];
-
-            const { data: inserted, error: insertError } = await supabase
-                .from('client_categories')
-                .insert(defaults)
-                .select('*')
-                .order('name');
-
-            if (insertError) {
-                console.error('[clientCategoryService.list] Erro ao auto-popular defaults:', insertError);
-                // Se falhar a inserção (ex: falta de permissão ou offline), retornamos os defaults virtualmente
-                return defaults.map((d, i) => ({ id: `temp-${i}`, ...d }));
-            }
-            return inserted || [];
-        }
-
-        return data || [];
+        return withDefaultCategories(data || [], organizationId);
     },
 
     async create(organizationId: string, name: string): Promise<ClientCategory> {
@@ -87,5 +77,25 @@ export const clientCategoryService = {
             console.error('[clientCategoryService.delete] Erro:', error);
             throw new Error(`Erro ao excluir categoria: ${error.message}`);
         }
-    }
+    },
+
+    async importDefaults(organizationId?: string): Promise<void> {
+        if (!organizationId) throw new Error('Selecione uma organização ativa para importar as categorias padrão.');
+
+        const { data: existing, error: readError } = await supabase
+            .from('client_categories')
+            .select('name')
+            .eq('organization_id', organizationId);
+        if (readError) throw readError;
+
+        const existingNames = new Set((existing || []).map(c => c.name.trim().toLocaleLowerCase('pt-BR')));
+        const payload = DEFAULT_CLIENT_CATEGORIES
+            .filter(name => !existingNames.has(name.toLocaleLowerCase('pt-BR')))
+            .map(name => ({ name, organization_id: organizationId }));
+
+        if (payload.length === 0) return;
+
+        const { error } = await supabase.from('client_categories').insert(payload);
+        if (error) throw error;
+    },
 };

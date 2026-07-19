@@ -2,11 +2,14 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 import { clientCategoryService } from '../services/clientCategoryService';
 import { ClientCategory } from '../types';
-import { Users, Plus, Check, X, Search, AlertCircle } from 'lucide-react';
+import { Users, Plus, Check, X, Search, AlertCircle, Copy, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+
+const isDefaultCategory = (cat: ClientCategory) => !cat.organization_id || cat.id.startsWith('default-');
 
 const CATEGORY_COLUMNS: ColumnConfig[] = [
     { key: 'name',    label: 'Nome', sortable: true },
@@ -82,6 +85,31 @@ const ClientCategoriesSettings: React.FC = () => {
         }
     };
 
+    const handleDuplicate = async (cat: ClientCategory) => {
+        if (!activeOrganizationId) { showToast('Selecione uma organização para duplicar.', 'error'); return; }
+        try {
+            await clientCategoryService.create(activeOrganizationId, `${cat.name} (Cópia)`);
+            showToast('Categoria duplicada com sucesso', 'success');
+            loadCategories();
+        } catch (error: any) {
+            showToast(error.message, 'error');
+        }
+    };
+
+    const handleImportDefaults = async () => {
+        if (!await confirm({ title: 'Importar Categorias Padrão', message: 'Deseja importar as categorias padrão do sistema para poder editá-las?' })) return;
+        setLoading(true);
+        try {
+            await clientCategoryService.importDefaults(activeOrganizationId ?? undefined);
+            showToast('Categorias padrão importadas com sucesso', 'success');
+            loadCategories();
+        } catch (error: any) {
+            showToast(error.message || 'Erro ao importar categorias padrão', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const startEdit = (cat: ClientCategory) => {
         setEditingId(cat.id);
         setEditValue(cat.name);
@@ -123,15 +151,22 @@ const ClientCategoriesSettings: React.FC = () => {
                         <p className="text-sm text-gray-500 mt-1">Gerencie as categorias de clientes usadas na sua organização (ex: Condomínio, Locação, etc).</p>
                     </div>
                 </div>
-                {!isAdding && !editingId && (
-                    <button
-                        onClick={startAdd}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                    >
-                        <Plus className="w-[15px] h-[15px]" />
-                        Nova categoria
-                    </button>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                    {!loading && categories.some(isDefaultCategory) && (
+                        <Button onClick={handleImportDefaults} variant="secondary" className="gap-2 text-sm hidden sm:flex">
+                            <Download className="w-4 h-4" /> Importar Padrões
+                        </Button>
+                    )}
+                    {!isAdding && !editingId && (
+                        <button
+                            onClick={startAdd}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                        >
+                            <Plus className="w-[15px] h-[15px]" />
+                            Nova categoria
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="mt-6 border-t border-gray-100 pt-6">
@@ -188,6 +223,13 @@ const ClientCategoriesSettings: React.FC = () => {
                             <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                             <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma categoria encontrada</h3>
                             <p className="text-sm text-gray-500">Tente ajustar sua busca ou cadastre uma nova categoria.</p>
+                            {!searchTerm && (
+                                <div className="mt-4 flex justify-center">
+                                    <Button onClick={handleImportDefaults} variant="secondary" className="gap-2 text-sm">
+                                        <Download className="w-4 h-4" /> Importar Padrões
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <table className="w-full text-left border-collapse">
@@ -227,14 +269,31 @@ const ClientCategoriesSettings: React.FC = () => {
                                                         <button onClick={() => handleUpdate(cat.id)} className="p-1.5 text-green-600 hover:bg-green-100 rounded-[6px] transition-colors"><Check className="w-4 h-4" /></button>
                                                         <button onClick={cancelEdit} className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-[6px] transition-colors"><X className="w-4 h-4" /></button>
                                                     </div>
-                                                ) : cat.name}
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        {cat.name}
+                                                        {isDefaultCategory(cat) && (
+                                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
+                                                                Global
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </td>
                                         )}
                                         {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                                    <ActionIconButton kind="edit" onClick={() => startEdit(cat)} />
-                                                    <ActionIconButton kind="delete" onClick={() => handleDelete(cat.id)} />
+                                                    {isDefaultCategory(cat) ? (
+                                                        <button onClick={() => handleDuplicate(cat)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-[6px] transition-colors" title="Duplicar">
+                                                            <Copy className="w-4 h-4" />
+                                                        </button>
+                                                    ) : (
+                                                        <>
+                                                            <ActionIconButton kind="edit" onClick={() => startEdit(cat)} />
+                                                            <ActionIconButton kind="delete" onClick={() => handleDelete(cat.id)} />
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                         )}

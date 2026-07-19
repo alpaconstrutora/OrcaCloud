@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft } from 'lucide-react';
+import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile } from '../types';
 import { commercialService } from '../services/commercialService';
 import { clientService } from '../services/clientService';
@@ -166,6 +166,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const selectedProperty = properties.find(p => p.id === formData.property_id);
     const selectedClient = clients.find(c => c.id === formData.client_id);
     const selectedBroker = brokers.find(b => b.id === formData.broker_id);
+
+    // Linhas de endereço do cliente selecionado — conferência antes de emitir
+    // contrato (aba "Dados do Cliente"). Mesma convenção de exibição de
+    // ClientList.tsx: campos vazios não geram vírgula/traço solto.
+    const clientAddressLine1 = [selectedClient?.address, selectedClient?.address_number].filter(Boolean).join(', ');
+    const clientAddressLine2 = [
+        selectedClient?.neighborhood,
+        [selectedClient?.city, selectedClient?.state].filter(Boolean).join('/'),
+        selectedClient?.zip_code ? `CEP ${selectedClient.zip_code}` : '',
+    ].filter(Boolean).join(' — ');
 
     const recalcCommission = (value: number, pct: number) => +(value * (pct / 100)).toFixed(2);
 
@@ -519,6 +529,61 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     ))}
                                 </select>
                             </div>
+
+                            {/* Dados cadastrados do cliente (Minha Organização → Meus Clientes) —
+                                somente leitura, para conferência antes de emitir o contrato. Não
+                                edita o cadastro aqui (evita duas fontes de verdade); qualquer
+                                correção é feita em Meus Clientes. */}
+                            {selectedClient && (
+                                <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100 space-y-4 animate-in slide-in-from-left-4 duration-500 shadow-sm">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-purple-600">
+                                            <UserCheck className="w-4 h-4" />
+                                            <h4 className="font-black uppercase tracking-widest text-xs">Dados Cadastrados — Conferência</h4>
+                                        </div>
+                                        {selectedClient.category && (
+                                            <span className="text-xs font-black bg-white px-2 py-1 rounded-lg border border-gray-100 text-purple-600 shadow-sm uppercase tracking-widest">
+                                                {selectedClient.category}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Tipo de Pessoa</p>
+                                            <p className="text-sm font-bold text-gray-800">{selectedClient.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                                <FileText className="w-3 h-3" /> CPF / CNPJ
+                                            </p>
+                                            <p className="text-sm font-bold text-gray-800">{selectedClient.document || '—'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                                <Mail className="w-3 h-3" /> E-mail
+                                            </p>
+                                            <p className="text-sm font-bold text-gray-800 truncate">{selectedClient.email || '—'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                                <Phone className="w-3 h-3" /> Telefone
+                                            </p>
+                                            <p className="text-sm font-bold text-gray-800">{selectedClient.phone || '—'}</p>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                            <MapPin className="w-3 h-3" /> Endereço
+                                        </p>
+                                        <p className="text-sm font-bold text-gray-800">{clientAddressLine1 || '—'}</p>
+                                        {clientAddressLine2 && (
+                                            <p className="text-xs font-medium text-gray-500 mt-0.5">{clientAddressLine2}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Origem / Canal — alimenta "Fontes de Locação" (e Vendas) */}
                             <div className="space-y-2">

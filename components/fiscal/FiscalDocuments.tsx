@@ -22,6 +22,12 @@ interface Props {
   onViewOrder?: (orderId: string) => void;
   /** Navega para a aba Contas a Pagar, escopada pela obra do título vinculado. */
   onViewPayable?: (projectId: string | null) => void;
+  /**
+   * Cromo do módulo pai (abas §3 + botões §4). Vem por prop porque a anatomia
+   * do §1 exige KPIs antes das toolbars, mas os KPIs são desta tela e as
+   * toolbars são do FiscalModule — quem decide a ordem final é o filho.
+   */
+  chromeSlot?: React.ReactNode;
 }
 
 const fmt = (v: number) =>
@@ -574,7 +580,7 @@ function DocumentDetail({
 }
 
 // ── Lista de NF-es ────────────────────────────────────────────────────────────
-export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPayable }: Props) {
+export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPayable, chromeSlot }: Props) {
   const [invoices, setInvoices] = useState<NfeInvoice[]>([]);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [orderNumbers, setOrderNumbers] = useState<Record<string, string>>({});
@@ -695,6 +701,10 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
         <KpiCard label="Taxa de sucesso" value={`${successRate}%`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
         <KpiCard label="Aguard. aprovação" value={pendingLink} icon={<Clock className="w-5 h-5" />} color={pendingLink > 0 ? 'amber' : 'gray'} />
       </div>
+
+      {/* Cromo do módulo pai (abas §3 + botões §4) — posicionado aqui, logo após
+          os KPIs desta tela, como exige a anatomia do §1. */}
+      {chromeSlot}
 
       {/* Toolbar acoplada à tabela — §5.2: border/rounded/shadow só no pai; a
           toolbar interna não tem moldura própria, só o border-b. */}

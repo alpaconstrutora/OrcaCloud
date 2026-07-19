@@ -9,6 +9,8 @@ interface Props {
   organizationId: string | null;
   writeOrganizationId: string | null;
   onToast: (msg: string, type: 'ok' | 'err') => void;
+  /** Cromo do módulo pai (abas §3 + botões §4) — ver FiscalDocuments.tsx para o porquê. */
+  chromeSlot?: React.ReactNode;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -52,7 +54,7 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 
-export function FiscalRules({ organizationId, writeOrganizationId, onToast }: Props) {
+export function FiscalRules({ organizationId, writeOrganizationId, onToast, chromeSlot }: Props) {
   const [rules, setRules] = useState<ClassificationRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -144,6 +146,9 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast }: Pr
         <KpiCard label="Palavra-chave" value={countByType('keyword')} icon={<Tags className="w-5 h-5" />} color="purple" />
         <KpiCard label="CFOP" value={countByType('cfop')} icon={<Tags className="w-5 h-5" />} color="teal" />
       </div>
+
+      {/* Cromo do módulo pai (abas §3 + botões §4) — logo após os KPIs, §1. */}
+      {chromeSlot}
 
       <div className="flex flex-col md:flex-row gap-2.5 items-center">
         <div className="flex-1 relative w-full">

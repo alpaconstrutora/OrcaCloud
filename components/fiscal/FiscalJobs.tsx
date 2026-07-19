@@ -12,6 +12,8 @@ import FiscalDeadLetterLoteModal from './FiscalDeadLetterLoteModal';
 interface Props {
   organizationId: string | null;
   onToast: (msg: string, type: 'ok' | 'err') => void;
+  /** Cromo do módulo pai (abas §3 + botões §4) — ver FiscalDocuments.tsx para o porquê. */
+  chromeSlot?: React.ReactNode;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -60,7 +62,7 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'actions', label: 'Ação', sortable: false },
 ];
 
-export function FiscalJobs({ organizationId, onToast }: Props) {
+export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
   const [jobs, setJobs] = useState<ProcessingJobWithDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
@@ -268,6 +270,9 @@ export function FiscalJobs({ organizationId, onToast }: Props) {
         <KpiCard shadow={false} size="sm" label="Dead letter" value={counts.dead_letter} icon={<AlertTriangle className="w-4 h-4" />} color="red" />
         <KpiCard shadow={false} size="sm" label="Arquivados" value={counts.archived} icon={<Archive className="w-4 h-4" />} color="gray" />
       </div>
+
+      {/* Cromo do módulo pai (abas §3 + botões §4) — logo após os KPIs, §1. */}
+      {chromeSlot}
 
       {counts.dead_letter > 0 && (
         <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-[10px] px-4 py-3">

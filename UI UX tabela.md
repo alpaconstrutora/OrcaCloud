@@ -29,6 +29,15 @@ documento, mas por método de auditoria errado. Os três erros:
 3. **Auditar um arquivo quando o padrão é de módulo.** Ver §3 — a barra de
    abas costuma morar no componente **pai**, não na tela.
 
+Um quarto erro apareceu depois (2026-07-19, Documentos Fiscais), com o
+`check-ui-standard.sh` já em uso e mesmo assim: **cada arquivo, lido
+isoladamente, estava certo — e a árvore composta saiu errada.** `FiscalModule`
+(pai: título+abas+botões) e `FiscalDocuments` (filho: KPIs+tabela) passavam
+limpo cada um por si; só compondo os dois (ou vendo a tela) dava pra notar que
+abas+botões apareciam *antes* do KPI do filho. Ver §3.2. **Título e KPI cards
+raramente bastam de uma auditoria de arquivo único quando a tela é composta
+por pai+filho — sempre desenhar (ou pedir print) da árvore final.**
+
 **Sempre rodar antes de reportar concluído:**
 
 ```bash
@@ -241,6 +250,50 @@ interface Props { tabsSlot?: React.ReactNode; }
   título via `Record<Aba, {titulo, subtitulo}>`, KPIs e abas no mesmo arquivo
   (`BankReconciliation.tsx:3202` e `:3253`). É o alvo final; `tabsSlot` é o
   caminho incremental quando os filhos já existem separados.
+
+### 3.2 Generalização: quando o pai também tem a §4 (não só a §3)
+
+O `FiscalModule.tsx` foi auditado, declarado "100% conforme" — cada arquivo
+lido isoladamente estava correto — e mesmo assim saiu fora de ordem na tela
+real: abas e botões (ambos no pai) apareciam *antes* dos KPIs, que vivem em
+cada filho (`FiscalDocuments`/`FiscalJobs`/`FiscalRules`, um por aba). O
+usuário só pegou isso com um print. **Auditar arquivo por arquivo não basta
+quando título/KPI e abas/botões pertencem a componentes diferentes — o que
+importa é a ordem no HTML final, que só se vê compondo a árvore (ou olhando
+a tela).**
+
+A generalização do `tabsSlot`: quando o pai monta **mais de um bloco de
+cromo** (abas §3 + toolbar de botões §4), combine os dois num único
+`chromeSlot` e passe pronto — não dois props separados, para não arriscar o
+filho renderizá-los fora de ordem:
+
+```tsx
+// No pai: um único nó combina abas + botões, na ordem entre eles que o §1 pede
+const chromeSlot = (
+  <>
+    <div>{/* abas §3 */}</div>
+    <div>{/* botões §4 — escopo à esquerda, ação primária à direita */}</div>
+  </>
+);
+
+// Cada filho (um por aba) recebe e posiciona depois do PRÓPRIO KpiCard grid
+{page === 'documents' && <FiscalDocuments chromeSlot={chromeSlot} … />}
+{page === 'admin'     && <FiscalJobs      chromeSlot={chromeSlot} … />}
+{page === 'rules'     && <FiscalRules     chromeSlot={chromeSlot} … />}
+```
+
+```tsx
+// Em CADA filho — não só no que está sendo editado no momento
+<div className="grid … mb-3">{/* 2. KPIs desta aba */}</div>
+{chromeSlot}                  {/* 3+4. abas e botões do pai, nesta posição */}
+<div>{/* 5. toolbar acoplada + tabela */}</div>
+```
+
+Diferença para o caso do `tabsSlot` original (§3.1): lá só a aba migrada
+tinha KPI puxando a barra pra baixo, então dava para migrar uma de cada vez
+sem quebrar as demais. Aqui, **se todas as abas do módulo têm KPI próprio**,
+não existe posição neutra para o cromo — ele tem que ir para dentro de
+**todas** de uma vez, ou nenhuma fica certa.
 
 ---
 

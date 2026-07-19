@@ -75,6 +75,84 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
   const rate = health ? Math.round(health.success_rate_pct) : 0;
   const rateColor = rate >= 80 ? 'bg-emerald-500' : rate >= 50 ? 'bg-amber-500' : 'bg-red-500';
 
+  // Cromo do módulo (§3 abas + §4 botões) — montado aqui e passado como
+  // `chromeSlot` para o filho ativo posicionar depois do próprio KPI (ver
+  // comentário no JSX abaixo). Abas primeiro, botões depois, na ordem do §1.
+  const chromeSlot = (
+    <>
+      {/* Toolbar de abas — §19.1 (trilho bg-gray-50, aba ativa bg-white text-blue-600,
+          flex-wrap); mb-3 pelo ritmo de cromo do §20.1 */}
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+          {NAV.map(n => (
+            <button
+              key={n.id}
+              onClick={() => setPage(n.id)}
+              className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                page === n.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              {n.icon} {n.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Toolbar de botões — §5.3: escopo à esquerda, ação primária à direita.
+          O seletor de organização é o controle de escopo do módulo (define QUAL
+          conjunto as três abas leem), por isso vive aqui e não no cabeçalho. */}
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={moduleOrgId}
+            onChange={e => setModuleOrgId(e.target.value)}
+            title="Organização"
+            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer min-w-[200px]"
+          >
+            <option value="">Todas as organizações</option>
+            {organizations.map(org => (
+              <option key={org.id} value={org.id}>{org.name}</option>
+            ))}
+          </select>
+          {health && (
+            <>
+              <span className="inline-flex items-center gap-1.5 h-9 text-xs font-medium text-gray-500">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${rateColor}`} />
+                Sucesso {rate}%
+              </span>
+              {(health.dead_letter ?? 0) > 0 && (
+                <span className="inline-flex items-center gap-1.5 h-9 text-xs font-medium text-red-600">
+                  <AlertCircle className="w-3.5 h-3.5" /> {health.dead_letter} dead letter
+                </span>
+              )}
+              {(health.queued ?? 0) > 0 && (
+                <span className="inline-flex items-center h-9 text-xs font-medium text-gray-500">{health.queued} na fila</span>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Ação primária — §17 variante compacta; mora na toolbar de botões (§5.3),
+            não solta ao lado do <h1>. Só na aba Documentos e com org definida. */}
+        {page === 'documents' && orgId && (
+          <button
+            onClick={() => setUploadOpen(true)}
+            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+          >
+            <UploadCloud className="w-[15px] h-[15px]" />
+            Enviar NF-e
+          </button>
+        )}
+      </div>
+
+      {isConsolidated && page === 'rules' && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-[10px] px-4 py-2.5 text-sm font-medium mb-3">
+          Visão consolidada — selecione uma organização específica acima para criar regras.
+        </div>
+      )}
+    </>
+  );
+
   return (
     <>
       {/* FISCAL_CSS ainda é injetado — TaxValidationPanel/JournalEntryCard (renderizados
@@ -92,90 +170,27 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
             <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[page].subtitle}</p>
           </div>
 
-          {/* Toolbar de abas — §19.1 (trilho bg-gray-50, aba ativa bg-white text-blue-600,
-              flex-wrap); mb-3 pelo ritmo de cromo do §20.1 */}
-          <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-              {NAV.map(n => (
-                <button
-                  key={n.id}
-                  onClick={() => setPage(n.id)}
-                  className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                    page === n.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
-                  }`}
-                >
-                  {n.icon} {n.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Toolbar de botões — §5.3: escopo à esquerda, ação primária à direita.
-              O seletor de organização é o controle de escopo do módulo (define QUAL
-              conjunto as três abas leem), por isso vive aqui e não no cabeçalho. */}
-          <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={moduleOrgId}
-                onChange={e => setModuleOrgId(e.target.value)}
-                title="Organização"
-                className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer min-w-[200px]"
-              >
-                <option value="">Todas as organizações</option>
-                {organizations.map(org => (
-                  <option key={org.id} value={org.id}>{org.name}</option>
-                ))}
-              </select>
-              {health && (
-                <>
-                  <span className="inline-flex items-center gap-1.5 h-9 text-xs font-medium text-gray-500">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${rateColor}`} />
-                    Sucesso {rate}%
-                  </span>
-                  {(health.dead_letter ?? 0) > 0 && (
-                    <span className="inline-flex items-center gap-1.5 h-9 text-xs font-medium text-red-600">
-                      <AlertCircle className="w-3.5 h-3.5" /> {health.dead_letter} dead letter
-                    </span>
-                  )}
-                  {(health.queued ?? 0) > 0 && (
-                    <span className="inline-flex items-center h-9 text-xs font-medium text-gray-500">{health.queued} na fila</span>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Ação primária — §17 variante compacta; mora na toolbar de botões (§5.3),
-                não solta ao lado do <h1>. Só na aba Documentos e com org definida. */}
-            {page === 'documents' && orgId && (
-              <button
-                onClick={() => setUploadOpen(true)}
-                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-              >
-                <UploadCloud className="w-[15px] h-[15px]" />
-                Enviar NF-e
-              </button>
-            )}
-          </div>
-
-          {isConsolidated && page === 'rules' && (
-            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-[10px] px-4 py-2.5 text-sm font-medium">
-              Visão consolidada — selecione uma organização específica acima para criar regras.
-            </div>
-          )}
-
-          {/* Conteúdo da aba ativa */}
+          {/* Conteúdo da aba ativa — cada filho tem seus PRÓPRIOS KPIs (§4.2), que a
+              anatomia do §1 exige ANTES das toolbars de abas/botões. Abas e botões são
+              cromo do módulo pai, então em vez de renderizá-los aqui (o que os poria
+              antes do KPI do filho — o mesmo bug de ordem já corrigido em
+              ProjectFinancialManager/BoletoManager via `tabsSlot`), o pai monta o
+              cromo e passa como `chromeSlot`; cada filho o posiciona logo após seu
+              próprio grid de KPIs. */}
           {page === 'documents' && (
             <FiscalDocuments
               organizationId={orgId}
               onToast={showToast}
               onViewOrder={onViewOrder}
               onViewPayable={onViewPayable}
+              chromeSlot={chromeSlot}
             />
           )}
           {page === 'admin' && (
             <FiscalJobs
               organizationId={orgId}
               onToast={showToast}
+              chromeSlot={chromeSlot}
             />
           )}
           {page === 'rules' && (
@@ -183,6 +198,7 @@ export function FiscalModule({ onViewOrder, onViewPayable }: Props) {
               organizationId={orgId}
               writeOrganizationId={orgId}
               onToast={showToast}
+              chromeSlot={chromeSlot}
             />
           )}
         </div>

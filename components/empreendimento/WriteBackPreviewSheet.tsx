@@ -7,7 +7,6 @@
 import React from 'react';
 import { Loader2, ArrowRight, Plus, Pencil, Building } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
-import Button from '../ui/Button';
 import { WriteBackItem } from '../../services/sync/writeBackImovib';
 
 interface Props {
@@ -149,11 +148,22 @@ export const WriteBackPreviewSheet: React.FC<Props> = ({ open, onClose, items, o
                         {selectedUpdates > 0 && ` · ${selectedUpdates} atualização(ões)`}
                     </span>
                     <div className="flex items-center gap-2">
-                        <Button variant="ghost" onClick={onClose} disabled={applying}>Cancelar</Button>
-                        <Button onClick={handleApply} disabled={applying || selected.size === 0}>
-                            {applying ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            disabled={applying}
+                            className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            onClick={handleApply}
+                            disabled={applying || selected.size === 0}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                        >
+                            {applying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-[15px] h-[15px]" />}
                             Enviar selecionadas
-                        </Button>
+                        </button>
                     </div>
                 </div>
             </SheetFooter>

@@ -366,14 +366,14 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
   return (
     <div className="space-y-6">
       {/* Fluxo dos 3 vértices */}
-      <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+      <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
         <div className="flex items-center justify-between mb-5">
-          <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider flex items-center gap-2">
+          <h3 className="text-xs font-semibold text-gray-500 flex items-center gap-2">
             <ArrowLeftRight className="w-4 h-4 text-blue-600" /> Centro de Sincronização
           </h3>
           <button
             onClick={load}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black uppercase tracking-wider rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200"
+            className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-[6px] bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200 transition-all active:scale-95"
           >
             <RefreshCw className="w-3 h-3" /> Recarregar
           </button>
@@ -475,9 +475,9 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
             ] : undefined}
           />
 
-          {/* Empreendimento (HUB) */}
-          <div className="rounded-2xl border-2 border-blue-200 bg-blue-50/40 p-4 flex flex-col items-center justify-center text-center">
-            <div className="p-2.5 bg-blue-600 text-white rounded-xl mb-2"><Building2 className="w-5 h-5" /></div>
+          {/* Empreendimento (HUB) — rótulo de diagrama (nomeia o nó central do desenho, §8.1), uppercase mantido */}
+          <div className="rounded-[10px] border-2 border-blue-200 bg-blue-50/40 p-4 flex flex-col items-center justify-center text-center">
+            <div className="p-2.5 bg-blue-600 text-white rounded-[6px] mb-2"><Building2 className="w-5 h-5" /></div>
             <span className="text-xs font-black uppercase tracking-wider text-blue-700">{e.name}</span>
             <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mt-0.5">Hub Central</span>
           </div>
@@ -636,7 +636,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
             </div>
           ) : studyReport ? (
             <>
-              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 pt-1">Do Estudo para o Empreendimento</p>
+              <p className="text-[10px] font-semibold text-gray-400 pt-1">Do estudo para o empreendimento</p>
               <DiffRow label="Torres a criar" value={studyReport.towersCreated} />
               <DiffRow label="Torres a atualizar" value={studyReport.towersUpdated} />
               <DiffRow label="Unidades a criar" value={studyReport.unitsCreated} />
@@ -644,7 +644,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
               <DiffRow label="Estado comercial preservado" value={studyReport.skippedDueToLocalChanges.length} muted />
               {studyOrphans > 0 && <DiffRow label="Itens órfãos (mantidos)" value={studyOrphans} warn />}
 
-              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 pt-3 border-t border-gray-100 mt-1">Do Empreendimento para o Estudo</p>
+              <p className="text-[10px] font-semibold text-gray-400 pt-3 border-t border-gray-100 mt-1">Do empreendimento para o estudo</p>
               {writeBackError ? (
                 <div className="text-xs text-rose-600 font-medium flex items-start gap-1.5">
                   <AlertTriangle className="w-4 h-4 shrink-0" /> {writeBackError}
@@ -676,7 +676,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
             </div>
           ) : plantaReport ? (
             <>
-              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 pt-1">Do Cenário para o Empreendimento</p>
+              <p className="text-[10px] font-semibold text-gray-400 pt-1">Do cenário para o empreendimento</p>
               <DiffRow label="Torres a criar" value={plantaReport.towersCreated} />
               <DiffRow label="Torres a atualizar" value={plantaReport.towersUpdated} />
               <DiffRow label="Unidades a criar" value={plantaReport.unitsCreated} />
@@ -688,7 +688,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
                 </p>
               ))}
 
-              <p className="text-[9px] font-black uppercase tracking-widest text-gray-400 pt-3 border-t border-gray-100 mt-1">Do Empreendimento para o Cenário</p>
+              <p className="text-[10px] font-semibold text-gray-400 pt-3 border-t border-gray-100 mt-1">Do empreendimento para o cenário</p>
               <DiffRow label="Agregados a recalcular" value={plantaChanges} warn={plantaChanges > 0} />
               <DiffRow label="Sem origem no Planta IA" value={plantaUnitsWithoutOrigin} muted />
               <p className="text-[9px] text-gray-400 font-medium leading-relaxed pt-1">
@@ -716,9 +716,9 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
               {comm.orphans > 0 && <DiffRow label="Vínculos órfãos" value={comm.orphans} warn />}
               <button
                 onClick={onGoToComercial}
-                className="mt-3 w-full px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2"
+                className="mt-3 w-full flex items-center justify-center gap-1.5 h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
               >
-                Abrir Espelho de Vendas <ArrowRight className="w-4 h-4" />
+                Abrir espelho de vendas <ArrowRight className="w-4 h-4" />
               </button>
             </>
           )}
@@ -726,7 +726,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
       </div>
 
       {/* Limitação conhecida */}
-      <div className="bg-gray-50/60 border border-dashed border-gray-200 rounded-2xl p-4 flex items-start gap-2.5">
+      <div className="bg-gray-50/60 border border-dashed border-gray-200 rounded-[10px] p-4 flex items-start gap-2.5">
         <Clock className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
         <p className="text-xs text-gray-500 font-medium leading-relaxed">
           <strong className="text-gray-600">Tipologia</strong> não é enviada de volta ao estudo — mudar a tipologia de
@@ -856,10 +856,11 @@ const VertexCard: React.FC<{
   const t = TINTS[tint] ?? TINTS.violet;
   const aligned = linked && !error && divergences === 0;
   return (
-    <div className={`rounded-2xl border ${t.ring} ${t.bg} p-4 flex flex-col ${className}`}>
+    <div className={`rounded-[10px] border ${t.ring} ${t.bg} p-4 flex flex-col ${className}`}>
       <div className="flex items-center gap-2 mb-2">
-        <div className={`p-2 bg-white rounded-lg ${t.text} border ${t.ring}`}><Icon className="w-4 h-4" /></div>
+        <div className={`p-2 bg-white rounded-[6px] ${t.text} border ${t.ring}`}><Icon className="w-4 h-4" /></div>
         <div className="min-w-0">
+          {/* Rótulo de diagrama — nomeia um vértice do desenho (§8.1), uppercase mantido */}
           <p className="text-xs font-black uppercase tracking-wider text-gray-700 truncate">{title}</p>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">{subtitle}</p>
         </div>
@@ -881,9 +882,9 @@ const VertexCard: React.FC<{
 const RelationCard: React.FC<{ title: string; icon: any; tint: string; children: React.ReactNode }> = ({ title, icon: Icon, tint, children }) => {
   const t = TINTS[tint] ?? TINTS.violet;
   return (
-    <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
-      <h4 className="font-black text-gray-800 text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
-        <span className={`p-1.5 rounded-lg ${t.bg} ${t.text}`}><Icon className="w-3.5 h-3.5" /></span>
+    <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm">
+      <h4 className="text-xs font-semibold text-gray-500 mb-4 flex items-center gap-2">
+        <span className={`p-1.5 rounded-[6px] ${t.bg} ${t.text}`}><Icon className="w-3.5 h-3.5" /></span>
         {title}
       </h4>
       <div className="space-y-1.5">{children}</div>

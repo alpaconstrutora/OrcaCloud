@@ -3,10 +3,10 @@
 // Cada linha = um "tipo de andar" com nome, tipo, nº inicial, repetições e un./pav.
 // O botão "Gerar Unidades" expande os templates nos andares reais via generateUnitsFromFloors.
 import React from 'react';
-import { Plus, Loader2, Layers, Zap, Check, X } from 'lucide-react';
+import { Plus, Loader2, Layers, Zap, Check, X, AlertCircle } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
-import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
+import { useConfirm } from '../ui/confirm';
 import { EmpreendimentoTower, EmpreendimentoFloor, EmpreendimentoFloorInsert, FloorTipo } from '../../types';
 
 interface Props {
@@ -25,15 +25,16 @@ const TIPO_OPTIONS: { value: FloorTipo; label: string }[] = [
   { value: 'OUTRO',     label: 'Outro' },
 ];
 
+// Texto colorido, sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
 const TIPO_STYLE: Record<FloorTipo, string> = {
-  SUBSOLO:   'bg-slate-500/10 text-slate-600',
-  TERREO:    'bg-emerald-500/10 text-emerald-600',
-  MEZANINO:  'bg-teal-500/10 text-teal-600',
-  TIPO:      'bg-blue-500/10 text-blue-600',
-  COBERTURA: 'bg-violet-500/10 text-violet-600',
-  TECNICO:   'bg-orange-500/10 text-orange-600',
-  GARAGEM:   'bg-gray-500/10 text-gray-600',
-  OUTRO:     'bg-rose-500/10 text-rose-600',
+  SUBSOLO:   'text-slate-600',
+  TERREO:    'text-emerald-600',
+  MEZANINO:  'text-teal-600',
+  TIPO:      'text-blue-600',
+  COBERTURA: 'text-violet-600',
+  TECNICO:   'text-orange-600',
+  GARAGEM:   'text-gray-600',
+  OUTRO:     'text-rose-600',
 };
 
 const emptyForm = () => ({
@@ -49,6 +50,12 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
   const [form, setForm] = React.useState(emptyForm());
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editForm, setEditForm] = React.useState(emptyForm());
+  const confirm = useConfirm();
+  const [notice, setNotice] = React.useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const notify = (msg: string, type: 'success' | 'error' = 'success') => {
+    setNotice({ msg, type });
+    setTimeout(() => setNotice(null), 4500);
+  };
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -65,8 +72,8 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) { alert('Informe o nome do pavimento.'); return; }
-    if (!form.floor_number) { alert('Informe o número inicial do pavimento.'); return; }
+    if (!form.name.trim()) { notify('Informe o nome do pavimento.', 'error'); return; }
+    if (!form.floor_number) { notify('Informe o número inicial do pavimento.', 'error'); return; }
     setSaving(true);
     try {
       const payload: EmpreendimentoFloorInsert = {
@@ -83,7 +90,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
       setForm(emptyForm());
       await load();
     } catch (err: any) {
-      alert(`Erro ao adicionar pavimento: ${err.message}`);
+      notify(`Erro ao adicionar pavimento: ${err.message}`, 'error');
     } finally { setSaving(false); }
   };
 
@@ -100,7 +107,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
   };
 
   const handleSaveEdit = async (f: EmpreendimentoFloor) => {
-    if (!editForm.name.trim()) { alert('Informe o nome do pavimento.'); return; }
+    if (!editForm.name.trim()) { notify('Informe o nome do pavimento.', 'error'); return; }
     try {
       await empreendimentoService.updateFloor(f.id, {
         name: editForm.name.trim(),
@@ -113,36 +120,47 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
       setEditingId(null);
       await load();
     } catch (err: any) {
-      alert(`Erro ao salvar pavimento: ${err.message}`);
+      notify(`Erro ao salvar pavimento: ${err.message}`, 'error');
     }
   };
 
   const handleDelete = async (f: EmpreendimentoFloor) => {
-    if (!window.confirm(`Excluir o pavimento "${f.name}"? As unidades vinculadas a ele perdem a referência de pavimento (não são excluídas).`)) return;
+    const ok = await confirm({
+      title: `Excluir "${f.name}"?`,
+      message: 'As unidades vinculadas a ele perdem a referência de pavimento (não são excluídas).',
+      confirmLabel: 'Excluir',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       await empreendimentoService.deleteFloor(f.id);
       setFloors(prev => prev.filter(x => x.id !== f.id));
     } catch (err: any) {
-      alert(`Erro ao excluir pavimento: ${err.message}`);
+      notify(`Erro ao excluir pavimento: ${err.message}`, 'error');
     }
   };
 
   const handleGenerate = async () => {
-    if (!floors.length) { alert('Cadastre ao menos um pavimento antes de gerar unidades.'); return; }
-    const msg = `Gerar ${totalUnidades} unidades para "${tower.name}"?\n\nATENÇÃO: as unidades existentes serão excluídas e recriadas a partir dos pavimentos.`;
-    if (!window.confirm(msg)) return;
+    if (!floors.length) { notify('Cadastre ao menos um pavimento antes de gerar unidades.', 'error'); return; }
+    const ok = await confirm({
+      title: `Gerar ${totalUnidades} unidades para "${tower.name}"?`,
+      message: 'Atenção: as unidades existentes serão excluídas e recriadas a partir dos pavimentos.',
+      confirmLabel: 'Gerar',
+      variant: 'warning',
+    });
+    if (!ok) return;
     setGenerating(true);
     try {
       await empreendimentoService.deleteUnitsByTower(tower.id);
       await empreendimentoService.generateUnitsFromFloors(tower);
       onUnitsRegenerated?.();
     } catch (err: any) {
-      alert(`Erro ao gerar unidades: ${err.message}`);
+      notify(`Erro ao gerar unidades: ${err.message}`, 'error');
     } finally { setGenerating(false); }
   };
 
-  const inputCls = 'px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium outline-none focus:border-blue-400 bg-white';
-  const editCls  = 'px-2 py-1 border border-blue-200 rounded-lg text-xs font-medium outline-none focus:border-blue-400 bg-white';
+  const inputCls = 'h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white transition-all';
+  const editCls  = 'px-2 py-1 border border-blue-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400 bg-white';
 
   // Preview do nomes dos andares para a linha em edição / adição
   const previewRange = (startStr: string, repeatStr: string, tipo: FloorTipo) => {
@@ -156,57 +174,61 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-1">
-        <h4 className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
+        <h4 className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
           <Layers className="w-3.5 h-3.5" /> Pavimentos
         </h4>
         {floors.length > 0 && (
           <div className="flex items-center gap-3 text-xs text-gray-400 font-semibold">
             <span>{totalAndares} andares · {totalUnidades} unidades</span>
-            <Button
+            <button
               onClick={handleGenerate}
               disabled={generating}
-              size="sm"
+              className="flex items-center gap-1.5 h-8 px-3 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-xs transition-all active:scale-95 disabled:opacity-50"
             >
               {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-              Gerar Unidades ({totalUnidades})
-            </Button>
+              Gerar unidades ({totalUnidades})
+            </button>
           </div>
         )}
       </div>
 
       {/* Formulário de adição */}
-      <form onSubmit={handleAdd} className="bg-blue-50/40 border border-blue-100 rounded-2xl p-3 grid grid-cols-2 md:grid-cols-7 gap-2 items-end">
+      <form onSubmit={handleAdd} className="bg-blue-50/40 border border-blue-100 rounded-[10px] p-3 grid grid-cols-2 md:grid-cols-7 gap-2 items-end">
         <div className="md:col-span-2">
-          <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Nome *</label>
+          <label className="text-[10px] font-semibold text-gray-400 block mb-1">Nome *</label>
           <input className={inputCls + ' w-full'} placeholder="ex: Pavimento Tipo" value={form.name}
             onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
         </div>
         <div>
-          <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Tipo *</label>
+          <label className="text-[10px] font-semibold text-gray-400 block mb-1">Tipo *</label>
           <select className={inputCls + ' w-full'} value={form.tipo}
             onChange={e => setForm(p => ({ ...p, tipo: e.target.value as FloorTipo }))}>
             {TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Nº Inicial *</label>
+          <label className="text-[10px] font-semibold text-gray-400 block mb-1">Nº inicial *</label>
           <input className={inputCls + ' w-full'} type="number" placeholder="ex: 1" value={form.floor_number}
             onChange={e => setForm(p => ({ ...p, floor_number: e.target.value }))} />
         </div>
         <div>
-          <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Repete</label>
+          <label className="text-[10px] font-semibold text-gray-400 block mb-1">Repete</label>
           <input className={inputCls + ' w-full'} type="number" min="1" placeholder="1" value={form.repeat_count}
             onChange={e => setForm(p => ({ ...p, repeat_count: e.target.value }))} />
         </div>
         <div>
-          <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Un./Pav.</label>
+          <label className="text-[10px] font-semibold text-gray-400 block mb-1">Un./pav.</label>
           <input className={inputCls + ' w-full'} type="number" min="1" placeholder="—" value={form.units_per_floor}
             onChange={e => setForm(p => ({ ...p, units_per_floor: e.target.value }))} />
         </div>
-        <Button type="submit" disabled={saving} size="sm">
+        <button
+          type="submit"
+          disabled={saving}
+          className="flex items-center justify-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+        >
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-          Add
-        </Button>
+          Adicionar
+        </button>
       </form>
 
       {/* Lista de pavimentos */}
@@ -215,15 +237,15 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
       ) : floors.length === 0 ? (
         <p className="text-center text-xs text-gray-400 py-4">Nenhum pavimento cadastrado. Adicione acima para estruturar os andares da torre.</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-gray-100 text-gray-400 font-bold uppercase tracking-wider bg-gray-50/50">
+              <tr className="border-b border-gray-100 text-gray-500 font-semibold bg-gray-50/50">
                 <th className="py-2.5 px-4">Nome</th>
                 <th className="py-2.5 px-4">Tipo</th>
-                <th className="py-2.5 px-4">Nº Ini.</th>
+                <th className="py-2.5 px-4">Nº inicial</th>
                 <th className="py-2.5 px-4">Repete</th>
-                <th className="py-2.5 px-4">Un./Pav.</th>
+                <th className="py-2.5 px-4">Un./pav.</th>
                 <th className="py-2.5 px-4">Andares</th>
                 <th className="py-2.5 px-4 text-center">Ações</th>
               </tr>
@@ -258,25 +280,25 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
                         </td>
                         <td className="py-2 px-3 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => handleSaveEdit(f)} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg"><Check className="w-3.5 h-3.5" /></button>
-                            <button onClick={() => setEditingId(null)} className="p-1.5 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-lg"><X className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => handleSaveEdit(f)} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-[6px]"><Check className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => setEditingId(null)} className="p-1.5 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-[6px]"><X className="w-3.5 h-3.5" /></button>
                           </div>
                         </td>
                       </>
                     ) : (
                       <>
-                        <td className="py-2.5 px-4 font-bold text-gray-800">{f.name}</td>
+                        <td className="py-2.5 px-4 font-normal text-gray-800">{f.name}</td>
                         <td className="py-2.5 px-4">
-                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${TIPO_STYLE[f.tipo]}`}>
+                          <span className={`text-xs font-normal ${TIPO_STYLE[f.tipo]}`}>
                             {TIPO_OPTIONS.find(o => o.value === f.tipo)?.label ?? f.tipo}
                           </span>
                         </td>
-                        <td className="py-2.5 px-4 text-gray-500 font-mono">{f.floor_number}</td>
-                        <td className="py-2.5 px-4 text-gray-500">
-                          {f.repeat_count > 1 ? <span className="font-bold text-blue-600">{f.repeat_count}×</span> : '1×'}
+                        <td className="py-2.5 px-4 text-gray-500 font-normal">{f.floor_number}</td>
+                        <td className="py-2.5 px-4 text-gray-500 font-normal">
+                          {f.repeat_count > 1 ? <span className="text-blue-600">{f.repeat_count}×</span> : '1×'}
                         </td>
-                        <td className="py-2.5 px-4 text-gray-500">{upf != null ? upf : <span className="text-gray-300">—</span>}</td>
-                        <td className="py-2.5 px-4 text-gray-500 text-xs font-mono">{rangeStr}</td>
+                        <td className="py-2.5 px-4 text-gray-500 font-normal">{upf != null ? upf : <span className="text-gray-300">—</span>}</td>
+                        <td className="py-2.5 px-4 text-gray-500 text-xs font-normal">{rangeStr}</td>
                         <td className="py-2.5 px-4 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <ActionIconButton kind="edit" size="sm" onClick={() => startEdit(f)} />
@@ -293,7 +315,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
               <tfoot>
                 <tr className="border-t-2 border-gray-200 bg-gray-50/70 font-bold text-xs text-gray-600">
                   <td className="py-2.5 px-4" colSpan={3}>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Total</span>
+                    <span className="text-[10px] font-semibold text-gray-400">Total</span>
                   </td>
                   <td className="py-2.5 px-4 text-blue-600">{totalAndares} andares</td>
                   <td className="py-2.5 px-4" colSpan={3}>{totalUnidades} unidades</td>
@@ -301,6 +323,14 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
               </tfoot>
             )}
           </table>
+        </div>
+      )}
+
+      {notice && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
+          notice.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" /> {notice.msg}
         </div>
       )}
     </div>

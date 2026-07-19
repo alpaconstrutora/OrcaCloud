@@ -6,7 +6,6 @@
 import React from 'react';
 import { Plus, Loader2, Building, HardHat, Check, X, BarChart2, AlertCircle } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
-import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import { useStore } from '../../store/useStore';
@@ -144,10 +143,14 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
         <input className={inputCls} placeholder="Nome (ex: Torre A)" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
         <input className={inputCls} placeholder="Nº pavimentos" type="number" value={form.floors_count} onChange={e => setForm(p => ({ ...p, floors_count: e.target.value }))} />
         <input className={inputCls} placeholder="Unid./pavimento" type="number" value={form.units_per_floor} onChange={e => setForm(p => ({ ...p, units_per_floor: e.target.value }))} />
-        <Button type="submit" disabled={saving} size="sm">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+        <button
+          type="submit"
+          disabled={saving}
+          className="flex items-center justify-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-[15px] h-[15px]" />}
           Adicionar torre
-        </Button>
+        </button>
       </form>
 
       {loading ? (

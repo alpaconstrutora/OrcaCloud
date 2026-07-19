@@ -240,11 +240,11 @@ export const CuradoriaTab: React.FC<Props> = ({ empreendimentoId, onChanged }) =
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
                     <span className="text-sm font-bold whitespace-nowrap px-1">{selected.size} selecionada(s)</span>
                     <button onClick={doApprove} disabled={busy}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-white text-blue-700 rounded-xl font-bold text-xs hover:bg-blue-50 disabled:opacity-60">
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-700 rounded-[6px] font-medium text-[13px] hover:bg-blue-50 disabled:opacity-60 transition-all active:scale-95">
                         {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />} Aprovar
                     </button>
                     <button onClick={doReject} disabled={busy}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-blue-500 rounded-xl font-bold text-xs hover:bg-blue-400 disabled:opacity-60">
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-500 rounded-[6px] font-medium text-[13px] hover:bg-blue-400 disabled:opacity-60 transition-all active:scale-95">
                         <XCircle className="w-3.5 h-3.5" /> Rejeitar
                     </button>
                 </div>

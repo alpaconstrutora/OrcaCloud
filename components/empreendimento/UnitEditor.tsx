@@ -2,7 +2,7 @@
 import React from 'react';
 import {
   Plus, Loader2, Layers, X, Check, Zap,
-  ChevronDown, ChevronUp, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown,
+  ChevronDown, ChevronUp, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, AlertCircle,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { empreendimentoService } from '../../services/empreendimentoService';
@@ -14,7 +14,6 @@ import {
   POSITION_LABEL, VIEW_LABEL, SUN_LABEL, POSITION_STYLE, VIEW_STYLE, SUN_STYLE,
   RENTAL_STATUS_LABEL,
 } from '../../utils/empreendimentoComercial';
-import Button from '../ui/Button';
 import { useConfirm } from '../ui/confirm';
 
 // ── Constantes de exibição ───────────────────────────────────────────────────
@@ -93,6 +92,13 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [bulkForm, setBulkForm] = React.useState(emptyBulkForm());
   const [bulkSaving, setBulkSaving] = React.useState(false);
+
+  // Toast (§13)
+  const [notice, setNotice] = React.useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const notify = (msg: string, type: 'success' | 'error' = 'success') => {
+    setNotice({ msg, type });
+    setTimeout(() => setNotice(null), 4500);
+  };
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -200,13 +206,13 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) { alert('Informe o nome/identificação da unidade.'); return; }
+    if (!form.name.trim()) { notify('Informe o nome/identificação da unidade.', 'error'); return; }
     setSaving(true);
     try {
       await empreendimentoService.createUnit({ tower_id: tower.id, name: form.name.trim(), ...buildPayload(form) });
       setForm(emptyForm());
       await load();
-    } catch (err: any) { alert(`Erro ao adicionar: ${err.message}`); }
+    } catch (err: any) { notify(`Erro ao adicionar: ${err.message}`, 'error'); }
     finally { setSaving(false); }
   };
 
@@ -225,7 +231,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
   };
 
   const handleSaveEdit = async (u: EmpreendimentoUnit) => {
-    if (!editForm.name.trim()) { alert('Informe o nome da unidade.'); return; }
+    if (!editForm.name.trim()) { notify('Informe o nome da unidade.', 'error'); return; }
     try {
       const priv = editForm.private_area ? Number(editForm.private_area) : undefined;
       const common = editForm.common_area ? Number(editForm.common_area) : undefined;
@@ -246,7 +252,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       await empreendimentoService.updateUnit(u.id, updated);
       setUnits(prev => prev.map(x => x.id === u.id ? { ...x, ...updated } : x));
       setEditingId(null);
-    } catch (err: any) { alert(`Erro ao salvar: ${err.message}`); }
+    } catch (err: any) { notify(`Erro ao salvar: ${err.message}`, 'error'); }
   };
 
   const handleDuplicate = async (u: EmpreendimentoUnit) => {
@@ -262,7 +268,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
         status: 'DISPONIVEL', rental_status: 'DISPONIVEL', is_vendavel: true, sort_order: units.length,
       });
       await load();
-    } catch (err: any) { alert(`Erro ao duplicar: ${err.message}`); }
+    } catch (err: any) { notify(`Erro ao duplicar: ${err.message}`, 'error'); }
   };
 
   const handleDelete = async (unit: EmpreendimentoUnit) => {
@@ -276,7 +282,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       await empreendimentoService.deleteUnit(unit.id);
       setUnits(prev => prev.filter(u => u.id !== unit.id));
       setSelected(prev => { const n = new Set(prev); n.delete(unit.id); return n; });
-    } catch (err: any) { alert(`Erro ao excluir: ${err.message}`); }
+    } catch (err: any) { notify(`Erro ao excluir: ${err.message}`, 'error'); }
   };
 
   // ── Bulk save ───────────────────────────────────────────────────────────────
@@ -286,7 +292,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       || bulkForm.private_area || bulkForm.common_area || bulkForm.bedrooms || bulkForm.bathrooms || bulkForm.suites || bulkForm.parking_spaces
       || bulkForm.position_type || bulkForm.view_type || bulkForm.sun_orientation
       || bulkForm.rental_price || bulkForm.rental_status;
-    if (!hasAny) { alert('Preencha pelo menos um campo para aplicar em lote.'); return; }
+    if (!hasAny) { notify('Preencha pelo menos um campo para aplicar em lote.', 'error'); return; }
     setBulkSaving(true);
     // Monta o patch de uma unidade aplicando só os campos preenchidos no bulkForm
     const buildUpd = (unit: EmpreendimentoUnit): Record<string, any> => {
@@ -318,7 +324,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       setUnits(prev => prev.map(u => selected.has(u.id) ? { ...u, ...buildUpd(u) } : u));
       setSelected(new Set());
       setBulkForm(emptyBulkForm());
-    } catch (err: any) { alert(`Erro ao salvar em lote: ${err.message}`); }
+    } catch (err: any) { notify(`Erro ao salvar em lote: ${err.message}`, 'error'); }
     finally { setBulkSaving(false); }
   };
 
@@ -328,8 +334,8 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
     e.preventDefault();
     const floors = Number(genForm.floors_count), perFloor = Number(genForm.units_per_floor);
     const startFloor = Number(genForm.start_floor);
-    if (!floors || !perFloor) { alert('Informe número de pavimentos e unidades por pavimento.'); return; }
-    if (floors > 100 || perFloor > 50) { alert('Máx 100 pav / 50 un/pav.'); return; }
+    if (!floors || !perFloor) { notify('Informe número de pavimentos e unidades por pavimento.', 'error'); return; }
+    if (floors > 100 || perFloor > 50) { notify('Máx 100 pav / 50 un/pav.', 'error'); return; }
     const ok = await confirm({
       title: 'Gerar unidades?',
       message: `${floors * perFloor} unidades serão criadas para "${tower.name}".`,
@@ -361,7 +367,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
       await empreendimentoService.bulkUpsertUnits(toCreate);
       setGenOpen(false);
       await load();
-    } catch (err: any) { alert(`Erro ao gerar: ${err.message}`); }
+    } catch (err: any) { notify(`Erro ao gerar: ${err.message}`, 'error'); }
     finally { setGenerating(false); }
   };
 
@@ -412,9 +418,13 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
           <option value="">Orientação</option>
           {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
         </select>
-        <Button type="submit" disabled={saving}>
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Add
-        </Button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="flex items-center justify-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-[15px] h-[15px]" />} Adicionar
+        </button>
       </form>
 
       {/* Geração automática */}
@@ -466,10 +476,14 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
               ))}
             </div>
             <div className="flex justify-end">
-              <Button type="submit" disabled={generating || genTotal === 0}>
-                {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                Gerar {genTotal > 0 ? `${genTotal} unidades` : 'Unidades'}
-              </Button>
+              <button
+                type="submit"
+                disabled={generating || genTotal === 0}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+              >
+                {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-[15px] h-[15px]" />}
+                Gerar {genTotal > 0 ? `${genTotal} unidades` : 'unidades'}
+              </button>
             </div>
           </form>
         )}
@@ -731,11 +745,23 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
               <option value="">Status locação...</option>
               {(Object.keys(RENTAL_STATUS_LABEL) as RentalUnitStatus[]).map(t => <option key={t} value={t}>{RENTAL_STATUS_LABEL[t]}</option>)}
             </select>
-            <Button size="sm" onClick={handleBulkSave} disabled={bulkSaving}>
+            <button
+              onClick={handleBulkSave}
+              disabled={bulkSaving}
+              className="flex items-center justify-center gap-1.5 h-8 px-3 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-xs transition-all active:scale-95 disabled:opacity-50"
+            >
               {bulkSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
               Aplicar
-            </Button>
+            </button>
           </div>
+        </div>
+      )}
+
+      {notice && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
+          notice.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" /> {notice.msg}
         </div>
       )}
     </div>

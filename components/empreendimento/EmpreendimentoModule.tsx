@@ -166,88 +166,87 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   // ── Lista ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* Header — card com breadcrumb (linguagem visual própria deste módulo,
-          documentada como exceção ao cabeçalho flat em ui_ux_standard_guide.md
-          §20); radius migrado pra escala compacta (§16) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-gray-400">
-            <span>Comercial</span><span>/</span><span className="text-gray-600 font-bold">Incorporação</span>
-          </div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight mt-1.5 flex items-center gap-2">
-            <Building2 className="w-6 h-6 text-blue-600" /> Empreendimentos
-          </h1>
-        </div>
-        {/* Botão primário — variante compacta (§17), não o componente Button
-            compartilhado (BASE dele ainda é font-black uppercase tracking-widest
-            rounded-xl, estilo pesado deprecado) */}
-        <button
-          onClick={() => { setEditing(null); setIsFormOpen(true); }}
-          title="Novo empreendimento"
-          className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-        >
-          <Plus className="w-[15px] h-[15px]" /> Novo empreendimento
-        </button>
+      {/* Header flat — h1 solto + subtítulo mt-1.5 (UI UX tabela.md §1). O contexto de
+          módulo (Comercial/Incorporação) já está na sidebar — não duplicar (§18 do
+          ui_ux_standard_guide.md). */}
+      <div>
+        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Empreendimentos</h1>
+        <p className="text-gray-400 text-sm mt-1.5 font-medium">Incorporações e desenvolvimentos imobiliários da organização.</p>
       </div>
 
-      {/* KPIs — mesmo nível de importância (contagem × contagem × soma financeira), grade simétrica (§4.2) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* KPIs — mesmo nível de importância (contagem × contagem × soma financeira), grade simétrica.
+          mb-3: ritmo de 12px até a toolbar acoplada (UI UX tabela.md §6). */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
         <KpiCard shadow={false} label="Total de Empreendimentos" value={kpis.total} icon={<Building2 className="w-5 h-5" />} color="blue" />
         <KpiCard shadow={false} label="Em Obras" value={kpis.emObras} icon={<Building2 className="w-5 h-5" />} color="amber" />
         <KpiCard shadow={false} label="VGV Total" value={`R$ ${kpis.vgvTotal.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`} icon={<Building2 className="w-5 h-5" />} color="emerald" />
       </div>
 
-      {/* Toolbar — variante desaninhada (§5.1): já há KPI cards acima dando contexto */}
-      <div className="flex flex-col md:flex-row gap-2.5 items-center">
-        <div className="flex-1 relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Pesquisar por nome, código ou SPE..."
-            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-          />
+      {/* Tabela com toolbar de busca acoplada (UI UX tabela.md §5) — busca, refresh, colunas
+          e o botão primário (sem barra de escopo/§4: não há controles de conta/competência
+          aqui) dentro do MESMO card da tabela, separados só pelo border-b da toolbar. */}
+      <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-gray-100 bg-white">
+          <div className="flex flex-col md:flex-row gap-2.5 items-center">
+            <div className="flex-1 relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Pesquisar por nome, código ou SPE..."
+                className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
+
+            <button
+              onClick={load}
+              className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+              title="Atualizar"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+
+            <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+
+            {/* Sem toggle grid/lista: esta tela só tem visualização em tabela */}
+            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+              <ColumnConfigButton
+                columns={COLUMNS.filter(c => c.key !== 'actions')}
+                visibleColumns={tableColumns.visibleColumns}
+                showColumnConfig={tableColumns.showColumnConfig}
+                onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                onToggleColumn={tableColumns.toggleColumn}
+                onReset={tableColumns.resetColumns}
+              />
+            </div>
+
+            {/* Botão primário (§8) — ação de cadastro pouco frequente, mora aqui porque a
+                tela não tem barra de escopo (§4) própria para hospedá-lo. */}
+            <button
+              onClick={() => { setEditing(null); setIsFormOpen(true); }}
+              title="Novo empreendimento"
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+            >
+              <Plus className="w-[15px] h-[15px]" /> Novo empreendimento
+            </button>
+          </div>
         </div>
 
-        <button
-          onClick={load}
-          className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
-          title="Atualizar"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
-
-        <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
-
-        {/* Sem toggle grid/lista: esta tela só tem visualização em tabela (§5, nota) */}
-        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
-          <ColumnConfigButton
-            columns={COLUMNS.filter(c => c.key !== 'actions')}
-            visibleColumns={tableColumns.visibleColumns}
-            showColumnConfig={tableColumns.showColumnConfig}
-            onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
-            onToggleColumn={tableColumns.toggleColumn}
-            onReset={tableColumns.resetColumns}
-          />
-        </div>
-      </div>
-
-      {/* Conteúdo */}
-      {loading ? (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-500">Carregando empreendimentos...</p>
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100">
-          <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum empreendimento encontrado</h3>
-          <p className="text-sm text-gray-500">
-            {search ? 'Tente ajustar sua busca.' : 'Cadastre seu primeiro empreendimento no botão acima.'}
-          </p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+        {/* Conteúdo — sem bg/border/rounded/shadow próprios, o card pai já supre */}
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-gray-500">Carregando empreendimentos...</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-12">
+            <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum empreendimento encontrado</h3>
+            <p className="text-sm text-gray-500">
+              {search ? 'Tente ajustar sua busca.' : 'Cadastre seu primeiro empreendimento no botão acima.'}
+            </p>
+          </div>
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -320,8 +319,8 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {isFormOpen && (
         <EmpreendimentoForm

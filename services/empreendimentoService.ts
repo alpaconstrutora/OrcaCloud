@@ -807,73 +807,14 @@ export const empreendimentoService = {
             .select(UNIT_COLS)
             .single();
         if (error) throw new Error(`Failed to update unit: ${error.message}`);
-        // Propaga o FÍSICO da unidade para as cópias comerciais dos DOIS canais
-        // (best-effort, não bloqueia). O físico é verdade única do empreendimento;
-        // o ESTADO (status de venda / ocupação de locação) NUNCA é empurrado —
-        // ele é gerido em cada módulo (venda via negociações; ocupação via "Sync
-        // de Locações"). O preço acompanha o canal, igual ao publish:
-        //   Vendas   → property.price = unit.price (VGV)
-        //   Locações → property.price = unit.rental_price (aluguel-alvo)
-        if (data.commercial_property_id) {
-            this.pushUnitFieldsToProperty(data, updates, data.commercial_property_id, 'SALE').catch(err =>
-                console.error('[empreendimentoService] erro ao propagar para Vendas:', err)
-            );
-        }
-        if (data.rental_property_id) {
-            this.pushUnitFieldsToProperty(data, updates, data.rental_property_id, 'RENTAL').catch(err =>
-                console.error('[empreendimentoService] erro ao propagar para Locações:', err)
-            );
-        }
+        // A propagação do FÍSICO para as cópias comerciais (Vendas + Locações) é
+        // feita pelo TRIGGER de banco `trg_propagate_unit_to_commercial`
+        // (migration 20270815000007) — dispara em QUALQUER update de
+        // empreendimento_units, sem depender deste caminho. Por isso não há mais
+        // push em TS aqui: seria escrita dupla e não cobriria os bypasses (sync
+        // Imovib/Planta IA, aceite de proposta, SQL direto). Estado (status/ocupação)
+        // continua NÃO propagando — o trigger também não toca nisso, de propósito.
         return data;
-    },
-
-    // Empurra os campos FÍSICOS da unit para uma property comercial (venda ou
-    // locação). NÃO toca status/ocupação (independência do módulo). O preço
-    // depende do canal: 'SALE' usa unit.price; 'RENTAL' usa unit.rental_price.
-    async pushUnitFieldsToProperty(
-        unit: EmpreendimentoUnit,
-        changed: EmpreendimentoUnitUpdate,
-        propertyId: string,
-        channel: 'SALE' | 'RENTAL',
-    ): Promise<void> {
-        const propUpdate: Record<string, unknown> = {};
-        if ('name'          in changed) propUpdate.name          = unit.name;
-        // Preço acompanha o canal (mesma regra do publishAll*).
-        if (channel === 'SALE'   && 'price'        in changed) propUpdate.price = unit.price ?? 0;
-        if (channel === 'RENTAL' && 'rental_price' in changed) propUpdate.price = unit.rental_price ?? 0;
-        if ('private_area'  in changed) propUpdate.private_area  = unit.private_area;
-        if ('common_area'   in changed) propUpdate.common_area   = unit.common_area;
-        if ('total_area'    in changed) propUpdate.total_area    = unit.total_area;
-        if ('typology'      in changed) propUpdate.typology      = unit.typology;
-        if ('floor'         in changed) propUpdate.floor         = unit.floor;
-        // Atributos de precificação — traduzidos PT→EN
-        if ('position_type'   in changed) propUpdate.position_type   = mapPositionToCommercial(unit.position_type) ?? null;
-        if ('view_type'       in changed) propUpdate.view_type       = mapViewToCommercial(unit.view_type) ?? null;
-        if ('sun_orientation' in changed) propUpdate.sun_orientation = mapSunToCommercial(unit.sun_orientation) ?? null;
-
-        // floor_tipo/parking_spaces/bedrooms/bathrooms vivem em specs (JSONB) — o
-        // PropertyModal lê specs.bedrooms/specs.bathrooms, não a coluna top-level.
-        // Merge para não destruir os outros campos já salvos em specs.
-        const specsChanged = ['floor_tipo', 'parking_spaces', 'bedrooms', 'bathrooms'].some(f => f in changed);
-        if (specsChanged) {
-            const { data: prop } = await supabase
-                .from('commercial_properties')
-                .select('specs')
-                .eq('id', propertyId)
-                .single();
-            const specs: Record<string, unknown> = { ...(prop?.specs ?? {}) };
-            if ('floor_tipo'      in changed) specs.floorTipo      = unit.floor_tipo;
-            if ('parking_spaces'  in changed) specs.parkingSpaces  = unit.parking_spaces;
-            if ('bedrooms'        in changed) specs.bedrooms       = unit.bedrooms;
-            if ('bathrooms'       in changed) specs.bathrooms      = unit.bathrooms;
-            propUpdate.specs = specs;
-        }
-
-        if (!Object.keys(propUpdate).length) return;
-        await supabase
-            .from('commercial_properties')
-            .update(propUpdate)
-            .eq('id', propertyId);
     },
 
     async deleteUnit(id: string): Promise<void> {

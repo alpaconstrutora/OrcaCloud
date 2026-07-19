@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Property, PropertyDeal, PropertyStatus } from '../types';
 import { commercialFinanceService } from './commercialFinanceService';
 import { projectService } from './projectService';
+import { financialSyncService } from './financialSyncService';
 
 /**
  * Traduz a violação de FK (23503) ao excluir um imóvel para uma frase acionável.
@@ -371,6 +372,17 @@ export const commercialService = {
                         settings: updatedSettings
                     });
                     console.log(`[COMMERCIAL SERVICE] Financial sync PERSISTED: ${installments.length} installments saved to Vault`);
+
+                    // Materializa JÁ as parcelas em internal_transactions (Contas a
+                    // Receber / Conciliação). Sem isto, as parcelas ficavam só no vault
+                    // e só apareciam em Contas a Receber depois de abrir a Conciliação
+                    // Bancária (única tela que disparava o sync). Upsert idempotente.
+                    try {
+                        await financialSyncService.syncFinancialData(
+                            { ...targetProject, settings: updatedSettings }, orgId);
+                    } catch (e) {
+                        console.error('[COMMERCIAL SERVICE] Falha ao materializar parcelas em Contas a Receber:', e);
+                    }
                 }
             } catch (err) {
                 console.error('[COMMERCIAL SERVICE] Sync or Property update failed:', err);

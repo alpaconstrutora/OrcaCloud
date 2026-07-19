@@ -86,6 +86,15 @@ export const regulatoryMapService = {
         return data;
     },
 
+    /** Insert em lote (uma request) — usado pela importação de planilha Excel, onde uma
+     *  cidade pode trazer dezenas de zonas de uma vez. */
+    async createZonesBulk(zones: RegulatoryMapZoneInsert[]): Promise<RegulatoryMapZone[]> {
+        if (zones.length === 0) return [];
+        const { data, error } = await supabase.from('regulatory_map_zones').insert(zones).select(ZONE_COLS);
+        if (error) throw new Error(`Falha ao importar zonas: ${error.message}`);
+        return data || [];
+    },
+
     async updateZone(id: string, updates: RegulatoryMapZoneUpdate): Promise<void> {
         const { error } = await supabase.from('regulatory_map_zones').update(updates).eq('id', id);
         if (error) throw new Error(`Falha ao atualizar zona: ${error.message}`);

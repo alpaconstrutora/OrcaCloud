@@ -4,10 +4,11 @@
 // Empreendimento (RegulatoryZoneTable), só que as linhas moram em regulatory_map_zones em vez
 // de empreendimento_regulatory_zones.
 import React from 'react';
-import { ArrowLeft, Edit } from 'lucide-react';
+import { ArrowLeft, Edit, FileSpreadsheet } from 'lucide-react';
 import { regulatoryMapService } from '../../services/regulatoryMapService';
 import { RegulatoryMapWithCity, RegulatoryMapZone, RegulatoryMapZoneUpdate } from '../../types';
 import RegulatoryZoneTable, { ZoneField } from '../RegulatoryZoneTable';
+import RegulatoryMapExcelImportModal from './RegulatoryMapExcelImportModal';
 
 interface Props {
     map: RegulatoryMapWithCity;
@@ -20,11 +21,14 @@ export const RegulatoryMapDetail: React.FC<Props> = ({ map, onBack, onEdit }) =>
     const [loading, setLoading] = React.useState(true);
     const [savingId, setSavingId] = React.useState<string | null>(null);
     const [adding, setAdding] = React.useState(false);
+    const [importOpen, setImportOpen] = React.useState(false);
 
-    React.useEffect(() => {
+    const loadZones = React.useCallback(() => {
         setLoading(true);
-        regulatoryMapService.listZones(map.id).then(setZones).catch(console.error).finally(() => setLoading(false));
+        return regulatoryMapService.listZones(map.id).then(setZones).catch(console.error).finally(() => setLoading(false));
     }, [map.id]);
+
+    React.useEffect(() => { loadZones(); }, [loadZones]);
 
     const handleAdd = async () => {
         try {
@@ -86,7 +90,27 @@ export const RegulatoryMapDetail: React.FC<Props> = ({ map, onBack, onEdit }) =>
                 onAdd={handleAdd}
                 onUpdate={handleUpdate}
                 onDelete={handleDelete}
+                emptyLabel='Clique em "Nova Zona" ou importe uma planilha da prefeitura'
+                headerActions={
+                    <button onClick={() => setImportOpen(true)}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold text-sm transition-all">
+                        <FileSpreadsheet className="w-4 h-4" /> Importar planilha Excel
+                    </button>
+                }
             />
+
+            {importOpen && (
+                <RegulatoryMapExcelImportModal
+                    regulatoryMapId={map.id}
+                    organizationId={map.organization_id}
+                    existingCount={zones.length}
+                    onClose={() => setImportOpen(false)}
+                    onImported={async () => {
+                        setImportOpen(false);
+                        await loadZones();
+                    }}
+                />
+            )}
         </div>
     );
 };

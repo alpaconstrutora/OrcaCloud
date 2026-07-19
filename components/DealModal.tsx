@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine } from 'lucide-react';
+import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile } from '../types';
 import { commercialService } from '../services/commercialService';
 import { clientService } from '../services/clientService';
@@ -316,6 +316,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
     if (!isOpen) return null;
 
+    // "Gerenciar Negociação" (registro já existente) vira tela cheia — mesmo padrão
+    // de conversão do ProjectModal (modo edit): sem backdrop/dim, seta "voltar" no
+    // lugar do X. "Nova Negociação Comercial" (criação simples) continua modal.
+    const isEditMode = !!formData.id;
+
     const hasMissingRequired = !formData.property_id || !formData.client_id;
     const hasBroker = !!formData.broker_id;
     const hasContratoContent = formData.id && (
@@ -345,10 +350,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     ];
 
     return (
-        <div className="absolute inset-0 z-[110] flex items-center justify-center p-8">
-            <div className="absolute inset-0 bg-[#0B1727]/80 backdrop-blur-xl animate-in fade-in duration-300" onClick={onClose} />
+        <div className={isEditMode ? 'fixed inset-0 z-[110] flex flex-col' : 'absolute inset-0 z-[110] flex items-center justify-center p-8'}>
+            {!isEditMode && (
+                <div className="absolute inset-0 bg-[#0B1727]/80 backdrop-blur-xl animate-in fade-in duration-300" onClick={onClose} />
+            )}
 
-            <div className="relative bg-white w-full h-full overflow-hidden rounded-[2.5rem] shadow-2xl border border-white/20 animate-in zoom-in-95 duration-300 flex flex-col">
+            <div className={isEditMode
+                ? 'relative bg-white w-full h-full overflow-hidden flex flex-col animate-in fade-in duration-300'
+                : 'relative bg-white w-full h-full overflow-hidden rounded-[2.5rem] shadow-2xl border border-white/20 animate-in zoom-in-95 duration-300 flex flex-col'
+            }>
 
                 {/* Header */}
                 <div className="px-8 py-5 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between shrink-0">
@@ -412,9 +422,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
                             </>
                         )}
-                        <button type="button" onClick={onClose} className="w-12 h-12 bg-white text-gray-400 rounded-xl flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all border border-gray-100 shadow-sm group">
-                            <X className="w-6 h-6 group-hover:rotate-90 transition-transform" />
-                        </button>
+                        {isEditMode ? (
+                            <button type="button" onClick={onClose} className="w-12 h-12 bg-white text-gray-400 rounded-xl flex items-center justify-center hover:text-blue-600 hover:border-blue-100 transition-all border border-gray-100 shadow-sm group">
+                                <ArrowLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
+                            </button>
+                        ) : (
+                            <button type="button" onClick={onClose} className="w-12 h-12 bg-white text-gray-400 rounded-xl flex items-center justify-center hover:bg-red-50 hover:text-red-500 transition-all border border-gray-100 shadow-sm group">
+                                <X className="w-6 h-6 group-hover:rotate-90 transition-transform" />
+                            </button>
+                        )}
                     </div>
                 </div>
 

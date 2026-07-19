@@ -659,6 +659,15 @@ export const contractService = {
         const dueDay = isRental && deal.payment_due_date
             ? new Date(deal.payment_due_date).getUTCDate()
             : undefined;
+        // Offset (dias) do início do contrato até o "Vencimento Pagto." — faz a
+        // PRIMEIRA parcela cair exatamente na data informada (syncRecurringToFinance
+        // ancora em start_date + payment_days). Sem isso, só o DIA do mês era
+        // preservado e a 1ª parcela podia cair em outro mês.
+        const paymentDays = isRental && deal.payment_due_date && deal.date
+            ? Math.max(0, Math.round(
+                (Date.parse(deal.payment_due_date.slice(0, 10) + 'T00:00:00Z')
+                    - Date.parse(deal.date.slice(0, 10) + 'T00:00:00Z')) / 86400000))
+            : undefined;
 
         const payload = {
             deal_id: deal.id,
@@ -680,6 +689,7 @@ export const contractService = {
             ...(isRental ? {
                 billing_cycle: deal.billing_cycle || 'Mensal',
                 due_day: dueDay,
+                payment_days: paymentDays,
                 end_date: deal.end_date || undefined,
                 reajuste_index: deal.reajuste_index || 'IGPM',
                 reajuste_data_base: deal.date || undefined,

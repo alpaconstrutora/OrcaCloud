@@ -807,24 +807,40 @@ export const empreendimentoService = {
             .select(UNIT_COLS)
             .single();
         if (error) throw new Error(`Failed to update unit: ${error.message}`);
-        // Propaga campos comerciais para a property vinculada (best-effort, não bloqueia)
+        // Propaga o FÍSICO da unidade para as cópias comerciais dos DOIS canais
+        // (best-effort, não bloqueia). O físico é verdade única do empreendimento;
+        // o ESTADO (status de venda / ocupação de locação) NUNCA é empurrado —
+        // ele é gerido em cada módulo (venda via negociações; ocupação via "Sync
+        // de Locações"). O preço acompanha o canal, igual ao publish:
+        //   Vendas   → property.price = unit.price (VGV)
+        //   Locações → property.price = unit.rental_price (aluguel-alvo)
         if (data.commercial_property_id) {
-            this.pushCommercialFieldsFromUnit(data, updates).catch(err =>
-                console.error('[empreendimentoService] erro ao propagar para Comercial:', err)
+            this.pushUnitFieldsToProperty(data, updates, data.commercial_property_id, 'SALE').catch(err =>
+                console.error('[empreendimentoService] erro ao propagar para Vendas:', err)
+            );
+        }
+        if (data.rental_property_id) {
+            this.pushUnitFieldsToProperty(data, updates, data.rental_property_id, 'RENTAL').catch(err =>
+                console.error('[empreendimentoService] erro ao propagar para Locações:', err)
             );
         }
         return data;
     },
 
-    // Campos da unit que têm mapeamento direto para commercial_properties
-    async pushCommercialFieldsFromUnit(
+    // Empurra os campos FÍSICOS da unit para uma property comercial (venda ou
+    // locação). NÃO toca status/ocupação (independência do módulo). O preço
+    // depende do canal: 'SALE' usa unit.price; 'RENTAL' usa unit.rental_price.
+    async pushUnitFieldsToProperty(
         unit: EmpreendimentoUnit,
         changed: EmpreendimentoUnitUpdate,
+        propertyId: string,
+        channel: 'SALE' | 'RENTAL',
     ): Promise<void> {
-        if (!unit.commercial_property_id) return;
         const propUpdate: Record<string, unknown> = {};
         if ('name'          in changed) propUpdate.name          = unit.name;
-        if ('price'         in changed) propUpdate.price         = unit.price ?? 0;
+        // Preço acompanha o canal (mesma regra do publishAll*).
+        if (channel === 'SALE'   && 'price'        in changed) propUpdate.price = unit.price ?? 0;
+        if (channel === 'RENTAL' && 'rental_price' in changed) propUpdate.price = unit.rental_price ?? 0;
         if ('private_area'  in changed) propUpdate.private_area  = unit.private_area;
         if ('common_area'   in changed) propUpdate.common_area   = unit.common_area;
         if ('total_area'    in changed) propUpdate.total_area    = unit.total_area;
@@ -843,7 +859,7 @@ export const empreendimentoService = {
             const { data: prop } = await supabase
                 .from('commercial_properties')
                 .select('specs')
-                .eq('id', unit.commercial_property_id)
+                .eq('id', propertyId)
                 .single();
             const specs: Record<string, unknown> = { ...(prop?.specs ?? {}) };
             if ('floor_tipo'      in changed) specs.floorTipo      = unit.floor_tipo;
@@ -857,7 +873,7 @@ export const empreendimentoService = {
         await supabase
             .from('commercial_properties')
             .update(propUpdate)
-            .eq('id', unit.commercial_property_id);
+            .eq('id', propertyId);
     },
 
     async deleteUnit(id: string): Promise<void> {

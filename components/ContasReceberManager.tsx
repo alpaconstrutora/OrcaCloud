@@ -16,6 +16,7 @@ import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilter
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
+import ActionIconButton from './ui/ActionIconButton';
 
 // ─── helpers ────────────────────────────────────────────────
 
@@ -94,16 +95,19 @@ type StatusFilter = 'all' | ReceivableEffectiveStatus;
 
 interface NovoModalProps {
     organizationId: string;
+    /** Presente = modo edição (só lançamento manual chega aqui). Ausente = criação. */
+    receivable?: Receivable;
     onSave: () => void;
     onClose: () => void;
 }
-function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps) {
+function NovoLancamentoModal({ organizationId, receivable, onSave, onClose }: NovoModalProps) {
+    const isEdit = !!receivable;
     const [form, setForm] = useState({
-        party_name: '',
-        description: '',
-        amount: '',
-        due_date: today(),
-        category: '',
+        party_name:  receivable?.party_name ?? '',
+        description: receivable?.description ?? '',
+        amount:      receivable ? String(receivable.amount ?? '') : '',
+        due_date:    receivable?.due_date ?? today(),
+        category:    receivable?.category ?? '',
     });
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState<string | null>(null);
@@ -135,15 +139,29 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
             const matched = form.party_name
                 ? clients.find(c => c.name.trim().toLowerCase() === form.party_name.trim().toLowerCase())
                 : undefined;
-            await receivableService.create(organizationId, {
-                due_date:    form.due_date,
-                amount:      parseFloat(form.amount.replace(',', '.')),
-                description: form.description,
-                party_id:    matched?.id,
-                party_name:  form.party_name || undefined,
-                party_type:  'CLIENT',
-                category:    form.category || undefined,
-            });
+            const amount = parseFloat(form.amount.replace(',', '.'));
+            if (isEdit) {
+                await receivableService.update(receivable!.id, {
+                    due_date:    form.due_date,
+                    amount,
+                    description: form.description,
+                    // null (não undefined) para de fato limpar no banco quando o
+                    // usuário apaga o campo — undefined seria ignorado pelo update.
+                    party_id:    matched?.id ?? null,
+                    party_name:  form.party_name || null,
+                    category:    form.category || null,
+                });
+            } else {
+                await receivableService.create(organizationId, {
+                    due_date:    form.due_date,
+                    amount,
+                    description: form.description,
+                    party_id:    matched?.id,
+                    party_name:  form.party_name || undefined,
+                    party_type:  'CLIENT',
+                    category:    form.category || undefined,
+                });
+            }
             onSave();
         } catch (e) {
             setErr(e instanceof Error ? e.message : 'Erro ao salvar');
@@ -156,7 +174,7 @@ function NovoLancamentoModal({ organizationId, onSave, onClose }: NovoModalProps
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                    <h2 className="font-black text-slate-800 text-lg">Novo Recebível</h2>
+                    <h2 className="font-black text-slate-800 text-lg">{isEdit ? 'Editar recebível' : 'Novo recebível'}</h2>
                     <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
                         <X className="w-4 h-4 text-gray-500" />
                     </button>
@@ -620,6 +638,7 @@ export default function ContasReceberManager({ organizationId, organizations, on
 
     const confirm = useConfirm();
     const [showNovo, setShowNovo]         = useState(false);
+    const [editando, setEditando]         = useState<Receivable | null>(null);
     const [changingStatus, setChangingStatus] = useState<string | null>(null);
     const [charges, setCharges]           = useState<Record<string, ClientCharge>>({});
     const [emitindo, setEmitindo]         = useState<Receivable | null>(null);
@@ -680,6 +699,37 @@ export default function ContasReceberManager({ organizationId, organizations, on
             notify('Recebível baixado com sucesso.');
         } catch (e) {
             notify('Erro: ' + (e instanceof Error ? e.message : 'Falha ao baixar'), 'error');
+        }
+    }
+
+    /**
+     * Exclusão só de lançamento manual — os demais são espelho de outro módulo
+     * (negócio, contrato, NF-e) e voltariam no próximo sync. O serviço repete
+     * essa trava no banco; aqui é só o gate da UI.
+     */
+    async function handleDelete(r: Receivable) {
+        const ok = await confirm({
+            title: 'Excluir lançamento?',
+            message: (
+                <>
+                    Excluir <b>{r.description ?? '(sem descrição)'}</b> de <b>{r.party_name ?? '—'}</b>?
+                    <div className="bg-gray-50 rounded-xl p-3 mt-3 flex justify-between items-center">
+                        <span className="text-xs text-gray-500">Valor</span>
+                        <span className="font-bold text-gray-900">{fmt(r.amount)}</span>
+                    </div>
+                    <p className="mt-3 text-xs text-gray-500">Essa ação não pode ser desfeita.</p>
+                </>
+            ),
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        try {
+            await receivableService.remove(r.id);
+            await load();
+            notify('Lançamento excluído.');
+        } catch (e) {
+            notify(e instanceof Error ? e.message : 'Falha ao excluir', 'error');
         }
     }
 
@@ -1063,6 +1113,9 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                 {sorted.map(r => {
                                     const isVencido = r.effective_status === 'VENCIDO';
                                     const isRecebido = r.effective_status === 'RECEBIDO';
+                                    // Só lançamento manual é editável/excluível aqui: os demais
+                                    // são espelho de outro módulo e voltariam no próximo sync.
+                                    const isManual = r.source_system === 'MANUAL';
                                     return (
                                         <tr key={r.id} className={`hover:bg-blue-50/50 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
                                             <td className="w-10 px-4 py-2.5 text-center">
@@ -1148,6 +1201,20 @@ export default function ContasReceberManager({ organizationId, organizations, on
                                                             ))}
                                                         </select>
                                                     )}
+                                                    {isManual && (
+                                                        <>
+                                                            <ActionIconButton
+                                                                kind="edit"
+                                                                title="Editar lançamento"
+                                                                onClick={() => setEditando(r)}
+                                                            />
+                                                            <ActionIconButton
+                                                                kind="delete"
+                                                                title="Excluir lançamento"
+                                                                onClick={() => handleDelete(r)}
+                                                            />
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                             )}
@@ -1199,6 +1266,14 @@ export default function ContasReceberManager({ organizationId, organizations, on
                     organizationId={effectiveOrgId}
                     onSave={() => { setShowNovo(false); load(); }}
                     onClose={() => setShowNovo(false)}
+                />
+            )}
+            {editando && (
+                <NovoLancamentoModal
+                    organizationId={effectiveOrgId}
+                    receivable={editando}
+                    onSave={() => { setEditando(null); load(); }}
+                    onClose={() => setEditando(null)}
                 />
             )}
             {emitindo && (

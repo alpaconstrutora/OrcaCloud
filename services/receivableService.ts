@@ -100,21 +100,60 @@ export const receivableService = {
         return { ...row, direction: 'CREDIT', effective_status: 'PREVISTO' } as Receivable;
     },
 
-    /** Corrige dados de negócio do recebível (valor, vencimento, descrição). */
+    /** Corrige dados de negócio do recebível (valor, vencimento, descrição, contraparte). */
     async update(
         id: string,
-        data: { amount?: number; due_date?: string; description?: string },
+        data: {
+            amount?: number; due_date?: string; description?: string;
+            party_id?: string | null; party_name?: string | null; category?: string | null;
+        },
     ): Promise<void> {
         const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
         if (data.amount      !== undefined) updates.amount = data.amount;
-        if (data.due_date    !== undefined) updates.due_date = data.due_date;
+        if (data.due_date    !== undefined) {
+            updates.due_date = data.due_date;
+            // transaction_date espelha o vencimento em lançamento manual (é como o
+            // create o grava) — sem isso a linha reordena/soma errado após editar.
+            updates.transaction_date = data.due_date;
+        }
         if (data.description !== undefined) updates.description = data.description;
+        if (data.party_id    !== undefined) updates.party_id = data.party_id;
+        if (data.party_name  !== undefined) updates.party_name = data.party_name;
+        if (data.category    !== undefined) updates.category = data.category;
 
         const { error } = await supabase
             .from('internal_transactions')
             .update(updates)
             .eq('id', id);
         if (error) throw error;
+    },
+
+    /**
+     * Exclui um recebível **manual**.
+     * O `.eq('source_system','MANUAL')` é trava de segurança, não filtro de
+     * conveniência: lançamentos vindos de outro módulo (negócio comercial,
+     * contrato, NF-e) são espelho da origem — apagados aqui, voltariam no
+     * próximo sync e, pior, sumiriam do lugar onde de fato são gerenciados.
+     */
+    async remove(id: string): Promise<void> {
+        const { data, error } = await supabase
+            .from('internal_transactions')
+            .delete()
+            .eq('id', id)
+            .eq('source_system', 'MANUAL')
+            .select('id');
+
+        if (error) {
+            // reconciliation_matches tem FK RESTRICT: recebível casado com uma
+            // linha do extrato não pode sumir sem desfazer a conciliação antes.
+            if (error.code === '23503') {
+                throw new Error('Este recebível está conciliado com o extrato bancário. Desfaça a conciliação antes de excluir.');
+            }
+            throw error;
+        }
+        if (!data || data.length === 0) {
+            throw new Error('Só lançamentos manuais podem ser excluídos aqui. Este veio de outro módulo — exclua na origem.');
+        }
     },
 
     async getInadimplencia(organizationId: string): Promise<InadimplenciaFaixa[]> {

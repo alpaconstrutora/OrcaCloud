@@ -36,6 +36,10 @@ export interface Empreendimento {
     // Vínculo vivo com o estudo de arquitetura (Planta IA) — direto, sem passar pelo Imovib
     planta_ai_study_id?: string | null;
 
+    // Obra principal (projects.id). Não substitui o vínculo por torre
+    // (EmpreendimentoTower.project_id), que é o correto no multi-torre.
+    project_id?: string | null;
+
     // Dados gerais / regularização
     matricula?: string;
     construtora?: string;          // distinta da incorporadora (developer_name)

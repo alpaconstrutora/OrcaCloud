@@ -4,7 +4,7 @@
 // casca visual da Viabilidade e (futuramente) do Planta IA. O miolo aqui é FloorEditor +
 // UnitEditor (unidade individual real); nos outros módulos o miolo difere, a casca não.
 import React from 'react';
-import { Plus, Loader2, Building, Link2, HardHat, Check, X, BarChart2, AlertCircle } from 'lucide-react';
+import { Plus, Loader2, Building, HardHat, Check, X, BarChart2, AlertCircle } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
@@ -134,43 +134,6 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
     }
   };
 
-  const handleLinkObra = async (tower: EmpreendimentoTower, projectId: string) => {
-    if (!projectId) return;
-    if (orgProjects.some(p => p.id === projectId && towers.some(t => t.id !== tower.id && t.project_id === projectId))) {
-      const ok = await confirm({
-        title: 'Obra já vinculada',
-        message: 'Esta obra já está vinculada a outra torre. Deseja vincular mesmo assim?',
-        confirmLabel: 'Vincular',
-        variant: 'warning',
-      });
-      if (!ok) return;
-    }
-    try {
-      await empreendimentoService.linkTowerToObra(tower.id, projectId);
-      setTowers(prev => prev.map(t => t.id === tower.id ? { ...t, project_id: projectId } : t));
-    } catch (err: any) {
-      notify(`Erro ao vincular obra: ${err.message}`, 'error');
-    }
-  };
-
-  const handleCreateObra = async (tower: EmpreendimentoTower) => {
-    if (!organizationId) { notify('Selecione uma organização específica para criar a obra.', 'error'); return; }
-    const ok = await confirm({
-      title: 'Criar obra?',
-      message: `Uma nova obra será criada e vinculada à torre "${tower.name}".`,
-      confirmLabel: 'Criar',
-      variant: 'default',
-    });
-    if (!ok) return;
-    try {
-      const projectId = await empreendimentoService.createObraForTower(tower.id, organizationId, tower.name);
-      setTowers(prev => prev.map(t => t.id === tower.id ? { ...t, project_id: projectId } : t));
-      notify('Obra criada e vinculada com sucesso.');
-    } catch (err: any) {
-      notify(`Erro ao criar obra: ${err.message}`, 'error');
-    }
-  };
-
   const inputCls = 'h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all';
   const editInputCls = 'h-9 px-2.5 border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:border-blue-500 bg-white';
   const fmt = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
@@ -239,17 +202,9 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
                     <HardHat className="w-3.5 h-3.5" /> {linkedObra.name}
                   </span>
                 ) : (
-                  <>
-                    <select defaultValue="" onChange={e => handleLinkObra(tower, e.target.value)}
-                      className="h-9 px-2.5 border border-gray-200 rounded-[6px] text-sm font-normal text-gray-600 bg-white outline-none">
-                      <option value="">Vincular obra…</option>
-                      {orgProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                    <button onClick={() => handleCreateObra(tower)}
-                      className="h-9 px-2.5 rounded-[6px] bg-blue-50 hover:bg-blue-100 text-blue-600 text-sm font-medium flex items-center gap-1.5">
-                      <Link2 className="w-3.5 h-3.5" /> Criar obra
-                    </button>
-                  </>
+                  <span className="text-xs font-medium px-2.5 h-9 inline-flex items-center text-gray-400">
+                    Sem obra — vincule em Editar Empreendimento
+                  </span>
                 )}
                 <ActionIconButton kind="edit" title="Editar torre" onClick={() => startEdit(tower)} />
                 <ActionIconButton kind="delete" onClick={() => handleDelete(tower)} />

@@ -1,14 +1,16 @@
 // components/empreendimento/EmpreendimentoForm.tsx
 import React from 'react';
-import { X, Loader2, Building2 } from 'lucide-react';
+import { X, Loader2, Building2, HardHat, Link2 } from 'lucide-react';
 import Button from '../ui/Button';
 import CityStateSelect from '../CityStateSelect';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { imovibService } from '../../services/imovibService';
 import { organizationService } from '../../services/organizationService';
 import { supabase } from '../../lib/supabase';
+import { useStore } from '../../store/useStore';
+import { useConfirm } from '../ui/confirm';
 import {
-  Empreendimento, EmpreendimentoStatus, EmpreendimentoTipo, EmpreendimentoInsert, ImovibStudy, Organization,
+  Empreendimento, EmpreendimentoStatus, EmpreendimentoTipo, EmpreendimentoInsert, EmpreendimentoTower, ImovibStudy, Organization,
 } from '../../types';
 import { PlantStudy } from '../../types/plantaAi';
 
@@ -37,9 +39,17 @@ const TIPO_OPTIONS: { value: EmpreendimentoTipo; label: string }[] = [
 ];
 
 export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, onClose, onSaved }) => {
+  // `projects` do store já vem só com obras reais (sem projeto de sistema, sem
+  // orçamento/planejamento/diário) — ver CLAUDE.md regras #2 e #3.
+  const { projects } = useStore();
+  const confirm = useConfirm();
   const [saving, setSaving] = React.useState(false);
   const [studies, setStudies] = React.useState<ImovibStudy[]>([]);
   const [plantStudies, setPlantStudies] = React.useState<PlantStudy[]>([]);
+  // Torres do empreendimento — só existem depois de criado. O vínculo de obra por torre
+  // (multi-torre) mora aqui no modal, junto do vínculo de obra principal (project_id).
+  const [towers, setTowers] = React.useState<EmpreendimentoTower[]>([]);
+  const [towerLinkBusyId, setTowerLinkBusyId] = React.useState<string | null>(null);
   // Org efetiva do registro. Vem da prop quando há uma org ativa específica;
   // com "Todas as organizações" a prop chega vazia e o usuário escolhe aqui.
   const [orgId, setOrgId] = React.useState<string>(editing?.organization_id || organizationId || '');
@@ -52,6 +62,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
     tipo: (editing?.tipo ?? '') as EmpreendimentoTipo | '',
     imovib_study_id: editing?.imovib_study_id ?? '',
     planta_ai_study_id: editing?.planta_ai_study_id ?? '',
+    project_id: editing?.project_id ?? '',
     matricula: editing?.matricula ?? '',
     construtora: editing?.construtora ?? '',
     responsavel_tecnico: editing?.responsavel_tecnico ?? '',
@@ -98,7 +109,66 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
       .then(({ data }) => setPlantStudies((data || []) as PlantStudy[]));
   }, [orgId]);
 
+  React.useEffect(() => {
+    if (!editing) { setTowers([]); return; }
+    empreendimentoService.listTowers(editing.id).then(setTowers).catch(() => setTowers([]));
+  }, [editing]);
+
+  // Obras da org escolhida. Sem org (ainda escolhendo), não há o que oferecer.
+  const orgProjects = React.useMemo(
+    () => projects.filter(p => !orgId || (p.settings as any)?.organizationId === orgId),
+    [projects, orgId],
+  );
+
+  // A coluna não tem FK (deadlock de DDL no módulo — ver a migration): a obra vinculada pode
+  // ter sido excluída, ou ser de outra org. Nesse caso o id não some do formulário sem aviso.
+  const orphanProjectId = form.project_id && !orgProjects.some(p => p.id === form.project_id)
+    ? form.project_id
+    : '';
+
   const set = (k: keyof typeof form, v: string) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const handleLinkTowerObra = async (tower: EmpreendimentoTower, projectId: string) => {
+    if (!projectId) return;
+    if (towers.some(t => t.id !== tower.id && t.project_id === projectId)) {
+      const ok = await confirm({
+        title: 'Obra já vinculada',
+        message: 'Esta obra já está vinculada a outra torre. Deseja vincular mesmo assim?',
+        confirmLabel: 'Vincular',
+        variant: 'warning',
+      });
+      if (!ok) return;
+    }
+    setTowerLinkBusyId(tower.id);
+    try {
+      await empreendimentoService.linkTowerToObra(tower.id, projectId);
+      setTowers(prev => prev.map(t => t.id === tower.id ? { ...t, project_id: projectId } : t));
+    } catch (err: any) {
+      alert(`Erro ao vincular obra: ${err.message}`);
+    } finally {
+      setTowerLinkBusyId(null);
+    }
+  };
+
+  const handleCreateTowerObra = async (tower: EmpreendimentoTower) => {
+    if (!orgId) { alert('Selecione uma organização específica para criar a obra.'); return; }
+    const ok = await confirm({
+      title: 'Criar obra?',
+      message: `Uma nova obra será criada e vinculada à torre "${tower.name}".`,
+      confirmLabel: 'Criar',
+      variant: 'default',
+    });
+    if (!ok) return;
+    setTowerLinkBusyId(tower.id);
+    try {
+      const projectId = await empreendimentoService.createObraForTower(tower.id, orgId, tower.name);
+      setTowers(prev => prev.map(t => t.id === tower.id ? { ...t, project_id: projectId } : t));
+    } catch (err: any) {
+      alert(`Erro ao criar obra: ${err.message}`);
+    } finally {
+      setTowerLinkBusyId(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,6 +184,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
         tipo: form.tipo || null,
         imovib_study_id: form.imovib_study_id || null,
         planta_ai_study_id: form.planta_ai_study_id || null,
+        project_id: form.project_id || null,
         matricula: form.matricula || undefined,
         construtora: form.construtora || undefined,
         responsavel_tecnico: form.responsavel_tecnico || undefined,
@@ -179,7 +250,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
                   onChange={e => {
                     setOrgId(e.target.value);
                     // Vínculos são por org: trocar a org invalida os estudos já escolhidos.
-                    setForm(prev => ({ ...prev, imovib_study_id: '', planta_ai_study_id: '' }));
+                    setForm(prev => ({ ...prev, imovib_study_id: '', planta_ai_study_id: '', project_id: '' }));
                   }}
                 >
                   <option value="">— Selecione —</option>
@@ -225,7 +296,64 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
                 Vínculo direto, independente do Imovib. Habilita o sync de torres/unidades a partir do cenário selecionado.
               </p>
             </div>
+            <div className="md:col-span-2">
+              <label className={labelCls}>Obra Vinculada</label>
+              <select className={inputCls} value={form.project_id} onChange={e => set('project_id', e.target.value)}>
+                <option value="">— Sem vínculo —</option>
+                {orphanProjectId && <option value={orphanProjectId}>Obra não encontrada (vínculo antigo)</option>}
+                {orgProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <p className="text-[10px] text-gray-400 font-medium mt-1">
+                {towers.length > 1
+                  ? 'Obra principal do empreendimento. Cada torre pode ter a sua própria obra — vincule abaixo.'
+                  : 'Obra do empreendimento.'}
+              </p>
+            </div>
           </div>
+
+          {/* Torres & Obras — só existe depois do empreendimento criado, e só faz sentido
+              mostrar por torre quando há mais de uma (torre única já usa "Obra Vinculada" acima). */}
+          {editing && towers.length > 1 && (
+            <div>
+              <h3 className="text-form-label font-black uppercase tracking-widest text-gray-500 mb-3">Obra por Torre</h3>
+              <div className="space-y-2">
+                {towers.map(tower => {
+                  const linkedObra = orgProjects.find(p => p.id === tower.project_id);
+                  const busy = towerLinkBusyId === tower.id;
+                  return (
+                    <div key={tower.id} className="flex items-center gap-2.5 flex-wrap px-3 py-2 border border-gray-100 rounded-xl">
+                      <span className="text-sm font-semibold text-gray-700 min-w-[8rem]">{tower.name}</span>
+                      {linkedObra ? (
+                        <span className="text-xs font-semibold px-2.5 h-9 inline-flex items-center rounded-[6px] bg-emerald-50 text-emerald-600 gap-1.5">
+                          <HardHat className="w-3.5 h-3.5" /> {linkedObra.name}
+                        </span>
+                      ) : (
+                        <>
+                          <select
+                            defaultValue=""
+                            disabled={busy}
+                            onChange={e => handleLinkTowerObra(tower, e.target.value)}
+                            className="h-9 px-2.5 border border-gray-200 rounded-[6px] text-sm font-normal text-gray-600 bg-white outline-none"
+                          >
+                            <option value="">Vincular obra…</option>
+                            {orgProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleCreateTowerObra(tower)}
+                            className="h-9 px-2.5 rounded-[6px] bg-blue-50 hover:bg-blue-100 text-blue-600 text-sm font-medium flex items-center gap-1.5 disabled:opacity-50"
+                          >
+                            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />} Criar obra
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Dados Gerais / Regularização */}
           <div>

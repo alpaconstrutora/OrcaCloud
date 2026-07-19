@@ -564,17 +564,18 @@ export const commercialFinanceService = {
 
         // Espelho em internal_transactions (Contas a Receber / Conciliação): as
         // parcelas do negócio sao materializadas la' com source_system='COMMERCIAL'
-        // e reference_id 'tx-{dealId}-p{n}'/'tx-{dealId}-dp'. O vault acima nao as
-        // toca — antes ficavam orfas ao excluir o negocio. Remove as PENDENTES;
-        // preserva as ja' RECEBIDAS/conciliadas (registro de dinheiro que entrou),
-        // coerente com o vault que mantem as pagas.
+        // e reference_id 'tx-{dealId}-p{n}'/'tx-{dealId}-dp'. A comissao do corretor
+        // vai como 'tx-comm-{dealId}' (DEBIT). O vault acima nao as toca — antes
+        // ficavam orfas ao excluir o negocio (o filtro so' pegava 'tx-{dealId}-%',
+        // deixando a comissao 'tx-comm-{dealId}' para tras). Remove as PENDENTES;
+        // preserva as ja' RECEBIDAS/PAGAS/conciliadas (dinheiro que entrou/saiu).
         try {
             const { data: mirrored } = await supabase
                 .from('internal_transactions')
                 .select('id, status, business_status')
                 .eq('organization_id', organizationId)
                 .eq('source_system', 'COMMERCIAL')
-                .like('reference_id', `tx-${dealId}-%`);
+                .or(`reference_id.like.tx-${dealId}-*,reference_id.eq.tx-comm-${dealId}`);
             const toDelete = (mirrored || [])
                 .filter((r: { status?: string; business_status?: string }) =>
                     r.status !== 'CONCILIATED' && !['RECEBIDO', 'PAGO'].includes(r.business_status ?? ''))

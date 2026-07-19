@@ -14,12 +14,20 @@ export const financialSyncService = {
         const info = settings.financialInfo;
         if (!info) return;
 
-        // Dimensão obra: só carimba quando há um project.id real (vaults org-level ficam null)
-        const projectId = project.id ?? null;
+        // O vault "Gestão Comercial" é um projeto de sistema: existe só para pendurar
+        // as parcelas do comercial (vendas/locações), NÃO é uma obra.
+        const isVault = isSystemProject(project);
+
+        // Dimensão obra: o vault NUNCA carimba project_id. Ele tem um id real na tabela
+        // `projects`, então `project.id ?? null` deixava passar o id do vault e as parcelas
+        // de Vendas/Locações apareciam em Contas a Receber com Obra = "Gestão Comercial"
+        // (vw_receivables faz LEFT JOIN projects → p.name). Parcela de comercial não tem
+        // obra: fica null e a coluna mostra "—". Ver utils/systemProjects.ts e REGRA #2.
+        const projectId = isVault ? null : (project.id ?? null);
 
         // Vault comercial é isento do hard-lock de período fechado (decisão de produto):
         // marca source_system='COMMERCIAL' para a trigger trg_block_period_internal_tx liberar.
-        const sourceSystem = isSystemProject(project) ? 'COMMERCIAL' : 'PROJECT';
+        const sourceSystem = isVault ? 'COMMERCIAL' : 'PROJECT';
 
         const internalTxs: Record<string, unknown>[] = [];
 

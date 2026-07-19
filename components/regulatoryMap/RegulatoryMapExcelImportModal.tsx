@@ -5,11 +5,11 @@
 // para um campo do Mapa Regulatório → revisar e importar. Não assume nenhum layout fixo —
 // cada prefeitura publica sua tabela de um jeito diferente.
 import React from 'react';
-import { X, Upload, Loader2, FileSpreadsheet, ArrowRight, ArrowLeft, RotateCcw, CheckCircle2 } from 'lucide-react';
+import { X, Upload, Loader2, FileSpreadsheet, ArrowRight, ArrowLeft, RotateCcw, CheckCircle2, Download } from 'lucide-react';
 import { RegulatoryMapZoneInsert } from '../../types';
 import { regulatoryMapService } from '../../services/regulatoryMapService';
 import {
-    readSheetGrid, suggestMapping, buildZoneRows, ColumnMapping, ParsedZoneRow,
+    readSheetGrid, suggestMapping, buildZoneRows, downloadTemplateWorkbook, ColumnMapping, ParsedZoneRow,
 } from '../../services/regulatoryMapExcelImport';
 import { ZONE_COLUMNS } from '../RegulatoryZoneTable';
 
@@ -172,6 +172,16 @@ export const RegulatoryMapExcelImportModal: React.FC<Props> = ({ regulatoryMapId
                                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
                                 className="hidden"
                             />
+                            <div className="flex items-center justify-center gap-2 mt-5">
+                                <p className="text-xs text-gray-400">Não tem uma planilha ainda?</p>
+                                <button
+                                    type="button"
+                                    onClick={downloadTemplateWorkbook}
+                                    className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                                >
+                                    <Download className="w-3.5 h-3.5" /> Baixar modelo (.xlsx)
+                                </button>
+                            </div>
                         </div>
                     )}
 

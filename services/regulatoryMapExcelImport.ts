@@ -7,7 +7,7 @@
 // linha visual — comum nesses documentos), (3) deixa o usuário escolher a linha de cabeçalho e
 // mapear cada coluna da planilha para um campo do Mapa Regulatório (ou ignorar).
 import * as XLSX from 'xlsx';
-import { ZoneField } from '../components/RegulatoryZoneTable';
+import { ZoneField, ZONE_COLUMNS } from '../components/RegulatoryZoneTable';
 
 export type ColumnMapping = ZoneField | 'ignore';
 
@@ -130,4 +130,43 @@ export function suggestMapping(headerRow: string[]): ColumnMapping[] {
         }
         return 'ignore' as ColumnMapping;
     });
+}
+
+// Duas linhas de exemplo (baseadas num caso real de mapa regulatório municipal) só para
+// ilustrar o formato esperado de cada coluna — o usuário apaga/sobrescreve ao preencher.
+const TEMPLATE_EXAMPLES: Partial<Record<ZoneField, string>>[] = [
+    {
+        macroarea: 'Urbanização Consolidada', zona: 'ZC', uso_permitido: 'Residencial, misto',
+        ca_minimo: '0,25', ca_basico: '3', ca_maximo: '4',
+        taxa_ocupacao_maxima: '0,9', taxa_permeabilidade_minima: '0,05', gabarito_altura_maxima: 'N.A.',
+        gabarito_pavimentos: '', recuo_frente: '5', recuo_fundos: '3',
+        recuo_lateral_direita: '1,5', recuo_lateral_esquerda: '1,5',
+        regra_vagas: 'por unidade', vagas_por_unidade: '1', area_minima_unidade: '45',
+        lei_referencia: 'Lei nº 1.234/2020', documento_fonte: 'Plano Diretor', nivel_confianca: 'Validado na prefeitura',
+        observacoes: '',
+    },
+    {
+        macroarea: 'Qualificação Urbana', zona: 'ZM 1', uso_permitido: 'Residencial',
+        ca_minimo: '0,25', ca_basico: '2,5', ca_maximo: '4',
+        taxa_ocupacao_maxima: '0,8', taxa_permeabilidade_minima: '0,05', gabarito_altura_maxima: 'N.A.',
+        gabarito_pavimentos: '', recuo_frente: '5', recuo_fundos: '3',
+        recuo_lateral_direita: '1,5', recuo_lateral_esquerda: '1,5',
+        regra_vagas: 'por unidade', vagas_por_unidade: '1', area_minima_unidade: '42',
+        lei_referencia: 'Lei nº 1.234/2020', documento_fonte: 'Plano Diretor', nivel_confianca: 'Médio',
+        observacoes: '',
+    },
+];
+
+/** Gera e baixa um .xlsx modelo com o cabeçalho esperado (labels iguais aos da tabela de
+ *  zonas) e 2 linhas de exemplo — ponto de partida para o usuário preencher com a lei da
+ *  cidade dele. O importador não exige esse layout exato (o mapeamento de colunas é livre),
+ *  mas usá-lo dispensa o passo de mapeamento (o cabeçalho já bate com os campos). */
+export function downloadTemplateWorkbook(): void {
+    const headers = ZONE_COLUMNS.map(c => c.label);
+    const rows = TEMPLATE_EXAMPLES.map(example => ZONE_COLUMNS.map(c => example[c.key] ?? ''));
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = headers.map(h => ({ wch: Math.max(16, h.length + 2) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Mapa Regulatório');
+    XLSX.writeFile(wb, 'modelo-mapa-regulatorio.xlsx');
 }

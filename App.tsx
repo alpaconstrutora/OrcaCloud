@@ -477,97 +477,113 @@ const App: React.FC = () => {
   const handleUpdateSettings = (newSettings: ProjectSettings) => setProjectSettings(newSettings);
   const handleUpdateBudget = (newBudget: BudgetEntry[]) => setBudget(newBudget);
 
-  // ── Guard público: portal do colaborador via token ───────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ⚠️ TODOS os hooks precisam rodar ANTES do primeiro `return` de guard.
+  //
+  // Antes, cada token de portal era um useMemo seguido do seu próprio `return`,
+  // e o useState/useEffect do overlay ficavam DEPOIS dos guards de autenticação.
+  // Resultado: a contagem de hooks mudava entre renders. O caso que quebrava em
+  // produção era o mais comum de todos — o carregamento normal:
+  //   render 1: loadingSession=true  → nenhum guard dispara → roda TODOS os hooks
+  //   render 2: loadingSession=false, session=null → `return <Auth/>` no meio
+  //             → os hooks do overlay não rodam → menos hooks que no render 1
+  //             → React #300 ("Rendered fewer hooks than expected") → tela branca.
+  // Por isso a tela branca aparecia logo após limpar o storage/deslogar.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Tokens de portais públicos — derivados de window.location, estáveis no ciclo
+  // de vida da página (por isso deps vazias).
+  /* eslint-disable react-hooks/exhaustive-deps */
   const portalToken = React.useMemo(() => {
     if (window.location.pathname === '/portal') {
       return new URLSearchParams(window.location.search).get('token');
     }
     return null;
   }, []);
-  if (portalToken) return <PortalTokenGate token={portalToken} />;
 
-  // ── Guard público: portal do cliente via token ────────────────────────────────
   const clientPortalToken = React.useMemo(() => {
     if (window.location.pathname === '/portal-cliente') {
       return new URLSearchParams(window.location.search).get('token');
     }
     return null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  if (clientPortalToken) return <ClientPortalTokenGate token={clientPortalToken} />;
 
-  // ── Guard público: portal do corretor via token ───────────────────────────────
   const brokerPortalToken = React.useMemo(() => {
     if (window.location.pathname === '/portal-corretor') {
       return new URLSearchParams(window.location.search).get('token');
     }
     return null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  if (brokerPortalToken) return <BrokerPortalTokenGate token={brokerPortalToken} />;
 
-  // ── Guard público: portal do investidor via token ──────────────────────────
   const investorPortalToken = React.useMemo(() => {
     if (window.location.pathname === '/portal-investidor') {
       return new URLSearchParams(window.location.search).get('token');
     }
     return null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  if (investorPortalToken) return <InvestorPortalTokenGate token={investorPortalToken} />;
 
-  // ── Guard público: portal do parceiro via token ────────────────────────────
   const partnerPortalToken = React.useMemo(() => {
     if (window.location.pathname === '/portal-parceiro') {
       return new URLSearchParams(window.location.search).get('token');
     }
     return null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  if (partnerPortalToken) return <PartnerPortalTokenGate token={partnerPortalToken} />;
 
-  // ── Guard público: pedido de compra via share_token ──────────────────────────
   const orderShareToken = React.useMemo(() => {
     const match = window.location.pathname.match(/^\/pedido\/([0-9a-f-]{36})$/i);
     return match ? match[1] : null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  if (orderShareToken) return <PublicOrderView token={orderShareToken} />;
 
-  // ── Guard público: proposta de venda via share_token (F3 do PV) ──────────────
   const proposalShareToken = React.useMemo(() => {
     const match = window.location.pathname.match(/^\/proposta\/([0-9a-f-]{36})$/i);
     return match ? match[1] : null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  if (proposalShareToken) return <PublicProposalView token={proposalShareToken} />;
 
-  // ── Guard público: aprovação de especificações de arquitetura do cliente ────
   const officesShareProjectId = React.useMemo(() => {
     const match = window.location.pathname.match(/^\/especificacoes-cliente\/([0-9a-f-]{36})$/i);
     return match ? match[1] : null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  if (officesShareProjectId) return <PublicEspecificacoesView projetoId={officesShareProjectId} />;
 
-  // ── Guard público: marketplace de oportunidades por slug ─────────────────────
   const marketplaceSlug = React.useMemo(() => {
     const match = window.location.pathname.match(/^\/m\/([a-z0-9-]+)\/?$/i);
     return match ? match[1] : null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const publicPlantDocId = React.useMemo(() => {
+    const match = window.location.pathname.match(/^\/publico\/validar-planta\/([0-9a-f-]{36})$/i);
+    return match ? match[1] : null;
+  }, []);
+  /* eslint-enable react-hooks/exhaustive-deps */
+
+  const showOverlay = loadingSession || !profileSynchronized || isValidating || projectsLoading;
+
+  // Escape hatch: se o overlay continuar ativo por muito tempo, o backend
+  // provavelmente está indisponível (ex.: Postgres travado → 522/503). Sem
+  // isto o app fica preso em "Sincronizando..." para sempre, sem avisar o
+  // usuário. Após OVERLAY_STUCK_MS mostramos uma tela de erro com "Tentar
+  // novamente" em vez do loading infinito.
+  const OVERLAY_STUCK_MS = 15000;
+  const [overlayStuck, setOverlayStuck] = React.useState(false);
+  React.useEffect(() => {
+    if (!showOverlay) { setOverlayStuck(false); return; }
+    const timer = setTimeout(() => setOverlayStuck(true), OVERLAY_STUCK_MS);
+    return () => clearTimeout(timer);
+  }, [showOverlay]);
+
+  // ── Guards públicos (ordem preservada) ───────────────────────────────────────
+  if (portalToken) return <PortalTokenGate token={portalToken} />;
+  if (clientPortalToken) return <ClientPortalTokenGate token={clientPortalToken} />;
+  if (brokerPortalToken) return <BrokerPortalTokenGate token={brokerPortalToken} />;
+  if (investorPortalToken) return <InvestorPortalTokenGate token={investorPortalToken} />;
+  if (partnerPortalToken) return <PartnerPortalTokenGate token={partnerPortalToken} />;
+  if (orderShareToken) return <PublicOrderView token={orderShareToken} />;
+  if (proposalShareToken) return <PublicProposalView token={proposalShareToken} />;
+  if (officesShareProjectId) return <PublicEspecificacoesView projetoId={officesShareProjectId} />;
   if (marketplaceSlug) return (
     <React.Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
       <PublicMarketplaceView slug={marketplaceSlug} />
     </React.Suspense>
   );
-
-  // ── Guard público: verificação de plantas via QR Code (DMS/GED) ──────────────
-  const publicPlantDocId = React.useMemo(() => {
-    const match = window.location.pathname.match(/^\/publico\/validar-planta\/([0-9a-f-]{36})$/i);
-    return match ? match[1] : null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   if (publicPlantDocId) return (
     <React.Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}>
       <PublicPlantChecker />
@@ -593,21 +609,6 @@ const App: React.FC = () => {
   );
 
   // ── Layout principal ─────────────────────────────────────────────────────────
-  const showOverlay = loadingSession || !profileSynchronized || isValidating || projectsLoading;
-
-  // Escape hatch: se o overlay continuar ativo por muito tempo, o backend
-  // provavelmente está indisponível (ex.: Postgres travado → 522/503). Sem
-  // isto o app fica preso em "Sincronizando..." para sempre, sem avisar o
-  // usuário. Após OVERLAY_STUCK_MS mostramos uma tela de erro com "Tentar
-  // novamente" em vez do loading infinito.
-  const OVERLAY_STUCK_MS = 15000;
-  const [overlayStuck, setOverlayStuck] = React.useState(false);
-  React.useEffect(() => {
-    if (!showOverlay) { setOverlayStuck(false); return; }
-    const timer = setTimeout(() => setOverlayStuck(true), OVERLAY_STUCK_MS);
-    return () => clearTimeout(timer);
-  }, [showOverlay]);
-
   return (
     <Layout
       activeView={activeView}

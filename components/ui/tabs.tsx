@@ -38,7 +38,7 @@ export function TabsList({ children, className = '' }: { children: React.ReactNo
   return (
     <div
       role="tablist"
-      className={`inline-flex items-center bg-gray-100/80 p-1.5 rounded-[1.5rem] backdrop-blur-sm border border-gray-200/50 ${className}`}
+      className={`flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full ${className}`}
     >
       {children}
     </div>
@@ -53,10 +53,10 @@ export function TabsTrigger({ value, children, className = '' }: { value: string
       role="tab"
       aria-selected={active}
       onClick={() => onValueChange(value)}
-      className={`px-6 py-2.5 rounded-2xl text-sm font-normal uppercase tracking-widest transition-all duration-300 ${
+      className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
         active
-          ? 'bg-white text-blue-600 shadow-md scale-[1.02]'
-          : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+          ? 'bg-white text-blue-600 shadow-sm'
+          : 'text-gray-400 hover:text-gray-600'
       } ${className}`}
     >
       {children}

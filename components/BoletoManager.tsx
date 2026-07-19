@@ -725,25 +725,6 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </button>
             </div>
 
-            {/* Filtros de status — trilho segmentado do §5 (era uma fileira de botões
-                soltos com bg-gray-900 + font-bold uppercase tracking-widest). */}
-            <div className="flex flex-wrap items-center h-9 bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit mb-3">
-                {(['todos', ...Object.keys(STATUS_LABELS)] as const).map((s) => (
-                    <button
-                        key={s}
-                        onClick={() => setFiltroStatus(s as BoletoStatus | 'todos')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                            filtroStatus === s
-                                ? 'bg-white text-blue-600 shadow-sm'
-                                : 'text-gray-400 hover:text-gray-600'
-                        }`}
-                    >
-                        {s === 'todos' ? 'Todos' : STATUS_LABELS[s as BoletoStatus]}
-                        <span className="ml-2 opacity-60">{counts[s] ?? 0}</span>
-                    </button>
-                ))}
-            </div>
-
             {/* Erro — antes do card, para não quebrar a costura toolbar↔tabela abaixo */}
             {error && (
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
@@ -759,7 +740,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-gray-100 bg-white space-y-3">
             <div className="flex flex-col md:flex-row gap-2.5 items-center">
-                <div className="flex-1 relative w-full">
+                {/* min-w-0: sem isso o flex-1 não encolhe abaixo do tamanho do
+                    placeholder e a linha estoura quando os 7 filtros entram ao lado. */}
+                <div className="flex-1 min-w-0 relative w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
@@ -769,6 +752,28 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                 </div>
+
+                {/* Filtros rápidos de status — trilho segmentado, dentro da toolbar
+                    acoplada e logo após a busca, como manda o §5 (o padrão
+                    "Tudo/Receitas/Despesas" do Extrato). Antes era uma barra própria
+                    acima do card da tabela. */}
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                    {(['todos', ...Object.keys(STATUS_LABELS)] as const).map((s) => (
+                        <button
+                            key={s}
+                            onClick={() => setFiltroStatus(s as BoletoStatus | 'todos')}
+                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                filtroStatus === s
+                                    ? 'bg-white text-blue-600 shadow-sm'
+                                    : 'text-gray-400 hover:text-gray-600'
+                            }`}
+                        >
+                            {s === 'todos' ? 'Todos' : STATUS_LABELS[s as BoletoStatus]}
+                            <span className="ml-1.5 opacity-60">{counts[s] ?? 0}</span>
+                        </button>
+                    ))}
+                </div>
+
                 <button
                     onClick={() => setShowFiltros(v => !v)}
                     className={`flex items-center gap-2 h-9 px-3.5 rounded-[6px] border font-medium text-[13px] transition-colors ${

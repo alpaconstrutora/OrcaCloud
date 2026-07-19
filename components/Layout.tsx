@@ -1112,7 +1112,7 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="opura-market" label="Inteligência de Mercado" icon={Search} />
                     <DropdownItem id="planta-ai" label="Estudo de Massa" icon={Brain} />
                     <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
-                    <DropdownItem id="laudo-avaliacao" label="Laudo de Avaliação (NBR 14653)" icon={FileSpreadsheet} />
+                    <DropdownItem id="laudo-avaliacao" label="Laudo de Avaliação" icon={FileSpreadsheet} />
                     <DropdownItem id="area-engine" label="Áreas NBR 12721" icon={FileSpreadsheet} />
                   </NavDropdown>
                 </>

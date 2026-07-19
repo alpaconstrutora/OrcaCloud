@@ -164,13 +164,20 @@ export const commercialFinanceService = {
             }
             
             console.log(`[COMMERCIAL-FINANCE] Saving ${deal.custom_installments.length} CUSTOM installments${downPayment > 0 ? ' + Entrada' : ''} for Deal #${deal.id.substring(0,8)}`);
-            deal.custom_installments.forEach((custom: PaymentInstallment) => {
+            deal.custom_installments.forEach((custom: PaymentInstallment, idx: number) => {
                 const sd = getStatus(custom.id, custom.value, custom.description, custom.status);
                 newInstallments.push({
                     ...custom,
                     ...metadata,
                     paymentDate: sd.paymentDate,
-                    status: sd.status as PaymentInstallment['status']
+                    status: sd.status as PaymentInstallment['status'],
+                    // id original vem de DealModal como `temp-${Date.now()}-${i}` — não embute
+                    // o dealId, então uma parcela customizada excluída junto com o negócio é
+                    // impossível de achar/limpar depois (deleteDealInstallments casa por
+                    // 'tx-{dealId}-%'). Reescreve para um id estável e rastreável ao deal.
+                    // getStatus acima já casa por value+description além do id, então preserva
+                    // status/paymentDate de execuções anteriores mesmo trocando o id agora.
+                    id: `tx-${deal.id}-custom-p${idx + 1}`
                 });
             });
         }

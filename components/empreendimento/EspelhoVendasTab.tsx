@@ -408,7 +408,6 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                 <th className="py-2 px-4">Dormitórios</th>
                 <th className="py-2 px-4">Vagas</th>
                 <th className="py-2 px-4">Banheiros</th>
-                <th className="py-2 px-4">Preço</th>
                 <th className="py-2 px-4">Status (Empr.)</th>
                 <th className="py-2 px-4">Status (Comercial)</th>
                 <th className="py-2 px-4 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -422,7 +421,6 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                 const mappedStatus = snap ? mapCommercialToEmpr(snap.status) : null;
                 const isUnmappable = snap ? UNMAPPABLE_COMMERCIAL_STATUSES.has(snap.status) : false;
                 const statusDiverge = snap && !isUnmappable && mappedStatus !== u.status;
-                const priceDiverge = snap && u.price != null && Math.abs(snap.price - u.price) > 0.01;
                 return (
                   <tr key={u.id} className={`border-b border-gray-50 hover:bg-gray-50/30 ${isOrphan ? 'bg-rose-50/40' : ''}`}>
                     <td className="py-2.5 px-4 text-sm font-normal text-gray-700">{u.name}</td>
@@ -432,17 +430,6 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e }) => {
                     <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bedrooms ?? '—'}</td>
                     <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.parking_spaces ?? '—'}</td>
                     <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bathrooms ?? '—'}</td>
-                    <td className="py-2.5 px-4">
-                      <div className="flex items-center gap-1.5">
-                        {/* §7: font-medium é permitido — e só — em valor financeiro */}
-                        <span className="text-sm font-medium text-gray-800">{u.price != null ? fmt(u.price) : '—'}</span>
-                        {priceDiverge && (
-                          <span title={`Comercial: ${fmt(snap!.price)}`}>
-                            <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
-                          </span>
-                        )}
-                      </div>
-                    </td>
                     <td className="py-2.5 px-4">
                       <span className={`text-sm font-normal ${textColor(UNIT_STATUS_STYLE[u.status])}`}>
                         {UNIT_STATUS_LABEL[u.status]}

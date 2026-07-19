@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    AlertCircle, Building2, Check, ChevronDown, ChevronUp,
+    AlertCircle, Building2, Check, ChevronDown,
     Clock, ExternalLink, FileText, Landmark, Loader2, RefreshCw,
     Search, X, DollarSign, AlertTriangle,
 } from 'lucide-react';
@@ -109,7 +109,6 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
     const [statusFilter, setStatusFilter] = usePersistedState<StatusFilter>('contasPagarManagerFilters:status', 'all');
     const [vencDe, setVencDe] = usePersistedState('contasPagarManagerFilters:vencDe', '');
     const [vencAte, setVencAte] = usePersistedState('contasPagarManagerFilters:vencAte', '');
-    const [showFilters, setShowFilters] = useState(false);
     const tableColumns = useTableColumns(CONTAS_COLUMNS, 'contasPagarManagerColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'contasPagarManagerFilters:advanced');
 
@@ -354,11 +353,67 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                         />
                     </div>
 
+                    {/* Toolbar de botões (§4) — controles de ESCOPO: sobre qual recorte de
+                        dados a tela está olhando (organização, período de vencimento). Barra
+                        própria acima da busca, porque muda o escopo, não o filtro — a §4 é
+                        explícita em não fundir escopo com busca ("qual organização/mês?" é
+                        pergunta diferente de "qual linha?"). Esta tela não tem ação primária
+                        (invoice nasce da aprovação de boleto), então o lado direito fica só
+                        com o resumo do recorte. */}
+                    <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                            {organizations && organizations.length > 1 && (
+                                <div className="relative flex items-center">
+                                    <Building2 className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                    <select
+                                        value={selectedOrgId}
+                                        onChange={e => handleOrgChange(e.target.value)}
+                                        className="h-9 pl-9 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none"
+                                    >
+                                        <option value="ALL">Todas as Organizações</option>
+                                        {organizations.map(o => (
+                                            <option key={o.id} value={o.id}>{o.name}</option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2.5" />
+                                </div>
+                            )}
+
+                            <span className="text-sm font-medium text-gray-400 pl-1">Vencimento</span>
+                            <input
+                                type="date"
+                                value={vencDe}
+                                onChange={e => setVencDe(e.target.value)}
+                                className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            />
+                            <span className="text-sm font-medium text-gray-400">até</span>
+                            <input
+                                type="date"
+                                value={vencAte}
+                                onChange={e => setVencAte(e.target.value)}
+                                className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            />
+                            {(vencDe || vencAte) && (
+                                <button
+                                    onClick={() => { setVencDe(''); setVencAte(''); }}
+                                    className="h-9 w-9 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all"
+                                    title="Limpar período"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
+
+                        <span className="text-sm font-normal text-gray-400 shrink-0">
+                            {filtered.length} de {invoices.length} conta{invoices.length !== 1 ? 's' : ''}
+                        </span>
+                    </div>
+
                     {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
                         conteúdo dividem um único card (border/rounded/shadow só no container
                         pai); a costura visível entre os dois é o border-b da toolbar. */}
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="flex flex-col gap-2.5 p-4 border-b border-gray-100 bg-white">
+                    <div className="p-4 border-b border-gray-100 bg-white space-y-3">
                         <div className="flex flex-col md:flex-row gap-2.5 items-center">
                             <div className="flex-1 relative w-full">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -392,35 +447,11 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 })}
                             </div>
 
-                            <button
-                                onClick={() => setShowFilters(v => !v)}
-                                className="h-9 flex items-center gap-1.5 px-3 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-50 transition-all whitespace-nowrap"
-                            >
-                                {showFilters ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                                Vencimento
-                            </button>
-
+                            {/* Escopo (organização, período) mora na barra da §4, acima —
+                                aqui ficam só os controles de FILTRO da linha. */}
                             <div className="flex items-center h-9">
                                 <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
                             </div>
-
-                            {/* Org selector — só quando há mais de uma organização */}
-                            {organizations && organizations.length > 1 && (
-                                <div className="relative flex items-center h-9">
-                                    <Building2 className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                                    <select
-                                        value={selectedOrgId}
-                                        onChange={e => handleOrgChange(e.target.value)}
-                                        className="h-9 pl-9 pr-7 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer transition-all appearance-none"
-                                    >
-                                        <option value="ALL">Todas as Organizações</option>
-                                        {organizations.map(o => (
-                                            <option key={o.id} value={o.id}>{o.name}</option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2" />
-                                </div>
-                            )}
 
                             <button
                                 onClick={() => carregar(effectiveOrgId)}
@@ -446,21 +477,6 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                             </div>
                         </div>
 
-                        {showFilters && (
-                            <div className="flex items-center gap-2 h-9 text-sm text-gray-500">
-                                <span>Vencimento:</span>
-                                <input type="date" value={vencDe} onChange={e => setVencDe(e.target.value)}
-                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
-                                <span>até</span>
-                                <input type="date" value={vencAte} onChange={e => setVencAte(e.target.value)}
-                                    className="h-9 border border-gray-200 rounded-[6px] px-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
-                                {(vencDe || vencAte) && (
-                                    <button onClick={() => { setVencDe(''); setVencAte(''); }} className="text-gray-400 hover:text-gray-600">
-                                        <X className="w-3.5 h-3.5" />
-                                    </button>
-                                )}
-                            </div>
-                        )}
                     </div>
 
                     {/* Tabela — sem bg/border/rounded/overflow-hidden próprios: já está
@@ -493,7 +509,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                     força uppercase internamente por padrão. */}
                                 <thead>
                                     <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                        <th className="w-10 px-4 py-2 text-center">
+                                        <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                             <input
                                                 type="checkbox"
                                                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
@@ -512,7 +528,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-left px-4 py-2"
+                                                className="text-left px-6 py-2 border-r border-gray-100"
                                             />
                                         )}
                                         {tableColumns.visibleColumns.includes('origem') && (
@@ -524,7 +540,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-left px-4 py-2"
+                                                className="text-left px-6 py-2 border-r border-gray-100"
                                             />
                                         )}
                                         {tableColumns.visibleColumns.includes('valor') && (
@@ -536,7 +552,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-right px-4 py-2"
+                                                className="text-right px-6 py-2 border-r border-gray-100"
                                             />
                                         )}
                                         {tableColumns.visibleColumns.includes('vencimento') && (
@@ -548,7 +564,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-center px-4 py-2"
+                                                className="text-center px-6 py-2 border-r border-gray-100"
                                             />
                                         )}
                                         {tableColumns.visibleColumns.includes('status') && (
@@ -560,10 +576,10 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 sortColumn={tableColumns.sortColumn}
                                                 sortDirection={tableColumns.sortDirection}
                                                 onSort={tableColumns.handleColumnSort}
-                                                className="text-center px-4 py-2"
+                                                className="text-center px-6 py-2 border-r border-gray-100"
                                             />
                                         )}
-                                        <th className="text-right px-4 py-2 text-table-header font-semibold text-gray-500">Ações</th>
+                                        <th className="text-right px-6 py-2 text-sm font-semibold text-gray-500">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
@@ -574,7 +590,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
 
                                         return (
                                             <tr key={inv.id} className={`hover:bg-blue-50/50 transition-colors ${selectedIds.has(inv.id) ? 'bg-blue-50/60' : overdue ? 'bg-red-50/30' : ''}`}>
-                                                <td className="w-10 px-4 py-2.5 text-center">
+                                                <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center">
                                                     {isSelectable(inv) ? (
                                                         <input
                                                             type="checkbox"
@@ -586,25 +602,25 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                     ) : null}
                                                 </td>
                                                 {tableColumns.visibleColumns.includes('supplier') && (
-                                                    <td className="px-4 py-2.5">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                         <p className="text-sm font-normal text-gray-700 truncate max-w-xs">{inv.supplierName ?? '—'}</p>
                                                         <p className="text-xs text-gray-400 truncate max-w-xs">{inv.fileName}</p>
                                                     </td>
                                                 )}
                                                 {tableColumns.visibleColumns.includes('origem') && (
-                                                    <td className="px-4 py-2.5">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                         <span className={`text-sm font-normal ${fromBoleto ? 'text-indigo-700' : 'text-gray-500'}`}>
                                                             {fromBoleto ? 'Boleto' : 'Manual'}
                                                         </span>
                                                     </td>
                                                 )}
                                                 {tableColumns.visibleColumns.includes('valor') && (
-                                                    <td className="px-4 py-2.5 text-right text-sm font-medium text-gray-800">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">
                                                         <Money value={inv.amount} />
                                                     </td>
                                                 )}
                                                 {tableColumns.visibleColumns.includes('vencimento') && (
-                                                    <td className={`px-4 py-2.5 text-center text-sm font-normal ${overdue ? 'text-red-600' : 'text-gray-600'}`}>
+                                                    <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center text-sm font-normal ${overdue ? 'text-red-600' : 'text-gray-600'}`}>
                                                         {formatDateBR(inv.dueDate)}
                                                         {overdue && dueDate && (
                                                             <div className="text-xs text-red-500">
@@ -614,11 +630,11 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                     </td>
                                                 )}
                                                 {tableColumns.visibleColumns.includes('status') && (
-                                                    <td className="px-4 py-2.5 text-center">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
                                                         <StatusBadge inv={inv} />
                                                     </td>
                                                 )}
-                                                <td className="px-4 py-2.5">
+                                                <td className="px-6 py-2.5">
                                                     <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                                         {/* Ver documento — botão-ícone padrão §9.2 (<ActionIconButton>) */}
                                                         {inv.filePath && (
@@ -671,13 +687,13 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                 </tbody>
                                 <tfoot>
                                     <tr className="bg-gray-50 border-t border-gray-200">
-                                        <td colSpan={3} className="px-4 py-2 text-sm text-gray-500">
+                                        <td colSpan={3} className="px-6 py-2 text-sm text-gray-500">
                                             {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
                                         </td>
-                                        <td className="px-4 py-2 text-right text-sm font-medium text-gray-900">
+                                        <td className="px-6 py-2 text-right text-sm font-medium text-gray-900">
                                             {formatMoney(filtered.filter(i => !['paid', 'rejected'].includes(i.status)).reduce((s, i) => s + (i.amount ?? 0), 0))}
                                         </td>
-                                        <td colSpan={3} className="px-4 py-2 text-sm text-gray-400 text-right">total a pagar (filtrado)</td>
+                                        <td colSpan={3} className="px-6 py-2 text-sm text-gray-400 text-right">total a pagar (filtrado)</td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -688,7 +704,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
 
             {/* Barra de ações em lote — fixa no rodapé, paleta azul (ui_ux_standard_guide.md §10) */}
             {selectedVisible.length > 0 && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-[10px] shadow-lg shadow-blue-900/20">
                     <span className="flex-1 text-sm font-bold whitespace-nowrap">
                         {selectedVisible.length} selecionada{selectedVisible.length !== 1 ? 's' : ''}
                         <span className="ml-2 font-normal opacity-75">· {formatMoney(selectedTotal)}</span>
@@ -696,14 +712,14 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                     <button
                         onClick={handleBulkPago}
                         disabled={bulkLoading}
-                        className="flex items-center gap-1.5 px-3 py-2 bg-white text-blue-700 rounded-xl text-sm font-semibold hover:bg-blue-50 disabled:opacity-60 transition-colors"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-700 rounded-[6px] text-[13px] font-medium hover:bg-blue-50 disabled:opacity-60 transition-all active:scale-95"
                     >
                         {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                         Marcar como pago
                     </button>
                     <button
                         onClick={clearSelection}
-                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-blue-400 transition-colors"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-500 rounded-[6px] text-[13px] font-medium hover:bg-blue-400 transition-all active:scale-95"
                     >
                         <X className="w-3.5 h-3.5" />
                         Desmarcar
@@ -733,7 +749,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
 
             {/* Toast de Notificação — padrão guia seção 13 */}
             {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
                     notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                 }`}>
                     <AlertCircle className="w-4 h-4 shrink-0" />

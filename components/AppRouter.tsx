@@ -101,6 +101,7 @@ const OpuraMarketModule     = React.lazy(() => import('./OpuraMarketModule'));
 const OpuraGovernanceModule = React.lazy(() => import('./OpuraGovernanceModule'));
 const OpuraAssetsModule     = React.lazy(() => import('./OpuraAssetsModule'));
 const EmpreendimentoModule  = React.lazy(() => import('./empreendimento/EmpreendimentoModule'));
+const RegulatoryMapModule   = React.lazy(() => import('./regulatoryMap/RegulatoryMapModule'));
 const InventoryModule       = React.lazy(() => import('./InventoryModule').then(m => ({ default: m.InventoryModule })));
 const ProcurementModule     = React.lazy(() => import('./ProcurementModule').then(m => ({ default: m.ProcurementModule })));
 const P2PFlowBoard          = React.lazy(() => import('./P2PFlowBoard').then(m => ({ default: m.P2PFlowBoard })));
@@ -301,7 +302,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = isModuleAllowed('canViewRentals', 'rentals');
     } else if (['sales', 'gestao-vendas'].includes(activeView)) {
       allowed = isModuleAllowed('canViewSales', 'crm');
-    } else if (activeView === 'imovib' || activeView === 'empreendimentos' || activeView === 'laudo-avaliacao') {
+    } else if (activeView === 'imovib' || activeView === 'empreendimentos' || activeView === 'laudo-avaliacao' || activeView === 'regulatory-maps') {
       allowed = isModuleAllowed('canViewImovib', 'incorporacao');
     } else if (activeView === 'fiscal-nfe') {
       allowed = isModuleAllowed('canViewFiscal', 'fiscal');
@@ -454,6 +455,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<Spinner />}>
           <EmpreendimentoModule
+            activeOrganizationId={activeOrganizationId}
+            onChangeView={setActiveView}
+          />
+        </React.Suspense>
+      );
+
+    case 'regulatory-maps':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <RegulatoryMapModule
             activeOrganizationId={activeOrganizationId}
             onChangeView={setActiveView}
           />

@@ -798,7 +798,16 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-2.5 text-right">
-                                                        <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingDeal({ id: '', property_id: property.id, client_id: '', type: 'RENTAL', value: property.price, date: new Date().toISOString().split('T')[0], status: 'PENDING' });
+                                                                    setIsDealModalOpen(true);
+                                                                }}
+                                                                className="text-emerald-600 hover:text-emerald-800 text-sm font-medium p-1.5 hover:bg-emerald-50 rounded-lg transition-all"
+                                                            >
+                                                                Negociação
+                                                            </button>
                                                             <ActionIconButton kind="edit" onClick={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }} />
                                                             <ActionIconButton kind="delete" onClick={() => handleDeleteProperty(property.id)} />
                                                         </div>

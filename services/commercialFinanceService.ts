@@ -29,7 +29,10 @@ export const commercialFinanceService = {
         const orgToUse = targetOrganizationId;
         console.log(`[COMMERCIAL-FINANCE] Processing Deal #${deal.id} for Org: ${orgToUse}`);
 
-        const allowedStatuses = ['COMPLETED', 'PENDING', 'WAITING_PAYMENT', 'APPROVED'];
+        // DEVE bater com FINANCIAL_STATUSES de commercialService.saveDeal — antes as duas
+        // listas divergiam (faltavam RESERVA/CONTRATO/ASSINATURA aqui), então negócios
+        // nessas etapas eram chamados pelo saveDeal e rejeitados aqui, sem gerar recebível.
+        const allowedStatuses = ['COMPLETED', 'PENDING', 'APPROVED', 'WAITING_PAYMENT', 'RESERVA', 'CONTRATO', 'ASSINATURA'];
         if (!allowedStatuses.includes(deal.status || '')) {
             console.log(`[COMMERCIAL-FINANCE] Skip: Invalid status "${deal.status}"`);
             return null;

@@ -323,12 +323,21 @@ export const commercialService = {
 
         // Estágios que reservam a unidade (impede venda duplicada)
         const RESERVA_STATUSES = ['WAITING_PAYMENT', 'RESERVA', 'CONTRATO', 'ASSINATURA'];
+        // Estágios que geram lançamentos em Contas a Receber. Inclui PENDING/APPROVED:
+        // o negócio já tem parcelas definidas e deve refletir no financeiro mesmo antes
+        // de reservar a unidade. DEVE bater com `allowedStatuses` de syncDealToFinance
+        // (commercialFinanceService) — as duas listas eram inconsistentes e por isso o
+        // PENDING nunca lançava e RESERVA/CONTRATO/ASSINATURA eram chamados mas rejeitados.
+        const FINANCIAL_STATUSES = ['COMPLETED', 'PENDING', 'APPROVED', ...RESERVA_STATUSES];
 
-        // Trigger financial sync if completed OR any reservation stage
-        if (result.status === 'COMPLETED' || RESERVA_STATUSES.includes(result.status)) {
+        // Gera/atualiza o financeiro em qualquer estágio ativo (não só reserva/conclusão)
+        if (FINANCIAL_STATUSES.includes(result.status)) {
             try {
-                // Atualizar status do imóvel se estiver configurado o vinculamento no negócio
-                if (result.property_id && result.client_id && result.type !== 'SERVICE') {
+                // Atualizar status do imóvel SÓ nas etapas que de fato reservam/concluem.
+                // PENDING/APPROVED geram recebível mas NÃO travam a unidade (negócio ainda
+                // em negociação não deve reservar o imóvel).
+                if (result.property_id && result.client_id && result.type !== 'SERVICE'
+                    && (result.status === 'COMPLETED' || RESERVA_STATUSES.includes(result.status))) {
                     const propertyUpdates: Partial<Property> = {
                         status: result.status === 'COMPLETED'
                             ? (result.type === 'SALE' ? PropertyStatus.SOLD : PropertyStatus.RENTED)

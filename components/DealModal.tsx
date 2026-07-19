@@ -231,6 +231,33 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     };
 
     /**
+     * Recalcula o valor final da parcela a partir do valor bruto + desconto
+     * (R$ ou %). `value` continua sendo o que materializa em Contas a Receber
+     * — editar o valor bruto, o tipo de desconto ou o valor do desconto sempre
+     * recalcula `value` a partir da base (`originalValue`), nunca deixando os
+     * dois soltos e fora de sincronia.
+     */
+    const updateInstallmentDiscount = (
+        index: number,
+        patch: Partial<Pick<PaymentInstallment, 'originalValue' | 'discountType' | 'discountAmount'>>
+    ) => {
+        setFormData(prev => {
+            const insts = [...(prev.custom_installments || [])];
+            const inst = insts[index];
+            const merged = { ...inst, ...patch };
+            const base = merged.originalValue ?? inst.value;
+            const discType = merged.discountType;
+            const discAmt = merged.discountAmount || 0;
+            let finalValue = base;
+            if (discType === 'PERCENT') finalValue = base - (base * discAmt / 100);
+            else if (discType === 'VALUE') finalValue = base - discAmt;
+            finalValue = Math.max(0, finalValue);
+            insts[index] = { ...merged, originalValue: base, value: Number(finalValue.toFixed(2)) };
+            return { ...prev, custom_installments: insts };
+        });
+    };
+
+    /**
      * Handler do campo "Data do 1º Pagamento". Se já existem parcelas geradas
      * (custom_installments), muda-la sozinha deixaria a data e o cronograma
      * dessincronizados — pergunta antes de recalcular os vencimentos (mantendo
@@ -824,47 +851,106 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
 
                                         {formData.custom_installments && formData.custom_installments.length > 0 && (
-                                            <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                            <div className="space-y-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
                                                 {formData.custom_installments.map((inst, index) => (
-                                                    <div key={inst.id} className="grid grid-cols-12 gap-2 p-2 bg-white border border-purple-100 rounded-xl items-center shadow-sm">
-                                                        <div className="col-span-1 flex justify-center">
-                                                            <span className="text-xs font-black text-gray-400">{index + 1}</span>
+                                                    <div key={inst.id} className="p-2 bg-white border border-purple-100 rounded-xl shadow-sm space-y-1.5">
+                                                        <div className="grid grid-cols-12 gap-2 items-center">
+                                                            <div className="col-span-1 flex justify-center">
+                                                                <span className="text-xs font-black text-gray-400">{index + 1}</span>
+                                                            </div>
+                                                            <div className="col-span-5">
+                                                                <input
+                                                                    type="date"
+                                                                    value={inst.dueDate}
+                                                                    onChange={(e) => {
+                                                                        const newInsts = [...formData.custom_installments!];
+                                                                        newInsts[index] = { ...inst, dueDate: e.target.value };
+                                                                        setFormData({ ...formData, custom_installments: newInsts });
+                                                                    }}
+                                                                    className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg p-2 text-form-input font-bold text-gray-700 outline-none"
+                                                                />
+                                                            </div>
+                                                            <div className="col-span-6 relative">
+                                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">R$</span>
+                                                                <input
+                                                                    type="number"
+                                                                    value={inst.originalValue ?? inst.value}
+                                                                    onChange={(e) => updateInstallmentDiscount(index, { originalValue: parseFloat(e.target.value) || 0 })}
+                                                                    className="w-full pl-6 pr-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg text-form-input font-bold text-gray-700 outline-none"
+                                                                />
+                                                            </div>
                                                         </div>
-                                                        <div className="col-span-5">
-                                                            <input
-                                                                type="date"
-                                                                value={inst.dueDate}
-                                                                onChange={(e) => {
-                                                                    const newInsts = [...formData.custom_installments!];
-                                                                    newInsts[index] = { ...inst, dueDate: e.target.value };
-                                                                    setFormData({ ...formData, custom_installments: newInsts });
-                                                                }}
-                                                                className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg p-2 text-form-input font-bold text-gray-700 outline-none"
-                                                            />
-                                                        </div>
-                                                        <div className="col-span-6 relative">
-                                                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">R$</span>
-                                                            <input
-                                                                type="number"
-                                                                value={inst.value}
-                                                                onChange={(e) => {
-                                                                    const newInsts = [...formData.custom_installments!];
-                                                                    newInsts[index] = { ...inst, value: parseFloat(e.target.value) || 0 };
-                                                                    setFormData({ ...formData, custom_installments: newInsts });
-                                                                }}
-                                                                className="w-full pl-6 pr-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg text-form-input font-bold text-gray-700 outline-none"
-                                                            />
+
+                                                        {/* Desconto por parcela — valor bruto (acima) menos desconto (R$ ou %) = valor final */}
+                                                        <div className="grid grid-cols-12 gap-2 items-center">
+                                                            <div className="col-span-1" />
+                                                            <div className="col-span-4">
+                                                                <select
+                                                                    value={inst.discountType ?? ''}
+                                                                    onChange={(e) => {
+                                                                        const type = e.target.value as 'VALUE' | 'PERCENT' | '';
+                                                                        updateInstallmentDiscount(index, {
+                                                                            discountType: type || undefined,
+                                                                            discountAmount: type ? inst.discountAmount : undefined
+                                                                        });
+                                                                    }}
+                                                                    className="w-full text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50 outline-none cursor-pointer"
+                                                                >
+                                                                    <option value="">Sem desconto</option>
+                                                                    <option value="VALUE">Desconto R$</option>
+                                                                    <option value="PERCENT">Desconto %</option>
+                                                                </select>
+                                                            </div>
+                                                            {inst.discountType && (
+                                                                <div className="col-span-3">
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        step="0.01"
+                                                                        value={inst.discountAmount ?? ''}
+                                                                        onChange={(e) => updateInstallmentDiscount(index, { discountAmount: parseFloat(e.target.value) || 0 })}
+                                                                        placeholder={inst.discountType === 'PERCENT' ? '%' : 'R$'}
+                                                                        className="w-full text-xs font-semibold text-amber-700 border border-amber-200 rounded-lg px-2 py-1.5 bg-amber-50 outline-none"
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                            {inst.discountType && (
+                                                                <div className="col-span-4 text-right">
+                                                                    <span className="text-xs font-black text-emerald-600">
+                                                                        Final: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inst.value)}
+                                                                    </span>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 ))}
-                                                <div className="flex justify-between items-center p-3 mt-2 bg-gray-50 rounded-xl border border-gray-100">
-                                                    <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Soma das Parcelas</span>
-                                                    <span className={`text-sm font-black ${Math.abs((formData.custom_installments.reduce((sum, i) => sum + i.value, 0) + (formData.down_payment || 0)) - (formData.value || 0)) < 0.01 ? 'text-green-600' : 'text-amber-600'}`}>
-                                                        Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
-                                                            formData.custom_installments.reduce((sum, i) => sum + i.value, 0) + (formData.down_payment || 0)
-                                                        )}
-                                                    </span>
-                                                </div>
+                                                {(() => {
+                                                    // Soma bruta valida contra o Valor do Fechamento (parcelas somam o
+                                                    // preço combinado, independente de desconto). Soma com desconto é
+                                                    // o que de fato será cobrado — mostrada só quando difere da bruta,
+                                                    // para não confundir "faltou parcela" com "desconto aplicado".
+                                                    const grossSum = formData.custom_installments!.reduce((sum, i) => sum + (i.originalValue ?? i.value), 0) + (formData.down_payment || 0);
+                                                    const netSum = formData.custom_installments!.reduce((sum, i) => sum + i.value, 0) + (formData.down_payment || 0);
+                                                    const hasDiscount = Math.abs(netSum - grossSum) > 0.01;
+                                                    return (
+                                                        <div className="p-3 mt-2 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Soma das Parcelas</span>
+                                                                <span className={`text-sm font-black ${Math.abs(grossSum - (formData.value || 0)) < 0.01 ? 'text-green-600' : 'text-amber-600'}`}>
+                                                                    Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(grossSum)}
+                                                                </span>
+                                                            </div>
+                                                            {hasDiscount && (
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest">Total com Desconto</span>
+                                                                    <span className="text-sm font-black text-emerald-600">
+                                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(netSum)}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         )}
                                     </div>

@@ -16,6 +16,16 @@ export interface PaymentInstallment {
     commissionRate?: number;
     brokerName?: string;
     attachmentUrl?: string;
+    /**
+     * Desconto por parcela (Gerenciar Negociação → Forma de Pagamento). `value`
+     * continua sendo o valor FINAL (com desconto já aplicado) — é o que
+     * materializa em Contas a Receber. `originalValue` guarda o valor bruto
+     * (pré-desconto) para permitir editar a base ou o desconto independentemente
+     * e recalcular; ausente = nenhum desconto foi aplicado ainda.
+     */
+    originalValue?: number;
+    discountType?: 'VALUE' | 'PERCENT';
+    discountAmount?: number;
 }
 
 export interface FinancialTransaction {

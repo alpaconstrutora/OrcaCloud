@@ -321,21 +321,21 @@ export const commercialService = {
             result = data as PropertyDeal;
         }
 
-        // Estágios que reservam a unidade (impede venda duplicada)
-        const RESERVA_STATUSES = ['WAITING_PAYMENT', 'RESERVA', 'CONTRATO', 'ASSINATURA'];
-        // Estágios que geram lançamentos em Contas a Receber. Inclui PENDING/APPROVED:
-        // o negócio já tem parcelas definidas e deve refletir no financeiro mesmo antes
-        // de reservar a unidade. DEVE bater com `allowedStatuses` de syncDealToFinance
-        // (commercialFinanceService) — as duas listas eram inconsistentes e por isso o
-        // PENDING nunca lançava e RESERVA/CONTRATO/ASSINATURA eram chamados mas rejeitados.
-        const FINANCIAL_STATUSES = ['COMPLETED', 'PENDING', 'APPROVED', ...RESERVA_STATUSES];
+        // Estágios que reservam a unidade (impede negociação duplicada da mesma unidade).
+        // Inclui PENDING/APPROVED: qualquer negociação ativa, mesmo sem contrato formal
+        // gerado ainda, trava a unidade — decisão do usuário 2026-07-19 (unidade com
+        // negociação pendente aparecia como "Disponível" em Gestão de Unidades).
+        const RESERVA_STATUSES = ['PENDING', 'APPROVED', 'WAITING_PAYMENT', 'RESERVA', 'CONTRATO', 'ASSINATURA'];
+        // Estágios que geram lançamentos em Contas a Receber. DEVE bater com
+        // `allowedStatuses` de syncDealToFinance (commercialFinanceService) — as duas
+        // listas eram inconsistentes e por isso PENDING nunca lançava e RESERVA/CONTRATO/
+        // ASSINATURA eram chamados mas rejeitados.
+        const FINANCIAL_STATUSES = ['COMPLETED', ...RESERVA_STATUSES];
 
         // Gera/atualiza o financeiro em qualquer estágio ativo (não só reserva/conclusão)
         if (FINANCIAL_STATUSES.includes(result.status)) {
             try {
-                // Atualizar status do imóvel SÓ nas etapas que de fato reservam/concluem.
-                // PENDING/APPROVED geram recebível mas NÃO travam a unidade (negócio ainda
-                // em negociação não deve reservar o imóvel).
+                // Atualizar status do imóvel em qualquer estágio ativo (inclusive PENDING).
                 if (result.property_id && result.client_id && result.type !== 'SERVICE'
                     && (result.status === 'COMPLETED' || RESERVA_STATUSES.includes(result.status))) {
                     const propertyUpdates: Partial<Property> = {

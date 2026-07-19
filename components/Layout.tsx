@@ -1105,19 +1105,15 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={Building2}
                     isOpen={isDesenvolvimentoImobOpen}
                     onToggle={() => setIsDesenvolvimentoImobOpen(o => !o)}
-                    hasActiveChild={['opportunities','opura-market','planta-ai','imovib','empreendimentos','area-engine','investor-portal','laudo-avaliacao'].includes(activeView)}
+                    hasActiveChild={['opportunities','opura-market','planta-ai','imovib','empreendimentos','area-engine','laudo-avaliacao'].includes(activeView)}
                   >
-                    <DropdownGroupLabel label="Desenvolvimento de Negócios" />
+                    <DropdownItem id="empreendimentos" label="Empreendimentos" icon={Building2} />
                     <DropdownItem id="opportunities" label="Oportunidades" icon={Building2} />
                     <DropdownItem id="opura-market" label="Inteligência de Mercado" icon={Search} />
                     <DropdownItem id="planta-ai" label="Estudo de Massa (Planta AI)" icon={Brain} />
                     <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
                     <DropdownItem id="laudo-avaliacao" label="Laudo de Avaliação (NBR 14653)" icon={FileSpreadsheet} />
-
-                    <DropdownGroupLabel label="Incorporação Imobiliária" />
-                    <DropdownItem id="empreendimentos" label="Empreendimentos" icon={Building2} />
                     <DropdownItem id="area-engine" label="Áreas NBR 12721" icon={FileSpreadsheet} />
-                    <DropdownItem id="investor-portal" label="Portal do Investidor / SPE" icon={TrendingUp} />
                   </NavDropdown>
                 </>
               )}

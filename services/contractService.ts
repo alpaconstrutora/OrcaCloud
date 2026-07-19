@@ -29,9 +29,30 @@ async function resolveSupplierName(supplierId: string | undefined, fallback: str
 }
 
 /**
+ * Direção de CAIXA do contrato: recebível (dinheiro entra) × pagável (dinheiro sai).
+ *
+ * ⚠️ NÃO usar `contract.direction` para isto. Esse campo carrega semântica de
+ * DOMÍNIO legada e INVERTIDA em relação ao caixa: contratos de SUPRIMENTOS são
+ * gravados com direction='INCOMING' (herança da numeração/listagem antiga), mas
+ * Suprimentos é onde você PAGA o fornecedor → pagável. Ler `direction` como
+ * direção de caixa (INCOMING→CREDIT) era exatamente o bug de contratos de
+ * Suprimentos caindo em Contas a Receber.
+ *
+ * Regra de negócio por domínio (fonte de verdade = `domain`):
+ *   • SUPRIMENTOS                 → você PAGA o fornecedor → PAGÁVEL  (DEBIT).
+ *   • VENDAS / SERVICOS / LOCACAO → você RECEBE do cliente → RECEBÍVEL (CREDIT).
+ * Fallback (domain nulo, contratos legados pré-coluna domain): semântica ORIGINAL
+ * de direction — OUTGOING=para cliente=recebível; INCOMING/nulo=fornecedor=pagável.
+ */
+function isReceivableContract(contract: { domain?: string | null; direction?: string | null }): boolean {
+    if (contract.domain) return contract.domain !== 'SUPRIMENTOS';
+    return contract.direction === 'OUTGOING';
+}
+
+/**
  * Resolve a contraparte cadastrada de um contrato para popular party_type/party_name
  * (e party_id) nos lançamentos internos.
- * INCOMING = recebível (cliente); OUTGOING/indefinido = pagável (fornecedor).
+ * Recebível → cliente; pagável → fornecedor (ver isReceivableContract).
  * IMPORTANTE: internal_transactions.party_id tem FK só para clients
  * (internal_txs_party_id_fkey). Por isso party_id só é setado para CLIENTE;
  * para fornecedor, gravamos party_type/party_name mas party_id fica null.
@@ -40,12 +61,12 @@ async function resolveContractParty(
     contract: Contract,
     fallbackName: string,
 ): Promise<{ party_id: string | null; party_type: 'SUPPLIER' | 'CLIENT' | null; party_name: string | null }> {
-    const cAny = contract as unknown as { direction?: string; client_id?: string; supplier_id?: string };
+    const cAny = contract as unknown as { domain?: string; direction?: string; client_id?: string; supplier_id?: string };
     if (!cAny.client_id && !cAny.supplier_id) return { party_id: null, party_type: null, party_name: null };
 
-    // Rótulo segue a direção (INCOMING = cliente/recebível; senão fornecedor/pagável),
+    // Rótulo segue a direção de caixa (recebível = cliente; pagável = fornecedor),
     // mas o NOME é resolvido de qualquer id que exista (a contraparte às vezes está em supplier_id).
-    const isIncoming = cAny.direction === 'INCOMING';
+    const isIncoming = isReceivableContract(cAny);
     const partyType: 'SUPPLIER' | 'CLIENT' = isIncoming ? 'CLIENT' : 'SUPPLIER';
     let name = fallbackName;
     try {
@@ -208,7 +229,7 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
 
             // Insert one row per installment with unique reference_id
             const party = await resolveContractParty(contract, supplierName);
-            const txDirection = contract.direction === 'INCOMING' ? 'CREDIT' : 'DEBIT';
+            const txDirection = isReceivableContract(contract) ? 'CREDIT' : 'DEBIT';
             const internalRows = newTxs.map((tx, i) => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_PARCELADO',
@@ -340,7 +361,7 @@ async function syncRecurringToFinance(contract: Contract) {
             })));
         } else if (contract.organization_id) {
             const party = await resolveContractParty(contract, supplierName);
-            const txDirection = contract.direction === 'INCOMING' ? 'CREDIT' : 'DEBIT';
+            const txDirection = isReceivableContract(contract) ? 'CREDIT' : 'DEBIT';
             await supabase.from('internal_transactions').insert(transactions.map(tx => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_RECURRING',
@@ -420,7 +441,7 @@ async function syncAVistaToFinance(contract: Contract) {
                 .eq('reference_id', contract.id);
 
             const party = await resolveContractParty(contract, supplierName);
-            const txDirection = contract.direction === 'INCOMING' ? 'CREDIT' : 'DEBIT';
+            const txDirection = isReceivableContract(contract) ? 'CREDIT' : 'DEBIT';
             await supabase.from('internal_transactions').insert({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_AVISTA',

@@ -506,27 +506,27 @@ function DocumentDetail({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                    <th className="px-4 py-2">#</th>
-                    <th className="px-4 py-2">Descrição</th>
-                    <th className="px-4 py-2">NCM</th>
-                    <th className="px-4 py-2">CFOP</th>
-                    <th className="px-4 py-2">Qtd</th>
-                    <th className="px-4 py-2">Vl. unit.</th>
-                    <th className="px-4 py-2">Total</th>
-                    <th className="px-4 py-2">Categoria</th>
+                    <th className="px-6 py-2 border-r border-gray-100">#</th>
+                    <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
+                    <th className="px-6 py-2 border-r border-gray-100">NCM</th>
+                    <th className="px-6 py-2 border-r border-gray-100">CFOP</th>
+                    <th className="px-6 py-2 border-r border-gray-100">Qtd</th>
+                    <th className="px-6 py-2 border-r border-gray-100">Vl. unit.</th>
+                    <th className="px-6 py-2 border-r border-gray-100">Total</th>
+                    <th className="px-6 py-2">Categoria</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {detail.items.map(item => (
                     <tr key={item.id}>
-                      <td className="px-4 py-2.5 text-sm font-normal text-gray-500">{item.line_number}</td>
-                      <td className="px-4 py-2.5 text-sm font-normal text-gray-700">{item.description}</td>
-                      <td className="px-4 py-2.5 text-sm font-normal text-gray-600">{item.ncm ?? '—'}</td>
-                      <td className="px-4 py-2.5 text-sm font-normal text-gray-600">{item.cfop ?? '—'}</td>
-                      <td className="px-4 py-2.5 text-sm font-normal text-gray-600">{item.quantity} {item.commercial_unit}</td>
-                      <td className="px-4 py-2.5 text-sm font-normal text-gray-600">{fmt(item.unit_value)}</td>
-                      <td className="px-4 py-2.5 text-sm font-medium text-gray-800">{fmt(item.total_value)}</td>
-                      <td className="px-4 py-2.5"><CategoryText cat={item.category} /></td>
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{item.line_number}</td>
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{item.description}</td>
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{item.ncm ?? '—'}</td>
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{item.cfop ?? '—'}</td>
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{item.quantity} {item.commercial_unit}</td>
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{fmt(item.unit_value)}</td>
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800">{fmt(item.total_value)}</td>
+                      <td className="px-6 py-2.5"><CategoryText cat={item.category} /></td>
                     </tr>
                   ))}
                 </tbody>

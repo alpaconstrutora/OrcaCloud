@@ -1,6 +1,6 @@
 // components/empreendimento/EmpreendimentoModule.tsx
 import React from 'react';
-import { Plus, Building2, Search, RefreshCw } from 'lucide-react';
+import { Plus, Building2, Search, RefreshCw, AlertCircle } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { KpiCard } from '../ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
@@ -52,6 +52,11 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<Empreendimento | null>(null);
   const confirm = useConfirm();
+  const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const notify = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4500);
+  };
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -87,7 +92,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
       await empreendimentoService.remove(item.id);
       setItems(prev => prev.filter(i => i.id !== item.id));
     } catch (err: any) {
-      alert(`Erro ao excluir: ${err.message}`);
+      notify(`Erro ao excluir: ${err.message}`, 'error');
     }
   };
 
@@ -325,6 +330,15 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
           onClose={() => { setIsFormOpen(false); setEditing(null); }}
           onSaved={handleSaved}
         />
+      )}
+
+      {notification && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+          notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {notification.message}
+        </div>
       )}
     </div>
   );

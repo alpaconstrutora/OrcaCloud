@@ -36,6 +36,11 @@ export const financialSyncService = {
                     direction: 'CREDIT',
                     description: inst.description || `Parcela - ${project.name}`,
                     entity_name: inst.clientName,
+                    // Contas a Receber (vw_receivables) exibe party_name, não entity_name.
+                    // Sem estes campos a parcela aparecia sem o nome do cliente.
+                    party_name: inst.clientName,
+                    party_id: inst.clientId ?? null, // FK clients(id), ON DELETE SET NULL
+                    party_type: 'CLIENT',
                     category: (inst as unknown as Record<string, unknown>).category || 'Receita de Obra',
                     status: inst.status === 'PAID' ? 'CONCILIATED' : 'PENDING'
                 });

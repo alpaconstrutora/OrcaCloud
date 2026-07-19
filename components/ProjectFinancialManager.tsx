@@ -1599,9 +1599,13 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     ];
 
     return (
-        <div className="p-2 space-y-8 animate-in fade-in duration-500">
-            {/* Header & Tabs */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+        <div className="p-2 space-y-6 animate-in fade-in duration-500">
+            {/* Toolbar de abas — UI UX tabela.md §3. O trilho de abas mora DENTRO de um
+                card branco (era um flex solto com mb-10), igual à tela de referência
+                (Extrato/BankReconciliation:3253). Ação de export à direita, §8:
+                h-9 + rounded-[6px] + font-medium sentence case — antes era
+                px-6 py-3 + rounded-2xl + uppercase + shadow-lg, que o §6/§8 proíbem. */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
                     <TabsList>
                         {tabs.map((tab) => (
@@ -1612,19 +1616,19 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     </TabsList>
                 </Tabs>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 shrink-0">
                     <button
                         onClick={() => handleExport('PDF', activeTab === 'fluxo' ? 'FLUXO' : 'EXTRATO')}
-                        className="flex items-center gap-2 px-6 py-3 bg-white text-gray-700 rounded-2xl font-normal text-sm uppercase border border-gray-200 shadow-sm hover:shadow-md transition-all active:scale-95"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-700 rounded-[6px] font-medium text-[13px] border border-gray-200 hover:bg-gray-50 transition-all active:scale-95"
                     >
-                        <FileText className="w-4 h-4 text-red-500" />
+                        <FileText className="w-[15px] h-[15px] text-red-500" />
                         PDF
                     </button>
                     <button
                         onClick={() => handleExport('EXCEL', activeTab === 'fluxo' ? 'FLUXO' : 'EXTRATO')}
-                        className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl font-normal text-sm uppercase shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all active:scale-95"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] font-medium text-[13px] hover:bg-emerald-700 transition-all active:scale-95"
                     >
-                        <FileDown className="w-4 h-4" />
+                        <FileDown className="w-[15px] h-[15px]" />
                         Excel
                     </button>
                 </div>

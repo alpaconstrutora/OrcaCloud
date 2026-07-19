@@ -1101,7 +1101,7 @@ const Layout: React.FC<LayoutProps> = ({
               {(mod.incorporacao || isDev) && (
                 <>
                   <NavDropdown
-                    label="Desenvolvimento Imobiliário"
+                    label="Incorporação"
                     icon={Building2}
                     isOpen={isDesenvolvimentoImobOpen}
                     onToggle={() => setIsDesenvolvimentoImobOpen(o => !o)}

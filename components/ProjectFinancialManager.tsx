@@ -1598,41 +1598,51 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
         { key: 'contas_pagar', label: 'Contas a Pagar' },
     ];
 
+    /* Toolbar de abas — UI UX tabela.md §3. Trilho dentro de card branco, igual à
+       tela de referência (Extrato/BankReconciliation:3253). Export à direita no §8:
+       h-9 + rounded-[6px] + font-medium sentence case. */
+    const tabsBar = (
+        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
+                <TabsList>
+                    {tabs.map((tab) => (
+                        <TabsTrigger key={tab.key} value={tab.key}>
+                            {tab.label}
+                        </TabsTrigger>
+                    ))}
+                </TabsList>
+            </Tabs>
+
+            <div className="flex items-center gap-2 shrink-0">
+                <button
+                    onClick={() => handleExport('PDF', activeTab === 'fluxo' ? 'FLUXO' : 'EXTRATO')}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-700 rounded-[6px] font-medium text-[13px] border border-gray-200 hover:bg-gray-50 transition-all active:scale-95"
+                >
+                    <FileText className="w-[15px] h-[15px] text-red-500" />
+                    PDF
+                </button>
+                <button
+                    onClick={() => handleExport('EXCEL', activeTab === 'fluxo' ? 'FLUXO' : 'EXTRATO')}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] font-medium text-[13px] hover:bg-emerald-700 transition-all active:scale-95"
+                >
+                    <FileDown className="w-[15px] h-[15px]" />
+                    Excel
+                </button>
+            </div>
+        </div>
+    );
+
+    /* Anatomia do §1: título → KPIs → ABAS → botões → tabela. As abas precisam vir
+       DEPOIS dos KPIs, mas título e KPIs pertencem a cada filho — então o filho
+       migrado recebe a barra por `tabsSlot` e a posiciona no lugar certo. Enquanto
+       uma aba não for migrada, o pai desenha a barra em cima (comportamento atual),
+       para nenhuma tela ficar sem navegação. Migrar = aceitar `tabsSlot` e listar aqui. */
+    const TABS_RENDERED_BY_CHILD: TabKey[] = ['contas_pagar'];
+    const childOwnsTabsBar = TABS_RENDERED_BY_CHILD.includes(activeTab);
+
     return (
         <div className="p-2 space-y-6 animate-in fade-in duration-500">
-            {/* Toolbar de abas — UI UX tabela.md §3. O trilho de abas mora DENTRO de um
-                card branco (era um flex solto com mb-10), igual à tela de referência
-                (Extrato/BankReconciliation:3253). Ação de export à direita, §8:
-                h-9 + rounded-[6px] + font-medium sentence case — antes era
-                px-6 py-3 + rounded-2xl + uppercase + shadow-lg, que o §6/§8 proíbem. */}
-            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabKey)}>
-                    <TabsList>
-                        {tabs.map((tab) => (
-                            <TabsTrigger key={tab.key} value={tab.key}>
-                                {tab.label}
-                            </TabsTrigger>
-                        ))}
-                    </TabsList>
-                </Tabs>
-
-                <div className="flex items-center gap-2 shrink-0">
-                    <button
-                        onClick={() => handleExport('PDF', activeTab === 'fluxo' ? 'FLUXO' : 'EXTRATO')}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-700 rounded-[6px] font-medium text-[13px] border border-gray-200 hover:bg-gray-50 transition-all active:scale-95"
-                    >
-                        <FileText className="w-[15px] h-[15px] text-red-500" />
-                        PDF
-                    </button>
-                    <button
-                        onClick={() => handleExport('EXCEL', activeTab === 'fluxo' ? 'FLUXO' : 'EXTRATO')}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] font-medium text-[13px] hover:bg-emerald-700 transition-all active:scale-95"
-                    >
-                        <FileDown className="w-[15px] h-[15px]" />
-                        Excel
-                    </button>
-                </div>
-            </div>
+            {!childOwnsTabsBar && tabsBar}
 
             {settings.name === 'Gestão Comercial' && (
                 <div className="flex flex-wrap items-center gap-4">
@@ -1675,7 +1685,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             { activeTab === 'extrato' && renderExtrato() }
             { activeTab === 'conciliacao' && <BankReconciliation organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} /> }
             { activeTab === 'boletos' && <BoletoManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} userEmail={userEmail} organizations={organizations} onOrgChange={onOrgChange || (() => {})} /> }
-            { activeTab === 'contas_pagar' && <ContasPagarManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} organizations={organizations} onOrgChange={(id) => onOrgChange?.(id)} /> }
+            { activeTab === 'contas_pagar' && <ContasPagarManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} organizations={organizations} onOrgChange={(id) => onOrgChange?.(id)} tabsSlot={tabsBar} /> }
 
             {selectedOrderId && <FinancialOrderDetails orderId={selectedOrderId} onUpdate={() => setRefreshTrigger(p => p + 1)} onClose={() => setSelectedOrderId(null)} />}
 

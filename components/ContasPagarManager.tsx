@@ -92,9 +92,16 @@ interface Props {
     organizationId?: string;
     organizations?: Organization[];
     onOrgChange?: (id: string) => void;
+    /**
+     * Barra de abas do módulo pai (§3). Vem por prop porque a anatomia do §1 exige
+     * título → KPIs → ABAS → botões → tabela: as abas são do pai, mas título e KPIs
+     * são desta tela, então quem posiciona a barra no lugar certo é o filho.
+     * Ausente = a tela é usada fora do Financeiro e simplesmente não tem abas.
+     */
+    tabsSlot?: React.ReactNode;
 }
 
-export default function ContasPagarManager({ organizationId, organizations, onOrgChange }: Props) {
+export default function ContasPagarManager({ organizationId, organizations, onOrgChange, tabsSlot }: Props) {
     const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -352,6 +359,11 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                             onClick={() => setStatusFilter('paid')}
                         />
                     </div>
+
+                    {/* Toolbar de abas (§3) — entre os KPIs e a toolbar de botões, na
+                        ordem da anatomia do §1. Renderizada pelo módulo pai e posicionada
+                        aqui (ver prop `tabsSlot`). */}
+                    {tabsSlot}
 
                     {/* Toolbar de botões (§4) — controles de ESCOPO: sobre qual recorte de
                         dados a tela está olhando (organização, período de vencimento). Barra

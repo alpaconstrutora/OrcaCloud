@@ -349,8 +349,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         },
     ];
 
+    // `absolute` (não `fixed`): Layout.tsx tem <main className="relative"> abaixo da
+    // barra superior sticky (irmã do main, não ancestral) — absolute preenche só a
+    // área de conteúdo, deixando a barra visível. `fixed` ignora esse container e
+    // cobre a janela inteira, escondendo a navegação do app.
     return (
-        <div className={isEditMode ? 'fixed inset-0 z-[110] flex flex-col' : 'absolute inset-0 z-[110] flex items-center justify-center p-8'}>
+        <div className={isEditMode ? 'absolute inset-0 z-[110] bg-white flex flex-col' : 'absolute inset-0 z-[110] flex items-center justify-center p-8'}>
             {!isEditMode && (
                 <div className="absolute inset-0 bg-[#0B1727]/80 backdrop-blur-xl animate-in fade-in duration-300" onClick={onClose} />
             )}

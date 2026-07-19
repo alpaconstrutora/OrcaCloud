@@ -1,6 +1,6 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag, KeyRound, Map, Loader2, ArrowLeftRight, ScrollText, Inbox } from 'lucide-react';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag, KeyRound, Map, Loader2, ArrowLeftRight, ScrollText, Inbox, AlertCircle } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus, ImovibStudy } from '../../types';
 import TowerEditor from './TowerEditor';
 import CommonAreaEditor from './CommonAreaEditor';
@@ -16,7 +16,6 @@ import { imovibService } from '../../services/imovibService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { areaEngineService } from '../../services/areaEngineService';
 import { generateIncorporationMemorialDraftPdf } from '../../services/incorporationMemorialService';
-import Button from '../ui/Button';
 
 interface Props {
   empreendimento: Empreendimento;
@@ -43,6 +42,15 @@ const TIPO_LABELS: Record<string, string> = {
   COND_INDUSTRIAL: 'Condomínio Industrial',
 };
 
+// Texto colorido, sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
+  PLANEJAMENTO: 'text-gray-600',
+  LANCAMENTO: 'text-amber-600',
+  EM_OBRAS: 'text-blue-600',
+  ENTREGUE: 'text-emerald-600',
+  ENCERRADO: 'text-slate-500',
+};
+
 type Tab = 'visao' | 'sync' | 'curadoria' | 'tipologia' | 'torres' | 'areas' | 'regulatorio' | 'comercial' | 'locacoes';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced }) => {
@@ -54,6 +62,11 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
   const [linkedStudyError, setLinkedStudyError] = React.useState<string | null>(null);
   const [generatingMemorial, setGeneratingMemorial] = React.useState(false);
   const [pendingCuradoria, setPendingCuradoria] = React.useState(0);
+  const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const notify = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4500);
+  };
 
   const loadPendingCuradoria = React.useCallback(async () => {
     try {
@@ -120,7 +133,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       generateIncorporationMemorialDraftPdf({ empreendimento: e, towers, version, quadroI, quadroII, fractions });
     } catch (err) {
       console.error('[EmpreendimentoDetail] erro ao gerar minuta do memorial:', err);
-      alert('Erro ao gerar a minuta do memorial. Tente novamente.');
+      notify('Erro ao gerar a minuta do memorial. Tente novamente.', 'error');
     } finally {
       setGeneratingMemorial(false);
     }
@@ -141,24 +154,28 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-        <Button variant="ghost" size="sm" onClick={onBack} className="mb-3">
+      <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
+        >
           <ArrowLeft className="w-4 h-4" /> Voltar
-        </Button>
+        </button>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-[10px]">
               <Building2 className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-black text-gray-900 tracking-tight">{e.name}</h1>
-                <span className="text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600">
+                <span className={`text-sm font-normal ${STATUS_TEXT_COLOR[e.status]}`}>
                   {STATUS_LABELS[e.status]}
                 </span>
                 {e.tipo && (
-                  <span className="text-xs font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-gray-500/10 text-gray-600">
-                    {TIPO_LABELS[e.tipo] || e.tipo}
+                  <span className="text-sm font-normal text-gray-500">
+                    · {TIPO_LABELS[e.tipo] || e.tipo}
                   </span>
                 )}
               </div>
@@ -174,32 +191,43 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
                 dois lugares com estados diferentes — o do header ficava sempre aceso, mesmo
                 sem divergência nenhuma (ui_ux_standard_guide.md §6.4/§18). */}
             {e.imovib_study_id && onGoToStudy && (
-              <button onClick={onGoToStudy} className="px-4 py-2.5 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-xl font-black text-button uppercase tracking-widest flex items-center gap-2">
-                <BarChart3 className="w-4 h-4" /> Ver Estudo
+              <button
+                onClick={onGoToStudy}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
+              >
+                <BarChart3 className="w-[15px] h-[15px]" /> Ver Estudo
               </button>
             )}
-            <Button variant="ghost" onClick={handleGenerateMemorial} disabled={generatingMemorial}>
+            <button
+              onClick={handleGenerateMemorial}
+              disabled={generatingMemorial}
+              className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
+            >
               <ScrollText className="w-4 h-4" /> {generatingMemorial ? 'Gerando...' : 'Minuta do Memorial'}
-            </Button>
-            <Button onClick={onEdit}>
-              <Edit className="w-4 h-4" /> Editar
-            </Button>
+            </button>
+            <button
+              onClick={onEdit}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+            >
+              <Edit className="w-[15px] h-[15px]" /> Editar
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-gray-200 gap-6 overflow-x-auto">
+      {/* Tabs — anatomia canônica §19.1: trilho bg-gray-50, aba ativa bg-white text-blue-600 shadow-sm, flex-wrap */}
+      <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
         {tabs.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`pb-3 font-black text-button uppercase tracking-widest transition-colors border-b-2 flex items-center gap-1.5
-              ${tab === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
+              tab === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+            }`}
           >
-            <t.icon className="w-4 h-4" /> {t.label}
+            <t.icon className="w-3.5 h-3.5" /> {t.label}
             {t.badge != null && t.badge > 0 && (
-              <span className="ml-0.5 min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-black tracking-normal">
+              <span className="ml-0.5 min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold">
                 {t.badge}
               </span>
             )}
@@ -210,8 +238,8 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       {/* Conteúdo */}
       {tab === 'visao' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-            <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider mb-4">Dados Gerais</h3>
+          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
+            <h3 className="text-xs font-semibold text-gray-500 mb-4">Dados Gerais</h3>
             <dl className="space-y-3 text-sm">
               <Row label="Tipo" value={e.tipo ? (TIPO_LABELS[e.tipo] || e.tipo) : undefined} />
               <Row label="Matrícula" value={e.matricula} />
@@ -222,8 +250,8 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             </dl>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-            <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider mb-4 flex items-center gap-2">
+          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
+            <h3 className="text-xs font-semibold text-gray-500 mb-4 flex items-center gap-2">
               <MapPin className="w-4 h-4 text-gray-400" /> Endereço
             </h3>
             <dl className="space-y-3 text-sm">
@@ -234,8 +262,8 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             </dl>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-            <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider mb-4">SPE</h3>
+          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
+            <h3 className="text-xs font-semibold text-gray-500 mb-4">SPE</h3>
             <dl className="space-y-3 text-sm">
               <Row label="Razão Social" value={e.spe_razao_social} />
               <Row label="CNPJ" value={e.spe_cnpj} />
@@ -245,8 +273,8 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             </dl>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-            <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider mb-4 flex items-center gap-2">
+          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
+            <h3 className="text-xs font-semibold text-gray-500 mb-4 flex items-center gap-2">
               <MapPin className="w-4 h-4 text-gray-400" /> Terreno
             </h3>
             <dl className="space-y-3 text-sm">
@@ -258,8 +286,8 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             </dl>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm lg:col-span-2">
-            <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider mb-4">Comercial</h3>
+          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm lg:col-span-2">
+            <h3 className="text-xs font-semibold text-gray-500 mb-4">Comercial</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Metric label="VGV Total" value={e.vgv_total != null ? `R$ ${e.vgv_total.toLocaleString('pt-BR')}` : '—'} />
               <Metric label="Lançamento" value={e.launch_date ? formatDate(e.launch_date) : '—'} />
@@ -272,41 +300,47 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       {tab === 'tipologia' && (
         e.imovib_study_id ? (
           isLoadingLinkedStudy ? (
-            <div className="bg-white p-10 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-center gap-3 text-gray-400 font-black uppercase tracking-widest text-button">
+            <div className="bg-white p-10 rounded-[10px] border border-gray-100 shadow-sm flex items-center justify-center gap-3 text-gray-400 text-sm font-medium">
               <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> Carregando estudo vinculado...
             </div>
           ) : linkedStudyError ? (
-            <div className="bg-white p-10 rounded-3xl border border-gray-100 shadow-sm text-center">
-              <h3 className="text-lg font-black text-gray-800 tracking-tight">Nao foi possivel carregar o estudo vinculado</h3>
+            <div className="bg-white p-10 rounded-[10px] border border-gray-100 shadow-sm text-center">
+              <h3 className="text-lg font-black text-gray-800 tracking-tight">Não foi possível carregar o estudo vinculado</h3>
               <p className="text-sm text-gray-500 font-medium mt-1">{linkedStudyError}</p>
-              <Button onClick={loadLinkedStudy} className="mt-5">
-                <RefreshCw className="w-4 h-4" /> Tentar Novamente
-              </Button>
+              <button
+                onClick={loadLinkedStudy}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 mx-auto mt-5"
+              >
+                <RefreshCw className="w-[15px] h-[15px]" /> Tentar novamente
+              </button>
             </div>
           ) : linkedStudy ? (
             <ImovibBlocksTypologyTab study={linkedStudy} onDataChanged={loadLinkedStudy} />
           ) : null
         ) : (
-          <div className="bg-white p-10 rounded-3xl border border-gray-100 shadow-sm text-center">
+          <div className="bg-white p-10 rounded-[10px] border border-gray-100 shadow-sm text-center">
             <Building2 className="w-10 h-10 mx-auto text-gray-300 mb-3" />
             <h3 className="text-lg font-black text-gray-800 tracking-tight">Nenhum estudo de viabilidade vinculado</h3>
             <p className="text-sm text-gray-500 font-medium mt-1 max-w-xl mx-auto">
-              Blocos e tipologias usam a mesma base do IMOVIB. Vincule um estudo de viabilidade para editar as premissas e manter uma fonte unica.
+              Blocos e tipologias usam a mesma base do IMOVIB. Vincule um estudo de viabilidade para editar as premissas e manter uma fonte única.
             </p>
-            <Button onClick={onEdit} className="mt-5">
-              <Edit className="w-4 h-4" /> Vincular Estudo
-            </Button>
+            <button
+              onClick={onEdit}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 mx-auto mt-5"
+            >
+              <Edit className="w-[15px] h-[15px]" /> Vincular estudo
+            </button>
           </div>
         )
       )}
       {tab === 'torres' && (
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+        <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
           <TowerEditor key={refreshKey} empreendimentoId={e.id} organizationId={organizationId} />
         </div>
       )}
 
       {tab === 'areas' && (
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+        <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
           <CommonAreaEditor key={refreshKey} empreendimentoId={e.id} />
         </div>
       )}
@@ -344,6 +378,15 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
           }}
         />
       )}
+
+      {notification && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+          notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {notification.message}
+        </div>
+      )}
     </div>
   );
 };
@@ -362,8 +405,8 @@ const Row: React.FC<{ label: string; value?: string }> = ({ label, value }) => (
 );
 
 const Metric: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div className="bg-gray-50/60 border border-gray-100 rounded-2xl p-4">
-    <span className="text-xs font-black uppercase tracking-widest text-gray-400 block mb-1">{label}</span>
+  <div className="bg-gray-50/60 border border-gray-100 rounded-[10px] p-4">
+    <span className="text-xs font-semibold text-gray-400 block mb-1">{label}</span>
     <span className="text-lg font-bold text-gray-800">{value}</span>
   </div>
 );

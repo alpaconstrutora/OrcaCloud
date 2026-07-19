@@ -1,7 +1,6 @@
 // components/empreendimento/EmpreendimentoForm.tsx
 import React from 'react';
-import { X, Loader2, Building2, HardHat, Link2 } from 'lucide-react';
-import Button from '../ui/Button';
+import { X, Loader2, Building2, HardHat, Link2, AlertCircle } from 'lucide-react';
 import CityStateSelect from '../CityStateSelect';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { imovibService } from '../../services/imovibService';
@@ -55,6 +54,11 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
   const [orgId, setOrgId] = React.useState<string>(editing?.organization_id || organizationId || '');
   const [organizations, setOrganizations] = React.useState<Organization[]>([]);
   const needsOrgPicker = !editing && !organizationId;
+  const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const notify = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4500);
+  };
   const [form, setForm] = React.useState({
     name: editing?.name ?? '',
     code: editing?.code ?? '',
@@ -144,14 +148,14 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
       await empreendimentoService.linkTowerToObra(tower.id, projectId);
       setTowers(prev => prev.map(t => t.id === tower.id ? { ...t, project_id: projectId } : t));
     } catch (err: any) {
-      alert(`Erro ao vincular obra: ${err.message}`);
+      notify(`Erro ao vincular obra: ${err.message}`, 'error');
     } finally {
       setTowerLinkBusyId(null);
     }
   };
 
   const handleCreateTowerObra = async (tower: EmpreendimentoTower) => {
-    if (!orgId) { alert('Selecione uma organização específica para criar a obra.'); return; }
+    if (!orgId) { notify('Selecione uma organização específica para criar a obra.', 'error'); return; }
     const ok = await confirm({
       title: 'Criar obra?',
       message: `Uma nova obra será criada e vinculada à torre "${tower.name}".`,
@@ -164,7 +168,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
       const projectId = await empreendimentoService.createObraForTower(tower.id, orgId, tower.name);
       setTowers(prev => prev.map(t => t.id === tower.id ? { ...t, project_id: projectId } : t));
     } catch (err: any) {
-      alert(`Erro ao criar obra: ${err.message}`);
+      notify(`Erro ao criar obra: ${err.message}`, 'error');
     } finally {
       setTowerLinkBusyId(null);
     }
@@ -172,8 +176,8 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) { alert('Informe o nome do empreendimento.'); return; }
-    if (!orgId) { alert('Selecione a organização do empreendimento.'); return; }
+    if (!form.name.trim()) { notify('Informe o nome do empreendimento.', 'error'); return; }
+    if (!orgId) { notify('Selecione a organização do empreendimento.', 'error'); return; }
     setSaving(true);
     try {
       const payload: Partial<EmpreendimentoInsert> = {
@@ -218,24 +222,27 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
         : await empreendimentoService.create(payload as EmpreendimentoInsert);
       onSaved(saved);
     } catch (err: any) {
-      alert(`Erro ao salvar empreendimento: ${err.message}`);
+      notify(`Erro ao salvar empreendimento: ${err.message}`, 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  const inputCls = 'w-full px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium outline-none focus:border-blue-400';
-  const labelCls = 'text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 block';
+  const inputCls = 'w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all';
+  const labelCls = 'text-xs font-semibold text-slate-500 mb-1 block';
+  const sectionCls = 'text-xs font-semibold text-gray-500 mb-3';
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between rounded-t-3xl">
+      <div className="bg-white rounded-[10px] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between rounded-t-[10px]">
           <h2 className="text-lg font-black text-gray-900 flex items-center gap-2">
             <Building2 className="w-5 h-5 text-blue-600" />
             {editing ? 'Editar Empreendimento' : 'Novo Empreendimento'}
           </h2>
-          <Button variant="ghost" size="icon" onClick={onClose}><X className="w-5 h-5 text-gray-500" /></Button>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-[6px] hover:bg-gray-100 transition-colors">
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -315,13 +322,13 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
               mostrar por torre quando há mais de uma (torre única já usa "Obra Vinculada" acima). */}
           {editing && towers.length > 1 && (
             <div>
-              <h3 className="text-form-label font-black uppercase tracking-widest text-gray-500 mb-3">Obra por Torre</h3>
+              <h3 className={sectionCls}>Obra por Torre</h3>
               <div className="space-y-2">
                 {towers.map(tower => {
                   const linkedObra = orgProjects.find(p => p.id === tower.project_id);
                   const busy = towerLinkBusyId === tower.id;
                   return (
-                    <div key={tower.id} className="flex items-center gap-2.5 flex-wrap px-3 py-2 border border-gray-100 rounded-xl">
+                    <div key={tower.id} className="flex items-center gap-2.5 flex-wrap px-3 py-2 border border-gray-100 rounded-[10px]">
                       <span className="text-sm font-semibold text-gray-700 min-w-[8rem]">{tower.name}</span>
                       {linkedObra ? (
                         <span className="text-xs font-semibold px-2.5 h-9 inline-flex items-center rounded-[6px] bg-emerald-50 text-emerald-600 gap-1.5">
@@ -357,7 +364,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
 
           {/* Dados Gerais / Regularização */}
           <div>
-            <h3 className="text-form-label font-black uppercase tracking-widest text-gray-500 mb-3">Dados Gerais</h3>
+            <h3 className={sectionCls}>Dados Gerais</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className={labelCls}>Matrícula</label>
@@ -384,7 +391,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
 
           {/* SPE */}
           <div>
-            <h3 className="text-form-label font-black uppercase tracking-widest text-gray-500 mb-3">SPE</h3>
+            <h3 className={sectionCls}>SPE</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Razão Social</label>
@@ -413,7 +420,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
 
           {/* Endereço de divulgação / oficial */}
           <div>
-            <h3 className="text-form-label font-black uppercase tracking-widest text-gray-500 mb-3">Endereço do Empreendimento</h3>
+            <h3 className={sectionCls}>Endereço do Empreendimento</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2">
                 <label className={labelCls}>Logradouro</label>
@@ -445,7 +452,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
 
           {/* Terreno */}
           <div>
-            <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-3">Terreno</h3>
+            <h3 className={sectionCls}>Terreno</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2">
                 <label className={labelCls}>Logradouro</label>
@@ -496,14 +503,33 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
-            <Button type="submit" disabled={saving}>
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+            >
+              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               {editing ? 'Salvar' : 'Criar'}
-            </Button>
+            </button>
           </div>
         </form>
       </div>
+
+      {notification && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+          notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {notification.message}
+        </div>
+      )}
     </div>
   );
 };

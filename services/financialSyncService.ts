@@ -32,6 +32,10 @@ export const financialSyncService = {
                     reference_id: inst.id,
                     project_id: projectId,
                     transaction_date: inst.dueDate,
+                    // due_date é o que Contas a Receber (vw_receivables) exibe na coluna
+                    // Vencimento E o que a view usa para calcular VENCIDO. Sem ele a
+                    // parcela aparecia sem vencimento e NUNCA era marcada como vencida.
+                    due_date: inst.dueDate,
                     amount: inst.value,
                     direction: 'CREDIT',
                     description: inst.description || `Parcela - ${project.name}`,
@@ -42,7 +46,11 @@ export const financialSyncService = {
                     party_id: inst.clientId ?? null, // FK clients(id), ON DELETE SET NULL
                     party_type: 'CLIENT',
                     category: (inst as unknown as Record<string, unknown>).category || 'Receita de Obra',
-                    status: inst.status === 'PAID' ? 'CONCILIATED' : 'PENDING'
+                    status: inst.status === 'PAID' ? 'CONCILIATED' : 'PENDING',
+                    // business_status é o status de NEGÓCIO que Contas a Receber exibe
+                    // e filtra (Previsto/Recebido/...). Ficava nulo em tudo que vinha de
+                    // sync — e a regra de VENCIDO da view dependia dele.
+                    business_status: inst.status === 'PAID' ? 'RECEBIDO' : 'PREVISTO'
                 });
             });
         }

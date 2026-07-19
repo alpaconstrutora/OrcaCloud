@@ -236,6 +236,9 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 reference_id: `${contract.id}:p${i + 1}`,
                 project_id: contract.project_id ?? null,
                 transaction_date: tx.date.split('T')[0],
+                // Vencimento da parcela — Contas a Receber exibe due_date e a view
+                // calcula VENCIDO a partir dele; sem isso a parcela nasce sem data.
+                due_date: tx.date.split('T')[0],
                 amount: tx.value,
                 direction: txDirection,
                 description: tx.description,
@@ -245,6 +248,9 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 party_type: party.party_type,
                 party_name: party.party_name,
                 status: 'PENDING',
+                // Status de NEGÓCIO exibido/filtrado em Contas a Receber. Ficava nulo,
+                // e a regra de VENCIDO da view dependia dele estar preenchido.
+                business_status: 'PREVISTO',
             }));
             await supabase.from('internal_transactions').insert(internalRows);
             console.log(`[CONTRACTS] Synced ${internalRows.length} parcelado txs to internal_transactions`);
@@ -368,6 +374,9 @@ async function syncRecurringToFinance(contract: Contract) {
                 reference_id: contract.id,
                 project_id: contract.project_id ?? null,
                 transaction_date: tx.date.split('T')[0],
+                // Vencimento da parcela — Contas a Receber exibe due_date e a view
+                // calcula VENCIDO a partir dele; sem isso a parcela nasce sem data.
+                due_date: tx.date.split('T')[0],
                 amount: tx.value,
                 direction: txDirection,
                 description: tx.description,
@@ -377,6 +386,9 @@ async function syncRecurringToFinance(contract: Contract) {
                 party_type: party.party_type,
                 party_name: party.party_name,
                 status: 'PENDING',
+                // Status de NEGÓCIO exibido/filtrado em Contas a Receber. Ficava nulo,
+                // e a regra de VENCIDO da view dependia dele estar preenchido.
+                business_status: 'PREVISTO',
             })));
         }
         console.log(`[CONTRACTS] Generated ${transactions.length} recurring entries for contract ${contract.id} (from current month)`);
@@ -448,6 +460,8 @@ async function syncAVistaToFinance(contract: Contract) {
                 reference_id: contract.id,
                 project_id: contract.project_id ?? null,
                 transaction_date: dueDate,
+                // Vencimento — ver comentário nas outras duas funções de sync.
+                due_date: dueDate,
                 amount: contract.original_value,
                 direction: txDirection,
                 description: tx.description,
@@ -457,6 +471,9 @@ async function syncAVistaToFinance(contract: Contract) {
                 party_type: party.party_type,
                 party_name: party.party_name,
                 status: 'PENDING',
+                // Status de NEGÓCIO exibido/filtrado em Contas a Receber. Ficava nulo,
+                // e a regra de VENCIDO da view dependia dele estar preenchido.
+                business_status: 'PREVISTO',
             });
         }
         console.log(`[CONTRACTS] Synced À Vista contract ${contract.id} to finance`);

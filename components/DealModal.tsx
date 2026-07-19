@@ -14,6 +14,7 @@ import DealWorkflowBar from './DealWorkflowBar';
 import { DealWorkflowStatus } from '../lib/dealWorkflow';
 import DealSignaturePanel from './DealSignaturePanel';
 import CreditAnalysisPanel from './CreditAnalysisPanel';
+import { useConfirm } from './ui/confirm';
 
 type TabId = 'negociacao' | 'partes' | 'contrato';
 
@@ -30,6 +31,7 @@ interface DealModalProps {
 
 const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onSave, defaultType, organizationId, buildingId }) => {
     const [activeTab, setActiveTab] = useState<TabId>('negociacao');
+    const confirm = useConfirm();
 
     const [formData, setFormData] = useState<Partial<PropertyDeal>>({
         type: defaultType || 'SALE',
@@ -193,8 +195,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
             const newInstallments: PaymentInstallment[] = [];
             for (let i = 1; i <= count; i++) {
-                const date = new Date(prev.date || Date.now());
-                date.setMonth(date.getMonth() + i);
+                let date: Date;
+                if (prev.payment_due_date) {
+                    // Data do 1º Pagamento ancora a parcela 1; as demais somam 1 mês
+                    // cada a partir dela (não mais da Data Efetiva). Meio-dia UTC
+                    // evita o bug de fuso que retrocede 1 dia em UTC-3.
+                    date = new Date(prev.payment_due_date + 'T12:00:00Z');
+                    date.setUTCMonth(date.getUTCMonth() + (i - 1));
+                } else {
+                    // Sem Data do 1º Pagamento definida: comportamento antigo.
+                    date = new Date(prev.date || Date.now());
+                    date.setMonth(date.getMonth() + i);
+                }
                 newInstallments.push({
                     id: `temp-${Date.now()}-${i}`,
                     description: `Parcela ${i}/${count}`,
@@ -206,6 +218,44 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             }
             return { ...prev, custom_installments: newInstallments };
         });
+    };
+
+    /**
+     * Handler do campo "Data do 1º Pagamento". Se já existem parcelas geradas
+     * (custom_installments), muda-la sozinha deixaria a data e o cronograma
+     * dessincronizados — pergunta antes de recalcular os vencimentos (mantendo
+     * os valores). A gravação em Contas a Receber só acontece ao Salvar.
+     */
+    const handlePaymentDueDateChange = async (newDate: string) => {
+        const hasGenerated = (formData.custom_installments?.length ?? 0) > 0;
+        if (hasGenerated && newDate && newDate !== formData.payment_due_date) {
+            const ok = await confirm({
+                title: 'Atualizar datas das parcelas?',
+                message: (
+                    <>
+                        As parcelas já foram geradas. Deseja recalcular o vencimento de cada
+                        uma a partir da nova Data do 1º Pagamento (os valores não mudam)?
+                        <p className="mt-2 text-xs text-gray-500">
+                            A mudança só é gravada em Contas a Receber ao clicar em "Salvar Alterações".
+                        </p>
+                    </>
+                ),
+                variant: 'warning',
+                confirmLabel: 'Recalcular parcelas',
+            });
+            if (ok) {
+                setFormData(prev => {
+                    const recalced = (prev.custom_installments || []).map((inst, idx) => {
+                        const d = new Date(newDate + 'T12:00:00Z');
+                        d.setUTCMonth(d.getUTCMonth() + idx);
+                        return { ...inst, dueDate: d.toISOString().split('T')[0] };
+                    });
+                    return { ...prev, payment_due_date: newDate, custom_installments: recalced };
+                });
+                return;
+            }
+        }
+        setFormData(prev => ({ ...prev, payment_due_date: newDate }));
     };
 
     const handleExportPDF = () => {
@@ -225,8 +275,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             return;
         }
 
-        if (formData.value === 0 && !confirm('O valor da negociação está zerado. Deseja continuar assim mesmo?')) {
-            return;
+        if (formData.value === 0) {
+            const ok = await confirm({
+                title: 'Valor zerado',
+                message: 'O valor da negociação está zerado. Deseja continuar assim mesmo?',
+                variant: 'warning',
+                confirmLabel: 'Continuar',
+            });
+            if (!ok) return;
         }
 
         setLoading(true);
@@ -413,7 +469,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     <div className="flex items-center gap-2 text-purple-600">
                                         <Building className="w-5 h-5" />
                                         <h3 className="font-black uppercase tracking-widest text-xs">Imóvel da Negociação</h3>
-                                        <span className="text-[9px] font-black text-red-400 bg-red-50 px-2 py-0.5 rounded-full border border-red-100 uppercase tracking-wider">Obrigatório</span>
+                                        <span className="text-xs font-semibold text-red-500">Obrigatório</span>
                                     </div>
                                     <select
                                         required
@@ -479,7 +535,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     <div className="flex items-center gap-2 text-purple-600">
                                         <User className="w-5 h-5" />
                                         <h3 className="font-black uppercase tracking-widest text-xs">Cliente / Comprador</h3>
-                                        <span className="text-[9px] font-black text-red-400 bg-red-50 px-2 py-0.5 rounded-full border border-red-100 uppercase tracking-wider">Obrigatório</span>
+                                        <span className="text-xs font-semibold text-red-500">Obrigatório</span>
                                     </div>
                                     <select
                                         required
@@ -558,13 +614,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Vencimento Pagto.</label>
+                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Data do 1º Pagamento</label>
                                         <div className="relative">
                                             <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400" />
                                             <input
                                                 type="date"
                                                 value={formData.payment_due_date || ''}
-                                                onChange={(e) => setFormData({ ...formData, payment_due_date: e.target.value })}
+                                                onChange={(e) => handlePaymentDueDateChange(e.target.value)}
                                                 className="w-full pl-11 pr-4 py-4 bg-purple-50/50 border border-purple-100 focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-purple-700 transition-all shadow-inner text-sm"
                                             />
                                         </div>
@@ -717,7 +773,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 <div className="flex items-center gap-2 text-amber-600">
                                     <UserCheck className="w-5 h-5" />
                                     <h3 className="font-black uppercase tracking-widest text-xs">Corretor da Negociação</h3>
-                                    <span className="text-[9px] font-black bg-amber-50 text-amber-500 px-2 py-0.5 rounded-full border border-amber-100 uppercase tracking-wider">Opcional</span>
+                                    <span className="text-xs font-semibold text-amber-500">Opcional</span>
                                 </div>
 
                                 <select
@@ -959,10 +1015,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     onStatusChange={(sigStatus: 'PENDING' | 'SIGNED') => {
                                         setFormData(prev => ({ ...prev, signature_status: sigStatus }));
                                         if (sigStatus === 'SIGNED' && formData.status === 'ASSINATURA') {
-                                            // eslint-disable-next-line no-alert
-                                            if (window.confirm('Contrato assinado! Deseja avançar a negociação para Concluído?')) {
-                                                setFormData(prev => ({ ...prev, signature_status: 'SIGNED', status: 'COMPLETED' }));
-                                            }
+                                            confirm({
+                                                title: 'Contrato assinado!',
+                                                message: 'Deseja avançar a negociação para Concluído?',
+                                                variant: 'default',
+                                                confirmLabel: 'Avançar',
+                                            }).then(ok => {
+                                                if (ok) setFormData(prev => ({ ...prev, signature_status: 'SIGNED', status: 'COMPLETED' }));
+                                            });
                                         }
                                     }}
                                 />

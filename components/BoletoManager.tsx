@@ -28,6 +28,14 @@ interface BoletoManagerProps {
     projectId?: string;
     organizations?: Organization[];
     onOrgChange?: (id: string | null) => void;
+    /**
+     * Barra de abas do módulo pai (§3/§3.1). Vem por prop porque a anatomia do §1
+     * exige título → KPIs → ABAS → botões → tabela: as abas são do Financeiro, mas
+     * título e KPIs são desta tela, então quem posiciona a barra é o filho.
+     * Ausente quando a tela roda como rota própria (AppRouter 'boletos-pagar'),
+     * onde de fato não há abas.
+     */
+    tabsSlot?: React.ReactNode;
 }
 
 const STATUS_LABELS: Record<BoletoStatus, string> = {
@@ -122,7 +130,7 @@ const BoletoCardItem = React.memo(function BoletoCardItem({
             </label>
             <button
                 onClick={() => onOpen(b)}
-                className={`w-full text-left bg-white rounded-2xl border p-5 pl-9 hover:shadow-lg transition-all ${
+                className={`w-full text-left bg-white rounded-[10px] border p-5 pl-9 hover:shadow-lg transition-all ${
                     selected ? 'border-blue-400 ring-2 ring-blue-200' :
                     atrasado ? 'border-red-200 bg-red-50/30' : 'border-gray-100 hover:border-gray-200'
                 }`}
@@ -271,7 +279,7 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
 });
 
 const BoletoManager: React.FC<BoletoManagerProps> = ({
-    organizationId, userEmail, projectId, organizations = [], onOrgChange,
+    organizationId, userEmail, projectId, organizations = [], onOrgChange, tabsSlot,
 }) => {
     // Inicia em 'ALL' para garantir visibilidade de todos os boletos acessíveis via RLS.
     // O usuário pode filtrar por organização específica via dropdown.
@@ -597,94 +605,18 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Captura de Boletos</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                        Capture boletos via PDF e gere lançamentos automaticamente em contas a pagar.
-                    </p>
-                </div>
-                <div className="flex items-center gap-3">
-                    {/* Seletor de organização — escala compacta §16 */}
-                    {organizations.length > 0 && (
-                        <div className="relative flex items-center gap-2 bg-white border border-gray-200 rounded-[6px] h-9 px-3 min-w-[200px]">
-                            <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <select
-                                ref={orgSelectRef}
-                                value={selectedOrgId}
-                                onChange={(e) => handleOrgChange(e.target.value)}
-                                className="w-full bg-transparent text-sm font-medium text-gray-700 outline-none cursor-pointer appearance-none pr-5"
-                            >
-                                <option value="ALL">Todas as Organizações</option>
-                                {organizations.map(org => (
-                                    <option key={org.id} value={org.id}>{org.name}</option>
-                                ))}
-                            </select>
-                            <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-3" />
-                        </div>
-                    )}
-                    {/* Botões secundários — markup local em vez do componente Button
-                        compartilhado (guia §17/§16). Button.tsx BASE aplica
-                        `rounded-xl font-black uppercase tracking-widest` em toda
-                        variante, inclusive 'secondary' — herdado sem aparecer no diff
-                        desta tela. Corrigido localmente, sem tocar no componente
-                        compartilhado (mudaria toda tela que usa Button). */}
-                    {filtered.length > 0 && (
-                        <>
-                            <button
-                                onClick={() => handleExport('excel')}
-                                disabled={exporting}
-                                title="Exportar lista filtrada para Excel"
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-emerald-700 rounded-[6px] hover:bg-emerald-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-                            >
-                                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                                Excel
-                            </button>
-                            <button
-                                onClick={() => handleExport('pdf')}
-                                disabled={exporting}
-                                title="Exportar lista filtrada para PDF"
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-red-600 rounded-[6px] hover:bg-red-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-                            >
-                                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                                PDF
-                            </button>
-                        </>
-                    )}
-                    <button
-                        onClick={() => carregar(effectiveOrgId)}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
-                    >
-                        <RefreshCw className="w-4 h-4" />
-                        Atualizar
-                    </button>
-                    <button
-                        onClick={() => setIsLoteOpen(true)}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-blue-600 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95"
-                    >
-                        <Upload className="w-4 h-4" />
-                        Importar em Lote
-                    </button>
-                    {/* Botão primário compacto — guia seção 17. Não usa o componente
-                        Button compartilhado aqui porque a variante 'primary' dele aplica
-                        font-black uppercase tracking-widest + shadow pesado (ver Button.tsx
-                        BASE), que é exatamente o padrão que a seção 17 substitui. Corrigir
-                        isso na tela sem tocar no componente compartilhado (impacto maior que
-                        o pedido; qualquer outra tela que use variant="primary" mudaria junto). */}
-                    <button
-                        onClick={abrirNovo}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-                    >
-                        <Plus className="w-[15px] h-[15px]" />
-                        Novo boleto
-                    </button>
-                </div>
+            {/* 1. Título — h1 solto (§1). Escopo e ações moram na barra da §4, abaixo
+                dos KPIs; antes estavam espremidos aqui na mesma linha do título. */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Captura de Boletos</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                    Capture boletos via PDF e gere lançamentos automaticamente em contas a pagar.
+                </p>
             </div>
 
             {/* Cards de resumo — padrão guia seção 4 (componente KpiCard) */}
             {!loading && boletos.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                     <KpiCard
                         label="A Pagar"
                         value={formatBRL(summary.totalPendente)}
@@ -716,16 +648,94 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 </div>
             )}
 
-            {/* Filtros de status — escala compacta §16 */}
-            <div className="flex flex-wrap gap-2">
+            {/* 3. Toolbar de abas (§3) — vem do módulo pai (Financeiro) e é posicionada
+                aqui, entre os KPIs e a toolbar de botões, como manda a anatomia do §1.
+                Ausente quando a tela é usada como rota própria (AppRouter 'boletos-pagar'). */}
+            {tabsSlot}
+
+            {/* 4. Toolbar de botões (§4) — escopo à esquerda (organização), ação
+                primária à direita. Estavam todos na linha do título antes. */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center gap-2">
+                    {organizations.length > 0 && (
+                        <div className="relative flex items-center">
+                            <Building2 className="absolute left-3 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                            <select
+                                ref={orgSelectRef}
+                                value={selectedOrgId}
+                                onChange={(e) => handleOrgChange(e.target.value)}
+                                className="h-9 pl-9 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer appearance-none min-w-[200px]"
+                            >
+                                <option value="ALL">Todas as Organizações</option>
+                                {organizations.map(org => (
+                                    <option key={org.id} value={org.id}>{org.name}</option>
+                                ))}
+                            </select>
+                            <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2.5" />
+                        </div>
+                    )}
+
+                    {/* Exports — só fazem sentido com lista carregada */}
+                    {filtered.length > 0 && (
+                        <>
+                            <button
+                                onClick={() => handleExport('excel')}
+                                disabled={exporting}
+                                title="Exportar lista filtrada para Excel"
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-emerald-700 rounded-[6px] hover:bg-emerald-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                            >
+                                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                Excel
+                            </button>
+                            <button
+                                onClick={() => handleExport('pdf')}
+                                disabled={exporting}
+                                title="Exportar lista filtrada para PDF"
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-red-600 rounded-[6px] hover:bg-red-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                            >
+                                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                PDF
+                            </button>
+                        </>
+                    )}
+
+                    <button
+                        onClick={() => carregar(effectiveOrgId)}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                        Atualizar
+                    </button>
+                    <button
+                        onClick={() => setIsLoteOpen(true)}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-blue-600 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95"
+                    >
+                        <Upload className="w-4 h-4" />
+                        Importar em Lote
+                    </button>
+                </div>
+
+                {/* Ação primária — único azul sólido da tela (§8) */}
+                <button
+                    onClick={abrirNovo}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    Novo boleto
+                </button>
+            </div>
+
+            {/* Filtros de status — trilho segmentado do §5 (era uma fileira de botões
+                soltos com bg-gray-900 + font-bold uppercase tracking-widest). */}
+            <div className="flex flex-wrap items-center h-9 bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit mb-3">
                 {(['todos', ...Object.keys(STATUS_LABELS)] as const).map((s) => (
                     <button
                         key={s}
                         onClick={() => setFiltroStatus(s as BoletoStatus | 'todos')}
-                        className={`h-9 px-4 rounded-[6px] text-[13px] font-bold uppercase tracking-widest border transition-colors ${
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                             filtroStatus === s
-                                ? 'bg-gray-900 text-white border-gray-900'
-                                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                                ? 'bg-white text-blue-600 shadow-sm'
+                                : 'text-gray-400 hover:text-gray-600'
                         }`}
                     >
                         {s === 'todos' ? 'Todos' : STATUS_LABELS[s as BoletoStatus]}
@@ -879,7 +889,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             {/* Barra de ações em lote — fixa (fora do fluxo normal) para não forçar
                 reflow da lista inteira de boletos ao selecionar/desmarcar o primeiro item */}
             {selectedIds.size > 0 && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-[10px] shadow-lg shadow-blue-900/20">
                     <span className="flex-1 text-sm font-bold whitespace-nowrap">
                         {selectedIds.size} boleto{selectedIds.size !== 1 ? 's' : ''} selecionado{selectedIds.size !== 1 ? 's' : ''}
                         <span className="ml-2 font-normal opacity-75">
@@ -907,7 +917,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     </Button>
                     <button
                         onClick={clearSelection}
-                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-400 transition-colors"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-500 rounded-[6px] text-[13px] font-medium hover:bg-blue-400 transition-all active:scale-95"
                     >
                         <X className="w-3.5 h-3.5" />
                         Desmarcar
@@ -1159,7 +1169,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             )}
             {/* Toast de Notificação — padrão guia seção 13 */}
             {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
                     notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                 }`}>
                     <AlertCircle className="w-4 h-4 shrink-0" />

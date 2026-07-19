@@ -1637,7 +1637,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
        migrado recebe a barra por `tabsSlot` e a posiciona no lugar certo. Enquanto
        uma aba não for migrada, o pai desenha a barra em cima (comportamento atual),
        para nenhuma tela ficar sem navegação. Migrar = aceitar `tabsSlot` e listar aqui. */
-    const TABS_RENDERED_BY_CHILD: TabKey[] = ['contas_pagar'];
+    const TABS_RENDERED_BY_CHILD: TabKey[] = ['contas_pagar', 'boletos'];
     const childOwnsTabsBar = TABS_RENDERED_BY_CHILD.includes(activeTab);
 
     return (
@@ -1684,7 +1684,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             {activeTab === 'rentabilidade' && renderRentabilidade()}
             { activeTab === 'extrato' && renderExtrato() }
             { activeTab === 'conciliacao' && <BankReconciliation organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} /> }
-            { activeTab === 'boletos' && <BoletoManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} userEmail={userEmail} organizations={organizations} onOrgChange={onOrgChange || (() => {})} /> }
+            { activeTab === 'boletos' && <BoletoManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} userEmail={userEmail} organizations={organizations} onOrgChange={onOrgChange || (() => {})} tabsSlot={tabsBar} /> }
             { activeTab === 'contas_pagar' && <ContasPagarManager organizationId={selectedOrgId !== 'ALL' ? selectedOrgId : (organizationId || settings.organizationId || organization?.id || '')} organizations={organizations} onOrgChange={(id) => onOrgChange?.(id)} tabsSlot={tabsBar} /> }
 
             {selectedOrderId && <FinancialOrderDetails orderId={selectedOrderId} onUpdate={() => setRefreshTrigger(p => p + 1)} onClose={() => setSelectedOrderId(null)} />}

@@ -559,6 +559,31 @@ export const commercialFinanceService = {
             console.warn(`[COMMERCIAL-FINANCE] Distrato de Deal ${dealId}: ${paidCount} parcela(s) PAGA(s) marcadas como ESTORNADO para auditoria.`);
         }
 
+        // Espelho em internal_transactions (Contas a Receber / Conciliação): as
+        // parcelas do negócio sao materializadas la' com source_system='COMMERCIAL'
+        // e reference_id 'tx-{dealId}-p{n}'/'tx-{dealId}-dp'. O vault acima nao as
+        // toca — antes ficavam orfas ao excluir o negocio. Remove as PENDENTES;
+        // preserva as ja' RECEBIDAS/conciliadas (registro de dinheiro que entrou),
+        // coerente com o vault que mantem as pagas.
+        try {
+            const { data: mirrored } = await supabase
+                .from('internal_transactions')
+                .select('id, status, business_status')
+                .eq('organization_id', organizationId)
+                .eq('source_system', 'COMMERCIAL')
+                .like('reference_id', `tx-${dealId}-%`);
+            const toDelete = (mirrored || [])
+                .filter((r: { status?: string; business_status?: string }) =>
+                    r.status !== 'CONCILIATED' && !['RECEBIDO', 'PAGO'].includes(r.business_status ?? ''))
+                .map((r: { id: string }) => r.id);
+            if (toDelete.length) {
+                await supabase.from('internal_transactions').delete().in('id', toDelete);
+                console.log(`[COMMERCIAL-FINANCE] Removidas ${toDelete.length} parcela(s) espelhadas em internal_transactions do Deal ${dealId}.`);
+            }
+        } catch (e) {
+            console.error('[COMMERCIAL-FINANCE] Erro ao limpar espelho em internal_transactions:', e);
+        }
+
         // Remover comissão do Portal do Corretor
         await this.deleteBrokerCommissionFromPortal(dealId);
     },

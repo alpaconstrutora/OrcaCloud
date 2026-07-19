@@ -1028,17 +1028,20 @@ export const contractService = {
                     console.log(`[CONTRACTS] Removed ${removedCount} financial transactions for deleted contract ${id}`);
                 }
 
-                // Also clean internal_transactions (Conciliação tab) — reference_id uses contract.id:pN pattern
-                const { data: parceladoRows } = await supabase
+                // Also clean internal_transactions (Conciliação / Contas a Receber).
+                // reference_id = contract.id (RECORRENTE/AVISTA) ou contract.id:pN
+                // (PARCELADO) → `${id}%` cobre os dois. Antes só limpava PARCELADO,
+                // então parcelas de LOCAÇÃO (recorrente) ficavam órfãs no financeiro.
+                const { data: contractRows } = await supabase
                     .from('internal_transactions')
                     .select('id')
                     .eq('organization_id', orgId)
-                    .eq('source_system', 'CONTRACT_PARCELADO')
+                    .in('source_system', ['CONTRACT_RECURRING', 'CONTRACT_PARCELADO', 'CONTRACT_AVISTA'])
                     .like('reference_id', `${id}%`);
-                if (parceladoRows?.length) {
+                if (contractRows?.length) {
                     await supabase.from('internal_transactions')
                         .delete()
-                        .in('id', parceladoRows.map((r: any) => r.id));
+                        .in('id', contractRows.map((r: any) => r.id));
                 }
             } catch (e) {
                 console.error('[CONTRACTS] Error cleaning up financial transactions on contract delete:', e);

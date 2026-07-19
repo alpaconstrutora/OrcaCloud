@@ -102,6 +102,23 @@ O corte agora é na origem, e é seguro por padrão:
 
 Fonte da verdade e razão de cada decisão: **`utils/systemProjects.ts`**.
 
+### A regra vale também na ESCRITA (não só na listagem)
+
+A tabela acima cobre **leitura**. O mesmo projeto de sistema não pode ser
+gravado como *dimensão obra* de um lançamento: **`project_id` de um projeto de
+sistema é sempre `NULL`**. Parcela do comercial (Vendas/Locações) não tem obra.
+
+Se você for gravar `project_id` (ou qualquer FK para `projects`) a partir de um
+objeto de projeto, corte antes:
+
+```ts
+const projectId = isSystemProject(project) ? null : (project.id ?? null);
+```
+
+O banco também trava isso (`trg_strip_system_project_from_internal_tx`,
+migration `20270819000003`), mas a trava é rede de segurança — não desculpa
+para gravar errado e deixar o banco consertar.
+
 **Verificação (exit ≠ 0 se achar comparação literal):**
 
 ```bash
@@ -117,6 +134,16 @@ enésima repetição do mesmo bug — o usuário pediu para resolver de forma
 definitiva, não mais um filtro pontual. A correção foi mover o corte para o
 store + `projectService`, fazer o backfill de `settings.isSystemProject`
 (migration `20270718000001`) e travar o padrão antigo no script acima.
+
+2026-07-19: o bug voltou por uma camada que a regra **não cobria** — a escrita.
+`financialSyncService` gravava `project_id = project.id` sem exceção; o
+comentário no código dizia "vaults org-level ficam null", mas o vault tem id
+real, então o id dele ia para a coluna e toda parcela de Vendas/Locações
+aparecia em Contas a Receber com Obra = "Gestão Comercial" — e como obra falsa
+no Scorecard e nos alertas ("Risco de caixa: Gestão Comercial"). Nenhum filtro
+de listagem resolvia: o dado já nascia errado. Daí a seção de ESCRITA acima e a
+trigger no banco. Lição: ao ver este projeto num lugar novo, pergunte se é
+leitura **ou escrita** antes de assumir que a regra já cobre.
 
 ---
 

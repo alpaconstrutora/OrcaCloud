@@ -791,13 +791,108 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
     return (
         <div className="space-y-6">
-            {/* Header — §20 (flat, sem hero) */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Venda de Ativos</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Controle de inventário de vendas, negociações e performance imobiliária.</p>
+            {/* 1. Título — §1 (h1 solto; os controles que estavam nesta linha viram
+                a toolbar de botões da §4, abaixo do KPI). */}
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Venda de Ativos</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Controle de inventário de vendas, negociações e performance imobiliária.</p>
+            </div>
+
+            {/* Pricing Modal */}
+            <PricingIntelligenceModal
+                isOpen={isPricingModalOpen}
+                onClose={() => setIsPricingModalOpen(false)}
+                onApply={handleApplyPricing}
+                buildingName={currentBuilding?.name || ''}
+            />
+
+            {/* 2. KPI cards — só existem na aba "Unidades do edifício" (inventory).
+                Precisam vir ANTES das abas/botões (§1); antes ficavam depois, porque
+                o header (agora §4) e as abas internas (§3) eram renderizados no topo
+                incondicionalmente. Nas demais abas (deals/dashboard/...), que não têm
+                KPI, a tela cai direto de título para abas/botões — ainda válido, §2
+                é "só se houver". */}
+            {activeTab === 'inventory' && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <KpiCard shadow={false} size="sm" label="Estoque (und)" value={`${stats.soldUnitsCount} / ${stats.totalVendavel}`} icon={<Building2 className="w-4 h-4" />} color="blue" />
+                    <KpiCard shadow={false} size="sm" label="VGV Vendido" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRealizado)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
+                    <KpiCard shadow={false} size="sm" label="Sell-Through" value={`${stats.sellThrough}%`} icon={<Percent className="w-4 h-4" />} color="purple" />
+                    <KpiCard shadow={false} size="sm" label="VGV Remanescente" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRemanescente)} icon={<Target className="w-4 h-4" />} color="amber" />
+                    <KpiCard shadow={false} size="sm" label="Ticket Médio" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.ticketMedio)} icon={<TrendingUp className="w-4 h-4" />} color="cyan" />
                 </div>
-                <div className="flex items-center gap-2">
+            )}
+
+            {/* 3. Toolbar de abas (§3) — navegação entre as vistas de UM empreendimento
+                selecionado. Trilho bg-gray-50 + aba ativa bg-white text-blue-600
+                shadow-sm (antes: bg-blue-600 text-white, sem trilho — cor de toggle de
+                ação, não de navegação). Vem ANTES da toolbar de botões (§1: KPI → abas
+                → botões) — as duas estavam invertidas numa primeira passada. */}
+            {selectedBuildingId && (
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    <button
+                        onClick={() => setActiveTab('inventory')}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        <HomeIcon className="w-3.5 h-3.5" />
+                        Unidades do edifício
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('deals')}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'deals' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        <Tag className="w-3.5 h-3.5" />
+                        Negociações
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('dashboard')}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        Resultados
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('simulation')}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'simulation' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        <Activity className="w-3.5 h-3.5" />
+                        Simulação
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('price-tables')}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'price-tables' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        <DollarSign className="w-3.5 h-3.5" />
+                        Tabela de preços
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('sales-plans')}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'sales-plans' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        <Percent className="w-3.5 h-3.5" />
+                        Planos de vendas
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('brokers')}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'brokers' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        <User className="w-3.5 h-3.5" />
+                        Corretores
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('contracts')}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'contracts' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        <FileText className="w-3.5 h-3.5" />
+                        Contratos
+                    </button>
+                </div>
+            )}
+
+            {/* 4. Toolbar de botões (§4) — escopo (Ver todos empreendimentos) e ações
+                (Inteligência de preços/Relatórios) à esquerda, ação primária (Novo
+                imóvel) à direita. Antes ficavam espremidos na linha do h1. */}
+            <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-wrap items-center gap-2">
                     {selectedBuildingId && (
                         <button
                             onClick={() => {
@@ -823,109 +918,30 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         <Maximize2 className="w-4 h-4" />
                         Relatórios
                     </button>
-                    <button
-                        onClick={() => {
-                            setEditingProperty(undefined);
-                            setIsPropertyModalOpen(true);
-                        }}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-                    >
-                        <Plus className="w-[15px] h-[15px]" />
-                        Novo imóvel
-                    </button>
+                    {selectedBuildingId && (
+                        <span className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] bg-blue-50 text-blue-700 text-sm font-medium">
+                            <Building2 className="w-4 h-4" />
+                            Visualizando: {currentBuilding?.name}
+                        </span>
+                    )}
                 </div>
+
+                <button
+                    onClick={() => {
+                        setEditingProperty(undefined);
+                        setIsPropertyModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    Novo imóvel
+                </button>
             </div>
 
-            {/* Pricing Modal */}
-            <PricingIntelligenceModal
-                isOpen={isPricingModalOpen}
-                onClose={() => setIsPricingModalOpen(false)}
-                onApply={handleApplyPricing}
-                buildingName={currentBuilding?.name || ''}
-            />
-
-            {selectedBuildingId && (
-                <div className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] bg-blue-50 text-blue-700 text-sm font-medium w-fit">
-                    <Building2 className="w-4 h-4" />
-                    Visualizando: {currentBuilding?.name}
-                </div>
-            )}
-
-            {/* Tabs internas do módulo (§19) — vocabulário compacto (h-9, rounded-[6px]) */}
-            {selectedBuildingId && (
-                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 w-fit max-w-full overflow-x-auto">
-                    <button
-                        onClick={() => setActiveTab('inventory')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        <HomeIcon className="w-3.5 h-3.5" />
-                        Unidades do edifício
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('deals')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'deals' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        <Tag className="w-3.5 h-3.5" />
-                        Negociações
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('dashboard')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        <TrendingUp className="w-3.5 h-3.5" />
-                        Resultados
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('simulation')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'simulation' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        <Activity className="w-3.5 h-3.5" />
-                        Simulação
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('price-tables')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'price-tables' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        <DollarSign className="w-3.5 h-3.5" />
-                        Tabela de preços
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('sales-plans')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'sales-plans' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        <Percent className="w-3.5 h-3.5" />
-                        Planos de vendas
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('brokers')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'brokers' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        <User className="w-3.5 h-3.5" />
-                        Corretores
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('contracts')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'contracts' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        <FileText className="w-3.5 h-3.5" />
-                        Contratos
-                    </button>
-                </div>
-
-            )}
-
-
-            {/* Content */}
+            {/* 5. Conteúdo da aba ativa */}
             {activeTab === 'inventory' && (
                 <div className="space-y-6">
-                    {/* Stats Summary Row */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        <KpiCard shadow={false} size="sm" label="Estoque (und)" value={`${stats.soldUnitsCount} / ${stats.totalVendavel}`} icon={<Building2 className="w-4 h-4" />} color="blue" />
-                        <KpiCard shadow={false} size="sm" label="VGV Vendido" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRealizado)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                        <KpiCard shadow={false} size="sm" label="Sell-Through" value={`${stats.sellThrough}%`} icon={<Percent className="w-4 h-4" />} color="purple" />
-                        <KpiCard shadow={false} size="sm" label="VGV Remanescente" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRemanescente)} icon={<Target className="w-4 h-4" />} color="amber" />
-                        <KpiCard shadow={false} size="sm" label="Ticket Médio" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.ticketMedio)} icon={<TrendingUp className="w-4 h-4" />} color="cyan" />
-                    </div>
+                    {/* KPI já renderizado acima (item 2 da anatomia, §1) — não repetir aqui. */}
 
                     {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
                         conteúdo dividem um único card (border/rounded/shadow só no container
@@ -1007,7 +1023,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                              ))
                                          ) : (
                                               <div className="col-span-full py-16 text-center">
-                                                  <p className="text-gray-400 font-bold uppercase tracking-widest text-sm">Nenhuma unidade encontrada para este edifício.</p>
+                                                  <p className="text-sm text-gray-500">Nenhuma unidade encontrada para este edifício.</p>
                                               </div>
                                          )
                                     ) : (
@@ -1082,7 +1098,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                                 />
                                                             </td>
                                                             {isVisible('name') && (
-                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900">
+                                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
                                                                     {property.name}
                                                                 </td>
                                                             )}
@@ -1181,7 +1197,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                             />
                                                         </td>
-                                                        {isVisible('name') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors whitespace-nowrap cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>{property.name}</td>}
+                                                        {isVisible('name') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700 group-hover:text-blue-600 transition-colors whitespace-nowrap cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>{property.name}</td>}
                                                         {isVisible('address') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400 cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>{property.address || 'Resumo do Empreendimento'}</td>}
                                                         {isVisible('price') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-medium text-gray-800 whitespace-nowrap cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(property.price || 0)}</td>}
                                                         {isVisible('price_per_m2') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-400 text-center whitespace-nowrap cursor-pointer" onClick={() => setSelectedBuildingId(property.id)}>---</td>}
@@ -1242,7 +1258,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
                     {/* Bulk Actions Bar */}
                     {selectedProperties.length > 0 && (
-                        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-[10px] shadow-lg shadow-blue-900/20">
                             <span className="flex-1 text-sm font-bold whitespace-nowrap">
                                 {selectedProperties.length} selecionado{selectedProperties.length !== 1 ? 's' : ''}
                             </span>
@@ -1257,7 +1273,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             </Button>
                             <button
                                 onClick={() => setSelectedProperties([])}
-                                className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-sm uppercase tracking-widest hover:bg-blue-400 transition-colors"
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-500 rounded-[6px] text-[13px] font-medium hover:bg-blue-400 transition-all active:scale-95"
                             >
                                 <X className="w-3.5 h-3.5" />
                                 Desmarcar
@@ -1843,7 +1859,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
             {/* Toast de Notificação — §13 */}
             {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
                     notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                 }`}>
                     <AlertCircle className="w-4 h-4 shrink-0" />

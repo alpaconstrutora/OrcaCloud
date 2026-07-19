@@ -1,5 +1,5 @@
 -- ==========================================================================
--- internal_transactions NUNCA carrega um projeto de SISTEMA como obra
+-- PASSO 1/2 — Backfill: solta a dimensão obra das linhas já gravadas
 -- Date: 2026-07-19
 -- ==========================================================================
 -- CONTEXTO
@@ -19,24 +19,19 @@
 -- LEITURA (listas de obras); aqui ele estava sendo gravado na ESCRITA, então
 -- nenhum filtro de listagem ajudava — o dado já nascia errado.
 --
--- Prova de que o marcador certo já era conhecido: o backfill do DRE
--- (20261103000001, blocos 2a/2b) se protegeu com `source_system = 'PROJECT'`,
--- justamente para não atribuir o vault a uma obra. Só o financialSyncService
--- não tinha essa proteção.
+-- ⚠️ POR QUE ESTE ARQUIVO É SÓ O BACKFILL
+-- A primeira versão fazia backfill + CREATE TRIGGER no mesmo script e deu
+-- `40P01: deadlock detected` com o app em produção rodando. Motivo: o UPDATE
+-- pega AccessShareLock em `projects` + RowExclusive em `internal_transactions`;
+-- em seguida o CREATE TRIGGER precisa escalar para AccessExclusiveLock em
+-- `internal_transactions` — enquanto uma query viva do app segurava
+-- `internal_transactions` e pedia `projects`. Ordem de locks invertida = deadlock.
+-- A trigger (defensiva) foi separada em 20270819000004, que é curto e isolado.
 --
--- ESTA MIGRATION
---   1. Corrige o dado já gravado (parcelas de Vendas/Locações que hoje exibem
---      "Gestão Comercial" na coluna Obra).
---   2. Instala uma trava no banco para o bug não voltar por outro caminho —
---      código novo, Edge Function, import manual, SQL direto. O fix no
---      TypeScript resolve o produtor de hoje; a trigger resolve os de amanhã.
---
--- Idempotente: rodar de novo afeta 0 linhas e recria a trigger igual.
+-- Este passo é DML puro: não escala lock, não conflita com leitura do app.
+-- Idempotente: rodar de novo afeta 0 linhas.
 -- ==========================================================================
 
--- ────────────────────────────────────────────────────────────
--- 1. Backfill — solta a dimensão obra das linhas já gravadas
--- ────────────────────────────────────────────────────────────
 -- Critério pela tabela `projects` (flag OU nome), não por source_system: pega
 -- também linhas gravadas antes de `isSystemProject` existir e as que vieram por
 -- caminhos que nunca marcaram source_system='COMMERCIAL'.
@@ -52,52 +47,13 @@ WHERE  p.id = it.project_id
      OR p.name = 'Gestão Comercial'
   );
 
--- ────────────────────────────────────────────────────────────
--- 2. Trava — projeto de sistema não entra na dimensão obra
--- ────────────────────────────────────────────────────────────
--- SECURITY DEFINER de propósito: a checagem precisa enxergar a linha de
--- `projects` mesmo quando a RLS a esconderia do usuário que está gravando.
--- Sem isso o EXISTS daria falso e a trava passaria batido.
--- Delimitador nomeado ($fn$) e não $$: o editor SQL do Supabase injeta
--- comentários entre statements e corta o $$ ("unterminated dollar-quoted
--- string") — ver project_modulo_financeiro_fase7.
-
-CREATE OR REPLACE FUNCTION public.fn_strip_system_project_from_internal_tx()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $fn$
-BEGIN
-  IF NEW.project_id IS NOT NULL AND EXISTS (
-      SELECT 1
-      FROM   public.projects p
-      WHERE  p.id = NEW.project_id
-        AND  (
-              p.settings->>'isSystemProject' = 'true'
-           OR p.name = 'Gestão Comercial'
-        )
-  ) THEN
-    -- Projeto de sistema (vault comercial) não é obra: a parcela fica sem
-    -- dimensão obra e a coluna Obra mostra "—".
-    NEW.project_id := NULL;
-  END IF;
-
-  RETURN NEW;
-END;
-$fn$;
-
--- Função de trigger não é chamável como RPC, mas é SECURITY DEFINER:
--- fecha para PUBLIC por padrão da casa (ver feedback_rpc_revoke_public_default).
-REVOKE ALL ON FUNCTION public.fn_strip_system_project_from_internal_tx() FROM PUBLIC;
-
-DROP TRIGGER IF EXISTS trg_strip_system_project_from_internal_tx ON public.internal_transactions;
-
-CREATE TRIGGER trg_strip_system_project_from_internal_tx
-  BEFORE INSERT OR UPDATE OF project_id ON public.internal_transactions
-  FOR EACH ROW
-  EXECUTE FUNCTION public.fn_strip_system_project_from_internal_tx();
+-- Conferência: deve retornar 0 linhas depois do UPDATE acima.
+SELECT count(*) AS parcelas_ainda_com_projeto_de_sistema
+FROM   public.internal_transactions it
+JOIN   public.projects p ON p.id = it.project_id
+WHERE  p.settings->>'isSystemProject' = 'true'
+   OR  p.name = 'Gestão Comercial';
 
 -- ==========================================================================
--- FIM: 20270819000003_internal_tx_nunca_carimba_projeto_de_sistema.sql
+-- FIM: PASSO 1/2 — rodar em seguida 20270819000004 (trigger)
 -- ==========================================================================

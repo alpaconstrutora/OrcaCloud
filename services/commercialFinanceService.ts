@@ -563,18 +563,23 @@ export const commercialFinanceService = {
         }
 
         // Espelho em internal_transactions (Contas a Receber / Conciliação): as
-        // parcelas do negócio sao materializadas la' com source_system='COMMERCIAL'
-        // e reference_id 'tx-{dealId}-p{n}'/'tx-{dealId}-dp'. A comissao do corretor
-        // vai como 'tx-comm-{dealId}' (DEBIT). O vault acima nao as toca — antes
-        // ficavam orfas ao excluir o negocio (o filtro so' pegava 'tx-{dealId}-%',
-        // deixando a comissao 'tx-comm-{dealId}' para tras). Remove as PENDENTES;
-        // preserva as ja' RECEBIDAS/PAGAS/conciliadas (dinheiro que entrou/saiu).
+        // parcelas do negócio sao materializadas la' com reference_id
+        // 'tx-{dealId}-p{n}'/'tx-{dealId}-dp'. A comissao do corretor vai como
+        // 'tx-comm-{dealId}' (DEBIT). O vault acima nao as toca — antes ficavam
+        // orfas ao excluir o negocio. Remove as PENDENTES; preserva as ja'
+        // RECEBIDAS/PAGAS/conciliadas (dinheiro que entrou/saiu).
+        // ⚠️ NÃO filtrar por source_system='COMMERCIAL': quando o deal tem
+        // linked_project_id para uma obra real, financialSyncService materializa
+        // com source_system='PROJECT' (isSystemProject retorna false para o
+        // projeto real). Um filtro de source_system aqui deixava essas parcelas
+        // órfãs — achado em auditoria 2026-07-19 (16 lançamentos, R$2M, presos
+        // em Contas a Receber de negócios já excluídos). reference_id já embute
+        // o dealId (UUID), então basta o padrão — sem risco de colisão entre orgs.
         try {
             const { data: mirrored } = await supabase
                 .from('internal_transactions')
                 .select('id, status, business_status')
                 .eq('organization_id', organizationId)
-                .eq('source_system', 'COMMERCIAL')
                 .or(`reference_id.like.tx-${dealId}-*,reference_id.eq.tx-comm-${dealId}`);
             const toDelete = (mirrored || [])
                 .filter((r: { status?: string; business_status?: string }) =>

@@ -12,8 +12,10 @@
 -- anterior (backfill + trigger juntos) deu `40P01: deadlock detected`.
 --
 -- Defesas aqui:
---   • `lock_timeout` — se não conseguir o lock em 5s, ABORTA limpo (55P03,
---     "lock timeout") em vez de ficar esperando e deadlockar. Pode rodar de novo.
+--   • `lock_timeout` **menor que o `deadlock_timeout`** (padrão 1s). Na 2ª
+--     tentativa usamos 5s e ainda deu 40P01: o detector de deadlock dispara em
+--     1s e mata a transação ANTES do lock_timeout de 5s ter chance de agir.
+--     Com 800ms a espera aborta limpo (55P03) antes do detector rodar.
 --   • Script curto e isolado: nada de UPDATE antes, então não há ordem de locks
 --     invertida contra as queries do app.
 --
@@ -21,10 +23,15 @@
 -- Feche as abas do sistema (ou rode fora do horário de uso) e execute de novo.
 -- Nada fica pela metade — ou aplica inteiro, ou não aplica.
 --
+-- ⚠️ ESTA TRIGGER É OPCIONAL. O bug já está resolvido sem ela: o fix em
+-- `financialSyncService.ts` impede gravar errado e o backfill (000003) limpou o
+-- que existia. Ela só protege contra caminhos FUTUROS. Se continuar brigando
+-- com o lock, deixe para uma janela de manutenção — não há urgência.
+--
 -- Idempotente: recria função e trigger iguais.
 -- ==========================================================================
 
-SET lock_timeout = '5s';
+SET lock_timeout = '800ms';
 
 -- ────────────────────────────────────────────────────────────
 -- 1. Função — não toca em internal_transactions, não pega lock na tabela

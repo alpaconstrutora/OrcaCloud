@@ -587,7 +587,7 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                 </td>
                                                 {tableColumns.visibleColumns.includes('supplier') && (
                                                     <td className="px-4 py-2.5">
-                                                        <p className="text-sm font-normal text-gray-900 truncate max-w-xs">{inv.supplierName ?? '—'}</p>
+                                                        <p className="text-sm font-normal text-gray-700 truncate max-w-xs">{inv.supplierName ?? '—'}</p>
                                                         <p className="text-xs text-gray-400 truncate max-w-xs">{inv.fileName}</p>
                                                     </td>
                                                 )}
@@ -630,30 +630,30 @@ export default function ContasPagarManager({ organizationId, organizations, onOr
                                                             />
                                                         )}
 
-                                                        {/* Pagar via Asaas — só para invoices originados de boleto com linha digitável */}
+                                                        {/* Pagar via Asaas — só para invoices originados de boleto com linha digitável.
+                                                            Link de texto, padrão §8/UI UX tabela.md (mesmo tratamento do "Baixar"/"Emitir" de ContasReceberManager.tsx). */}
                                                         {!['paid', 'rejected'].includes(inv.status) && fromBoleto && inv.supplierOrganizationId && (
                                                             <button
                                                                 onClick={() => setPagandoAsaas(inv)}
-                                                                className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 rounded-[6px] transition-all shadow-sm text-sm font-semibold active:scale-95"
+                                                                className="text-emerald-700 hover:text-emerald-800 text-sm font-medium p-1.5 hover:bg-emerald-50 rounded-[6px] transition-all flex items-center gap-1"
                                                                 title="Pagar via Asaas"
                                                             >
-                                                                <Landmark className="w-4 h-4" />
-                                                                Pagar via Asaas
+                                                                <Landmark className="w-3.5 h-3.5" /> Pagar via Asaas
                                                             </button>
                                                         )}
 
-                                                        {/* Marcar como pago */}
+                                                        {/* Marcar como pago — ação primária/frequente da linha (§8) */}
                                                         {!['paid', 'rejected'].includes(inv.status) && (
                                                             <button
                                                                 onClick={() => handleMarcarPago(inv)}
                                                                 disabled={marcandoPago === inv.id}
-                                                                className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-green-200 text-green-700 hover:bg-green-50 rounded-[6px] transition-all shadow-sm text-sm font-semibold disabled:opacity-50 active:scale-95"
+                                                                className="text-green-700 hover:text-green-800 text-sm font-medium p-1.5 hover:bg-green-50 rounded-[6px] transition-all disabled:opacity-50 flex items-center gap-1"
                                                                 title="Marcar como pago"
                                                             >
                                                                 {marcandoPago === inv.id ? (
-                                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                                                 ) : (
-                                                                    <Check className="w-4 h-4" />
+                                                                    <Check className="w-3.5 h-3.5" />
                                                                 )}
                                                                 Pago
                                                             </button>

@@ -709,111 +709,114 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         ABA 3 — FORMA DE PAGAMENTO
                     ══════════════════════════════════════════ */}
                     {activeTab === 'pagamento' && (
-                        <div className="max-w-3xl space-y-6">
-                            <div className="flex items-center gap-2 text-purple-600">
-                                <DollarSign className="w-5 h-5" />
-                                <h3 className="font-black uppercase tracking-widest text-xs">
-                                    {formData.type === 'SALE' ? 'Condições de Venda' :
-                                        formData.type === 'RENTAL' ? 'Condições de Aluguel' : 'Condições do Acordo'}
-                                </h3>
-                            </div>
+                        <div className="space-y-6">
+                            {/* Campos compactos (não precisam de tela cheia) — Tipo, Valor, Datas,
+                                Forma de Pagamento, Entrada/Nº Parcelas. O Plano de Pagamento (abaixo,
+                                fora deste container) usa a largura toda: cada parcela + desconto
+                                cabe numa linha só. */}
+                            <div className="max-w-3xl space-y-6">
+                                <div className="flex items-center gap-2 text-purple-600">
+                                    <DollarSign className="w-5 h-5" />
+                                    <h3 className="font-black uppercase tracking-widest text-xs">
+                                        {formData.type === 'SALE' ? 'Condições de Venda' :
+                                            formData.type === 'RENTAL' ? 'Condições de Aluguel' : 'Condições do Acordo'}
+                                    </h3>
+                                </div>
 
-                            {/* Tipo */}
-                            <div className={`grid gap-4 bg-gray-50 p-2 rounded-3xl shadow-inner ${(initialData?.type || defaultType) ? 'hidden' : 'grid-cols-3'}`}>
-                                {(['SALE', 'RENTAL', 'SERVICE'] as const).map((t) => (
-                                    <button
-                                        key={t}
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, type: t })}
-                                        className={`py-4 rounded-2xl font-black text-button uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 ${formData.type === t ? 'bg-white text-purple-600 shadow-xl border border-gray-100 scale-[1.02]' : 'text-gray-400 hover:text-gray-600'}`}
-                                    >
-                                        {t === 'SALE' ? 'Venda' : t === 'RENTAL' ? 'Aluguel' : 'Serviço'}
-                                    </button>
-                                ))}
-                            </div>
+                                {/* Tipo */}
+                                <div className={`grid gap-4 bg-gray-50 p-2 rounded-3xl shadow-inner ${(initialData?.type || defaultType) ? 'hidden' : 'grid-cols-3'}`}>
+                                    {(['SALE', 'RENTAL', 'SERVICE'] as const).map((t) => (
+                                        <button
+                                            key={t}
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, type: t })}
+                                            className={`py-4 rounded-2xl font-black text-button uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 ${formData.type === t ? 'bg-white text-purple-600 shadow-xl border border-gray-100 scale-[1.02]' : 'text-gray-400 hover:text-gray-600'}`}
+                                        >
+                                            {t === 'SALE' ? 'Venda' : t === 'RENTAL' ? 'Aluguel' : 'Serviço'}
+                                        </button>
+                                    ))}
+                                </div>
 
-                            {/* Valor */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Valor do Fechamento</label>
-                                <div className="relative group">
-                                    <span className="absolute left-8 top-1/2 -translate-y-1/2 font-mono font-bold text-purple-300 group-focus-within:text-white transition-colors">BRL</span>
-                                    <input
-                                        required
-                                        type="number"
-                                        value={formData.value || ''}
+                                {/* Valor */}
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Valor do Fechamento</label>
+                                    <div className="relative group">
+                                        <span className="absolute left-8 top-1/2 -translate-y-1/2 font-mono font-bold text-purple-300 group-focus-within:text-white transition-colors">BRL</span>
+                                        <input
+                                            required
+                                            type="number"
+                                            value={formData.value || ''}
+                                            onChange={(e) => {
+                                                const newValue = parseFloat(e.target.value) || 0;
+                                                const pct = formData.broker_commission_pct || 0;
+                                                setFormData({
+                                                    ...formData,
+                                                    value: newValue,
+                                                    broker_commission_value: recalcCommission(newValue, pct)
+                                                });
+                                            }}
+                                            className="w-full pl-20 pr-8 py-6 bg-purple-600 text-white placeholder-purple-300 rounded-[2rem] outline-none font-black text-3xl shadow-xl shadow-purple-600/20 focus:scale-[1.01] transition-all"
+                                            placeholder="0,00"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Datas */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Data Efetiva</label>
+                                        <div className="relative">
+                                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                            <input
+                                                type="date"
+                                                value={formData.date}
+                                                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                                className="w-full pl-11 pr-4 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Data do 1º Pagamento</label>
+                                        <div className="relative">
+                                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400" />
+                                            <input
+                                                type="date"
+                                                value={formData.payment_due_date || ''}
+                                                onChange={(e) => handlePaymentDueDateChange(e.target.value)}
+                                                className="w-full pl-11 pr-4 py-4 bg-purple-50/50 border border-purple-100 focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-purple-700 transition-all shadow-inner text-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Forma de Pagamento */}
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Forma de Pagamento</label>
+                                    <select
+                                        value={formData.payment_method}
                                         onChange={(e) => {
-                                            const newValue = parseFloat(e.target.value) || 0;
-                                            const pct = formData.broker_commission_pct || 0;
+                                            const method = e.target.value;
                                             setFormData({
                                                 ...formData,
-                                                value: newValue,
-                                                broker_commission_value: recalcCommission(newValue, pct)
+                                                payment_method: method,
+                                                installments: method === 'CASH' ? 1 : formData.installments
                                             });
                                         }}
-                                        className="w-full pl-20 pr-8 py-6 bg-purple-600 text-white placeholder-purple-300 rounded-[2rem] outline-none font-black text-3xl shadow-xl shadow-purple-600/20 focus:scale-[1.01] transition-all"
-                                        placeholder="0,00"
-                                    />
+                                        className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner"
+                                    >
+                                        <option value="CASH">À Vista</option>
+                                        <option value="INSTALLMENTS">Parcelado Direto / Mensalidade</option>
+                                        {formData.type === 'SALE' && (
+                                            <>
+                                                <option value="FINANCING">Financiamento</option>
+                                                <option value="PERMUTA">Permuta</option>
+                                                <option value="HIBRIDO">Híbrido</option>
+                                            </>
+                                        )}
+                                    </select>
                                 </div>
-                            </div>
 
-                            {/* Datas */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Data Efetiva</label>
-                                    <div className="relative">
-                                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                        <input
-                                            type="date"
-                                            value={formData.date}
-                                            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                            className="w-full pl-11 pr-4 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Data do 1º Pagamento</label>
-                                    <div className="relative">
-                                        <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400" />
-                                        <input
-                                            type="date"
-                                            value={formData.payment_due_date || ''}
-                                            onChange={(e) => handlePaymentDueDateChange(e.target.value)}
-                                            className="w-full pl-11 pr-4 py-4 bg-purple-50/50 border border-purple-100 focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-purple-700 transition-all shadow-inner text-sm"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Forma de Pagamento */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Forma de Pagamento</label>
-                                <select
-                                    value={formData.payment_method}
-                                    onChange={(e) => {
-                                        const method = e.target.value;
-                                        setFormData({
-                                            ...formData,
-                                            payment_method: method,
-                                            installments: method === 'CASH' ? 1 : formData.installments
-                                        });
-                                    }}
-                                    className="w-full px-6 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all cursor-pointer shadow-inner"
-                                >
-                                    <option value="CASH">À Vista</option>
-                                    <option value="INSTALLMENTS">Parcelado Direto / Mensalidade</option>
-                                    {formData.type === 'SALE' && (
-                                        <>
-                                            <option value="FINANCING">Financiamento</option>
-                                            <option value="PERMUTA">Permuta</option>
-                                            <option value="HIBRIDO">Híbrido</option>
-                                        </>
-                                    )}
-                                </select>
-                            </div>
-
-                            {/* Parcelas */}
-                            {formData.payment_method === 'INSTALLMENTS' && (
-                                <div className="space-y-4">
+                                {formData.payment_method === 'INSTALLMENTS' && (
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Entrada (BRL)</label>
@@ -836,124 +839,118 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             />
                                         </div>
                                     </div>
+                                )}
+                            </div>
 
-                                    <div>
-                                        <div className="flex items-center justify-between mb-3">
-                                            <h4 className="text-xs font-black text-purple-600 uppercase tracking-widest">Plano de Pagamento</h4>
-                                            <button
-                                                type="button"
-                                                onClick={handleGenerateInstallments}
-                                                disabled={loading}
-                                                className={`px-4 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${loading ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-purple-100 text-purple-700 hover:bg-purple-200 active:scale-95'}`}
-                                            >
-                                                {loading ? 'Verificando...' : 'Gerar Parcelas'}
-                                            </button>
-                                        </div>
+                            {/* Plano de Pagamento — largura total: data + valor bruto + desconto +
+                                valor final cabem todos na mesma linha por parcela. */}
+                            {formData.payment_method === 'INSTALLMENTS' && (
+                                <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h4 className="text-xs font-black text-purple-600 uppercase tracking-widest">Plano de Pagamento</h4>
+                                        <button
+                                            type="button"
+                                            onClick={handleGenerateInstallments}
+                                            disabled={loading}
+                                            className={`px-4 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${loading ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-purple-100 text-purple-700 hover:bg-purple-200 active:scale-95'}`}
+                                        >
+                                            {loading ? 'Verificando...' : 'Gerar Parcelas'}
+                                        </button>
+                                    </div>
 
-                                        {formData.custom_installments && formData.custom_installments.length > 0 && (
-                                            <div className="space-y-2 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                                                {formData.custom_installments.map((inst, index) => (
-                                                    <div key={inst.id} className="p-2 bg-white border border-purple-100 rounded-xl shadow-sm space-y-1.5">
-                                                        <div className="grid grid-cols-12 gap-2 items-center">
-                                                            <div className="col-span-1 flex justify-center">
-                                                                <span className="text-xs font-black text-gray-400">{index + 1}</span>
-                                                            </div>
-                                                            <div className="col-span-5">
-                                                                <input
-                                                                    type="date"
-                                                                    value={inst.dueDate}
-                                                                    onChange={(e) => {
-                                                                        const newInsts = [...formData.custom_installments!];
-                                                                        newInsts[index] = { ...inst, dueDate: e.target.value };
-                                                                        setFormData({ ...formData, custom_installments: newInsts });
-                                                                    }}
-                                                                    className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg p-2 text-form-input font-bold text-gray-700 outline-none"
-                                                                />
-                                                            </div>
-                                                            <div className="col-span-6 relative">
-                                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">R$</span>
-                                                                <input
-                                                                    type="number"
-                                                                    value={inst.originalValue ?? inst.value}
-                                                                    onChange={(e) => updateInstallmentDiscount(index, { originalValue: parseFloat(e.target.value) || 0 })}
-                                                                    className="w-full pl-6 pr-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg text-form-input font-bold text-gray-700 outline-none"
-                                                                />
-                                                            </div>
-                                                        </div>
+                                    {formData.custom_installments && formData.custom_installments.length > 0 && (
+                                        <div className="space-y-2 max-h-[28rem] overflow-y-auto pr-2 custom-scrollbar">
+                                            {formData.custom_installments.map((inst, index) => (
+                                                <div key={inst.id} className="flex flex-wrap items-center gap-3 p-3 bg-white border border-purple-100 rounded-xl shadow-sm">
+                                                    <span className="w-6 shrink-0 text-center text-xs font-black text-gray-400">{index + 1}</span>
 
-                                                        {/* Desconto por parcela — valor bruto (acima) menos desconto (R$ ou %) = valor final */}
-                                                        <div className="grid grid-cols-12 gap-2 items-center">
-                                                            <div className="col-span-1" />
-                                                            <div className="col-span-4">
-                                                                <select
-                                                                    value={inst.discountType ?? ''}
-                                                                    onChange={(e) => {
-                                                                        const type = e.target.value as 'VALUE' | 'PERCENT' | '';
-                                                                        updateInstallmentDiscount(index, {
-                                                                            discountType: type || undefined,
-                                                                            discountAmount: type ? inst.discountAmount : undefined
-                                                                        });
-                                                                    }}
-                                                                    className="w-full text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50 outline-none cursor-pointer"
-                                                                >
-                                                                    <option value="">Sem desconto</option>
-                                                                    <option value="VALUE">Desconto R$</option>
-                                                                    <option value="PERCENT">Desconto %</option>
-                                                                </select>
-                                                            </div>
-                                                            {inst.discountType && (
-                                                                <div className="col-span-3">
-                                                                    <input
-                                                                        type="number"
-                                                                        min="0"
-                                                                        step="0.01"
-                                                                        value={inst.discountAmount ?? ''}
-                                                                        onChange={(e) => updateInstallmentDiscount(index, { discountAmount: parseFloat(e.target.value) || 0 })}
-                                                                        placeholder={inst.discountType === 'PERCENT' ? '%' : 'R$'}
-                                                                        className="w-full text-xs font-semibold text-amber-700 border border-amber-200 rounded-lg px-2 py-1.5 bg-amber-50 outline-none"
-                                                                    />
-                                                                </div>
-                                                            )}
-                                                            {inst.discountType && (
-                                                                <div className="col-span-4 text-right">
-                                                                    <span className="text-xs font-black text-emerald-600">
-                                                                        Final: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inst.value)}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                        </div>
+                                                    <input
+                                                        type="date"
+                                                        value={inst.dueDate}
+                                                        onChange={(e) => {
+                                                            const newInsts = [...formData.custom_installments!];
+                                                            newInsts[index] = { ...inst, dueDate: e.target.value };
+                                                            setFormData({ ...formData, custom_installments: newInsts });
+                                                        }}
+                                                        className="w-[160px] shrink-0 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg p-2 text-form-input font-bold text-gray-700 outline-none"
+                                                    />
+
+                                                    <div className="relative w-[150px] shrink-0">
+                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">R$</span>
+                                                        <input
+                                                            type="number"
+                                                            value={inst.originalValue ?? inst.value}
+                                                            onChange={(e) => updateInstallmentDiscount(index, { originalValue: parseFloat(e.target.value) || 0 })}
+                                                            className="w-full pl-6 pr-2 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-300 rounded-lg text-form-input font-bold text-gray-700 outline-none"
+                                                        />
                                                     </div>
-                                                ))}
-                                                {(() => {
-                                                    // Soma bruta valida contra o Valor do Fechamento (parcelas somam o
-                                                    // preço combinado, independente de desconto). Soma com desconto é
-                                                    // o que de fato será cobrado — mostrada só quando difere da bruta,
-                                                    // para não confundir "faltou parcela" com "desconto aplicado".
-                                                    const grossSum = formData.custom_installments!.reduce((sum, i) => sum + (i.originalValue ?? i.value), 0) + (formData.down_payment || 0);
-                                                    const netSum = formData.custom_installments!.reduce((sum, i) => sum + i.value, 0) + (formData.down_payment || 0);
-                                                    const hasDiscount = Math.abs(netSum - grossSum) > 0.01;
-                                                    return (
-                                                        <div className="p-3 mt-2 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
-                                                            <div className="flex justify-between items-center">
-                                                                <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Soma das Parcelas</span>
-                                                                <span className={`text-sm font-black ${Math.abs(grossSum - (formData.value || 0)) < 0.01 ? 'text-green-600' : 'text-amber-600'}`}>
-                                                                    Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(grossSum)}
+
+                                                    <select
+                                                        value={inst.discountType ?? ''}
+                                                        onChange={(e) => {
+                                                            const type = e.target.value as 'VALUE' | 'PERCENT' | '';
+                                                            updateInstallmentDiscount(index, {
+                                                                discountType: type || undefined,
+                                                                discountAmount: type ? inst.discountAmount : undefined
+                                                            });
+                                                        }}
+                                                        className="w-[150px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-gray-50 outline-none cursor-pointer"
+                                                    >
+                                                        <option value="">Sem desconto</option>
+                                                        <option value="VALUE">Desconto R$</option>
+                                                        <option value="PERCENT">Desconto %</option>
+                                                    </select>
+
+                                                    {inst.discountType && (
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.01"
+                                                            value={inst.discountAmount ?? ''}
+                                                            onChange={(e) => updateInstallmentDiscount(index, { discountAmount: parseFloat(e.target.value) || 0 })}
+                                                            placeholder={inst.discountType === 'PERCENT' ? '%' : 'R$'}
+                                                            className="w-[110px] shrink-0 text-xs font-semibold text-amber-700 border border-amber-200 rounded-lg px-2 py-2 bg-amber-50 outline-none"
+                                                        />
+                                                    )}
+
+                                                    <div className="flex-1 min-w-[140px] text-right">
+                                                        {inst.discountType && (
+                                                            <span className="text-xs font-black text-emerald-600">
+                                                                Final: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inst.value)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {(() => {
+                                                // Soma bruta valida contra o Valor do Fechamento (parcelas somam o
+                                                // preço combinado, independente de desconto). Soma com desconto é
+                                                // o que de fato será cobrado — mostrada só quando difere da bruta,
+                                                // para não confundir "faltou parcela" com "desconto aplicado".
+                                                const grossSum = formData.custom_installments!.reduce((sum, i) => sum + (i.originalValue ?? i.value), 0) + (formData.down_payment || 0);
+                                                const netSum = formData.custom_installments!.reduce((sum, i) => sum + i.value, 0) + (formData.down_payment || 0);
+                                                const hasDiscount = Math.abs(netSum - grossSum) > 0.01;
+                                                return (
+                                                    <div className="max-w-3xl flex items-center justify-between gap-6 p-3 mt-2 bg-gray-50 rounded-xl border border-gray-100">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Soma das Parcelas</span>
+                                                            <span className={`text-sm font-black ${Math.abs(grossSum - (formData.value || 0)) < 0.01 ? 'text-green-600' : 'text-amber-600'}`}>
+                                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(grossSum)}
+                                                            </span>
+                                                        </div>
+                                                        {hasDiscount && (
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest">Total com Desconto</span>
+                                                                <span className="text-sm font-black text-emerald-600">
+                                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(netSum)}
                                                                 </span>
                                                             </div>
-                                                            {hasDiscount && (
-                                                                <div className="flex justify-between items-center">
-                                                                    <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest">Total com Desconto</span>
-                                                                    <span className="text-sm font-black text-emerald-600">
-                                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(netSum)}
-                                                                    </span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </div>
-                                        )}
-                                    </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

@@ -18,6 +18,12 @@ const CATEGORY_COLUMNS: ColumnConfig[] = [
 
 const ClientCategoriesSettings: React.FC = () => {
     const activeOrganizationId = useStore(state => state.activeOrganizationId);
+    const organizations = useStore(state => state.organizations);
+    // Em "Todas as organizações" (activeOrganizationId null): se o usuário só tem
+    // UMA organização, ela é o alvo óbvio de criação/importação — não faz sentido
+    // exigir que ele troque o seletor global só para cadastrar. Com várias, aí sim
+    // é ambíguo e o alvo precisa ser escolhido. Ver feedback_todas_organizacoes_nao_esconder.
+    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
     const { localToast, showToast } = useToast();
     const confirm = useConfirm();
 
@@ -50,9 +56,9 @@ const ClientCategoriesSettings: React.FC = () => {
 
     const handleAdd = async () => {
         if (!editValue.trim()) return;
-        if (!activeOrganizationId) { showToast('Selecione uma organização para criar uma categoria.', 'error'); return; }
+        if (!effectiveOrganizationId) { showToast('Selecione uma organização para criar uma categoria.', 'error'); return; }
         try {
-            await clientCategoryService.create(activeOrganizationId, editValue.trim());
+            await clientCategoryService.create(effectiveOrganizationId, editValue.trim());
             showToast('Categoria criada com sucesso', 'success');
             setEditValue('');
             setIsAdding(false);
@@ -87,9 +93,9 @@ const ClientCategoriesSettings: React.FC = () => {
     };
 
     const handleDuplicate = async (cat: ClientCategory) => {
-        if (!activeOrganizationId) { showToast('Selecione uma organização para duplicar.', 'error'); return; }
+        if (!effectiveOrganizationId) { showToast('Selecione uma organização para duplicar.', 'error'); return; }
         try {
-            await clientCategoryService.create(activeOrganizationId, `${cat.name} (Cópia)`);
+            await clientCategoryService.create(effectiveOrganizationId, `${cat.name} (Cópia)`);
             showToast('Categoria duplicada com sucesso', 'success');
             loadCategories();
         } catch (error: any) {
@@ -101,7 +107,7 @@ const ClientCategoriesSettings: React.FC = () => {
         if (!await confirm({ title: 'Importar Categorias Padrão', message: 'Deseja importar as categorias padrão do sistema para poder editá-las?' })) return;
         setLoading(true);
         try {
-            await clientCategoryService.importDefaults(activeOrganizationId ?? undefined);
+            await clientCategoryService.importDefaults(effectiveOrganizationId);
             showToast('Categorias padrão importadas com sucesso', 'success');
             loadCategories();
         } catch (error: any) {
@@ -161,8 +167,8 @@ const ClientCategoriesSettings: React.FC = () => {
                     {!isAdding && !editingId && (
                         <button
                             onClick={startAdd}
-                            disabled={!activeOrganizationId}
-                            title={!activeOrganizationId ? 'Selecione uma organização específica para criar uma categoria.' : undefined}
+                            disabled={!effectiveOrganizationId}
+                            title={!effectiveOrganizationId ? 'Selecione uma organização específica para criar uma categoria.' : undefined}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
                         >
                             <Plus className="w-[15px] h-[15px]" />

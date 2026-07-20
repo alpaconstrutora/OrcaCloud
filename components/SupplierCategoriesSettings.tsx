@@ -11,7 +11,11 @@ import { DEFAULT_SUPPLIER_CATEGORIES } from '../constants/supplierCategories';
 
 const SupplierCategoriesSettings: React.FC = () => {
     const activeOrganizationId = useStore(state => state.activeOrganizationId);
+    const organizations = useStore(state => state.organizations);
     const orgId = activeOrganizationId ?? undefined;
+    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+    // criação/importação; com várias, o alvo é ambíguo e precisa ser escolhido.
+    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
     const { localToast, showToast } = useToast();
     const confirm = useConfirm();
 
@@ -41,11 +45,11 @@ const SupplierCategoriesSettings: React.FC = () => {
 
     const handleAdd = async () => {
         if (!editValue.trim()) return;
-        if (!activeOrganizationId) { showToast('Selecione uma organização para criar uma categoria.', 'error'); return; }
+        if (!effectiveOrganizationId) { showToast('Selecione uma organização para criar uma categoria.', 'error'); return; }
         try {
             await supplierCategoryService.createCategory({
                 name: editValue.trim(),
-                organization_id: orgId
+                organization_id: effectiveOrganizationId
             });
             showToast('Categoria criada com sucesso', 'success');
             setEditValue('');
@@ -81,10 +85,11 @@ const SupplierCategoriesSettings: React.FC = () => {
     };
 
     const handleDuplicate = async (category: SupplierCategory) => {
+        if (!effectiveOrganizationId) { showToast('Selecione uma organização para duplicar.', 'error'); return; }
         try {
             await supplierCategoryService.createCategory({
                 name: `${category.name} (Cópia)`,
-                organization_id: orgId
+                organization_id: effectiveOrganizationId
             });
             showToast('Categoria duplicada com sucesso', 'success');
             loadCategories();
@@ -99,7 +104,7 @@ const SupplierCategoriesSettings: React.FC = () => {
         try {
             const categoriesToImport = DEFAULT_SUPPLIER_CATEGORIES.map(name => ({
                 name,
-                organization_id: orgId
+                organization_id: effectiveOrganizationId
             }));
             await supplierCategoryService.createCategories(categoriesToImport);
             showToast('Categorias padrão importadas com sucesso', 'success');
@@ -150,8 +155,8 @@ const SupplierCategoriesSettings: React.FC = () => {
                     {!isAdding && !editingId && (
                         <Button
                             onClick={startAdd}
-                            disabled={!orgId}
-                            title={!orgId ? 'Selecione uma organização específica para criar uma categoria.' : undefined}
+                            disabled={!effectiveOrganizationId}
+                            title={!effectiveOrganizationId ? 'Selecione uma organização específica para criar uma categoria.' : undefined}
                             className="gap-2 shrink-0 text-sm bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500/20"
                         >
                             <Plus className="w-4 h-4" /> Nova Categoria

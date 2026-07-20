@@ -13,7 +13,11 @@ const CATEGORIES: ContractTypeCategory[] = ['Serviços', 'Suprimentos', 'Geral']
 
 const ContractTypesSettings: React.FC = () => {
     const activeOrganizationId = useStore(state => state.activeOrganizationId);
+    const organizations = useStore(state => state.organizations);
     const orgId = activeOrganizationId ?? undefined;
+    // Em "Todas as organizações": com UMA só organização, ela é o alvo de
+    // criação/importação; com várias, o alvo é ambíguo e precisa ser escolhido.
+    const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
     const { localToast, showToast } = useToast();
     const confirm = useConfirm();
 
@@ -43,9 +47,9 @@ const ContractTypesSettings: React.FC = () => {
 
     const handleAdd = async () => {
         if (!editName.trim()) return;
-        if (!orgId) { showToast('Selecione uma organização para criar um tipo de contrato.', 'error'); return; }
+        if (!effectiveOrganizationId) { showToast('Selecione uma organização para criar um tipo de contrato.', 'error'); return; }
         try {
-            await contractTypeService.createType({ name: editName.trim(), category: editCategory, organization_id: orgId });
+            await contractTypeService.createType({ name: editName.trim(), category: editCategory, organization_id: effectiveOrganizationId });
             showToast('Tipo de contrato criado com sucesso', 'success');
             cancelEdit();
             loadTypes();
@@ -79,7 +83,7 @@ const ContractTypesSettings: React.FC = () => {
 
     const handleDuplicate = async (type: ContractTypeRecord) => {
         try {
-            await contractTypeService.createType({ name: `${type.name} (Cópia)`, category: type.category, organization_id: orgId });
+            await contractTypeService.createType({ name: `${type.name} (Cópia)`, category: type.category, organization_id: effectiveOrganizationId });
             showToast('Tipo de contrato duplicado com sucesso', 'success');
             loadTypes();
         } catch (error: any) {
@@ -91,7 +95,7 @@ const ContractTypesSettings: React.FC = () => {
         if (!await confirm({ title: 'Importar Tipos Padrão', message: 'Deseja importar os tipos de contrato padrão do sistema para poder editá-los?' })) return;
         setLoading(true);
         try {
-            await contractTypeService.importDefaults(orgId);
+            await contractTypeService.importDefaults(effectiveOrganizationId);
             showToast('Tipos padrão importados com sucesso', 'success');
             loadTypes();
         } catch (error: any) {
@@ -145,8 +149,8 @@ const ContractTypesSettings: React.FC = () => {
                     {!isAdding && !editingId && (
                         <Button
                             onClick={startAdd}
-                            disabled={!orgId}
-                            title={!orgId ? 'Selecione uma organização específica para criar um tipo de contrato.' : undefined}
+                            disabled={!effectiveOrganizationId}
+                            title={!effectiveOrganizationId ? 'Selecione uma organização específica para criar um tipo de contrato.' : undefined}
                             className="gap-2 shrink-0 text-sm bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500/20"
                         >
                             <Plus className="w-4 h-4" /> Novo Tipo

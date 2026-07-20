@@ -4279,7 +4279,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     </div>
                                 )}
                                 {activeView === 'pending' && pendentesViewMode === 'list' && (
-                                    <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                                    <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                         <ColumnConfigButton
                                             columns={PENDING_BANK_COLUMNS.filter(c => c.key !== 'actions')}
                                             visibleColumns={pendingBankColumns.visibleColumns}
@@ -5065,7 +5065,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         )}
                                     </div>
                                     {pendentesViewMode === 'list' && (
-                                        <div className="flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-1.5 shrink-0">
+                                        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                             <ColumnConfigButton
                                                 columns={PENDING_INTERNAL_COLUMNS.filter(c => c.key !== 'actions')}
                                                 visibleColumns={pendingInternalColumns.visibleColumns}

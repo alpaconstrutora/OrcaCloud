@@ -54,10 +54,11 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
   const [towers, setTowers] = React.useState<EmpreendimentoTower[]>([]);
   const [towerLinkBusyId, setTowerLinkBusyId] = React.useState<string | null>(null);
   // Org efetiva do registro. Vem da prop quando há uma org ativa específica;
-  // com "Todas as organizações" a prop chega vazia e o usuário escolhe aqui.
+  // com "Todas as organizações" a prop chega vazia e o usuário escolhe aqui. Ao editar, o
+  // campo continua visível (e editável) — antes só aparecia ao criar sem org de contexto,
+  // então não tinha como ver nem corrigir a organização de um empreendimento já existente.
   const [orgId, setOrgId] = React.useState<string>(editing?.organization_id || organizationId || '');
   const [organizations, setOrganizations] = React.useState<Organization[]>([]);
-  const needsOrgPicker = !editing && !organizationId;
   const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const notify = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -94,9 +95,29 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
   });
 
   React.useEffect(() => {
-    if (!needsOrgPicker) return;
     organizationService.listOrganizations().then(setOrganizations).catch(() => setOrganizations([]));
-  }, [needsOrgPicker]);
+  }, []);
+
+  // Trocar a organização de um empreendimento JÁ EXISTENTE não desfaz vínculos (obra,
+  // estudos, torres continuam com o mesmo id salvo) — só pode fazer esses registros
+  // pararem de aparecer nos seletores, se pertencerem à organização anterior. Por isso
+  // avisa antes. Ao criar do zero, nada foi salvo ainda: pode trocar livremente.
+  const handleOrgChange = async (newOrgId: string) => {
+    if (editing && newOrgId !== orgId) {
+      const ok = await confirm({
+        title: 'Trocar a organização do empreendimento?',
+        message: 'Obra vinculada, estudos de Viabilidade/Arquitetura e torres continuam apontando para os mesmos registros. Se algum deles pertencer à organização atual (não à nova), ele deixa de aparecer nos seletores até você revincular ou corrigir a organização dele também.',
+        confirmLabel: 'Trocar mesmo assim',
+        variant: 'warning',
+      });
+      if (!ok) return;
+    }
+    setOrgId(newOrgId);
+    if (!editing) {
+      // Criando do zero: nada foi salvo ainda, então invalida seleções tentativas da org anterior.
+      setForm(prev => ({ ...prev, imovib_study_id: '', planta_ai_study_id: '', project_id: '' }));
+    }
+  };
 
   React.useEffect(() => {
     // Os vínculos (Imovib / Planta IA) são por organização: sem org escolhida não há o que listar.
@@ -248,23 +269,22 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Identificação */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {needsOrgPicker && (
-              <div className="md:col-span-3">
-                <label className={labelCls}>Organização *</label>
-                <select
-                  className={inputCls}
-                  value={orgId}
-                  onChange={e => {
-                    setOrgId(e.target.value);
-                    // Vínculos são por org: trocar a org invalida os estudos já escolhidos.
-                    setForm(prev => ({ ...prev, imovib_study_id: '', planta_ai_study_id: '', project_id: '' }));
-                  }}
-                >
-                  <option value="">— Selecione —</option>
-                  {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                </select>
-              </div>
-            )}
+            <div>
+              <label className={labelCls}>Organização *</label>
+              <select
+                className={inputCls}
+                value={orgId}
+                onChange={e => handleOrgChange(e.target.value)}
+              >
+                <option value="">— Selecione —</option>
+                {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+              {editing && (
+                <p className="text-[10px] text-gray-400 font-medium mt-1">
+                  Obra, estudos e torres vinculados usam essa organização para aparecer nos seletores.
+                </p>
+              )}
+            </div>
             <div className="md:col-span-2">
               <label className={labelCls}>Nome *</label>
               <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} />

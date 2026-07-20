@@ -258,7 +258,11 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
               <MapPin className="w-4 h-4 text-gray-400" /> Terreno
             </h3>
             <dl className="space-y-3 text-sm">
-              <Row label="Área do Terreno" value={e.terreno_area != null ? `${e.terreno_area} m²` : undefined} />
+              <Row label="Tipo de Terreno" value={e.terreno_tipo} />
+              <Row label="Área Total" value={e.terreno_area != null ? `${e.terreno_area} m²` : undefined} />
+              <Row label="Testada (Frente)" value={e.terreno_frente != null ? `${e.terreno_frente} m` : undefined} />
+              <Row label="Fundos" value={e.terreno_fundos != null ? `${e.terreno_fundos} m` : undefined} />
+              <Row label="Profundidade" value={e.terreno_profundidade != null ? `${e.terreno_profundidade} m` : undefined} />
             </dl>
           </div>
 
@@ -275,7 +279,13 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
 
       {tab === 'torres' && (
         <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
-          <TowerEditor key={refreshKey} empreendimentoId={e.id} organizationId={organizationId} />
+          <TowerEditor
+            key={refreshKey}
+            empreendimentoId={e.id}
+            organizationId={organizationId}
+            empreendimento={e}
+            onTerrenoSaved={onSynced}
+          />
         </div>
       )}
 

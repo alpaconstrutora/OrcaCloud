@@ -73,8 +73,11 @@ export interface Empreendimento {
     terreno_state?: string;
     terreno_zip_code?: string;
     terreno_area?: number;
+    // 'Regular (Retangular)' | 'Irregular (Geometria complexa)' — mesmo vocabulário de plant_terrains.terrain_type
+    terreno_tipo?: string;
     terreno_frente?: number;
     terreno_fundos?: number;
+    terreno_profundidade?: number;
     terreno_lateral_direita?: number;
     terreno_lateral_esquerda?: number;
 

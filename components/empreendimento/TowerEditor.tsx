@@ -4,12 +4,12 @@
 // casca visual da Viabilidade e (futuramente) do Planta IA. O miolo aqui é FloorEditor +
 // UnitEditor (unidade individual real); nos outros módulos o miolo difere, a casca não.
 import React from 'react';
-import { Plus, Loader2, Building, HardHat, Check, X, BarChart2, AlertCircle } from 'lucide-react';
+import { Plus, Loader2, Building, HardHat, Check, X, BarChart2, AlertCircle, MapPin } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import { useStore } from '../../store/useStore';
-import { EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoUnit } from '../../types';
+import { Empreendimento, EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoUnit } from '../../types';
 import UnitEditor from './UnitEditor';
 import FloorEditor from './FloorEditor';
 import { TorreCard, TorreEmpty, TorreTotais, TorreTotalMetric } from '../torres/TorreCard';
@@ -18,9 +18,15 @@ import { isObra } from '../../utils/projectClassification';
 interface Props {
   empreendimentoId: string;
   organizationId: string;
+  /** Dados atuais do empreendimento — só usados para pré-preencher a barra de Terreno. */
+  empreendimento?: Empreendimento;
+  /** Chamado depois de salvar o Terreno, para o pai recarregar o empreendimento (Visão Geral usa os mesmos campos). */
+  onTerrenoSaved?: () => void;
 }
 
-export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId }) => {
+const TERRENO_TIPO_OPTIONS = ['Regular (Retangular)', 'Irregular (Geometria complexa)'];
+
+export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId, empreendimento, onTerrenoSaved }) => {
   const { projects } = useStore();
   const confirm = useConfirm();
   const [towers, setTowers] = React.useState<EmpreendimentoTower[]>([]);
@@ -33,10 +39,38 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
   const [unitsByTower, setUnitsByTower] = React.useState<Record<string, EmpreendimentoUnit[]>>({});
   const [unitKeyByTower, setUnitKeyByTower] = React.useState<Record<string, number>>({});
   const [notice, setNotice] = React.useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const [terrenoForm, setTerrenoForm] = React.useState({
+    terreno_tipo: empreendimento?.terreno_tipo ?? '',
+    terreno_area: empreendimento?.terreno_area?.toString() ?? '',
+    terreno_frente: empreendimento?.terreno_frente?.toString() ?? '',
+    terreno_fundos: empreendimento?.terreno_fundos?.toString() ?? '',
+    terreno_profundidade: empreendimento?.terreno_profundidade?.toString() ?? '',
+  });
+  const [savingTerreno, setSavingTerreno] = React.useState(false);
 
   const notify = (msg: string, type: 'success' | 'error' = 'success') => {
     setNotice({ msg, type });
     setTimeout(() => setNotice(null), 4000);
+  };
+
+  const handleSaveTerreno = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingTerreno(true);
+    try {
+      await empreendimentoService.update(empreendimentoId, {
+        terreno_tipo: terrenoForm.terreno_tipo || undefined,
+        terreno_area: terrenoForm.terreno_area ? Number(terrenoForm.terreno_area) : undefined,
+        terreno_frente: terrenoForm.terreno_frente ? Number(terrenoForm.terreno_frente) : undefined,
+        terreno_fundos: terrenoForm.terreno_fundos ? Number(terrenoForm.terreno_fundos) : undefined,
+        terreno_profundidade: terrenoForm.terreno_profundidade ? Number(terrenoForm.terreno_profundidade) : undefined,
+      });
+      notify('Terreno salvo com sucesso.');
+      onTerrenoSaved?.();
+    } catch (err: any) {
+      notify(`Erro ao salvar terreno: ${err.message}`, 'error');
+    } finally {
+      setSavingTerreno(false);
+    }
   };
 
   const handleUnitsChange = React.useCallback((towerId: string, units: EmpreendimentoUnit[]) => {
@@ -139,6 +173,53 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId 
 
   return (
     <div className="space-y-4">
+      {/* Terreno — dado do empreendimento (não de uma torre), 1 por empreendimento.
+          Mesmo visual da barra de "Adicionar Pavimento" (FloorEditor), com os campos do
+          terreno em vez dos de andar. */}
+      <div className="space-y-2">
+        <h4 className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
+          <MapPin className="w-3.5 h-3.5" /> Terreno
+        </h4>
+        <form onSubmit={handleSaveTerreno} className="bg-blue-50/40 border border-blue-100 rounded-[10px] p-3 grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
+          <div>
+            <label className="text-[10px] font-semibold text-gray-400 block mb-1">Tipo de Terreno</label>
+            <select className={inputCls + ' w-full'} value={terrenoForm.terreno_tipo}
+              onChange={e => setTerrenoForm(p => ({ ...p, terreno_tipo: e.target.value }))}>
+              <option value="">— Selecione —</option>
+              {TERRENO_TIPO_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-gray-400 block mb-1">Área Total (m²)</label>
+            <input className={inputCls + ' w-full'} type="number" step="0.01" placeholder="—" value={terrenoForm.terreno_area}
+              onChange={e => setTerrenoForm(p => ({ ...p, terreno_area: e.target.value }))} />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-gray-400 block mb-1">Testada (m) - Frente</label>
+            <input className={inputCls + ' w-full'} type="number" step="0.01" placeholder="—" value={terrenoForm.terreno_frente}
+              onChange={e => setTerrenoForm(p => ({ ...p, terreno_frente: e.target.value }))} />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-gray-400 block mb-1">Fundos (m)</label>
+            <input className={inputCls + ' w-full'} type="number" step="0.01" placeholder="—" value={terrenoForm.terreno_fundos}
+              onChange={e => setTerrenoForm(p => ({ ...p, terreno_fundos: e.target.value }))} />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-gray-400 block mb-1">Profundidade (m)</label>
+            <input className={inputCls + ' w-full'} type="number" step="0.01" placeholder="—" value={terrenoForm.terreno_profundidade}
+              onChange={e => setTerrenoForm(p => ({ ...p, terreno_profundidade: e.target.value }))} />
+          </div>
+          <button
+            type="submit"
+            disabled={savingTerreno}
+            className="flex items-center justify-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+          >
+            {savingTerreno ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+            Adicionar Terreno
+          </button>
+        </form>
+      </div>
+
       <form onSubmit={handleAdd} className="grid grid-cols-2 md:grid-cols-4 gap-2.5 items-center">
         <input className={inputCls} placeholder="Nome (ex: Torre A)" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
         <input className={inputCls} placeholder="Nº pavimentos" type="number" value={form.floors_count} onChange={e => setForm(p => ({ ...p, floors_count: e.target.value }))} />

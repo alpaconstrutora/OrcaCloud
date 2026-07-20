@@ -121,8 +121,12 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
   }, [orgId]);
 
   // Obras da org escolhida. Sem org (ainda escolhendo), não há o que oferecer.
+  // organization_id (coluna nativa) tem precedência sobre settings.organizationId: obra
+  // vinculada a uma empresa/grupo só carrega a org ali (sincronizada por trigger a partir
+  // de empresa_id) — settings.organizationId nunca é preenchido nesse caso, e o filtro
+  // ficava cego para essas obras (reportado em Empreendimento > Obra Vinculada).
   const orgProjects = React.useMemo(
-    () => projects.filter(p => !orgId || (p.settings as any)?.organizationId === orgId),
+    () => projects.filter(p => !orgId || (p.organization_id ?? (p.settings as any)?.organizationId) === orgId),
     [projects, orgId],
   );
 

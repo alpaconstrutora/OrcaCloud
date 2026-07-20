@@ -82,9 +82,12 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
     setUnitKeyByTower(prev => ({ ...prev, [towerId]: (prev[towerId] ?? 0) + 1 }));
   }, []);
 
+  // organization_id (coluna nativa) tem precedência sobre settings.organizationId — ver
+  // mesma nota em EmpreendimentoForm.tsx.
   const orgProjects = React.useMemo(() => projects.filter(p => {
     const s: any = p.settings || {};
-    return isObra({ settings: s }) && (!organizationId || s.organizationId === organizationId);
+    const projOrgId = p.organization_id ?? s.organizationId;
+    return isObra({ settings: s }) && (!organizationId || projOrgId === organizationId);
   }), [projects, organizationId]);
 
   const load = React.useCallback(async () => {

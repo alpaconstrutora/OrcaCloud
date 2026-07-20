@@ -11,6 +11,10 @@ export interface ProjectData {
     empresa_id?: string;
     investor_id?: string;
     updated_at?: string;
+    // Coluna nativa (denormalizada de empresa_id via trigger, ou gravada direto). Fonte
+    // mais confiável que settings.organizationId — obras vinculadas a uma empresa/grupo
+    // só têm a organização aqui, nunca no JSONB. Ver services/empreendimentoService.ts.
+    organization_id?: string;
 }
 
 export const projectService = {
@@ -168,7 +172,7 @@ export const projectService = {
     ) {
         let query = supabase
             .from('projects')
-            .select('id, name, updated_at, created_at, settings, code, empresa_id, investor_id')
+            .select('id, name, updated_at, created_at, settings, code, empresa_id, investor_id, organization_id')
             .order('updated_at', { ascending: false });
 
         if (clientId) {

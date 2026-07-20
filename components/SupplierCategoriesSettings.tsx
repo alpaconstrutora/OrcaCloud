@@ -6,6 +6,7 @@ import { Tag, Plus, Check, X, Loader2, Copy, Download, AlertCircle } from 'lucid
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
+import { useOrganizationPicker } from './ui/useOrganizationPicker';
 import { useToast } from '../hooks/useToast';
 import { DEFAULT_SUPPLIER_CATEGORIES } from '../constants/supplierCategories';
 
@@ -18,12 +19,14 @@ const SupplierCategoriesSettings: React.FC = () => {
     const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
     const { localToast, showToast } = useToast();
     const confirm = useConfirm();
+    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
 
     const [categories, setCategories] = React.useState<SupplierCategory[]>([]);
     const [loading, setLoading] = React.useState(false);
 
     // Form states
     const [isAdding, setIsAdding] = React.useState(false);
+    const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [editValue, setEditValue] = React.useState('');
 
@@ -45,11 +48,11 @@ const SupplierCategoriesSettings: React.FC = () => {
 
     const handleAdd = async () => {
         if (!editValue.trim()) return;
-        if (!effectiveOrganizationId) { showToast('Selecione uma organização para criar uma categoria.', 'error'); return; }
+        if (!createOrgId) { showToast('Selecione uma organização para criar uma categoria.', 'error'); return; }
         try {
             await supplierCategoryService.createCategory({
                 name: editValue.trim(),
-                organization_id: effectiveOrganizationId
+                organization_id: createOrgId
             });
             showToast('Categoria criada com sucesso', 'success');
             setEditValue('');
@@ -85,11 +88,12 @@ const SupplierCategoriesSettings: React.FC = () => {
     };
 
     const handleDuplicate = async (category: SupplierCategory) => {
-        if (!effectiveOrganizationId) { showToast('Selecione uma organização para duplicar.', 'error'); return; }
+        const targetOrgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!targetOrgId) return;
         try {
             await supplierCategoryService.createCategory({
                 name: `${category.name} (Cópia)`,
-                organization_id: effectiveOrganizationId
+                organization_id: targetOrgId
             });
             showToast('Categoria duplicada com sucesso', 'success');
             loadCategories();
@@ -99,12 +103,14 @@ const SupplierCategoriesSettings: React.FC = () => {
     };
 
     const handleImportDefaults = async () => {
+        const targetOrgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!targetOrgId) return;
         if (!await confirm({ title: 'Importar Categorias Padrão', message: 'Deseja importar as categorias padrão do sistema para poder editá-las?' })) return;
         setLoading(true);
         try {
             const categoriesToImport = DEFAULT_SUPPLIER_CATEGORIES.map(name => ({
                 name,
-                organization_id: effectiveOrganizationId
+                organization_id: targetOrgId
             }));
             await supplierCategoryService.createCategories(categoriesToImport);
             showToast('Categorias padrão importadas com sucesso', 'success');
@@ -122,7 +128,10 @@ const SupplierCategoriesSettings: React.FC = () => {
         setIsAdding(false);
     };
 
-    const startAdd = () => {
+    const startAdd = async () => {
+        const targetOrgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!targetOrgId) return;
+        setCreateOrgId(targetOrgId);
         setIsAdding(true);
         setEditingId(null);
         setEditValue('');
@@ -155,8 +164,6 @@ const SupplierCategoriesSettings: React.FC = () => {
                     {!isAdding && !editingId && (
                         <Button
                             onClick={startAdd}
-                            disabled={!effectiveOrganizationId}
-                            title={!effectiveOrganizationId ? 'Selecione uma organização específica para criar uma categoria.' : undefined}
                             className="gap-2 shrink-0 text-sm bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500/20"
                         >
                             <Plus className="w-4 h-4" /> Nova Categoria
@@ -251,6 +258,8 @@ const SupplierCategoriesSettings: React.FC = () => {
                     {localToast.message}
                 </div>
             )}
+
+            {orgPickerModal}
         </div>
     );
 };

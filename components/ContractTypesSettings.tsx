@@ -6,6 +6,7 @@ import { FileText, Plus, Check, X, Loader2, Copy, Download, AlertCircle } from '
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
+import { useOrganizationPicker } from './ui/useOrganizationPicker';
 import { useToast } from '../hooks/useToast';
 import { ContractTypeCategory } from '../constants/contractTypes';
 
@@ -20,11 +21,13 @@ const ContractTypesSettings: React.FC = () => {
     const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
     const { localToast, showToast } = useToast();
     const confirm = useConfirm();
+    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
 
     const [types, setTypes] = React.useState<ContractTypeRecord[]>([]);
     const [loading, setLoading] = React.useState(false);
 
     const [isAdding, setIsAdding] = React.useState(false);
+    const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [editName, setEditName] = React.useState('');
     const [editCategory, setEditCategory] = React.useState<ContractTypeCategory>('Geral');
@@ -47,9 +50,9 @@ const ContractTypesSettings: React.FC = () => {
 
     const handleAdd = async () => {
         if (!editName.trim()) return;
-        if (!effectiveOrganizationId) { showToast('Selecione uma organização para criar um tipo de contrato.', 'error'); return; }
+        if (!createOrgId) { showToast('Selecione uma organização para criar um tipo de contrato.', 'error'); return; }
         try {
-            await contractTypeService.createType({ name: editName.trim(), category: editCategory, organization_id: effectiveOrganizationId });
+            await contractTypeService.createType({ name: editName.trim(), category: editCategory, organization_id: createOrgId });
             showToast('Tipo de contrato criado com sucesso', 'success');
             cancelEdit();
             loadTypes();
@@ -82,8 +85,10 @@ const ContractTypesSettings: React.FC = () => {
     };
 
     const handleDuplicate = async (type: ContractTypeRecord) => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
         try {
-            await contractTypeService.createType({ name: `${type.name} (Cópia)`, category: type.category, organization_id: effectiveOrganizationId });
+            await contractTypeService.createType({ name: `${type.name} (Cópia)`, category: type.category, organization_id: orgId });
             showToast('Tipo de contrato duplicado com sucesso', 'success');
             loadTypes();
         } catch (error: any) {
@@ -92,10 +97,12 @@ const ContractTypesSettings: React.FC = () => {
     };
 
     const handleImportDefaults = async () => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
         if (!await confirm({ title: 'Importar Tipos Padrão', message: 'Deseja importar os tipos de contrato padrão do sistema para poder editá-los?' })) return;
         setLoading(true);
         try {
-            await contractTypeService.importDefaults(effectiveOrganizationId);
+            await contractTypeService.importDefaults(orgId);
             showToast('Tipos padrão importados com sucesso', 'success');
             loadTypes();
         } catch (error: any) {
@@ -112,7 +119,10 @@ const ContractTypesSettings: React.FC = () => {
         setIsAdding(false);
     };
 
-    const startAdd = () => {
+    const startAdd = async () => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
+        setCreateOrgId(orgId);
         setIsAdding(true);
         setEditingId(null);
         setEditName('');
@@ -149,8 +159,6 @@ const ContractTypesSettings: React.FC = () => {
                     {!isAdding && !editingId && (
                         <Button
                             onClick={startAdd}
-                            disabled={!effectiveOrganizationId}
-                            title={!effectiveOrganizationId ? 'Selecione uma organização específica para criar um tipo de contrato.' : undefined}
                             className="gap-2 shrink-0 text-sm bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500/20"
                         >
                             <Plus className="w-4 h-4" /> Novo Tipo
@@ -262,6 +270,8 @@ const ContractTypesSettings: React.FC = () => {
                     {localToast.message}
                 </div>
             )}
+
+            {orgPickerModal}
         </div>
     );
 };

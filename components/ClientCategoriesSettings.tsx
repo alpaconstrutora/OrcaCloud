@@ -6,6 +6,7 @@ import { Users, Plus, Check, X, Search, AlertCircle, Copy, Download } from 'luci
 import ActionIconButton from './ui/ActionIconButton';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
+import { useOrganizationPicker } from './ui/useOrganizationPicker';
 import { useToast } from '../hooks/useToast';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
@@ -26,12 +27,14 @@ const ClientCategoriesSettings: React.FC = () => {
     const effectiveOrganizationId = activeOrganizationId ?? (organizations.length === 1 ? organizations[0].id : undefined);
     const { localToast, showToast } = useToast();
     const confirm = useConfirm();
+    const { pickOrganization, orgPickerModal } = useOrganizationPicker();
 
     const [categories, setCategories] = React.useState<ClientCategory[]>([]);
     const [loading, setLoading] = React.useState(false);
 
     // Form states
     const [isAdding, setIsAdding] = React.useState(false);
+    const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [editValue, setEditValue] = React.useState('');
 
@@ -56,9 +59,9 @@ const ClientCategoriesSettings: React.FC = () => {
 
     const handleAdd = async () => {
         if (!editValue.trim()) return;
-        if (!effectiveOrganizationId) { showToast('Selecione uma organização para criar uma categoria.', 'error'); return; }
+        if (!createOrgId) { showToast('Selecione uma organização para criar uma categoria.', 'error'); return; }
         try {
-            await clientCategoryService.create(effectiveOrganizationId, editValue.trim());
+            await clientCategoryService.create(createOrgId, editValue.trim());
             showToast('Categoria criada com sucesso', 'success');
             setEditValue('');
             setIsAdding(false);
@@ -93,9 +96,10 @@ const ClientCategoriesSettings: React.FC = () => {
     };
 
     const handleDuplicate = async (cat: ClientCategory) => {
-        if (!effectiveOrganizationId) { showToast('Selecione uma organização para duplicar.', 'error'); return; }
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
         try {
-            await clientCategoryService.create(effectiveOrganizationId, `${cat.name} (Cópia)`);
+            await clientCategoryService.create(orgId, `${cat.name} (Cópia)`);
             showToast('Categoria duplicada com sucesso', 'success');
             loadCategories();
         } catch (error: any) {
@@ -104,10 +108,12 @@ const ClientCategoriesSettings: React.FC = () => {
     };
 
     const handleImportDefaults = async () => {
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
         if (!await confirm({ title: 'Importar Categorias Padrão', message: 'Deseja importar as categorias padrão do sistema para poder editá-las?' })) return;
         setLoading(true);
         try {
-            await clientCategoryService.importDefaults(effectiveOrganizationId);
+            await clientCategoryService.importDefaults(orgId);
             showToast('Categorias padrão importadas com sucesso', 'success');
             loadCategories();
         } catch (error: any) {
@@ -123,7 +129,12 @@ const ClientCategoriesSettings: React.FC = () => {
         setIsAdding(false);
     };
 
-    const startAdd = () => {
+    const startAdd = async () => {
+        // Resolve o alvo ANTES de abrir o form: com org efetiva usa ela; em "Todas"
+        // com várias orgs, abre o seletor. Cancelar não abre o form.
+        const orgId = effectiveOrganizationId ?? (await pickOrganization()) ?? undefined;
+        if (!orgId) return;
+        setCreateOrgId(orgId);
         setIsAdding(true);
         setEditingId(null);
         setEditValue('');
@@ -167,9 +178,7 @@ const ClientCategoriesSettings: React.FC = () => {
                     {!isAdding && !editingId && (
                         <button
                             onClick={startAdd}
-                            disabled={!effectiveOrganizationId}
-                            title={!effectiveOrganizationId ? 'Selecione uma organização específica para criar uma categoria.' : undefined}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                         >
                             <Plus className="w-[15px] h-[15px]" />
                             Nova categoria
@@ -322,6 +331,8 @@ const ClientCategoriesSettings: React.FC = () => {
                     {localToast.message}
                 </div>
             )}
+
+            {orgPickerModal}
         </div>
     );
 };

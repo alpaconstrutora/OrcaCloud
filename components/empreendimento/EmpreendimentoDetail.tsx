@@ -1,7 +1,7 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, RefreshCw, ShoppingBag, KeyRound, Map, Loader2, ArrowLeftRight, ScrollText, Inbox, AlertCircle } from 'lucide-react';
-import { Empreendimento, EmpreendimentoStatus, ImovibStudy } from '../../types';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle } from 'lucide-react';
+import { Empreendimento, EmpreendimentoStatus } from '../../types';
 import TowerEditor from './TowerEditor';
 import CommonAreaEditor from './CommonAreaEditor';
 import SyncFromStudyModal from './SyncFromStudyModal';
@@ -11,9 +11,8 @@ import { SyncCenterTab } from './SyncCenterTab';
 import CuradoriaTab from './CuradoriaTab';
 import { empreendimentoProposalService } from '../../services/empreendimentoProposalService';
 import MapaRegulatorioEditor from '../MapaRegulatorioEditor';
-import ImovibBlocksTypologyTab from '../ImovibBlocksTypologyTab';
-import { imovibService } from '../../services/imovibService';
 import { empreendimentoService } from '../../services/empreendimentoService';
+import { empreendimentoTypeService } from '../../services/empreendimentoTypeService';
 import { areaEngineService } from '../../services/areaEngineService';
 import { generateIncorporationMemorialDraftPdf } from '../../services/incorporationMemorialService';
 
@@ -34,7 +33,9 @@ const STATUS_LABELS: Record<EmpreendimentoStatus, string> = {
   ENCERRADO: 'Encerrado',
 };
 
-const TIPO_LABELS: Record<string, string> = {
+// Fallback só usado se o catálogo (Configurações do Sistema → Tipos de Empreendimento)
+// ainda não carregou ou o tipo salvo foi excluído do catálogo.
+const FALLBACK_TIPO_LABELS: Record<string, string> = {
   VERTICAL: 'Vertical',
   HORIZONTAL: 'Horizontal',
   MISTO: 'Misto',
@@ -51,17 +52,15 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
   ENCERRADO: 'text-slate-500',
 };
 
-type Tab = 'visao' | 'sync' | 'curadoria' | 'tipologia' | 'torres' | 'areas' | 'regulatorio' | 'comercial' | 'locacoes';
+type Tab = 'visao' | 'sync' | 'curadoria' | 'torres' | 'areas' | 'regulatorio' | 'comercial' | 'locacoes';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced }) => {
   const [tab, setTab] = React.useState<Tab>('visao');
   const [syncOpen, setSyncOpen] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
-  const [linkedStudy, setLinkedStudy] = React.useState<ImovibStudy | null>(null);
-  const [isLoadingLinkedStudy, setIsLoadingLinkedStudy] = React.useState(false);
-  const [linkedStudyError, setLinkedStudyError] = React.useState<string | null>(null);
   const [generatingMemorial, setGeneratingMemorial] = React.useState(false);
   const [pendingCuradoria, setPendingCuradoria] = React.useState(0);
+  const [tipoNameMap, setTipoNameMap] = React.useState<Record<string, string>>({});
   const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const notify = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -78,34 +77,16 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
 
   React.useEffect(() => { loadPendingCuradoria(); }, [loadPendingCuradoria, refreshKey]);
 
-  const terrenoCidade = [e.terreno_city, e.terreno_state].filter(Boolean).join(' - ');
-  const terrenoLinha = [e.terreno_street, e.terreno_number].filter(Boolean).join(', ');
+  React.useEffect(() => {
+    empreendimentoTypeService.list(organizationId)
+      .then(types => setTipoNameMap(Object.fromEntries(types.map(t => [t.slug, t.name]))))
+      .catch(() => setTipoNameMap({}));
+  }, [organizationId]);
+
+  const tipoLabel = e.tipo ? (tipoNameMap[e.tipo] || FALLBACK_TIPO_LABELS[e.tipo] || e.tipo) : undefined;
+
   const enderecoCidade = [e.endereco_city, e.endereco_state].filter(Boolean).join(' - ');
   const enderecoLinha = [e.endereco_street, e.endereco_number].filter(Boolean).join(', ');
-
-  const loadLinkedStudy = React.useCallback(async () => {
-    if (!e.imovib_study_id) {
-      setLinkedStudy(null);
-      return;
-    }
-    try {
-      setIsLoadingLinkedStudy(true);
-      setLinkedStudyError(null);
-      const study = await imovibService.getStudyById(e.imovib_study_id, true);
-      setLinkedStudy(study);
-    } catch (err: any) {
-      console.error('[EmpreendimentoDetail] erro ao carregar estudo vinculado:', err);
-      setLinkedStudyError(err?.message || 'Erro ao carregar estudo vinculado.');
-    } finally {
-      setIsLoadingLinkedStudy(false);
-    }
-  }, [e.imovib_study_id]);
-
-  React.useEffect(() => {
-    if (tab === 'tipologia') {
-      loadLinkedStudy();
-    }
-  }, [tab, loadLinkedStudy]);
 
   const handleGenerateMemorial = async () => {
     setGeneratingMemorial(true);
@@ -143,7 +124,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     { id: 'visao', label: 'Visão Geral', icon: FileText },
     { id: 'sync', label: 'Sincronização', icon: ArrowLeftRight },
     { id: 'curadoria', label: 'Curadoria', icon: Inbox, badge: pendingCuradoria },
-    { id: 'tipologia', label: 'Bloco e Tipologia', icon: Building2 },
     { id: 'torres', label: 'Torres & Unidades', icon: Layers },
     { id: 'areas', label: 'Áreas Comuns', icon: Trees },
     { id: 'regulatorio', label: 'Mapa Regulatorio', icon: Map },
@@ -173,9 +153,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
                 <span className={`text-sm font-normal ${STATUS_TEXT_COLOR[e.status]}`}>
                   {STATUS_LABELS[e.status]}
                 </span>
-                {e.tipo && (
+                {tipoLabel && (
                   <span className="text-sm font-normal text-gray-500">
-                    · {TIPO_LABELS[e.tipo] || e.tipo}
+                    · {tipoLabel}
                   </span>
                 )}
               </div>
@@ -241,7 +221,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
           <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
             <h3 className="text-xs font-semibold text-gray-500 mb-4">Dados Gerais</h3>
             <dl className="space-y-3 text-sm">
-              <Row label="Tipo" value={e.tipo ? (TIPO_LABELS[e.tipo] || e.tipo) : undefined} />
+              <Row label="Tipo" value={tipoLabel} />
               <Row label="Matrícula" value={e.matricula} />
               <Row label="Nº do Processo" value={e.numero_processo} />
               <Row label="Construtora" value={e.construtora} />
@@ -278,10 +258,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
               <MapPin className="w-4 h-4 text-gray-400" /> Terreno
             </h3>
             <dl className="space-y-3 text-sm">
-              <Row label="Endereço" value={terrenoLinha} />
-              <Row label="Bairro" value={e.terreno_neighborhood} />
-              <Row label="Cidade/UF" value={terrenoCidade} />
-              <Row label="CEP" value={e.terreno_zip_code} />
               <Row label="Área do Terreno" value={e.terreno_area != null ? `${e.terreno_area} m²` : undefined} />
             </dl>
           </div>
@@ -297,42 +273,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
         </div>
       )}
 
-      {tab === 'tipologia' && (
-        e.imovib_study_id ? (
-          isLoadingLinkedStudy ? (
-            <div className="bg-white p-10 rounded-[10px] border border-gray-100 shadow-sm flex items-center justify-center gap-3 text-gray-400 text-sm font-medium">
-              <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> Carregando estudo vinculado...
-            </div>
-          ) : linkedStudyError ? (
-            <div className="bg-white p-10 rounded-[10px] border border-gray-100 shadow-sm text-center">
-              <h3 className="text-lg font-black text-gray-800 tracking-tight">Não foi possível carregar o estudo vinculado</h3>
-              <p className="text-sm text-gray-500 font-medium mt-1">{linkedStudyError}</p>
-              <button
-                onClick={loadLinkedStudy}
-                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 mx-auto mt-5"
-              >
-                <RefreshCw className="w-[15px] h-[15px]" /> Tentar novamente
-              </button>
-            </div>
-          ) : linkedStudy ? (
-            <ImovibBlocksTypologyTab study={linkedStudy} onDataChanged={loadLinkedStudy} />
-          ) : null
-        ) : (
-          <div className="bg-white p-10 rounded-[10px] border border-gray-100 shadow-sm text-center">
-            <Building2 className="w-10 h-10 mx-auto text-gray-300 mb-3" />
-            <h3 className="text-lg font-black text-gray-800 tracking-tight">Nenhum estudo de viabilidade vinculado</h3>
-            <p className="text-sm text-gray-500 font-medium mt-1 max-w-xl mx-auto">
-              Blocos e tipologias usam a mesma base do IMOVIB. Vincule um estudo de viabilidade para editar as premissas e manter uma fonte única.
-            </p>
-            <button
-              onClick={onEdit}
-              className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 mx-auto mt-5"
-            >
-              <Edit className="w-[15px] h-[15px]" /> Vincular estudo
-            </button>
-          </div>
-        )
-      )}
       {tab === 'torres' && (
         <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
           <TowerEditor key={refreshKey} empreendimentoId={e.id} organizationId={organizationId} />

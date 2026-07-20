@@ -24,6 +24,7 @@ import type {
     AreaVersionCommonAllocation,
 } from '../types/areaEngine';
 import { empreendimentoService } from './empreendimentoService';
+import { empreendimentoTypeService } from './empreendimentoTypeService';
 import type {
     EmpreendimentoWithChildren,
     EmpreendimentoTipo,
@@ -198,15 +199,11 @@ export interface AreaWriteBackReport {
     warnings: string[];
 }
 
-function mapEmpreendimentoTipo(tipo?: EmpreendimentoTipo | null): AreaProject['project_type'] {
-    switch (tipo) {
-        case 'VERTICAL': return 'vertical';
-        case 'HORIZONTAL': return 'horizontal';
-        case 'MISTO': return 'mixed';
-        case 'COND_LOGISTICO':
-        case 'COND_INDUSTRIAL': return 'commercial';
-        default: return 'vertical';
-    }
+// `tipo` é o slug de um registro em empreendimento_types (catálogo em Configurações do
+// Sistema) — a categoria do motor vem de lá, não de um switch fixo, para que tipos
+// criados pelo usuário classifiquem corretamente sem precisar mexer neste arquivo.
+async function mapEmpreendimentoTipo(tipo: EmpreendimentoTipo | null | undefined, organizationId: string): Promise<AreaProject['project_type']> {
+    return empreendimentoTypeService.getMotorCategory(tipo, organizationId);
 }
 
 // FloorTipo do Empreendimento → area_floor_type do motor. Sem correspondência clara
@@ -1343,6 +1340,7 @@ export const areaEngineService = {
         // (rebuild a partir do estado atual do empreendimento) em vez de duplicar o projeto.
         // A versão anterior nunca é mutada — serve de baseline para o relatório de drift.
         const existingProject = await this.getProjectByEmpreendimento(emp.id, organizationId);
+        const projectType = await mapEmpreendimentoTipo(emp.tipo, organizationId);
         let project: AreaProject;
         let versionNumber: number;
         let previousVersionId: string | null = null;
@@ -1354,7 +1352,7 @@ export const areaEngineService = {
             // Mantém dados-mestres do projeto alinhados com o empreendimento.
             await this.updateProject(existingProject.id, {
                 name: emp.name,
-                project_type: mapEmpreendimentoTipo(emp.tipo),
+                project_type: projectType,
                 notes: notesParts.join(' '),
             });
         } else {
@@ -1364,7 +1362,7 @@ export const areaEngineService = {
                 name: emp.name,
                 normative_reference: 'ABNT NBR 12721:2006',
                 normative_valid_from: '2007-01-21',
-                project_type: mapEmpreendimentoTipo(emp.tipo),
+                project_type: projectType,
                 status: 'active',
                 notes: notesParts.join(' '),
             });

@@ -3,6 +3,7 @@ import React from 'react';
 import { X, Loader2, Building2, HardHat, Link2, AlertCircle } from 'lucide-react';
 import CityStateSelect from '../CityStateSelect';
 import { empreendimentoService } from '../../services/empreendimentoService';
+import { empreendimentoTypeService, EmpreendimentoTypeRecord } from '../../services/empreendimentoTypeService';
 import { imovibService } from '../../services/imovibService';
 import { organizationService } from '../../services/organizationService';
 import { supabase } from '../../lib/supabase';
@@ -29,7 +30,9 @@ const STATUS_OPTIONS: { value: EmpreendimentoStatus; label: string }[] = [
   { value: 'ENCERRADO', label: 'Encerrado' },
 ];
 
-const TIPO_OPTIONS: { value: EmpreendimentoTipo; label: string }[] = [
+// Fallback só usado se o catálogo (Configurações do Sistema → Tipos de Empreendimento)
+// ainda não carregou ou está vazio — mesmo padrão de ProjectModal.tsx com obraTypeService.
+const FALLBACK_TIPO_OPTIONS: { value: EmpreendimentoTipo; label: string }[] = [
   { value: 'VERTICAL', label: 'Vertical' },
   { value: 'HORIZONTAL', label: 'Horizontal' },
   { value: 'MISTO', label: 'Misto' },
@@ -45,6 +48,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
   const [saving, setSaving] = React.useState(false);
   const [studies, setStudies] = React.useState<ImovibStudy[]>([]);
   const [plantStudies, setPlantStudies] = React.useState<PlantStudy[]>([]);
+  const [empreendimentoTypes, setEmpreendimentoTypes] = React.useState<EmpreendimentoTypeRecord[]>([]);
   // Torres do empreendimento — só existem depois de criado. O vínculo de obra por torre
   // (multi-torre) mora aqui no modal, junto do vínculo de obra principal (project_id).
   const [towers, setTowers] = React.useState<EmpreendimentoTower[]>([]);
@@ -85,12 +89,6 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
     manager: editing?.manager ?? '',
     launch_date: editing?.launch_date ?? '',
     expected_delivery_date: editing?.expected_delivery_date ?? '',
-    terreno_street: editing?.terreno_street ?? '',
-    terreno_number: editing?.terreno_number ?? '',
-    terreno_neighborhood: editing?.terreno_neighborhood ?? '',
-    terreno_city: editing?.terreno_city ?? '',
-    terreno_state: editing?.terreno_state ?? '',
-    terreno_zip_code: editing?.terreno_zip_code ?? '',
     terreno_area: editing?.terreno_area?.toString() ?? '',
     vgv_total: editing?.vgv_total?.toString() ?? '',
   });
@@ -117,6 +115,10 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
     if (!editing) { setTowers([]); return; }
     empreendimentoService.listTowers(editing.id).then(setTowers).catch(() => setTowers([]));
   }, [editing]);
+
+  React.useEffect(() => {
+    empreendimentoTypeService.list(orgId || undefined).then(setEmpreendimentoTypes).catch(() => setEmpreendimentoTypes([]));
+  }, [orgId]);
 
   // Obras da org escolhida. Sem org (ainda escolhendo), não há o que oferecer.
   const orgProjects = React.useMemo(
@@ -207,12 +209,6 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
         manager: form.manager || undefined,
         launch_date: form.launch_date || undefined,
         expected_delivery_date: form.expected_delivery_date || undefined,
-        terreno_street: form.terreno_street || undefined,
-        terreno_number: form.terreno_number || undefined,
-        terreno_neighborhood: form.terreno_neighborhood || undefined,
-        terreno_city: form.terreno_city || undefined,
-        terreno_state: form.terreno_state || undefined,
-        terreno_zip_code: form.terreno_zip_code || undefined,
         terreno_area: form.terreno_area ? Number(form.terreno_area) : undefined,
         vgv_total: form.vgv_total ? Number(form.vgv_total) : undefined,
       };
@@ -283,7 +279,10 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
               <label className={labelCls}>Tipo</label>
               <select className={inputCls} value={form.tipo} onChange={e => set('tipo', e.target.value)}>
                 <option value="">— Selecione —</option>
-                {TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {empreendimentoTypes.length > 0
+                  ? empreendimentoTypes.map(t => <option key={t.slug} value={t.slug}>{t.name}</option>)
+                  : FALLBACK_TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)
+                }
               </select>
             </div>
             <div className="md:col-span-2">
@@ -450,35 +449,13 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, o
             </div>
           </div>
 
-          {/* Terreno */}
+          {/* Terreno — só a área (endereço do terreno foi removido por duplicar o
+              bloco "Endereço do Empreendimento" acima; os campos terreno_* de
+              endereço continuam existindo no banco para não perder dado histórico,
+              só não são mais editados aqui). */}
           <div>
             <h3 className={sectionCls}>Terreno</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="md:col-span-2">
-                <label className={labelCls}>Logradouro</label>
-                <input className={inputCls} value={form.terreno_street} onChange={e => set('terreno_street', e.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>Número</label>
-                <input className={inputCls} value={form.terreno_number} onChange={e => set('terreno_number', e.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>Bairro</label>
-                <input className={inputCls} value={form.terreno_neighborhood} onChange={e => set('terreno_neighborhood', e.target.value)} />
-              </div>
-              <div className="md:col-span-2">
-                <CityStateSelect
-                  cep={form.terreno_zip_code || undefined}
-                  stateCode={form.terreno_state || undefined}
-                  cityName={form.terreno_city || undefined}
-                  onChange={({ cep, stateCode, cityName }) => setForm(prev => ({
-                    ...prev,
-                    terreno_zip_code: cep ?? '',
-                    terreno_state: stateCode ?? '',
-                    terreno_city: cityName ?? '',
-                  }))}
-                />
-              </div>
               <div>
                 <label className={labelCls}>Área do Terreno (m²)</label>
                 <input type="number" step="0.01" className={inputCls} value={form.terreno_area} onChange={e => set('terreno_area', e.target.value)} />

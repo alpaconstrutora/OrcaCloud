@@ -5,8 +5,11 @@
 export type EmpreendimentoStatus =
     | 'PLANEJAMENTO' | 'LANCAMENTO' | 'EM_OBRAS' | 'ENTREGUE' | 'ENCERRADO';
 
-export type EmpreendimentoTipo =
-    | 'VERTICAL' | 'HORIZONTAL' | 'MISTO' | 'COND_LOGISTICO' | 'COND_INDUSTRIAL';
+// Antes era um union fixo (VERTICAL/HORIZONTAL/MISTO/COND_LOGISTICO/COND_INDUSTRIAL).
+// Agora é o `slug` de um registro em `empreendimento_types` (catálogo gerenciável em
+// Configurações do Sistema — ver services/empreendimentoTypeService.ts). Os 5 tipos do
+// sistema usam esses mesmos slugs, então dados antigos continuam válidos sem migração.
+export type EmpreendimentoTipo = string;
 
 export type FloorTipo =
     | 'SUBSOLO' | 'TERREO' | 'MEZANINO' | 'TIPO' | 'COBERTURA' | 'TECNICO' | 'GARAGEM' | 'OUTRO';

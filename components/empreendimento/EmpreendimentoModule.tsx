@@ -33,6 +33,7 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
 };
 
 const COLUMNS: ColumnConfig[] = [
+  { key: 'code', label: 'Código', sortable: true },
   { key: 'name', label: 'Empreendimento', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
   { key: 'vgv', label: 'VGV Total', sortable: true },
@@ -112,6 +113,10 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
     return result.sort((a, b) => {
       if (tableColumns.sortColumn) {
         switch (tableColumns.sortColumn) {
+          case 'code':
+            return tableColumns.sortDirection === 'asc'
+              ? (a.code || '').localeCompare(b.code || '')
+              : (b.code || '').localeCompare(a.code || '');
           case 'name':
             return tableColumns.sortDirection === 'asc'
               ? a.name.localeCompare(b.name)
@@ -251,6 +256,12 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                  {tableColumns.visibleColumns.includes('code') && (
+                    <SortableHeader colKey="code" label="Código" uppercase={false}
+                      sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
+                      onSort={tableColumns.handleColumnSort}
+                      className="px-6 py-2 border-r border-gray-100 whitespace-nowrap" />
+                  )}
                   {tableColumns.visibleColumns.includes('name') && (
                     <SortableHeader colKey="name" label="Empreendimento" uppercase={false}
                       sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
@@ -281,6 +292,11 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                     onClick={() => setSelected(item)}
                     className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
                   >
+                    {tableColumns.visibleColumns.includes('code') && (
+                      <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600 whitespace-nowrap">
+                        {item.code || '—'}
+                      </td>
+                    )}
                     {tableColumns.visibleColumns.includes('name') && (
                       <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                         <div className="flex items-center gap-3">
@@ -289,7 +305,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-normal text-gray-900 truncate">{item.name}</p>
-                            <p className="text-sm font-normal text-gray-400 truncate">{item.code || item.spe_razao_social || '—'}</p>
+                            <p className="text-sm font-normal text-gray-400 truncate">{item.spe_razao_social || '—'}</p>
                           </div>
                         </div>
                       </td>

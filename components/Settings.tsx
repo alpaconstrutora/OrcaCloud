@@ -9,6 +9,7 @@ import ClientCategoriesSettings from './ClientCategoriesSettings';
 import SupplierCategoriesSettings from './SupplierCategoriesSettings';
 import FinancialCategoriesManager from './FinancialCategoriesManager';
 import ContractTypesSettings from './ContractTypesSettings';
+import EmpreendimentoTypesSettings from './EmpreendimentoTypesSettings';
 import ContractIndexManager from './ContractIndexManager';
 
 const Settings: React.FC = () => {
@@ -451,6 +452,7 @@ const Settings: React.FC = () => {
                     <ClientCategoriesSettings />
                     <SupplierCategoriesSettings />
                     <ContractTypesSettings />
+                    <EmpreendimentoTypesSettings />
 
                     {/* Para separar visualmente sem destoar, envolvemos num container branco parecido */}
                     <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">

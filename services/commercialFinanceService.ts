@@ -508,6 +508,52 @@ export const commercialFinanceService = {
     },
 
     /**
+     * Recupera as parcelas já materializadas no cofre financeiro para uma negociação
+     * (o "Plano de Pagamento" de uma edição anterior). `custom_installments` nunca é
+     * gravado em `commercial_deals` — é campo de trabalho, removido antes do insert/
+     * update (ver commercialService.saveDeal) e só sobrevive dentro de
+     * `financialInfo.installments` no vault. Sem isto, reabrir uma negociação salva
+     * sempre mostrava o Plano de Pagamento vazio, mesmo com parcelas já geradas e
+     * salvas — o usuário via elas "sumirem" ao sair e voltar.
+     * Exclui o Sinal/Entrada (`tx-{dealId}-dp`), que é editado à parte no campo
+     * "Entrada (BRL)", não como linha do cronograma.
+     */
+    async getDealInstallments(dealId: string, organizationId: string): Promise<PaymentInstallment[]> {
+        if (!organizationId || !dealId) return [];
+        try {
+            const { data: projects, error } = await supabase
+                .from('projects')
+                .select('id, settings')
+                .eq('name', 'Gestão Comercial')
+                .filter('settings->>organizationId', 'eq', organizationId);
+
+            if (error || !projects) return [];
+
+            const shortId = dealId.substring(0, 8);
+            const dpId = `tx-${dealId}-dp`;
+            const found: PaymentInstallment[] = [];
+
+            for (const p of projects) {
+                const installments = p.settings?.financialInfo?.installments;
+                if (!installments || !Array.isArray(installments)) continue;
+
+                const dealInstallments = installments.filter((i: PaymentInstallment) => {
+                    if (i.id === dpId) return false; // Sinal/Entrada — editado à parte
+                    const isSameDeal = i.dealId === dealId;
+                    const isGhost = (i.description || '').includes(`Deal #${shortId}`) || (i.id || '').includes(shortId);
+                    return isSameDeal || isGhost;
+                });
+                found.push(...dealInstallments);
+            }
+
+            return found.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+        } catch (err) {
+            console.error('[COMMERCIAL-FINANCE] Error fetching deal installments:', err);
+            return [];
+        }
+    },
+
+    /**
      * Distrato: remove parcelas PENDENTES e marca PAGAS como ESTORNADO.
      * Não bloqueia mais — parcelas pagas ficam auditáveis com status CANCELLED.
      */

@@ -248,6 +248,29 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         }
     }, [isOpen, formData.id, formData.type]);
 
+    // Ao abrir uma negociação já salva, reconstrói o Plano de Pagamento a partir
+    // do cofre financeiro (Gestão Comercial) — custom_installments NUNCA é coluna
+    // de commercial_deals (removido antes do insert/update, ver
+    // commercialService.saveDeal), só sobrevive materializado no cofre. Sem isto,
+    // reabrir a negociação sempre mostrava o plano vazio mesmo com parcelas já
+    // geradas e salvas — "as parcelas somem" ao sair e voltar.
+    useEffect(() => {
+        if (!isOpen || !formData.id) return;
+        const orgId = formData.organization_id || organizationId;
+        if (!orgId) return;
+        let active = true;
+        commercialFinanceService.getDealInstallments(formData.id, orgId)
+            .then(insts => {
+                if (active && insts.length > 0) {
+                    // Não sobrescreve se já houver algo em edição (ex: efeito refirou
+                    // depois que o usuário já gerou/editou parcelas nesta sessão).
+                    setFormData(prev => (prev.custom_installments?.length ? prev : { ...prev, custom_installments: insts }));
+                }
+            })
+            .catch(err => console.error('[DealModal] Erro ao recuperar parcelas do cofre:', err));
+        return () => { active = false; };
+    }, [isOpen, formData.id]);
+
     const handleGenerateContract = async () => {
         if (!formData.id) return;
         const isRental = formData.type === 'RENTAL';

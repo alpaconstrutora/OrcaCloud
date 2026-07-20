@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import type { CommercialPriceTable, CommercialPriceTableItem } from './commercialPriceTableService';
 
 export interface BrokerPortalToken {
     id: string;
@@ -76,5 +77,30 @@ export const brokerPortalService = {
         if (error) throw error;
         const res = data as { valid: boolean; commissions?: any[] };
         return res?.commissions ?? [];
+    },
+
+    /**
+     * Tabela de preços ATIVA de um empreendimento (building), para o modo público
+     * do Portal do Corretor. Espelha commercialPriceTableService.getActiveTable +
+     * getTableItems, mas via RPC anon — essas duas tabelas têm RLS `is_org_member`
+     * sem policy `TO anon` (ver migration fn_broker_portal_get_price_table).
+     * `table: null` quando o prédio não tem versão ativa — o chamador cai no
+     * fallback das unidades filhas com o preço vigente de commercial_properties.
+     */
+    async getPriceTableByToken(token: string, buildingId: string): Promise<{
+        table: Pick<CommercialPriceTable, 'id' | 'version_label' | 'effective_date' | 'status' | 'activated_at'> | null;
+        items: CommercialPriceTableItem[];
+    }> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_get_price_table', {
+            p_token: token,
+            p_building_id: buildingId,
+        });
+        if (error) throw error;
+        const res = data as {
+            valid: boolean;
+            table?: Pick<CommercialPriceTable, 'id' | 'version_label' | 'effective_date' | 'status' | 'activated_at'> | null;
+            items?: CommercialPriceTableItem[];
+        };
+        return { table: res?.table ?? null, items: res?.items ?? [] };
     },
 };

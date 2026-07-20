@@ -5,6 +5,7 @@ import { downloadProposalPdf } from '../services/proposalPdfService';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import BrokerProposalSimulator from './broker/BrokerProposalSimulator';
 import BrokerLeadManager from './broker/BrokerLeadManager';
+import BrokerDevelopments from './broker/BrokerDevelopments';
 import BrokerCommissions from './broker/BrokerCommissions';
 import BrokerMaterials from './broker/BrokerMaterials';
 import BrokerRanking from './broker/BrokerRanking';
@@ -23,7 +24,7 @@ import { PropertyStatus, UserProfile, ProfileGroup } from '../types';
 import type { BrokerUnit, BrokerProposal, BrokerProfile } from '../types';
 import type { PropertyDeal } from '../types/imovib';
 
-type PortalTab = 'estoque' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes';
+type PortalTab = 'estoque' | 'empreendimentos' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes';
 
 interface BrokerPortalProps {
     profile: { group: string; role: string; email?: string };
@@ -59,6 +60,7 @@ const StatCard = ({ title, value, subtext, icon: Icon, color }: StatCardProps) =
 
 const ALL_TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
     { id: 'estoque', label: 'Estoque', icon: LayoutGrid },
+    { id: 'empreendimentos', label: 'Empreendimentos', icon: Building2 },
     { id: 'propostas', label: 'Propostas', icon: FileText },
     { id: 'leads', label: 'Leads', icon: Users },
     { id: 'comissoes', label: 'Comissões', icon: DollarSign },
@@ -74,7 +76,7 @@ const ALL_TABS: { id: PortalTab; label: string; icon: React.ElementType }[] = [
 
 // Agrupamento das abas para a navegação em sidebar do portal público (Fase 1+2 do redesign UI/UX).
 const NAV_GROUPS: { label: string; tabs: PortalTab[] }[] = [
-    { label: 'Comercial', tabs: ['estoque', 'propostas', 'leads'] },
+    { label: 'Comercial', tabs: ['estoque', 'empreendimentos', 'propostas', 'leads'] },
     { label: 'Financeiro', tabs: ['comissoes'] },
     { label: 'Conteúdo', tabs: ['materiais', 'treinamento'] },
     { label: 'Engajamento', tabs: ['ranking', 'agenda', 'chat'] },
@@ -577,6 +579,16 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                         onReserveUnit={handleReserve}
                     />
                 </div>
+            )}
+
+            {currentTab === 'empreendimentos' && (
+                <BrokerDevelopments
+                    buildings={buildings}
+                    units={units}
+                    portalToken={portalToken}
+                    organizationId={initialOrgId || selectedOrgId}
+                    onMakeProposal={handleMakeProposal}
+                />
             )}
 
             {currentTab === 'propostas' && showSimulator && selectedUnit && (

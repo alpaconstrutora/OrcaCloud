@@ -4100,7 +4100,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         <StatementCardWrapper {...wrapperProps}>
                         <div className={activeView === 'statement'
                             ? "flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white"
-                            : "flex justify-between items-center px-4"}>
+                            : "flex flex-wrap justify-between items-center gap-y-2 px-4"}>
                             {activeView !== 'statement' && (
                             <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
                                 <Download className="w-4 h-4" />
@@ -4128,7 +4128,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 )}
                             </div>
                             )}
-                            <div className={activeView === 'statement' ? "flex items-center gap-2 order-2 shrink-0" : "flex items-center gap-2"}>
+                            <div className={activeView === 'statement' ? "flex items-center gap-2 order-2 shrink-0" : "flex flex-wrap items-center gap-2 gap-y-2"}>
                                 <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[6px] border border-gray-100 shrink-0">
                                     <button
                                         onClick={() => setFlowFilter('ALL')}
@@ -4936,8 +4936,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     {activeView === 'pending' && (
                     <div className="space-y-4">
                         {/* Right: Internal Ledger */}
-                        <div className="flex justify-between items-center px-4">
-                            <div className="flex items-center gap-4">
+                        <div className="flex flex-wrap justify-between items-center gap-y-2 px-4">
+                            <div className="flex flex-wrap items-center gap-4 gap-y-2">
                                 <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
                                     <Check className="w-4 h-4" />
                                     Lançamentos

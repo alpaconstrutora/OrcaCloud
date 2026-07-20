@@ -26,6 +26,14 @@ export interface PaymentInstallment {
     originalValue?: number;
     discountType?: 'VALUE' | 'PERCENT';
     discountAmount?: number;
+    /**
+     * Tipo de pagamento e observação livre por parcela (Gerenciar Negociação →
+     * Forma de Pagamento → Plano de Pagamento). `notes` é distinto de
+     * `description` (que é o rótulo autogerado "Parcela i/N") — é anotação
+     * livre do usuário, ex: "cheque pré-datado do sócio".
+     */
+    paymentType?: 'PIX' | 'TED' | 'DOC' | 'DINHEIRO' | 'CHEQUE' | 'PERMUTA';
+    notes?: string;
 }
 
 export interface FinancialTransaction {

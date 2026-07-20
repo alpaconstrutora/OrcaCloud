@@ -1120,7 +1120,37 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         />
                                                     )}
 
-                                                    <div className="flex-1 min-w-[140px] text-right">
+                                                    <select
+                                                        value={inst.paymentType ?? ''}
+                                                        onChange={(e) => {
+                                                            const newInsts = [...formData.custom_installments!];
+                                                            newInsts[index] = { ...inst, paymentType: (e.target.value || undefined) as PaymentInstallment['paymentType'] };
+                                                            setFormData({ ...formData, custom_installments: newInsts });
+                                                        }}
+                                                        className="w-[130px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-gray-50 outline-none cursor-pointer"
+                                                    >
+                                                        <option value="">Tipo Pagto.</option>
+                                                        <option value="PIX">PIX</option>
+                                                        <option value="TED">TED</option>
+                                                        <option value="DOC">DOC</option>
+                                                        <option value="DINHEIRO">Dinheiro</option>
+                                                        <option value="CHEQUE">Cheque</option>
+                                                        <option value="PERMUTA">Permuta</option>
+                                                    </select>
+
+                                                    <input
+                                                        type="text"
+                                                        value={inst.notes ?? ''}
+                                                        onChange={(e) => {
+                                                            const newInsts = [...formData.custom_installments!];
+                                                            newInsts[index] = { ...inst, notes: e.target.value };
+                                                            setFormData({ ...formData, custom_installments: newInsts });
+                                                        }}
+                                                        placeholder="Descrição / observação"
+                                                        className="flex-1 min-w-[160px] text-xs font-medium text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-gray-50 outline-none focus:bg-white focus:border-purple-300"
+                                                    />
+
+                                                    <div className="shrink-0 text-right">
                                                         {inst.discountType && (
                                                             <span className="text-xs font-black text-emerald-600">
                                                                 Final: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inst.value)}

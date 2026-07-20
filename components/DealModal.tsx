@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin } from 'lucide-react';
+import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile } from '../types';
 import { commercialService } from '../services/commercialService';
 import { clientService } from '../services/clientService';
@@ -17,6 +17,107 @@ import CreditAnalysisPanel from './CreditAnalysisPanel';
 import { useConfirm } from './ui/confirm';
 
 type TabId = 'cliente' | 'unidade' | 'pagamento' | 'partes' | 'contrato';
+
+/**
+ * Edição em lote de desconto (Plano de Pagamento → seleção múltipla).
+ * Modelo: `components/BankTxEdicaoEmLoteModal.tsx` (Financeiro → Extrato
+ * Bancário) — modal dedicado em vez de controles inline na barra de seleção
+ * (guia §10). Aplica o MESMO tipo+valor de desconto a todas as parcelas
+ * selecionadas; cada uma recalcula seu valor final a partir da própria base
+ * (originalValue ?? value), então parcelas com valores diferentes recebem
+ * o desconto proporcional (%) ou o mesmo abatimento fixo (R$) corretamente.
+ */
+interface InstallmentLoteModalProps {
+    installments: PaymentInstallment[]; // selecionadas
+    onClose: () => void;
+    onSave: (discountType: 'VALUE' | 'PERCENT' | null, discountAmount: number) => void;
+}
+const InstallmentLoteDiscountModal: React.FC<InstallmentLoteModalProps> = ({ installments, onClose, onSave }) => {
+    const [discountType, setDiscountType] = useState<'VALUE' | 'PERCENT' | ''>('');
+    const [discountAmount, setDiscountAmount] = useState('');
+
+    const totalBruto = installments.reduce((s, i) => s + (i.originalValue ?? i.value), 0);
+    const amount = parseFloat(discountAmount.replace(',', '.')) || 0;
+    const canSave = discountType === '' /* limpar desconto */ || amount > 0;
+
+    return (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+                <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+                    <div>
+                        <h2 className="text-lg font-black text-gray-900">Editar Desconto em Lote</h2>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                            {installments.length} parcela{installments.length !== 1 ? 's' : ''} selecionada{installments.length !== 1 ? 's' : ''} · {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBruto)} (bruto)
+                        </p>
+                    </div>
+                    <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+                    <div>
+                        <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Tipo de Desconto</label>
+                        <select
+                            value={discountType}
+                            onChange={(e) => setDiscountType(e.target.value as 'VALUE' | 'PERCENT' | '')}
+                            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
+                        >
+                            <option value="">Remover desconto de todas</option>
+                            <option value="VALUE">Desconto em R$ (mesmo valor em todas)</option>
+                            <option value="PERCENT">Desconto em % (mesmo percentual em todas)</option>
+                        </select>
+                    </div>
+
+                    {discountType !== '' && (
+                        <div>
+                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">
+                                Valor do desconto {discountType === 'PERCENT' ? '(%)' : '(R$)'}
+                            </label>
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={discountAmount}
+                                onChange={(e) => setDiscountAmount(e.target.value)}
+                                placeholder={discountType === 'PERCENT' ? 'Ex: 10' : 'Ex: 100,00'}
+                                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
+                            />
+                        </div>
+                    )}
+
+                    <div className="bg-gray-50 rounded-2xl border border-gray-100 divide-y divide-gray-100 max-h-40 overflow-y-auto">
+                        {installments.map(i => (
+                            <div key={i.id} className="flex items-center justify-between px-4 py-2 text-xs">
+                                <span className="text-gray-700 font-medium truncate max-w-[60%]">{i.description}</span>
+                                <span className="text-gray-500 font-bold shrink-0 ml-2">
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(i.originalValue ?? i.value)}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="px-6 pb-6 pt-4 border-t border-gray-100 flex items-center gap-3">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 px-4 py-3 rounded-2xl bg-gray-100 text-gray-700 font-bold text-button uppercase tracking-widest hover:bg-gray-200 transition-colors"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={() => onSave(discountType || null, amount)}
+                        disabled={!canSave}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-purple-600 text-white font-bold text-button uppercase tracking-widest hover:bg-purple-700 transition-colors disabled:opacity-40 shadow-lg shadow-purple-900/20"
+                    >
+                        <Check className="w-3.5 h-3.5" />
+                        Aplicar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 interface DealModalProps {
     isOpen: boolean;
@@ -67,6 +168,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 broker_commission_value: 0,
                 ...initialData
             });
+            setSelectedInstallmentIds(new Set());
+            setLastCheckedInstallmentIndex(null);
         }
     }, [initialData, isOpen]);
 
@@ -76,6 +179,54 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
     const [loading, setLoading] = useState(false);
     const [org, setOrg] = useState<Organization | null>(null);
+
+    // Seleção em lote das parcelas (Plano de Pagamento) — mesmo padrão de
+    // BankReconciliation.tsx (Extrato Bancário): Set de ids + âncora de
+    // Shift+clique (guia §10.1) + modal dedicado de edição em lote (§10).
+    const [selectedInstallmentIds, setSelectedInstallmentIds] = useState<Set<string>>(new Set());
+    const [lastCheckedInstallmentIndex, setLastCheckedInstallmentIndex] = useState<number | null>(null);
+    const [showInstallmentLoteModal, setShowInstallmentLoteModal] = useState(false);
+
+    const handleInstallmentRowCheck = (id: string, index: number, checked: boolean, shiftKey: boolean) => {
+        const rows = formData.custom_installments || [];
+        if (shiftKey && lastCheckedInstallmentIndex !== null) {
+            const [start, end] = lastCheckedInstallmentIndex < index ? [lastCheckedInstallmentIndex, index] : [index, lastCheckedInstallmentIndex];
+            const rangeIds = rows.slice(start, end + 1).map(i => i.id);
+            setSelectedInstallmentIds(prev => new Set([...prev, ...rangeIds]));
+        } else {
+            setSelectedInstallmentIds(prev => {
+                const next = new Set(prev);
+                if (checked) next.add(id); else next.delete(id);
+                return next;
+            });
+            setLastCheckedInstallmentIndex(index);
+        }
+    };
+
+    /** Aplica o mesmo tipo+valor de desconto a todas as parcelas selecionadas — cada
+     * uma recalcula seu próprio valor final a partir da sua base (originalValue ?? value). */
+    const applyBulkInstallmentDiscount = (discountType: 'VALUE' | 'PERCENT' | null, discountAmount: number) => {
+        setFormData(prev => {
+            const insts = (prev.custom_installments || []).map(inst => {
+                if (!selectedInstallmentIds.has(inst.id)) return inst;
+                const base = inst.originalValue ?? inst.value;
+                let finalValue = base;
+                if (discountType === 'PERCENT') finalValue = base - (base * discountAmount / 100);
+                else if (discountType === 'VALUE') finalValue = base - discountAmount;
+                finalValue = Math.max(0, finalValue);
+                return {
+                    ...inst,
+                    originalValue: base,
+                    discountType: discountType ?? undefined,
+                    discountAmount: discountType ? discountAmount : undefined,
+                    value: Number(finalValue.toFixed(2))
+                };
+            });
+            return { ...prev, custom_installments: insts };
+        });
+        setShowInstallmentLoteModal(false);
+        setSelectedInstallmentIds(new Set());
+    };
 
     // Ponte Negociação → Contrato formal. Venda (domain='VENDAS') gera um contrato
     // de compra e venda; Locação (domain='LOCACAO') gera um contrato recorrente.
@@ -202,9 +353,20 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             const count = prev.installments || 1;
             const baseValue = prev.value || 0;
             const instValue = Math.max(0, baseValue - downPayment) / count;
+            // Retém as parcelas já existentes (data, valor, desconto — tudo que o
+            // usuário já ajustou manualmente): clicar em "Gerar Parcelas" de novo
+            // (ex: só pra ajustar o Nº Parcelas) não pode apagar edições e descontos
+            // já feitos. Só ajusta o TAMANHO do cronograma; índices que já existiam
+            // continuam intactos, só o rótulo "Parcela i/count" é recalculado.
+            const existing = prev.custom_installments || [];
 
             const newInstallments: PaymentInstallment[] = [];
             for (let i = 1; i <= count; i++) {
+                const prior = existing[i - 1];
+                if (prior) {
+                    newInstallments.push({ ...prior, description: `Parcela ${i}/${count}` });
+                    continue;
+                }
                 let date: Date;
                 if (prev.payment_due_date) {
                     // Data do 1º Pagamento ancora a parcela 1; as demais somam 1 mês
@@ -847,7 +1009,22 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             {formData.payment_method === 'INSTALLMENTS' && (
                                 <div>
                                     <div className="flex items-center justify-between mb-3">
-                                        <h4 className="text-xs font-black text-purple-600 uppercase tracking-widest">Plano de Pagamento</h4>
+                                        <div className="flex items-center gap-3">
+                                            {(formData.custom_installments?.length ?? 0) > 0 && (
+                                                <input
+                                                    type="checkbox"
+                                                    title="Selecionar todas"
+                                                    checked={formData.custom_installments!.every(i => selectedInstallmentIds.has(i.id))}
+                                                    onChange={() => {
+                                                        const all = formData.custom_installments || [];
+                                                        const allSelected = all.every(i => selectedInstallmentIds.has(i.id));
+                                                        setSelectedInstallmentIds(allSelected ? new Set() : new Set(all.map(i => i.id)));
+                                                    }}
+                                                    className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                                                />
+                                            )}
+                                            <h4 className="text-xs font-black text-purple-600 uppercase tracking-widest">Plano de Pagamento</h4>
+                                        </div>
                                         <button
                                             type="button"
                                             onClick={handleGenerateInstallments}
@@ -861,7 +1038,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     {formData.custom_installments && formData.custom_installments.length > 0 && (
                                         <div className="space-y-2 max-h-[28rem] overflow-y-auto pr-2 custom-scrollbar">
                                             {formData.custom_installments.map((inst, index) => (
-                                                <div key={inst.id} className="flex flex-wrap items-center gap-3 p-3 bg-white border border-purple-100 rounded-xl shadow-sm">
+                                                <div key={inst.id} className={`flex flex-wrap items-center gap-3 p-3 bg-white border rounded-xl shadow-sm ${selectedInstallmentIds.has(inst.id) ? 'border-purple-300 bg-purple-50/30' : 'border-purple-100'}`}>
+                                                    <input
+                                                        type="checkbox"
+                                                        title="Dica: segure Shift e clique para selecionar um intervalo"
+                                                        checked={selectedInstallmentIds.has(inst.id)}
+                                                        onChange={(e) => handleInstallmentRowCheck(inst.id, index, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
+                                                        className="w-4 h-4 shrink-0 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                                                    />
                                                     <span className="w-6 shrink-0 text-center text-xs font-black text-gray-400">{index + 1}</span>
 
                                                     <input
@@ -1292,6 +1476,45 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         </button>
                     </div>
                 </div>
+
+                {/* Barra de ação em lote — parcelas selecionadas no Plano de Pagamento
+                    (guia §10: fixa no rodapé, fora do fluxo normal). */}
+                {activeTab === 'pagamento' && selectedInstallmentIds.size > 0 && (
+                    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[120] flex items-center gap-3 p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-900/20">
+                        <span className="flex-1 text-sm font-bold whitespace-nowrap">
+                            {selectedInstallmentIds.size} parcela{selectedInstallmentIds.size !== 1 ? 's' : ''} selecionada{selectedInstallmentIds.size !== 1 ? 's' : ''}
+                            <span className="ml-2 font-normal opacity-75">
+                                · {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                    (formData.custom_installments || [])
+                                        .filter(i => selectedInstallmentIds.has(i.id))
+                                        .reduce((s, i) => s + (i.originalValue ?? i.value), 0)
+                                )}
+                            </span>
+                        </span>
+                        <button
+                            onClick={() => setShowInstallmentLoteModal(true)}
+                            className="flex items-center gap-2 px-3 py-2 bg-white text-blue-700 rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-50 transition-colors"
+                        >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Editar Desconto
+                        </button>
+                        <button
+                            onClick={() => setSelectedInstallmentIds(new Set())}
+                            className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-400 transition-colors"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                            Desmarcar
+                        </button>
+                    </div>
+                )}
+
+                {showInstallmentLoteModal && (
+                    <InstallmentLoteDiscountModal
+                        installments={(formData.custom_installments || []).filter(i => selectedInstallmentIds.has(i.id))}
+                        onClose={() => setShowInstallmentLoteModal(false)}
+                        onSave={applyBulkInstallmentDiscount}
+                    />
+                )}
             </div>
         </div>
     );

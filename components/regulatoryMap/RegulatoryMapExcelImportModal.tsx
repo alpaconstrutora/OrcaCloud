@@ -16,7 +16,6 @@ import { ZONE_COLUMNS } from '../RegulatoryZoneTable';
 interface Props {
     regulatoryMapId: string;
     organizationId: string;
-    existingCount: number;
     onClose: () => void;
     onImported: () => void;
 }
@@ -28,7 +27,7 @@ const MAPPING_OPTIONS: { value: ColumnMapping; label: string }[] = [
     ...ZONE_COLUMNS.map(c => ({ value: c.key as ColumnMapping, label: c.label })),
 ];
 
-export const RegulatoryMapExcelImportModal: React.FC<Props> = ({ regulatoryMapId, organizationId, existingCount, onClose, onImported }) => {
+export const RegulatoryMapExcelImportModal: React.FC<Props> = ({ regulatoryMapId, organizationId, onClose, onImported }) => {
     const fileRef = React.useRef<HTMLInputElement>(null);
     const [step, setStep] = React.useState<Step>('upload');
     const [fileName, setFileName] = React.useState('');
@@ -38,7 +37,7 @@ export const RegulatoryMapExcelImportModal: React.FC<Props> = ({ regulatoryMapId
     const [parsedRows, setParsedRows] = React.useState<ParsedZoneRow[]>([]);
     const [error, setError] = React.useState<string | null>(null);
     const [importing, setImporting] = React.useState(false);
-    const [importedCount, setImportedCount] = React.useState(0);
+    const [importResult, setImportResult] = React.useState<{ created: number; updated: number } | null>(null);
 
     const handleFile = async (file: File) => {
         setError(null);
@@ -91,14 +90,16 @@ export const RegulatoryMapExcelImportModal: React.FC<Props> = ({ regulatoryMapId
         setImporting(true);
         setError(null);
         try {
-            const inserts: RegulatoryMapZoneInsert[] = chosen.map((r, i) => ({
+            const inserts: RegulatoryMapZoneInsert[] = chosen.map((r) => ({
                 regulatory_map_id: regulatoryMapId,
                 organization_id: organizationId,
-                sort_order: existingCount + i,
+                sort_order: 0,
                 ...r.values,
             }));
-            const created = await regulatoryMapService.createZonesBulk(inserts);
-            setImportedCount(created.length);
+            // upsert por (macroárea, zona): reimportar a mesma planilha (ou uma versão
+            // atualizada) atualiza as zonas já cadastradas em vez de duplicar.
+            const result = await regulatoryMapService.upsertZonesFromImport({ regulatoryMapId, zones: inserts });
+            setImportResult(result);
             setStep('done');
         } catch (err: any) {
             setError(err.message || 'Erro ao importar zonas.');
@@ -275,14 +276,18 @@ export const RegulatoryMapExcelImportModal: React.FC<Props> = ({ regulatoryMapId
                         </div>
                     )}
 
-                    {step === 'done' && (
+                    {step === 'done' && importResult && (
                         <div className="p-12 flex flex-col items-center gap-4 text-center">
                             <div className="p-4 bg-emerald-50 rounded-full">
                                 <CheckCircle2 className="w-10 h-10 text-emerald-500" />
                             </div>
                             <div>
-                                <h3 className="text-lg font-black text-gray-900">{importedCount} zona(s) importada(s)</h3>
-                                <p className="text-sm text-gray-500 mt-1">As zonas já aparecem na tabela do mapa regulatório.</p>
+                                <h3 className="text-lg font-black text-gray-900">
+                                    {importResult.created} nova(s) · {importResult.updated} atualizada(s)
+                                </h3>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Zonas já cadastradas (mesma macroárea + zona) foram atualizadas em vez de duplicadas.
+                                </p>
                             </div>
                         </div>
                     )}

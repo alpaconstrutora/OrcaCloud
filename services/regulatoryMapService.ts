@@ -95,6 +95,52 @@ export const regulatoryMapService = {
         return data || [];
     },
 
+    /** Importação de planilha Excel: reimportar o mesmo arquivo (ou uma versão atualizada da
+     *  lei) NÃO deve duplicar zonas — casa cada linha importada com uma zona já existente pela
+     *  chave natural (macroárea, zona) e ATUALIZA em vez de inserir de novo. Só cria zona nova
+     *  quando não há uma existente com essa mesma combinação (ou quando a linha não tem
+     *  macroárea/zona pra identificar — aí não tem como casar, sempre insere). */
+    async upsertZonesFromImport(params: {
+        regulatoryMapId: string;
+        zones: RegulatoryMapZoneInsert[];
+    }): Promise<{ created: number; updated: number }> {
+        const { regulatoryMapId, zones } = params;
+        const existing = await this.listZones(regulatoryMapId);
+
+        const keyOf = (macroarea?: string, zona?: string): string | null => {
+            const m = (macroarea || '').trim().toLowerCase();
+            const z = (zona || '').trim().toLowerCase();
+            return m && z ? `${m}::${z}` : null;
+        };
+
+        const existingByKey = new Map<string, RegulatoryMapZone>();
+        for (const z of existing) {
+            const key = keyOf(z.macroarea, z.zona);
+            if (key) existingByKey.set(key, z);
+        }
+
+        const usedExistingIds = new Set<string>();
+        const toInsert: RegulatoryMapZoneInsert[] = [];
+        let nextSortOrder = existing.length;
+        let updated = 0;
+
+        for (const z of zones) {
+            const key = keyOf(z.macroarea, z.zona);
+            const match = key ? existingByKey.get(key) : undefined;
+            if (match && !usedExistingIds.has(match.id)) {
+                usedExistingIds.add(match.id);
+                const { regulatory_map_id: _mapId, organization_id: _orgId, sort_order: _sortOrder, ...values } = z;
+                await this.updateZone(match.id, values);
+                updated++;
+            } else {
+                toInsert.push({ ...z, sort_order: nextSortOrder++ });
+            }
+        }
+
+        const created = toInsert.length > 0 ? (await this.createZonesBulk(toInsert)).length : 0;
+        return { created, updated };
+    },
+
     async updateZone(id: string, updates: RegulatoryMapZoneUpdate): Promise<void> {
         const { error } = await supabase.from('regulatory_map_zones').update(updates).eq('id', id);
         if (error) throw new Error(`Falha ao atualizar zona: ${error.message}`);

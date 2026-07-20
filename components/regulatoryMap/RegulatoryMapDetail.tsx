@@ -103,7 +103,6 @@ export const RegulatoryMapDetail: React.FC<Props> = ({ map, onBack, onEdit }) =>
                 <RegulatoryMapExcelImportModal
                     regulatoryMapId={map.id}
                     organizationId={map.organization_id}
-                    existingCount={zones.length}
                     onClose={() => setImportOpen(false)}
                     onImported={async () => {
                         setImportOpen(false);

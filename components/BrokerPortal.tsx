@@ -6,6 +6,7 @@ import PropertyUnitMap from './common/PropertyUnitMap';
 import BrokerProposalSimulator from './broker/BrokerProposalSimulator';
 import BrokerLeadManager from './broker/BrokerLeadManager';
 import BrokerDevelopments from './broker/BrokerDevelopments';
+import { useConfirm } from './ui/confirm';
 import BrokerCommissions from './broker/BrokerCommissions';
 import BrokerMaterials from './broker/BrokerMaterials';
 import BrokerRanking from './broker/BrokerRanking';
@@ -87,6 +88,7 @@ const TAB_BY_ID: Record<PortalTab, { id: PortalTab; label: string; icon: React.E
 
 const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoque', organizationId: initialOrgId, isPreview = false, portalToken, initialBroker }) => {
     const { organizations } = useStore();
+    const confirm = useConfirm();
 
     // isAdmin controla visibilidade de todo o chrome administrativo
     const isAdmin = !isPreview && (
@@ -242,7 +244,13 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
     }, [units, selectedBuildingId]);
 
     const handleReserve = async (unit: BrokerUnit) => {
-        if (!window.confirm(`Reservar a unidade ${unit.number || unit.name} por 48h?`)) return;
+        const ok = await confirm({
+            title: 'Reservar unidade?',
+            message: `Reservar a unidade ${unit.number || unit.name} por 48h?`,
+            variant: 'warning',
+            confirmLabel: 'Reservar',
+        });
+        if (!ok) return;
         try {
             await commercialService.saveProperty({ id: unit.id, status: PropertyStatus.RESERVED });
             setUnits(prev => prev.map(u => u.id === unit.id ? { ...u, status: PropertyStatus.RESERVED } : u));
@@ -329,10 +337,9 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             )}
             <div className={isStandalone ? 'flex flex-1 overflow-hidden' : ''}>
                 {isStandalone && (
-                    <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex flex-col shrink-0 overflow-y-auto">
+                    <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex flex-col gap-1 shrink-0 overflow-y-auto">
                         {navGroups.map(group => (
-                            <div key={group.label} className="flex flex-col gap-1">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 px-4 mt-4 mb-1 first:mt-0">{group.label}</span>
+                            <React.Fragment key={group.label}>
                                 {group.items.map(tab => (
                                     <button
                                         key={tab.id}
@@ -347,7 +354,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                                         <span>{tab.label}</span>
                                     </button>
                                 ))}
-                            </div>
+                            </React.Fragment>
                         ))}
                     </aside>
                 )}

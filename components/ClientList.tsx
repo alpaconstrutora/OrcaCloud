@@ -1,9 +1,10 @@
 import React from 'react';
 import { clientService } from '../services/clientService';
 import { clientPortalService, ClientPortalToken } from '../services/clientPortalService';
+import { clientCategoryService } from '../services/clientCategoryService';
 import { supabase } from '../lib/supabase';
 import { User, Mail, Phone, Trash2, Search, Loader2, Plus, Edit2, LayoutDashboard, Table2, Building2, Link2, Copy, Check, RefreshCw, X, Wrench, ClipboardList, Bell, Send, Tag } from 'lucide-react';
-import { Client } from '../types';
+import { Client, ClientCategory } from '../types';
 import ClientModal from './ClientModal';
 import ClientRequestsAdminModal from './ClientRequestsAdminModal';
 import { clientMessagesService } from '../services/clientMessagesService';
@@ -41,22 +42,32 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca/categoria já existentes, não os substitui.
-const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
+// As opções do campo "category" são montadas em runtime a partir das categorias
+// cadastradas em Configurações do Sistema > Tipos de Clientes (clientCategoryService) —
+// ver buildAdvancedFilterFields abaixo.
+const BASE_ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'name', label: 'Cliente', type: 'text' },
     { key: 'email', label: 'E-mail', type: 'text' },
     { key: 'document', label: 'Documento', type: 'text' },
     { key: 'organization', label: 'Organização', type: 'text' },
-    { key: 'category', label: 'Tipo', type: 'select', options: [
-        { value: 'Vendas', label: 'Vendas' }, { value: 'Locação', label: 'Locação' }, { value: 'Serviços', label: 'Serviços' },
-    ] },
+];
+
+const buildAdvancedFilterFields = (categories: ClientCategory[]): FilterFieldConfig[] => [
+    ...BASE_ADVANCED_FILTER_FIELDS,
+    { key: 'category', label: 'Tipo', type: 'select', options: categories.map(c => ({ value: c.name, label: c.name })) },
 ];
 
 // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_standard_guide.md §8).
+// Cores fixas pros 3 tipos originais (histórico); categoria custom cadastrada em
+// Configurações do Sistema > Tipos de Clientes cai no fallback cinza abaixo.
 const CATEGORY_COLORS: Record<string, string> = {
     'Vendas': 'text-emerald-700',
     'Locação': 'text-blue-700',
     'Serviços': 'text-amber-700',
 };
+
+// Ciclo de cores dos KPI cards por categoria (§4.2) — mesma paleta do KpiCard.
+const KPI_COLOR_CYCLE = ['emerald', 'indigo', 'amber', 'purple', 'teal', 'rose', 'cyan', 'orange'] as const;
 
 const CategoryLabel: React.FC<{ category?: string }> = ({ category }) => (
     <span className={`text-sm font-normal ${category ? (CATEGORY_COLORS[category] || 'text-gray-600') : 'text-gray-400'}`}>
@@ -79,6 +90,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const { activeOrganizationId } = useStore();
     const [clients, setClients] = React.useState<Client[]>([]);
     const [projects, setProjects] = React.useState<any[]>([]);
+    const [categories, setCategories] = React.useState<ClientCategory[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('clientListFilters:search', '');
@@ -88,7 +100,11 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const [categoryFilter, setCategoryFilter] = usePersistedState<string>('clientListFilters:category', 'all');
     const { toasts, show: showToast, dismiss: dismissToast } = useServicesToast();
     const tableColumns = useTableColumns(CLIENT_COLUMNS, 'clientListColumns');
-    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'clientListFilters:advanced');
+    // Opções de "Tipo" vêm de Configurações do Sistema > Tipos de Clientes (mesma
+    // fonte usada pelo ClientModal), não de uma lista fixa — categoria custom
+    // criada lá (ex: "Condomínio") precisa aparecer aqui igual.
+    const advancedFilterFields = React.useMemo(() => buildAdvancedFilterFields(categories), [categories]);
+    const advancedFilters = useAdvancedFilters(advancedFilterFields, 'clientListFilters:advanced');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'clientListColWidths');
     // table-layout:fixed + largura 100% faz o navegador redistribuir o espaço
     // sobrando entre as colunas de <col> fixo (arrastar uma borda "puxava" as
@@ -102,6 +118,12 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     React.useEffect(() => {
         loadData();
     }, [organizationId]);
+
+    React.useEffect(() => {
+        clientCategoryService.list(organizationId || activeOrganizationId || undefined)
+            .then(setCategories)
+            .catch(console.error);
+    }, [organizationId, activeOrganizationId]);
 
     const loadData = async () => {
         setIsLoading(true);
@@ -245,7 +267,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             )
             .filter(c => categoryFilter === 'all' || c.category === categoryFilter);
 
-        result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+        result = applyFilterRules(result, advancedFilters.rules, advancedFilterFields, getAdvancedFilterValue);
 
         return result.sort((a, b) => {
                 // Ordenação por coluna (quando selecionada)
@@ -279,7 +301,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                 // toda coluna ordenável já ordena pelo próprio cabeçalho, sem dropdown redundante).
                 return a.name.localeCompare(b.name);
             });
-    }, [clients, searchTerm, categoryFilter, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [clients, searchTerm, categoryFilter, advancedFilters.rules, advancedFilterFields, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const handleSendComunicado = async () => {
         if (!comunicadoModal || !comunicadoForm.title.trim()) return;
@@ -304,12 +326,14 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     };
 
 
-    const kpis = React.useMemo(() => ({
-        total: clients.length,
-        vendas: clients.filter(c => c.category === 'Vendas').length,
-        locacao: clients.filter(c => c.category === 'Locação').length,
-        servicos: clients.filter(c => c.category === 'Serviços').length,
-    }), [clients]);
+    // Decomposição por categoria (§4.2): as categorias vêm de Configurações do
+    // Sistema > Tipos de Clientes — não são mais fixas em Vendas/Locação/Serviços,
+    // uma categoria custom (ex: "Condomínio") ganha card igual às demais.
+    const categoryKpis = React.useMemo(
+        () => categories.map(cat => ({ id: cat.id, name: cat.name, count: clients.filter(c => c.category === cat.name).length })),
+        [categories, clients]
+    );
+    const totalClients = clients.length;
 
     const getClientProjects = React.useCallback(
         (clientId: string) => projects.filter(p => p.settings?.clientId === clientId && isObra(p)),
@@ -335,10 +359,18 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
 
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 {/* "Total" em destaque (2 colunas); os demais são a decomposição por categoria (§4.2) */}
-                <KpiCard shadow={false} size="lg" className="col-span-2" label="Total de Clientes" value={kpis.total} icon={<User className="w-4 h-4" />} color="blue" />
-                <KpiCard shadow={false} size="sm" label="Vendas" value={kpis.vendas} icon={<Tag className="w-4 h-4" />} color="emerald" />
-                <KpiCard shadow={false} size="sm" label="Locação" value={kpis.locacao} icon={<Building2 className="w-4 h-4" />} color="indigo" />
-                <KpiCard shadow={false} size="sm" label="Serviços" value={kpis.servicos} icon={<Wrench className="w-4 h-4" />} color="amber" />
+                <KpiCard shadow={false} size="lg" className="col-span-2" label="Total de Clientes" value={totalClients} icon={<User className="w-4 h-4" />} color="blue" />
+                {categoryKpis.map((kpi, idx) => (
+                    <KpiCard
+                        key={kpi.id}
+                        shadow={false}
+                        size="sm"
+                        label={kpi.name}
+                        value={kpi.count}
+                        icon={<Tag className="w-4 h-4" />}
+                        color={KPI_COLOR_CYCLE[idx % KPI_COLOR_CYCLE.length]}
+                    />
+                ))}
             </div>
 
             {/* Toolbar §5.2 (variante acoplada à tabela, escala compacta §16) — toolbar e
@@ -364,14 +396,14 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                     className="h-9 text-sm font-normal text-gray-700 bg-white border border-gray-200 rounded-[6px] px-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 >
                     <option value="all">Todos os Tipos</option>
-                    <option value="Vendas">Vendas</option>
-                    <option value="Locação">Locação</option>
-                    <option value="Serviços">Serviços</option>
+                    {categories.map(cat => (
+                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                    ))}
                 </select>
 
                 {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (ui_ux_standard_guide.md §6.4) */}
                 <div className="flex items-center h-9">
-                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                    <AdvancedFilterPanel fields={advancedFilterFields} state={advancedFilters} />
                 </div>
 
                 <button

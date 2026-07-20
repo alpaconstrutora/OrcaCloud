@@ -17,6 +17,7 @@ export interface Client {
     email?: string;
     phone?: string;
     document?: string;
+    rg?: string;
     type: 'PF' | 'PJ';
     address?: string;
     address_number?: string;

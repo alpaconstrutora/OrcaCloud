@@ -25,6 +25,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
         email: '',
         phone: '',
         document: '',
+        rg: '',
         type: 'PF',
         address: '',
         address_number: '',
@@ -50,6 +51,7 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                 email: '',
                 phone: '',
                 document: '',
+                rg: '',
                 type: 'PF',
                 address: '',
                 address_number: '',
@@ -162,6 +164,24 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                             </div>
                         </div>
                     </div>
+
+                    {formData.type === 'PF' && (
+                        <div className="grid grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">RG</label>
+                                <div className="relative">
+                                    <FileText className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="00.000.000-0"
+                                        className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={formData.rg ?? ''}
+                                        onChange={(e) => update({ rg: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>

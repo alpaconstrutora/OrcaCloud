@@ -126,6 +126,17 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
     // admin vê todas (para poder configurar); corretor vê só as habilitadas
     const navTabs = isAdmin ? ALL_TABS : visibleTabs;
 
+    // currentTab nasce 'estoque' (default do useState) independente de essa aba estar
+    // habilitada para o corretor — no link público (isAdmin=false), se 'estoque' (ou
+    // qualquer aba atual) tiver sido ocultada, o conteúdo antigo ficava preso na tela
+    // porque nada trocava currentTab. Corrige assim que detecta o descompasso.
+    React.useEffect(() => {
+        if (navTabs.length > 0 && !navTabs.some(t => t.id === currentTab)) {
+            setCurrentTab(navTabs[0].id);
+            setShowSimulator(false);
+        }
+    }, [navTabs, currentTab]);
+
     const toggleTabVisibility = async (tabId: string) => {
         if (!effectiveBroker) return;
         const next = enabledTabIds.includes(tabId)

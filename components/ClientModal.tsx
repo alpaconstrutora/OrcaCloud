@@ -7,6 +7,7 @@ import { Sheet, SheetHeader, SheetTitle, SheetPanel, SheetFooter } from './ui/sh
 import { useStore } from '../store/useStore';
 import { clientCategoryService } from '../services/clientCategoryService';
 import { ClientCategory } from '../types';
+import { masterDataService, MasterState } from '../services/masterDataService';
 
 interface ClientModalProps {
     isOpen: boolean;
@@ -18,6 +19,7 @@ interface ClientModalProps {
 const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, initialData }) => {
     const activeOrganizationId = useStore(state => state.activeOrganizationId);
     const [categories, setCategories] = React.useState<ClientCategory[]>([]);
+    const [states, setStates] = React.useState<MasterState[]>([]);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [dirty, setDirty] = React.useState(false);
     const [formData, setFormData] = React.useState<Partial<Client>>({
@@ -26,6 +28,8 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
         phone: '',
         document: '',
         rg: '',
+        rg_uf: '',
+        rg_issuing_agency: '',
         type: 'PF',
         address: '',
         address_number: '',
@@ -52,6 +56,8 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                 phone: '',
                 document: '',
                 rg: '',
+                rg_uf: '',
+                rg_issuing_agency: '',
                 type: 'PF',
                 address: '',
                 address_number: '',
@@ -62,6 +68,11 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
             });
         }
     }, [initialData, isOpen]);
+
+    React.useEffect(() => {
+        if (!isOpen) return;
+        masterDataService.listStates('BR').then(setStates).catch(console.error);
+    }, [isOpen]);
 
     React.useEffect(() => {
         if (!isOpen || !activeOrganizationId) return;
@@ -179,6 +190,29 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                                         onChange={(e) => update({ rg: e.target.value })}
                                     />
                                 </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">UF</label>
+                                <select
+                                    className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                    value={formData.rg_uf ?? ''}
+                                    onChange={(e) => update({ rg_uf: e.target.value })}
+                                >
+                                    <option value="">—</option>
+                                    {states.map(s => (
+                                        <option key={s.id} value={s.code}>{s.code}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Órgão Expedidor</label>
+                                <input
+                                    type="text"
+                                    placeholder="SSP"
+                                    className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={formData.rg_issuing_agency ?? ''}
+                                    onChange={(e) => update({ rg_issuing_agency: e.target.value })}
+                                />
                             </div>
                         </div>
                     )}

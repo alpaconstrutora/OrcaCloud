@@ -1,0 +1,3 @@
+ALTER TABLE public.clients
+ADD COLUMN IF NOT EXISTS rg_uf TEXT,
+ADD COLUMN IF NOT EXISTS rg_issuing_agency TEXT;

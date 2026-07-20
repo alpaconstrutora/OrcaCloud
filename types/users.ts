@@ -18,6 +18,8 @@ export interface Client {
     phone?: string;
     document?: string;
     rg?: string;
+    rg_uf?: string;
+    rg_issuing_agency?: string;
     type: 'PF' | 'PJ';
     address?: string;
     address_number?: string;

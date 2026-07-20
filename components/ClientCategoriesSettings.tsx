@@ -49,7 +49,8 @@ const ClientCategoriesSettings: React.FC = () => {
     }, [loadCategories]);
 
     const handleAdd = async () => {
-        if (!activeOrganizationId || !editValue.trim()) return;
+        if (!editValue.trim()) return;
+        if (!activeOrganizationId) { showToast('Selecione uma organização para criar uma categoria.', 'error'); return; }
         try {
             await clientCategoryService.create(activeOrganizationId, editValue.trim());
             showToast('Categoria criada com sucesso', 'success');
@@ -160,7 +161,9 @@ const ClientCategoriesSettings: React.FC = () => {
                     {!isAdding && !editingId && (
                         <button
                             onClick={startAdd}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                            disabled={!activeOrganizationId}
+                            title={!activeOrganizationId ? 'Selecione uma organização específica para criar uma categoria.' : undefined}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
                         >
                             <Plus className="w-[15px] h-[15px]" />
                             Nova categoria
@@ -273,7 +276,7 @@ const ClientCategoriesSettings: React.FC = () => {
                                                     <div className="flex items-center gap-2">
                                                         {cat.name}
                                                         {isDefaultCategory(cat) && (
-                                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
+                                                            <span className="text-xs font-normal text-gray-400">
                                                                 Global
                                                             </span>
                                                         )}

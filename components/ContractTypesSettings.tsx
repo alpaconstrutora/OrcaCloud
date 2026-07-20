@@ -2,7 +2,7 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 import { contractTypeService } from '../services/contractTypeService';
 import { ContractTypeRecord } from '../types';
-import { FileText, Plus, Check, X, Loader2, Copy, Download } from 'lucide-react';
+import { FileText, Plus, Check, X, Loader2, Copy, Download, AlertCircle } from 'lucide-react';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
@@ -14,7 +14,7 @@ const CATEGORIES: ContractTypeCategory[] = ['Serviços', 'Suprimentos', 'Geral']
 const ContractTypesSettings: React.FC = () => {
     const activeOrganizationId = useStore(state => state.activeOrganizationId);
     const orgId = activeOrganizationId ?? undefined;
-    const { showToast } = useToast();
+    const { localToast, showToast } = useToast();
     const confirm = useConfirm();
 
     const [types, setTypes] = React.useState<ContractTypeRecord[]>([]);
@@ -43,6 +43,7 @@ const ContractTypesSettings: React.FC = () => {
 
     const handleAdd = async () => {
         if (!editName.trim()) return;
+        if (!orgId) { showToast('Selecione uma organização para criar um tipo de contrato.', 'error'); return; }
         try {
             await contractTypeService.createType({ name: editName.trim(), category: editCategory, organization_id: orgId });
             showToast('Tipo de contrato criado com sucesso', 'success');
@@ -142,7 +143,12 @@ const ContractTypesSettings: React.FC = () => {
                         </Button>
                     )}
                     {!isAdding && !editingId && (
-                        <Button onClick={startAdd} className="gap-2 shrink-0 text-sm bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500/20">
+                        <Button
+                            onClick={startAdd}
+                            disabled={!orgId}
+                            title={!orgId ? 'Selecione uma organização específica para criar um tipo de contrato.' : undefined}
+                            className="gap-2 shrink-0 text-sm bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500/20"
+                        >
                             <Plus className="w-4 h-4" /> Novo Tipo
                         </Button>
                     )}
@@ -243,6 +249,15 @@ const ContractTypesSettings: React.FC = () => {
                     </ul>
                 )}
             </div>
+
+            {localToast && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {localToast.message}
+                </div>
+            )}
         </div>
     );
 };

@@ -8,7 +8,7 @@ import {
     COLOR_OPTIONS,
     colorClasses,
 } from '../services/empreendimentoTypeService';
-import { Building2, Plus, Check, X, Loader2, Copy } from 'lucide-react';
+import { Building2, Plus, Check, X, Loader2, Copy, AlertCircle } from 'lucide-react';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
@@ -17,7 +17,7 @@ import { useToast } from '../hooks/useToast';
 const EmpreendimentoTypesSettings: React.FC = () => {
     const activeOrganizationId = useStore(state => state.activeOrganizationId);
     const orgId = activeOrganizationId ?? undefined;
-    const { showToast } = useToast();
+    const { localToast, showToast } = useToast();
     const confirm = useConfirm();
 
     const [types, setTypes] = React.useState<EmpreendimentoTypeRecord[]>([]);
@@ -155,7 +155,12 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                     </div>
                 </div>
                 {!isAdding && !editingId && (
-                    <Button onClick={startAdd} className="gap-2 shrink-0 text-sm bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500/20">
+                    <Button
+                        onClick={startAdd}
+                        disabled={!orgId}
+                        title={!orgId ? 'Selecione uma organização específica para criar um tipo de empreendimento.' : undefined}
+                        className="gap-2 shrink-0 text-sm bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500/20"
+                    >
                         <Plus className="w-4 h-4" /> Novo Tipo
                     </Button>
                 )}
@@ -215,6 +220,15 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                     </ul>
                 )}
             </div>
+
+            {localToast && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                    localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {localToast.message}
+                </div>
+            )}
         </div>
     );
 };

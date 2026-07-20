@@ -1058,9 +1058,57 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </button>
                                     </div>
 
-                                    {formData.custom_installments && formData.custom_installments.length > 0 && (
+                                    {((formData.down_payment || 0) > 0 || (formData.custom_installments?.length ?? 0) > 0) && (
                                         <div className="space-y-2 max-h-[28rem] overflow-y-auto pr-2 custom-scrollbar">
-                                            {formData.custom_installments.map((inst, index) => (
+                                            {/* Entrada — não é item de custom_installments (é o campo down_payment
+                                                à parte), mas aparece como 1ª linha do Plano de Pagamento para poder
+                                                receber Tipo de Pagamento e Descrição igual às demais parcelas. */}
+                                            {(formData.down_payment || 0) > 0 && (
+                                                <div className="flex flex-wrap items-center gap-3 p-3 bg-purple-50/40 border border-purple-100 rounded-xl shadow-sm">
+                                                    <span className="w-6 shrink-0" />
+                                                    <span className="w-6 shrink-0 text-center text-[10px] font-black text-purple-500 uppercase">Entr.</span>
+
+                                                    <input
+                                                        type="date"
+                                                        value={formData.date}
+                                                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                                        className="w-[160px] shrink-0 bg-white border border-transparent focus:border-purple-300 rounded-lg p-2 text-form-input font-bold text-gray-700 outline-none"
+                                                    />
+
+                                                    <div className="relative w-[150px] shrink-0">
+                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">R$</span>
+                                                        <input
+                                                            type="number"
+                                                            value={formData.down_payment ?? ''}
+                                                            onChange={(e) => setFormData({ ...formData, down_payment: parseFloat(e.target.value) || 0 })}
+                                                            className="w-full pl-6 pr-2 py-2 bg-white border border-transparent focus:border-purple-300 rounded-lg text-form-input font-bold text-gray-700 outline-none"
+                                                        />
+                                                    </div>
+
+                                                    <select
+                                                        value={formData.down_payment_payment_type ?? ''}
+                                                        onChange={(e) => setFormData({ ...formData, down_payment_payment_type: (e.target.value || undefined) as PaymentInstallment['paymentType'] })}
+                                                        className="w-[150px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-white outline-none cursor-pointer"
+                                                    >
+                                                        <option value="">Tipo Pagto.</option>
+                                                        <option value="PIX">PIX</option>
+                                                        <option value="TED">TED</option>
+                                                        <option value="DOC">DOC</option>
+                                                        <option value="DINHEIRO">Dinheiro</option>
+                                                        <option value="CHEQUE">Cheque</option>
+                                                        <option value="PERMUTA">Permuta</option>
+                                                    </select>
+
+                                                    <input
+                                                        type="text"
+                                                        value={formData.down_payment_notes ?? ''}
+                                                        onChange={(e) => setFormData({ ...formData, down_payment_notes: e.target.value })}
+                                                        placeholder="Descrição / observação"
+                                                        className="flex-1 min-w-[160px] text-xs font-medium text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-white outline-none focus:border-purple-300"
+                                                    />
+                                                </div>
+                                            )}
+                                            {formData.custom_installments && formData.custom_installments.map((inst, index) => (
                                                 <div key={inst.id} className={`flex flex-wrap items-center gap-3 p-3 bg-white border rounded-xl shadow-sm ${selectedInstallmentIds.has(inst.id) ? 'border-purple-300 bg-purple-50/30' : 'border-purple-100'}`}>
                                                     <input
                                                         type="checkbox"
@@ -1164,8 +1212,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 // preço combinado, independente de desconto). Soma com desconto é
                                                 // o que de fato será cobrado — mostrada só quando difere da bruta,
                                                 // para não confundir "faltou parcela" com "desconto aplicado".
-                                                const grossSum = formData.custom_installments!.reduce((sum, i) => sum + (i.originalValue ?? i.value), 0) + (formData.down_payment || 0);
-                                                const netSum = formData.custom_installments!.reduce((sum, i) => sum + i.value, 0) + (formData.down_payment || 0);
+                                                const grossSum = (formData.custom_installments || []).reduce((sum, i) => sum + (i.originalValue ?? i.value), 0) + (formData.down_payment || 0);
+                                                const netSum = (formData.custom_installments || []).reduce((sum, i) => sum + i.value, 0) + (formData.down_payment || 0);
                                                 const hasDiscount = Math.abs(netSum - grossSum) > 0.01;
                                                 return (
                                                     <div className="max-w-3xl flex items-center justify-between gap-6 p-3 mt-2 bg-gray-50 rounded-xl border border-gray-100">

@@ -132,6 +132,9 @@ export interface PropertyDeal {
     installments?: number;
     installment_value?: number;
     down_payment?: number;
+    /** Tipo de pagamento e observação da Entrada — mesmos campos por parcela em custom_installments, espelhados aqui porque a Entrada não é um item do array (é o campo down_payment). */
+    down_payment_payment_type?: PaymentInstallment['paymentType'];
+    down_payment_notes?: string;
     payment_due_date?: string;
     /** Origem/canal do negócio (ex.: Direto, Portal, Imobiliária) — alimenta "Fontes de Locação"/Vendas */
     origin_channel?: string;

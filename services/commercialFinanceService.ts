@@ -152,14 +152,16 @@ export const commercialFinanceService = {
                 const dpId = `tx-${deal.id}-dp`;
                 const dpDesc = `Receita: ${deal.type === 'SALE' ? 'Venda' : 'Aluguel'} - Sinal (Entrada)`;
                 const sd = getStatus(dpId, downPayment, dpDesc, 'PENDING');
-                newInstallments.push({ 
-                    id: dpId, 
-                    description: dpDesc, 
-                    dueDate: deal.date || new Date().toISOString().split('T')[0], 
-                    value: Number(downPayment.toFixed(2)), 
+                newInstallments.push({
+                    id: dpId,
+                    description: dpDesc,
+                    dueDate: deal.date || new Date().toISOString().split('T')[0],
+                    value: Number(downPayment.toFixed(2)),
                     status: sd.status as PaymentInstallment['status'],
-                    paymentDate: sd.paymentDate, 
-                    ...metadata 
+                    paymentDate: sd.paymentDate,
+                    paymentType: deal.down_payment_payment_type,
+                    notes: deal.down_payment_notes,
+                    ...metadata
                 });
             }
             
@@ -194,7 +196,7 @@ export const commercialFinanceService = {
                 const id = `tx-${deal.id}-dp`;
                 const desc = `Receita: ${deal.type === 'SALE' ? 'Venda' : 'Aluguel'} - Sinal (Entrada) - Deal #${deal.id.substring(0, 8)}`;
                 const sd = getStatus(id, downPayment, desc, 'PENDING');
-                newInstallments.push({ id, description: desc, dueDate: deal.date || new Date().toISOString().split('T')[0], value: Number(downPayment.toFixed(2)), status: sd.status as PaymentInstallment['status'],paymentDate: sd.paymentDate, ...metadata });
+                newInstallments.push({ id, description: desc, dueDate: deal.date || new Date().toISOString().split('T')[0], value: Number(downPayment.toFixed(2)), status: sd.status as PaymentInstallment['status'], paymentDate: sd.paymentDate, paymentType: deal.down_payment_payment_type, notes: deal.down_payment_notes, ...metadata });
             }
 
             // Adicionar Parcelas Regulares

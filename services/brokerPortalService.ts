@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { CommercialPriceTable, CommercialPriceTableItem } from './commercialPriceTableService';
+import type { SalesPlan, PolicyValidation, SimulationPolicyInput } from './salesPlanService';
 
 export interface BrokerPortalToken {
     id: string;
@@ -102,5 +103,37 @@ export const brokerPortalService = {
             items?: CommercialPriceTableItem[];
         };
         return { table: res?.table ?? null, items: res?.items ?? [] };
+    },
+
+    /**
+     * Planos de vendas ATIVOS de um empreendimento, para o Simulador de Proposta
+     * no modo público (sem sessão Supabase). Espelha salesPlanService.listActive,
+     * mas via RPC anon — sales_plans só tem RLS `TO authenticated` (20270717000000).
+     */
+    async getSalesPlansByToken(token: string, buildingId: string): Promise<SalesPlan[]> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_get_sales_plans', {
+            p_token: token,
+            p_building_id: buildingId,
+        });
+        if (error) throw error;
+        const res = data as { valid: boolean; plans?: SalesPlan[] };
+        return res?.plans ?? [];
+    },
+
+    /**
+     * Validação de política do Simulador no modo público. Espelha
+     * salesPlanService.validateSimulation, mas a posse do plano é conferida pelo
+     * token (nunca por is_org_member, que exige auth.uid() — sempre nulo em anon).
+     * Mesmas regras do lado autenticado: ambas as RPCs delegam para
+     * fn_sales_simulation_checks no banco, não há duplicação de política.
+     */
+    async validateSalesSimulationByToken(token: string, planId: string, input: SimulationPolicyInput): Promise<PolicyValidation> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_validate_sales_simulation', {
+            p_token: token,
+            p_plan_id: planId,
+            p_payload: input,
+        });
+        if (error) throw error;
+        return data as PolicyValidation;
     },
 };

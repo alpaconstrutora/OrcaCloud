@@ -5,6 +5,7 @@ import {
     salesPlanService, simulatePayment,
     type SalesPlan, type PolicyValidation, type Verdict,
 } from '../../services/salesPlanService';
+import { brokerPortalService } from '../../services/brokerPortalService';
 
 interface BrokerProposalSimulatorProps {
     unit: BrokerUnit | null;
@@ -12,6 +13,10 @@ interface BrokerProposalSimulatorProps {
     organizationId: string;
     onSubmitProposal: (proposal: Partial<BrokerProposal>) => void;
     onCancel: () => void;
+    /** Presente no link público (sem sessão Supabase) — plano de vendas e validação
+     *  de política passam a usar as RPCs anon (fn_broker_portal_get_sales_plans /
+     *  fn_broker_portal_validate_sales_simulation) em vez do client autenticado. */
+    portalToken?: string;
 }
 
 const VERDICT_LABEL: Record<Verdict, string> = {
@@ -34,7 +39,8 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
     brokerEmail,
     organizationId,
     onSubmitProposal,
-    onCancel
+    onCancel,
+    portalToken,
 }) => {
     // Buyer info
     const [buyerName, setBuyerName] = useState('');
@@ -65,12 +71,15 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
         if (isRental || !unit?.parent_id) return;
         let alive = true;
         setPlansLoading(true);
-        salesPlanService.listActive(unit.parent_id)
+        const load = portalToken
+            ? brokerPortalService.getSalesPlansByToken(portalToken, unit.parent_id)
+            : salesPlanService.listActive(unit.parent_id);
+        load
             .then(list => { if (!alive) return; setPlans(list); if (list.length === 1) setSelectedPlanId(list[0].id); })
             .catch(err => console.error('[Simulador] erro ao carregar planos:', err))
             .finally(() => { if (alive) setPlansLoading(false); });
         return () => { alive = false; };
-    }, [isRental, unit?.parent_id]);
+    }, [isRental, unit?.parent_id, portalToken]);
 
     const selectedPlan = useMemo(() => plans.find(p => p.id === selectedPlanId) ?? null, [plans, selectedPlanId]);
 
@@ -117,16 +126,20 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
     useEffect(() => {
         if (isRental || !selectedPlanId) { setPolicy(null); return; }
         const t = setTimeout(() => {
-            salesPlanService.validateSimulation(selectedPlanId, {
+            const payload = {
                 down_payment_pct: downPaymentPct,
                 installments: monthlyInstallments,
                 discount_pct: discountPct,
                 installment_value: simulation.monthlyValue,
                 intermediary_count: 0,
-            }).then(setPolicy).catch(err => console.error('[Simulador] validacao:', err));
+            };
+            const validate = portalToken
+                ? brokerPortalService.validateSalesSimulationByToken(portalToken, selectedPlanId, payload)
+                : salesPlanService.validateSimulation(selectedPlanId, payload);
+            validate.then(setPolicy).catch(err => console.error('[Simulador] validacao:', err));
         }, 400);
         return () => clearTimeout(t);
-    }, [isRental, selectedPlanId, downPaymentPct, monthlyInstallments, discountPct, simulation.monthlyValue]);
+    }, [isRental, selectedPlanId, downPaymentPct, monthlyInstallments, discountPct, simulation.monthlyValue, portalToken]);
 
     const formatCurrency = useCallback((value: number) =>
         new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value), []);

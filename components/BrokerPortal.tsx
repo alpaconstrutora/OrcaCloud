@@ -624,6 +624,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                     organizationId={initialOrgId || selectedOrgId || 'demo'}
                     onSubmitProposal={handleSubmitProposal}
                     onCancel={() => { setShowSimulator(false); setCurrentTab('estoque'); }}
+                    portalToken={portalToken}
                 />
             )}
 

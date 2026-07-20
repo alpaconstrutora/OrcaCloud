@@ -129,7 +129,7 @@ const Settings: React.FC = () => {
                     onClick={() => setActiveTab('geral')}
                     className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'geral' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                 >
-                    Geral
+                    Nomenclatura
                 </button>
                 <button
                     onClick={() => setActiveTab('categorias')}
@@ -205,9 +205,6 @@ const Settings: React.FC = () => {
 
             {activeTab === 'geral' && (
                 <div className="space-y-6">
-                    {/* Tipos de Clientes */}
-                    <ClientCategoriesSettings />
-
                     {/* Numeração de Pedidos */}
                     <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start justify-between gap-4">

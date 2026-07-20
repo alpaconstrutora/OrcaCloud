@@ -1,9 +1,8 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, Trees, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus } from '../../types';
 import TowerEditor from './TowerEditor';
-import CommonAreaEditor from './CommonAreaEditor';
 import SyncFromStudyModal from './SyncFromStudyModal';
 import { EspelhoVendasTab } from './EspelhoVendasTab';
 import { EspelhoLocacoesTab } from './EspelhoLocacoesTab';
@@ -52,7 +51,7 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
   ENCERRADO: 'text-slate-500',
 };
 
-type Tab = 'visao' | 'sync' | 'curadoria' | 'torres' | 'areas' | 'regulatorio' | 'comercial' | 'locacoes';
+type Tab = 'visao' | 'sync' | 'curadoria' | 'torres' | 'regulatorio' | 'comercial' | 'locacoes';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced }) => {
   const [tab, setTab] = React.useState<Tab>('visao');
@@ -125,7 +124,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     { id: 'sync', label: 'Sincronização', icon: ArrowLeftRight },
     { id: 'curadoria', label: 'Curadoria', icon: Inbox, badge: pendingCuradoria },
     { id: 'torres', label: 'Torres & Unidades', icon: Layers },
-    { id: 'areas', label: 'Áreas Comuns', icon: Trees },
     { id: 'regulatorio', label: 'Mapa Regulatorio', icon: Map },
     { id: 'comercial', label: 'Espelho de Vendas', icon: ShoppingBag },
     { id: 'locacoes', label: 'Espelho de Locações', icon: KeyRound },
@@ -286,12 +284,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             empreendimento={e}
             onTerrenoSaved={onSynced}
           />
-        </div>
-      )}
-
-      {tab === 'areas' && (
-        <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
-          <CommonAreaEditor key={refreshKey} empreendimentoId={e.id} />
         </div>
       )}
 

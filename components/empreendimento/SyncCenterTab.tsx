@@ -1,21 +1,25 @@
 // components/empreendimento/SyncCenterTab.tsx
-// Centro de Sincronização — mapa vivo das ligações do Empreendimento, e o lugar de onde
-// TODAS elas são disparadas. O desenho é um triângulo, não uma estrela: além das arestas
-// com o hub (Viabilidade, Arquitetura, Comercial), Arquitetura e Viabilidade falam
-// DIRETO entre si (imovib_studies.planta_ai_study_id) — essa é a aresta mais antiga das
-// três e ficava invisível aqui, dando a impressão de que tudo passava pelo Empreendimento.
+// Centro de Sincronização dos ESTUDOS — mapa vivo das ligações do Empreendimento com a
+// Viabilidade (Imovib) e a Arquitetura (Planta IA), e o lugar de onde esses syncs são
+// disparados. O desenho é um triângulo: além das duas arestas com o hub, Arquitetura e
+// Viabilidade falam DIRETO entre si (imovib_studies.planta_ai_study_id) — a aresta mais
+// antiga das três, que ficava invisível e dava a impressão de que tudo passava pelo hub.
+//
+// As pontes com Comercial (Venda de Ativos) e Locações NÃO moram mais aqui: elas viviam
+// duplicadas com as abas Espelho de Vendas / Espelho de Locações, que fazem o mesmo
+// publish/pull de forma mais rica (unidade a unidade, órfãos, endereço, KPIs). Aqui ficou
+// só o que não existe em nenhum outro lugar: o sync dos estudos (ui_ux_standard_guide.md §6.4).
 //
 // Os botões vivem nos cards do diagrama (2 por aresta, um por sentido); os cards de
-// detalhe abaixo ficam só com os números que justificam a ação — sem dois controles para
-// a mesma coisa (ui_ux_standard_guide.md §6.4).
+// detalhe abaixo ficam só com os números que justificam a ação.
 import React from 'react';
 import {
-  Loader2, RefreshCw, ShoppingBag, BarChart3, Building2, ArrowLeftRight,
-  CheckCircle2, AlertTriangle, ArrowRight, Link2Off, Clock, Upload, Ruler,
-  Download, Send, KeyRound,
+  Loader2, RefreshCw, BarChart3, Building2, ArrowLeftRight,
+  CheckCircle2, AlertTriangle, Link2Off, Clock, Upload, Ruler,
+  Download, Send,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { empreendimentoService, CommercialDivergenceSummary } from '../../services/empreendimentoService';
+import { empreendimentoService } from '../../services/empreendimentoService';
 import { plantaEmpreendimentoSync } from '../../services/plantaEmpreendimentoSync';
 import { PlantaAiIntegration } from '../../services/plantaAiIntegration';
 import { previewWriteBackImovib, applyWriteBackImovib, WriteBackItem } from '../../services/sync/writeBackImovib';
@@ -26,7 +30,6 @@ import WriteBackPreviewSheet from './WriteBackPreviewSheet';
 interface Props {
   empreendimento: Empreendimento;
   onOpenStudySync: () => void;
-  onGoToComercial: () => void;
 }
 
 const fmtDate = (iso?: string | null) => {
@@ -35,17 +38,11 @@ const fmtDate = (iso?: string | null) => {
   catch { return iso; }
 };
 
-export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudySync, onGoToComercial }) => {
-  // Sempre o org do próprio empreendimento — nunca o seletor global (que pode estar
-  // em "Todas as Organizações" = string vazia).
-  const organizationId = e.organization_id;
+export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudySync }) => {
   const confirm = useConfirm();
   const [loading, setLoading] = React.useState(true);
   const [studyReport, setStudyReport] = React.useState<EmpreendimentoSyncReport | null>(null);
   const [studyError, setStudyError] = React.useState<string | null>(null);
-  const [comm, setComm] = React.useState<CommercialDivergenceSummary | null>(null);
-  // Locações — eixo independente do de Vendas (rental_status/rental_price)
-  const [rental, setRental] = React.useState<CommercialDivergenceSummary | null>(null);
   const [writeBackItems, setWriteBackItems] = React.useState<WriteBackItem[] | null>(null);
   const [writeBackError, setWriteBackError] = React.useState<string | null>(null);
   const [writingBack, setWritingBack] = React.useState(false);
@@ -64,11 +61,6 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
   // que nunca se falaram.
   const [axStudy, setAxStudy] = React.useState<{ selectedScenarioId: string | null; pairedWithImovib: boolean } | null>(null);
   const [axBusy, setAxBusy] = React.useState<'toImovib' | 'fromImovib' | null>(null);
-
-  // Comercial em lote
-  const [commBusy, setCommBusy] = React.useState<'publish' | 'pull' | null>(null);
-  // Locações em lote
-  const [rentalBusy, setRentalBusy] = React.useState<'publish' | 'pull' | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -129,23 +121,9 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
       setAxStudy(null);
     }
 
-    // Comercial
-    tasks.push(
-      empreendimentoService.getCommercialDivergenceSummary(e.id, organizationId)
-        .then(s => setComm(s))
-        .catch(err => { console.error('[SyncCenter] erro comercial:', err); setComm(null); })
-    );
-
-    // Locações (eixo próprio — rental_status/rental_price)
-    tasks.push(
-      empreendimentoService.getRentalDivergenceSummary(e.id, organizationId)
-        .then(s => setRental(s))
-        .catch(err => { console.error('[SyncCenter] erro locações:', err); setRental(null); })
-    );
-
     await Promise.all(tasks);
     setLoading(false);
-  }, [e.id, e.imovib_study_id, e.planta_ai_study_id, organizationId]);
+  }, [e.id, e.imovib_study_id, e.planta_ai_study_id]);
 
   React.useEffect(() => { load(); }, [load]);
 
@@ -212,84 +190,6 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
     }
   };
 
-  // ── Empreendimento ⇄ Comercial ────────────────────────────────────────────
-  const handlePublishAll = async () => {
-    if (!comm || comm.unpublished === 0) return;
-    const ok = await confirm({
-      title: 'Publicar no Comercial?',
-      message: `${comm.unpublished} unidade(s) ainda não publicada(s) serão criadas no Comercial (Venda de Ativos), agrupadas sob o edifício do empreendimento.`,
-      confirmLabel: 'Publicar',
-      variant: 'warning',
-    });
-    if (!ok) return;
-    setCommBusy('publish');
-    try {
-      await empreendimentoService.publishAllToCommercial(e.id, organizationId);
-      await load();
-    } catch (err: any) {
-      setStudyError(`Erro ao publicar no Comercial: ${err.message}`);
-    } finally { setCommBusy(null); }
-  };
-
-  const handlePullFromCommercial = async () => {
-    if (!comm || comm.statusDiverge === 0) return;
-    const ok = await confirm({
-      title: 'Trazer status do Comercial?',
-      message: `${comm.statusDiverge} unidade(s) têm status de venda diferente no Comercial. O status de lá é a fonte (é onde a venda acontece) e será aplicado às unidades.`
-        + (comm.unmappable ? `\n\n⚠ ${comm.unmappable} unidade(s) em Locado/Manutenção não têm equivalente no Empreendimento e não serão alteradas.` : ''),
-      confirmLabel: 'Trazer',
-      variant: 'warning',
-    });
-    if (!ok) return;
-    setCommBusy('pull');
-    try {
-      await empreendimentoService.pullStatusFromCommercial(e.id, organizationId);
-      await load();
-    } catch (err: any) {
-      setStudyError(`Erro ao sincronizar do Comercial: ${err.message}`);
-    } finally { setCommBusy(null); }
-  };
-
-  // ── Empreendimento ⇄ Locações ─────────────────────────────────────────────
-  // Eixo independente do de Vendas: escreve em rental_status/rental_price, então
-  // rodar os dois pulls nunca faz um sobrescrever o outro.
-  const handlePublishAllRental = async () => {
-    if (!rental || rental.unpublished === 0) return;
-    const ok = await confirm({
-      title: 'Publicar em Locações?',
-      message: `${rental.unpublished} unidade(s) ainda não publicada(s) serão criadas em Locações, agrupadas sob o edifício de locação do empreendimento, herdando o aluguel-alvo definido nas unidades.`,
-      confirmLabel: 'Publicar',
-      variant: 'warning',
-    });
-    if (!ok) return;
-    setRentalBusy('publish');
-    try {
-      await empreendimentoService.publishAllToRental(e.id, organizationId);
-      await load();
-    } catch (err: any) {
-      setStudyError(`Erro ao publicar em Locações: ${err.message}`);
-    } finally { setRentalBusy(null); }
-  };
-
-  const handlePullFromRental = async () => {
-    if (!rental || rental.statusDiverge === 0) return;
-    const ok = await confirm({
-      title: 'Trazer status de Locações?',
-      message: `${rental.statusDiverge} unidade(s) têm ocupação diferente em Locações. O status de lá é a fonte (é onde a locação acontece) e será aplicado às unidades.`
-        + (rental.unmappable ? `\n\n⚠ ${rental.unmappable} unidade(s) em Vendido/Permutado não têm equivalente no eixo de locação e não serão alteradas.` : ''),
-      confirmLabel: 'Trazer',
-      variant: 'warning',
-    });
-    if (!ok) return;
-    setRentalBusy('pull');
-    try {
-      await empreendimentoService.pullStatusFromRental(e.id, organizationId);
-      await load();
-    } catch (err: any) {
-      setStudyError(`Erro ao sincronizar de Locações: ${err.message}`);
-    } finally { setRentalBusy(null); }
-  };
-
   // ── Aresta direta Arquitetura ⇄ Viabilidade ───────────────────────────────
   const handleAxToImovib = async () => {
     if (!e.planta_ai_study_id || !axStudy?.selectedScenarioId) return;
@@ -342,14 +242,6 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
     ? studyReport.orphanTowers.length + studyReport.orphanUnits.length
     : 0;
 
-  const commDiverge = comm
-    ? comm.statusDiverge + comm.priceDiverge + comm.orphans + comm.unmappable
-    : 0;
-
-  const rentalDiverge = rental
-    ? rental.statusDiverge + rental.priceDiverge + rental.orphans + rental.unmappable
-    : 0;
-
   const plantaDiverge = plantaReport
     ? plantaReport.towersCreated + plantaReport.towersUpdated + plantaReport.unitsCreated + plantaReport.unitsUpdated
     : 0;
@@ -379,18 +271,18 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
           </button>
         </div>
 
-        {/* Triângulo, não estrela: Arquitetura tem DUAS arestas — uma com o hub e outra
+        {/* Triângulo dos estudos: Arquitetura tem DUAS arestas — uma com o hub e outra
             direta com a Viabilidade (imovib_studies.planta_ai_study_id). Desenhar só os raios
             do hub escondia a ligação mais antiga das três.
 
-            Layout (desktop):                [ARQUITETURA]
-                                        ↙(direto)      ↕
-                            [VIABILIDADE] ↔ [HUB] ↔ [COMERCIAL]
+            Layout (desktop):                     [ARQUITETURA]
+                                             ↙(direto)      ↕
+                                 [VIABILIDADE] ↔ [HUB]
 
             Cada aresta é um <EdgeConnector> com seus 2 botões — o conector É a ação. Ter os
             botões dentro do card do vértice fazia o ↕ Arquitetura↔Hub parecer uma ligação
             sem ação nenhuma. */}
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-3 items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 items-stretch">
           {/* Linha 1 — Arquitetura, sobre o hub */}
           <div className="hidden md:block" />
           <div className="hidden md:block" />
@@ -406,11 +298,9 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
             extraOrphans={plantaOrphans}
             footer={plantaReport ? `${plantaReport.scenarioUnits} unidade(s) no cenário` : null}
           />
-          <div className="hidden md:block" />
-          <div className="hidden md:block" />
 
           {/* Linha 2 — aresta Arquitetura ↔ Hub. A aresta direta Arquitetura↔Viabilidade
-              NÃO mora mais aqui: ver a faixa abaixo do grid. */}
+              NÃO mora aqui: ver a faixa abaixo do grid. */}
           <div className="hidden md:block" />
           <div className="hidden md:block" />
           <EdgeConnector
@@ -435,10 +325,8 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
               },
             ] : undefined}
           />
-          <div className="hidden md:block" />
-          <div className="hidden md:block" />
 
-          {/* Linha 3 — Viabilidade ↔ HUB ↔ Comercial */}
+          {/* Linha 3 — Viabilidade ↔ HUB */}
           <VertexCard
             icon={BarChart3}
             tint="violet"
@@ -481,89 +369,6 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
             <span className="text-xs font-black uppercase tracking-wider text-blue-700">{e.name}</span>
             <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mt-0.5">Hub Central</span>
           </div>
-
-          <EdgeConnector
-            orientation="horizontal"
-            label="Empreendimento ↔ Comercial"
-            tint="emerald"
-            active={!!comm && comm.total > 0}
-            activeTitle="Empreendimento ↔ Venda de Ativos"
-            inactiveTitle="Nenhuma unidade cadastrada nas torres deste empreendimento"
-            actions={comm && comm.total > 0 ? [
-              {
-                label: 'Publicar no Comercial', icon: Upload, direction: 'out',
-                onClick: handlePublishAll,
-                disabled: comm.unpublished === 0, busy: commBusy === 'publish',
-                title: comm.unpublished === 0 ? 'Todas as unidades já estão publicadas' : `Publicar ${comm.unpublished} unidade(s) não publicada(s)`,
-              },
-              {
-                label: 'Trazer status', icon: Download, direction: 'in',
-                onClick: handlePullFromCommercial,
-                disabled: comm.statusDiverge === 0, busy: commBusy === 'pull',
-                title: comm.statusDiverge === 0 ? 'Nenhum status divergente' : `Aplicar o status de venda de ${comm.statusDiverge} unidade(s)`,
-              },
-            ] : undefined}
-          />
-
-          {/* Comercial */}
-          <VertexCard
-            icon={ShoppingBag}
-            tint="emerald"
-            title="Venda de Ativos"
-            subtitle="Comercial"
-            linked={!!comm && comm.published > 0}
-            unlinkedLabel={comm && comm.total > 0 ? 'Nenhuma unidade publicada' : 'Sem unidades'}
-            error={null}
-            divergences={commDiverge}
-            extraOrphans={comm?.orphans ?? 0}
-            footer={comm ? `${comm.published}/${comm.total} publicadas` : '—'}
-          />
-
-          {/* Linha 4 — aresta Locações ↔ Hub (abaixo do hub, como Arquitetura acima) */}
-          <div className="hidden md:block" />
-          <div className="hidden md:block" />
-          <EdgeConnector
-            orientation="vertical"
-            label="Empreendimento ↔ Locações"
-            tint="teal"
-            active={!!rental && rental.total > 0}
-            activeTitle="Empreendimento ↔ Locações"
-            inactiveTitle="Nenhuma unidade cadastrada nas torres deste empreendimento"
-            actions={rental && rental.total > 0 ? [
-              {
-                label: 'Publicar em Locações', icon: Upload, direction: 'out',
-                onClick: handlePublishAllRental,
-                disabled: rental.unpublished === 0, busy: rentalBusy === 'publish',
-                title: rental.unpublished === 0 ? 'Todas as unidades já estão publicadas' : `Publicar ${rental.unpublished} unidade(s) não publicada(s)`,
-              },
-              {
-                label: 'Trazer status', icon: Download, direction: 'in',
-                onClick: handlePullFromRental,
-                disabled: rental.statusDiverge === 0, busy: rentalBusy === 'pull',
-                title: rental.statusDiverge === 0 ? 'Nenhuma ocupação divergente' : `Aplicar a ocupação de ${rental.statusDiverge} unidade(s)`,
-              },
-            ] : undefined}
-          />
-          <div className="hidden md:block" />
-          <div className="hidden md:block" />
-
-          {/* Linha 5 — Locações */}
-          <div className="hidden md:block" />
-          <div className="hidden md:block" />
-          <VertexCard
-            icon={KeyRound}
-            tint="teal"
-            title="Locações"
-            subtitle="Comercial"
-            linked={!!rental && rental.published > 0}
-            unlinkedLabel={rental && rental.total > 0 ? 'Nenhuma unidade publicada' : 'Sem unidades'}
-            error={null}
-            divergences={rentalDiverge}
-            extraOrphans={rental?.orphans ?? 0}
-            footer={rental ? `${rental.published}/${rental.total} publicadas` : '—'}
-          />
-          <div className="hidden md:block" />
-          <div className="hidden md:block" />
         </div>
 
         {/* Aresta direta Arquitetura ↔ Viabilidade — em faixa própria, de propósito.
@@ -698,31 +503,17 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
           ) : null}
         </RelationCard>
 
-        {/* Empreendimento ↔ Comercial */}
-        <RelationCard
-          title="Empreendimento ↔ Venda de Ativos"
-          icon={ShoppingBag}
-          tint="emerald"
-        >
-          {!comm || comm.total === 0 ? (
-            <EmptyHint icon={Link2Off} text="Nenhuma unidade cadastrada nas torres deste empreendimento." />
-          ) : (
-            <>
-              <DiffRow label="Publicadas no Comercial" value={comm.published} muted />
-              <DiffRow label="Não publicadas" value={comm.unpublished} muted />
-              <DiffRow label="Status divergente" value={comm.statusDiverge} warn={comm.statusDiverge > 0} />
-              <DiffRow label="Preço divergente" value={comm.priceDiverge} warn={comm.priceDiverge > 0} />
-              <DiffRow label="Locado/Manutenção (sem equivalente)" value={comm.unmappable} warn={comm.unmappable > 0} />
-              {comm.orphans > 0 && <DiffRow label="Vínculos órfãos" value={comm.orphans} warn />}
-              <button
-                onClick={onGoToComercial}
-                className="mt-3 w-full flex items-center justify-center gap-1.5 h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
-              >
-                Abrir espelho de vendas <ArrowRight className="w-4 h-4" />
-              </button>
-            </>
-          )}
-        </RelationCard>
+      </div>
+
+      {/* Onde foram parar as pontes com Vendas e Locações — o publish/pull dessas duas
+          agora mora só nas abas Espelho, que fazem o mesmo de forma mais rica. */}
+      <div className="bg-blue-50/40 border border-dashed border-blue-200 rounded-[10px] p-4 flex items-start gap-2.5">
+        <ArrowLeftRight className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+        <p className="text-xs text-gray-600 font-medium leading-relaxed">
+          As pontes com <strong className="text-gray-700">Venda de Ativos</strong> e <strong className="text-gray-700">Locações</strong> (publicar unidades e trazer status)
+          ficam nas abas <strong className="text-gray-700">Espelho de Vendas</strong> e <strong className="text-gray-700">Espelho de Locações</strong>, onde você
+          resolve unidade a unidade, limpa vínculos órfãos e acompanha os KPIs. Este centro cuida só do sync com os estudos.
+        </p>
       </div>
 
       {/* Limitação conhecida */}

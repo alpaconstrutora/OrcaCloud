@@ -299,7 +299,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
           key={refreshKey}
           empreendimento={e}
           onOpenStudySync={() => setSyncOpen(true)}
-          onGoToComercial={() => setTab('comercial')}
         />
       )}
       {tab === 'curadoria' && (

@@ -236,8 +236,16 @@ export const commercialService = {
     async saveDeal(deal: Partial<PropertyDeal>) {
         let result: PropertyDeal;
 
-        // Remove virtual fields before DB operation
-        const { custom_installments, ...dbPayload } = deal;
+        // custom_installments é gravado como coluna normal (dbPayload abaixo) E
+        // usado mais adiante para acionar o sync com o cofre financeiro (Contas a
+        // Receber) — este segundo uso só acontece quando o status está em
+        // FINANCIAL_STATUSES (propositalmente: uma Proposta em IN_NEGOTIATION não
+        // pode lançar recebível). Antes a coluna era removida do payload do banco
+        // e só sobrevivia via aquele sync — então o Plano de Pagamento de uma
+        // negociação ainda em Proposta nunca era persistido e sumia ao sair e
+        // voltar. Persistir aqui também garante que o rascunho sobreviva
+        // independente do status.
+        const dbPayload: Partial<PropertyDeal> = { ...deal };
 
         Object.keys(dbPayload).forEach(key => {
             if (dbPayload[key as keyof typeof dbPayload] === "") {
@@ -354,7 +362,7 @@ export const commercialService = {
                     payment_method: deal.payment_method || result.payment_method,
                     down_payment: deal.down_payment !== undefined ? deal.down_payment : result.down_payment,
                     installments: deal.installments || result.installments,
-                    custom_installments: custom_installments,
+                    custom_installments: deal.custom_installments,
                     linked_project_id: deal.linked_project_id || (result as any).linked_project_id
                 };
 

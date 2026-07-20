@@ -138,6 +138,14 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             });
             setAllBrokers(prev => prev.map(b => b.id === updated.id ? updated : b));
             if (selectedAdminBroker?.id === updated.id) setSelectedAdminBroker(updated);
+            // Se a aba que acabamos de ocultar é a que está aberta agora, sai dela — senão o
+            // conteúdo continua na tela mesmo depois de "ocultada" (só o botão da nav mudava).
+            if (currentTab === tabId && !next.includes(tabId)) {
+                const effectiveNext = next.length > 0 ? next : ALL_TABS.map(t => t.id);
+                const fallback = (effectiveNext.includes('estoque') ? 'estoque' : effectiveNext[0]) as PortalTab;
+                setCurrentTab(fallback);
+                setShowSimulator(false);
+            }
         } catch (err) {
             console.error('Erro ao salvar abas do corretor:', err);
         }

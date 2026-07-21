@@ -42,6 +42,13 @@ const INSTALLMENT_TYPE_INTERVAL_MONTHS: Record<NonNullable<PaymentInstallment['i
     AVULSA: 1,
 };
 
+/** Tipos que o modal de Gerar Parcelas oferece — só os periódicos. Sinal já
+ * tem seu próprio campo (Entrada) e Avulsa seu próprio botão ("+ Parcela
+ * Avulsa"); gerar em lote qualquer um dos dois não combina com o modelo de
+ * blocos-por-tipo com rateio compartilhado implementado abaixo. */
+const GENERATOR_INSTALLMENT_TYPES: NonNullable<PaymentInstallment['installmentType']>[] =
+    ['MENSAL', 'TRIMESTRAL', 'SEMESTRAL', 'ANUAL'];
+
 /**
  * Edição em lote de desconto (Plano de Pagamento → seleção múltipla).
  * Modelo: `components/BankTxEdicaoEmLoteModal.tsx` (Financeiro → Extrato
@@ -411,39 +418,57 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             }
         }
 
-        // Gerar Parcelas SEMPRE recria um cronograma limpo com exatamente N parcelas
-        // IGUAIS (rateio de Valor − Entrada pelo Nº de Parcelas), espaçadas pelo
-        // intervalo do Tipo de Pagamento escolhido no modal (mensal/trimestral/
-        // semestral/anual). Parcelas Avulsas não entram aqui — são criadas uma a
-        // uma via handleAddAdhocInstallment, sem mexer nas demais.
+        // Um Plano de Pagamento pode combinar vários Tipos ao mesmo tempo (10
+        // mensais + 3 semestrais, por exemplo). Gerar Parcelas SUBSTITUI só o
+        // BLOCO do Tipo escolhido (cria se não existir, resubstitui se já
+        // existir) — os demais tipos ficam intactos. Parcelas Avulsas nunca
+        // entram no rateio nem são tocadas aqui (são criadas uma a uma via
+        // handleAddAdhocInstallment).
         //
-        // Recriar do zero (em vez de reter parcelas por índice, como era antes)
-        // evita dois bugs já corrigidos: (1) valores misturados ao mudar o Nº de
-        // Parcelas e regerar; (2) ids antigos retidos colidindo como key
-        // duplicada no React (pedia 5, via 3).
+        // Como todos os blocos regulares (mensal+trimestral+semestral+anual)
+        // dividem o MESMO total (Valor − Entrada − Avulsas), acrescentar ou
+        // resubstituir um bloco muda quantas parcelas dividem esse total —
+        // por isso os blocos preservados são recalculados junto (mesmo valor
+        // por parcela em todos, só a última parcela do bloco recém-gerado
+        // absorve o resto do arredondamento).
         const intervalMonths = INSTALLMENT_TYPE_INTERVAL_MONTHS[installmentType] ?? 1;
         const count = Math.max(1, Math.floor(Number(installmentCount) || 1));
 
         setFormData(prev => {
-            // Parcelas Avulsas (adicionadas via handleAddAdhocInstallment) são fora
-            // da série regular — regenerar o cronograma não pode apagá-las.
-            const keptAdhoc = (prev.custom_installments || []).filter(i => i.installmentType === 'AVULSA');
+            const allExisting = prev.custom_installments || [];
+            const adhoc = allExisting.filter(i => i.installmentType === 'AVULSA');
+            // Blocos de OUTROS tipos — preservados (data/id/desconto/forma de
+            // pagamento/observação mantidos), só o valor é recalculado abaixo.
+            const otherBlocks = allExisting.filter(i => i.installmentType !== 'AVULSA' && i.installmentType !== installmentType);
 
             const downPayment = prev.down_payment || 0;
             const baseValue = prev.value || 0;
-            const total = Math.max(0, baseValue - downPayment);
-            // Rateio igual com centavos exatos: cada parcela recebe `per`, e a ÚLTIMA
-            // absorve o resto do arredondamento para a soma bater exatamente com
-            // `total` (e, somada à Entrada, com o Valor do fechamento).
-            const per = Math.floor((total / count) * 100) / 100;
+            const adhocTotal = adhoc.reduce((sum, i) => sum + (i.originalValue ?? i.value), 0);
+            const total = Math.max(0, baseValue - downPayment - adhocTotal);
+            const totalRegularCount = otherBlocks.length + count;
+            // Rateio igual com centavos exatos: todas as parcelas regulares (de
+            // TODOS os tipos combinados) recebem `per`; a última parcela do
+            // bloco recém-gerado absorve o resto do arredondamento, para a soma
+            // bater exatamente com `total`.
+            const per = Math.floor((total / totalRegularCount) * 100) / 100;
+            const remainder = Number((total - per * totalRegularCount).toFixed(2));
+
+            // Recalcula os blocos preservados com a nova base — reaplicando o
+            // desconto de cada parcela (se houver), igual a updateInstallmentDiscount.
+            const recalculatedOtherBlocks = otherBlocks.map(inst => {
+                const discType = inst.discountType;
+                const discAmt = inst.discountAmount || 0;
+                let finalValue = per;
+                if (discType === 'PERCENT') finalValue = per - (per * discAmt / 100);
+                else if (discType === 'VALUE') finalValue = per - discAmt;
+                return { ...inst, originalValue: per, value: Number(Math.max(0, finalValue).toFixed(2)) };
+            });
 
             const stamp = Date.now();
-            const newInstallments: PaymentInstallment[] = [];
-            let allocated = 0;
+            const newBlock: PaymentInstallment[] = [];
             for (let i = 1; i <= count; i++) {
                 const isLast = i === count;
-                const value = isLast ? Number((total - allocated).toFixed(2)) : per;
-                allocated = Number((allocated + per).toFixed(2));
+                const value = isLast ? Number((per + remainder).toFixed(2)) : per;
 
                 let date: Date;
                 if (prev.payment_due_date) {
@@ -458,7 +483,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     date = new Date(prev.date || Date.now());
                     date.setMonth(date.getMonth() + i * intervalMonths);
                 }
-                newInstallments.push({
+                newBlock.push({
                     id: `temp-${stamp}-${i}`,
                     description: `Parcela ${i}/${count}`,
                     dueDate: date.toISOString().split('T')[0],
@@ -468,7 +493,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     installmentType
                 });
             }
-            return { ...prev, installments: count, custom_installments: [...newInstallments, ...keptAdhoc] };
+            return {
+                ...prev,
+                installments: totalRegularCount,
+                custom_installments: [...recalculatedOtherBlocks, ...newBlock, ...adhoc]
+            };
         });
         // Cronograma novo → limpa qualquer seleção de parcela (os ids mudaram).
         setSelectedInstallmentIds(new Set());
@@ -1778,22 +1807,30 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         onChange={(e) => setGenerateInstallmentType(e.target.value as NonNullable<PaymentInstallment['installmentType']>)}
                                         className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
                                     >
-                                        {Object.entries(INSTALLMENT_TYPE_LABELS).map(([value, label]) => (
-                                            <option key={value} value={value}>{label}</option>
+                                        {GENERATOR_INSTALLMENT_TYPES.map(value => (
+                                            <option key={value} value={value}>{INSTALLMENT_TYPE_LABELS[value]}</option>
                                         ))}
                                     </select>
                                     <p className="text-xs text-gray-400 mt-1">
                                         Define o espaçamento entre as parcelas geradas (ex: trimestral = 1 a cada 3 meses).
+                                        Um Plano de Pagamento pode combinar vários tipos — gerar um tipo novo não apaga os
+                                        outros já existentes.
                                     </p>
                                 </div>
 
                                 {(() => {
-                                    const regularCount = (formData.custom_installments || []).filter(i => i.installmentType !== 'AVULSA').length;
-                                    return regularCount > 0 && (
-                                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800">
-                                            Isto substitui as {regularCount} parcela(s) atuais. Ajustes manuais (descontos,
-                                            valores editados, tipo/forma de pagamento e observações) serão perdidos. Parcelas
-                                            Avulsas adicionadas à parte não são afetadas.
+                                    const existing = formData.custom_installments || [];
+                                    const sameTypeCount = existing.filter(i => i.installmentType === generateInstallmentType).length;
+                                    const otherTypesCount = existing.filter(i => i.installmentType !== 'AVULSA' && i.installmentType !== generateInstallmentType).length;
+                                    if (sameTypeCount === 0 && otherTypesCount === 0) return null;
+                                    return (
+                                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800 space-y-1">
+                                            {sameTypeCount > 0 && (
+                                                <p>Substitui as {sameTypeCount} parcela(s) de "{INSTALLMENT_TYPE_LABELS[generateInstallmentType]}" atuais — ajustes manuais nelas (descontos, valores editados, forma de pagamento e observações) serão perdidos.</p>
+                                            )}
+                                            {otherTypesCount > 0 && (
+                                                <p>As {otherTypesCount} parcela(s) de outro(s) tipo(s) são mantidas (só o valor é recalculado para a soma continuar batendo com o Valor Total).</p>
+                                            )}
                                         </div>
                                     );
                                 })()}

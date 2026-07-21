@@ -122,8 +122,13 @@ export const propertyExportService = {
             const installments: PaymentInstallment[] = [...(deal.custom_installments || [])]
                 .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
             installments.forEach((inst, idx) => {
+                // Nunca usa inst.description aqui: é um campo interno (às vezes carrega
+                // texto legado tipo "Receita: Venda - Parcela 1/1 - Deal #..." herdado
+                // de uma sincronização antiga com o financeiro) — não é seguro mostrar
+                // pro cliente. Avulsa tem nome fixo; as demais usam posição sequencial.
+                const label = inst.installmentType === 'AVULSA' ? 'Parcela Avulsa' : `Parcela ${idx + 1}`;
                 rows.push([
-                    inst.description || `Parcela ${idx + 1}`,
+                    label,
                     fmtDate(inst.dueDate),
                     PAYMENT_TYPE_LABELS[inst.paymentType || ''] || '-',
                     INSTALLMENT_TYPE_LABELS[inst.installmentType || ''] || '-',

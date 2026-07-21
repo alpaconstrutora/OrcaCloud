@@ -446,7 +446,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     if (!formData.id && !formData.organization_id) {
                         setFormData(prev => ({ ...prev, organization_id: o[0].id }));
                     }
-                    const brokerData = await brokerService.listProfiles(organizationId);
+                    // A org da PRÓPRIA negociação (initialData, não a state formData —
+                    // esta closure roda antes do efeito que reseta formData a partir de
+                    // initialData aplicar, então formData.organization_id ainda estaria
+                    // com o valor da negociação anterior) vem primeiro; organizationId
+                    // (seletor global do app) só serve de fallback para negociação nova.
+                    // Sem isso, abrir uma negociação de uma org diferente da selecionada
+                    // no topo (ou com "Todas as organizações" ativo) filtrava o corretor
+                    // certo pra fora da lista, e o campo Corretor aparecia vazio mesmo
+                    // com broker_id preenchido.
+                    const brokerData = await brokerService.listProfiles(initialData?.organization_id || organizationId);
                     setBrokers(brokerData);
                 }
             } catch (err) {

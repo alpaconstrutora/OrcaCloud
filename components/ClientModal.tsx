@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Mail, Phone, FileText, MapPin } from 'lucide-react';
+import { User, Mail, Phone, FileText, MapPin, Building2 } from 'lucide-react';
 import { Client } from '../types';
 import CityStateSelect from './CityStateSelect';
 import Button from './ui/Button';
@@ -18,6 +18,7 @@ interface ClientModalProps {
 
 const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, initialData }) => {
     const activeOrganizationId = useStore(state => state.activeOrganizationId);
+    const organizations = useStore(state => state.organizations);
     const [categories, setCategories] = React.useState<ClientCategory[]>([]);
     const [states, setStates] = React.useState<MasterState[]>([]);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -36,7 +37,8 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
         neighborhood: '',
         city: '',
         state: '',
-        category: 'Vendas'
+        category: 'Vendas',
+        organization_id: activeOrganizationId ?? undefined
     });
 
     const update = (patch: Partial<Client>) => {
@@ -64,10 +66,11 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                 neighborhood: '',
                 city: '',
                 state: '',
-                category: 'Vendas'
+                category: 'Vendas',
+                organization_id: activeOrganizationId ?? undefined
             });
         }
-    }, [initialData, isOpen]);
+    }, [initialData, isOpen, activeOrganizationId]);
 
     React.useEffect(() => {
         if (!isOpen) return;
@@ -75,16 +78,21 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
     }, [isOpen]);
 
     React.useEffect(() => {
-        if (!isOpen || !activeOrganizationId) return;
-        clientCategoryService.list(activeOrganizationId)
+        if (!isOpen) return;
+        // As categorias dependem da organização ESCOLHIDA no formulário (campo abaixo),
+        // não da organização ativa no seletor global — do contrário, com o seletor
+        // global em "Todas as organizações" (activeOrganizationId null) essa lista
+        // nunca era carregada e o campo "Tipo de Cliente" ficava vazio.
+        clientCategoryService.list(formData.organization_id || undefined)
             .then(data => {
                 setCategories(data);
-                if (!initialData && data.length > 0 && !formData.category) {
-                    setFormData(prev => ({ ...prev, category: prev.category || data[0].name }));
-                }
+                setFormData(prev => {
+                    if (prev.category && data.some(c => c.name === prev.category)) return prev;
+                    return { ...prev, category: data[0]?.name };
+                });
             })
             .catch(console.error);
-    }, [isOpen, activeOrganizationId, initialData]);
+    }, [isOpen, formData.organization_id]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -134,6 +142,23 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSubmit, in
                                 onChange={(e) => update({ name: e.target.value })}
                                 autoFocus
                             />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Organização</label>
+                        <div className="relative">
+                            <Building2 className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                            <select
+                                className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                value={formData.organization_id ?? ''}
+                                onChange={(e) => update({ organization_id: e.target.value || undefined })}
+                            >
+                                <option value="">Todas as Organizações</option>
+                                {organizations.map(org => (
+                                    <option key={org.id} value={org.id}>{org.name}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 

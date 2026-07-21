@@ -27,13 +27,21 @@ export interface PaymentInstallment {
     discountType?: 'VALUE' | 'PERCENT';
     discountAmount?: number;
     /**
-     * Tipo de pagamento e observação livre por parcela (Gerenciar Negociação →
+     * Forma de pagamento e observação livre por parcela (Gerenciar Negociação →
      * Forma de Pagamento → Plano de Pagamento). `notes` é distinto de
      * `description` (que é o rótulo autogerado "Parcela i/N") — é anotação
      * livre do usuário, ex: "cheque pré-datado do sócio".
      */
     paymentType?: 'PIX' | 'TED' | 'DOC' | 'DINHEIRO' | 'CHEQUE' | 'PERMUTA';
     notes?: string;
+    /**
+     * Classificação da parcela dentro do cronograma (Plano de Pagamento) — o QUE
+     * ela representa (Sinal, mensal, trimestral...), distinto de `paymentType`
+     * (COMO ela é paga: PIX/TED/...). `handleGenerateInstallments` marca as
+     * parcelas geradas como 'MENSAL' por padrão (o gerador espaça 1 mês entre
+     * elas); o usuário pode reclassificar linha a linha.
+     */
+    installmentType?: 'SINAL' | 'MENSAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL' | 'AVULSA';
 }
 
 export interface FinancialTransaction {

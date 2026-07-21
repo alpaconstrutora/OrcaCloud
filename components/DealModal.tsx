@@ -143,6 +143,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         payment_method: 'CASH',
         installments: 1,
         down_payment: 0,
+        down_payment_installment_type: 'SINAL',
         contract_number: '',
         organization_id: organizationId,
         broker_commission_pct: 0,
@@ -162,6 +163,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 payment_method: 'CASH',
                 installments: 1,
                 down_payment: 0,
+                down_payment_installment_type: 'SINAL',
                 contract_number: '',
                 organization_id: organizationId,
                 broker_commission_pct: 0,
@@ -438,7 +440,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     dueDate: date.toISOString().split('T')[0],
                     value,
                     status: 'PENDING',
-                    dealId: prev.id
+                    dealId: prev.id,
+                    // O gerador espaça 1 mês entre parcelas — default coerente com
+                    // isso; o usuário reclassifica linha a linha se o caso for outro
+                    // (trimestral, avulsa etc.).
+                    installmentType: 'MENSAL'
                 });
             }
             return { ...prev, custom_installments: newInstallments };
@@ -1119,11 +1125,24 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     </div>
 
                                                     <select
+                                                        value={formData.down_payment_installment_type ?? 'SINAL'}
+                                                        onChange={(e) => setFormData({ ...formData, down_payment_installment_type: (e.target.value || undefined) as PaymentInstallment['installmentType'] })}
+                                                        className="w-[150px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-white outline-none cursor-pointer"
+                                                    >
+                                                        <option value="SINAL">Sinal</option>
+                                                        <option value="MENSAL">Parcelas mensais</option>
+                                                        <option value="TRIMESTRAL">Parcelas trimestrais</option>
+                                                        <option value="SEMESTRAL">Parcelas semestrais</option>
+                                                        <option value="ANUAL">Parcelas anuais</option>
+                                                        <option value="AVULSA">Parcelas avulsas</option>
+                                                    </select>
+
+                                                    <select
                                                         value={formData.down_payment_payment_type ?? ''}
                                                         onChange={(e) => setFormData({ ...formData, down_payment_payment_type: (e.target.value || undefined) as PaymentInstallment['paymentType'] })}
                                                         className="w-[150px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-white outline-none cursor-pointer"
                                                     >
-                                                        <option value="">Tipo Pagto.</option>
+                                                        <option value="">Forma Pagto.</option>
                                                         <option value="PIX">PIX</option>
                                                         <option value="TED">TED</option>
                                                         <option value="DOC">DOC</option>
@@ -1202,6 +1221,24 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     )}
 
                                                     <select
+                                                        value={inst.installmentType ?? ''}
+                                                        onChange={(e) => {
+                                                            const newInsts = [...formData.custom_installments!];
+                                                            newInsts[index] = { ...inst, installmentType: (e.target.value || undefined) as PaymentInstallment['installmentType'] };
+                                                            setFormData({ ...formData, custom_installments: newInsts });
+                                                        }}
+                                                        className="w-[150px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-gray-50 outline-none cursor-pointer"
+                                                    >
+                                                        <option value="">Tipo Pagto.</option>
+                                                        <option value="SINAL">Sinal</option>
+                                                        <option value="MENSAL">Parcelas mensais</option>
+                                                        <option value="TRIMESTRAL">Parcelas trimestrais</option>
+                                                        <option value="SEMESTRAL">Parcelas semestrais</option>
+                                                        <option value="ANUAL">Parcelas anuais</option>
+                                                        <option value="AVULSA">Parcelas avulsas</option>
+                                                    </select>
+
+                                                    <select
                                                         value={inst.paymentType ?? ''}
                                                         onChange={(e) => {
                                                             const newInsts = [...formData.custom_installments!];
@@ -1210,7 +1247,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         }}
                                                         className="w-[130px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-gray-50 outline-none cursor-pointer"
                                                     >
-                                                        <option value="">Tipo Pagto.</option>
+                                                        <option value="">Forma Pagto.</option>
                                                         <option value="PIX">PIX</option>
                                                         <option value="TED">TED</option>
                                                         <option value="DOC">DOC</option>

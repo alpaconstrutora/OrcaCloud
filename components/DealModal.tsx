@@ -371,25 +371,55 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             }
         }
 
+        // Gerar Parcelas SEMPRE recria um cronograma limpo com exatamente N parcelas
+        // IGUAIS (rateio de Valor − Entrada pelo Nº de Parcelas). Se já existe um
+        // plano montado, confirma antes de substituir.
+        //
+        // O comportamento antigo "reter índices que já existiam" gerava dois bugs:
+        //   (1) valores misturados — ao mudar o Nº de Parcelas e regerar, as parcelas
+        //       antigas ficavam com o valor do count antigo e as novas com o novo;
+        //   (2) parcelas "somem" — a parcela retida mantinha o id antigo; com
+        //       custom_installments agora sendo coluna real, ids repetidos/legados
+        //       viravam key duplicada no React e as linhas colapsavam (pedia 5, via 3).
+        // Recriar do zero com ids novos e únicos resolve ambos.
+        const existing = formData.custom_installments || [];
+        if (existing.length > 0) {
+            const ok = await confirm({
+                title: 'Recriar plano de pagamento?',
+                message: (
+                    <>
+                        Isto substitui as {existing.length} parcela(s) atuais por {Math.max(1, Math.floor(Number(formData.installments) || 1))} parcela(s)
+                        de valor igual, recalculadas a partir do Valor e da Entrada.
+                        <p className="mt-2 text-xs text-gray-500">
+                            Ajustes manuais (descontos, valores editados, tipo de pagamento e observações)
+                            das parcelas atuais serão perdidos.
+                        </p>
+                    </>
+                ),
+                variant: 'warning',
+                confirmLabel: 'Recriar parcelas',
+            });
+            if (!ok) return;
+        }
+
         setFormData(prev => {
             const downPayment = prev.down_payment || 0;
-            const count = prev.installments || 1;
+            const count = Math.max(1, Math.floor(Number(prev.installments) || 1));
             const baseValue = prev.value || 0;
-            const instValue = Math.max(0, baseValue - downPayment) / count;
-            // Retém as parcelas já existentes (data, valor, desconto — tudo que o
-            // usuário já ajustou manualmente): clicar em "Gerar Parcelas" de novo
-            // (ex: só pra ajustar o Nº Parcelas) não pode apagar edições e descontos
-            // já feitos. Só ajusta o TAMANHO do cronograma; índices que já existiam
-            // continuam intactos, só o rótulo "Parcela i/count" é recalculado.
-            const existing = prev.custom_installments || [];
+            const total = Math.max(0, baseValue - downPayment);
+            // Rateio igual com centavos exatos: cada parcela recebe `per`, e a ÚLTIMA
+            // absorve o resto do arredondamento para a soma bater exatamente com
+            // `total` (e, somada à Entrada, com o Valor do fechamento).
+            const per = Math.floor((total / count) * 100) / 100;
 
+            const stamp = Date.now();
             const newInstallments: PaymentInstallment[] = [];
+            let allocated = 0;
             for (let i = 1; i <= count; i++) {
-                const prior = existing[i - 1];
-                if (prior) {
-                    newInstallments.push({ ...prior, description: `Parcela ${i}/${count}` });
-                    continue;
-                }
+                const isLast = i === count;
+                const value = isLast ? Number((total - allocated).toFixed(2)) : per;
+                allocated = Number((allocated + per).toFixed(2));
+
                 let date: Date;
                 if (prev.payment_due_date) {
                     // Data do 1º Pagamento ancora a parcela 1; as demais somam 1 mês
@@ -403,16 +433,19 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     date.setMonth(date.getMonth() + i);
                 }
                 newInstallments.push({
-                    id: `temp-${Date.now()}-${i}`,
+                    id: `temp-${stamp}-${i}`,
                     description: `Parcela ${i}/${count}`,
                     dueDate: date.toISOString().split('T')[0],
-                    value: instValue,
+                    value,
                     status: 'PENDING',
                     dealId: prev.id
                 });
             }
             return { ...prev, custom_installments: newInstallments };
         });
+        // Cronograma novo → limpa qualquer seleção de parcela (os ids mudaram).
+        setSelectedInstallmentIds(new Set());
+        setLastCheckedInstallmentIndex(null);
     };
 
     /**

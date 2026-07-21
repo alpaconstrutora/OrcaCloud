@@ -5,7 +5,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { KpiCard } from '../ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
-import { empreendimentoService } from '../../services/empreendimentoService';
+import { empreendimentoService, EmpreendimentoOrphanSummary } from '../../services/empreendimentoService';
 import { Empreendimento, EmpreendimentoStatus } from '../../types';
 import EmpreendimentoForm from './EmpreendimentoForm';
 import EmpreendimentoDetail from './EmpreendimentoDetail';
@@ -71,6 +71,19 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   }, [orgIdParam]);
 
   React.useEffect(() => { load(); }, [load]);
+
+  // Aviso proativo de vínculos órfãos (unidade apontando para um imóvel do
+  // Comercial que não existe mais) — sem isto, só se descobre abrindo a aba
+  // Espelho de Vendas/Locações de cada empreendimento um a um (foi assim que
+  // o caso Garden Cambuhy — 41 unidades órfãs — passou despercebido).
+  const [orphanSummary, setOrphanSummary] = React.useState<EmpreendimentoOrphanSummary[]>([]);
+  React.useEffect(() => {
+    let active = true;
+    empreendimentoService.getOrphanLinksSummary(orgIdParam)
+      .then(summary => { if (active) setOrphanSummary(summary); })
+      .catch(err => console.error('[EmpreendimentoModule] erro ao varrer vínculos órfãos:', err));
+    return () => { active = false; };
+  }, [orgIdParam, items]);
 
   const handleSaved = async (saved: Empreendimento) => {
     setIsFormOpen(false);
@@ -178,6 +191,34 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
         <h1 className="text-3xl font-black text-gray-900 tracking-tight">Empreendimentos</h1>
         <p className="text-gray-400 text-sm mt-1.5 font-medium">Incorporações e desenvolvimentos imobiliários da organização.</p>
       </div>
+
+      {/* Aviso proativo de vínculos órfãos — mesmo padrão visual do banner usado em
+          EspelhoVendasTab/EspelhoLocacoesTab (bg-rose-50 + AlertCircle), só que aqui
+          cobre TODOS os empreendimentos de uma vez em vez de um só. */}
+      {orphanSummary.length > 0 && (
+        <div className="bg-rose-50 border border-rose-200 rounded-[10px] px-4 py-3 space-y-2">
+          <div className="flex items-center gap-2 text-rose-700">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span className="text-sm font-medium">
+              {orphanSummary.length} empreendimento{orphanSummary.length !== 1 ? 's' : ''} com unidades vinculadas a imóveis que não existem mais no Comercial:
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2 pl-6">
+            {orphanSummary.map(o => (
+              <button
+                key={o.empreendimentoId}
+                onClick={() => {
+                  const item = items.find(i => i.id === o.empreendimentoId);
+                  if (item) setSelected(item);
+                }}
+                className="text-xs font-bold text-rose-700 bg-white border border-rose-200 rounded-[6px] px-2.5 py-1 hover:bg-rose-100 transition-colors"
+              >
+                {o.empreendimentoName} ({o.commercialOrphans + o.rentalOrphans})
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* KPIs — mesmo nível de importância (contagem × contagem × soma financeira), grade simétrica.
           mb-3: ritmo de 12px até a toolbar acoplada (UI UX tabela.md §6). */}

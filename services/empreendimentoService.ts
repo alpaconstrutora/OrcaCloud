@@ -32,6 +32,15 @@ export interface CommercialDivergenceSummary {
     orphans: number;
 }
 
+// Um empreendimento com unidade(s) apontando para commercial_property_id/
+// rental_property_id que não existe(m) mais — ver getOrphanLinksSummary.
+export interface EmpreendimentoOrphanSummary {
+    empreendimentoId: string;
+    empreendimentoName: string;
+    commercialOrphans: number;
+    rentalOrphans: number;
+}
+
 // Resultado de Empreendimento → Comercial (publicação em lote).
 export interface CommercialPublishReport {
     published: number;
@@ -646,6 +655,82 @@ export const empreendimentoService = {
             if (u.rental_price != null && Math.abs((snap.price ?? 0) - u.rental_price) > 0.01) summary.priceDiverge++;
         }
         return summary;
+    },
+
+    /**
+     * Varre TODOS os empreendimentos de uma vez (de uma org, ou de todas se
+     * organizationId for omitido) procurando unidades com commercial_property_id/
+     * rental_property_id órfão — mesma detecção usada em getCommercialDivergenceSummary/
+     * getRentalDivergenceSummary e no Espelho de Vendas/Locações (EspelhoVendasTab/
+     * EspelhoLocacoesTab), só que em lote para todos de uma vez. Existe para
+     * alimentar um aviso proativo no dashboard do módulo — hoje um vínculo órfão só
+     * aparece quando alguém abre a aba Espelho daquele empreendimento específico
+     * (ver incidente Garden Cambuhy: 41 unidades ficaram órfãs sem nenhum aviso até
+     * alguém entrar na aba certa).
+     *
+     * Agrupa os ids de property por organização do PRÓPRIO empreendimento (não a
+     * `organizationId` do parâmetro) antes de checar existência em commercial_properties
+     * — necessário para o caso "todas as organizações", onde a varredura cobre mais
+     * de uma org ao mesmo tempo e cada uma só pode ver suas próprias properties.
+     */
+    async getOrphanLinksSummary(organizationId?: string): Promise<EmpreendimentoOrphanSummary[]> {
+        const emps = await this.list(organizationId);
+        if (emps.length === 0) return [];
+        const empById = new Map(emps.map(e => [e.id, e]));
+
+        const { data: towers } = await supabase
+            .from('empreendimento_towers')
+            .select('id, empreendimento_id')
+            .in('empreendimento_id', emps.map(e => e.id));
+        if (!towers || towers.length === 0) return [];
+        const towerToEmpId = new Map(towers.map(t => [t.id, t.empreendimento_id]));
+
+        const { data: units } = await supabase
+            .from('empreendimento_units')
+            .select('tower_id, commercial_property_id, rental_property_id')
+            .in('tower_id', towers.map(t => t.id));
+        if (!units || units.length === 0) return [];
+
+        const idsByOrg = new Map<string, Set<string>>();
+        for (const u of units) {
+            const empId = towerToEmpId.get(u.tower_id);
+            const orgId = empId ? empById.get(empId)?.organization_id : undefined;
+            if (!orgId) continue;
+            let set = idsByOrg.get(orgId);
+            if (!set) { set = new Set(); idsByOrg.set(orgId, set); }
+            if (u.commercial_property_id) set.add(u.commercial_property_id);
+            if (u.rental_property_id) set.add(u.rental_property_id);
+        }
+
+        const existingIds = new Set<string>();
+        for (const [orgId, ids] of idsByOrg) {
+            if (ids.size === 0) continue;
+            const { data } = await supabase
+                .from('commercial_properties')
+                .select('id')
+                .eq('organization_id', orgId)
+                .in('id', Array.from(ids));
+            (data || []).forEach((p: any) => existingIds.add(p.id));
+        }
+
+        const countByEmpId = new Map<string, { commercialOrphans: number; rentalOrphans: number }>();
+        for (const u of units) {
+            const empId = towerToEmpId.get(u.tower_id);
+            if (!empId) continue;
+            const counts = countByEmpId.get(empId) || { commercialOrphans: 0, rentalOrphans: 0 };
+            if (u.commercial_property_id && !existingIds.has(u.commercial_property_id)) counts.commercialOrphans++;
+            if (u.rental_property_id && !existingIds.has(u.rental_property_id)) counts.rentalOrphans++;
+            countByEmpId.set(empId, counts);
+        }
+
+        const result: EmpreendimentoOrphanSummary[] = [];
+        for (const [empId, counts] of countByEmpId) {
+            if (counts.commercialOrphans === 0 && counts.rentalOrphans === 0) continue;
+            const emp = empById.get(empId);
+            if (!emp) continue;
+            result.push({ empreendimentoId: empId, empreendimentoName: emp.name, ...counts });
+        }
+        return result;
     },
 
     /**

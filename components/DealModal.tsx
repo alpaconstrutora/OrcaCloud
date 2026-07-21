@@ -222,6 +222,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [showGenerateModal, setShowGenerateModal] = useState(false);
     const [generateInstallmentType, setGenerateInstallmentType] = useState<NonNullable<PaymentInstallment['installmentType']>>('MENSAL');
     const [generateInstallmentCount, setGenerateInstallmentCount] = useState(1);
+    const [generateFirstDueDate, setGenerateFirstDueDate] = useState('');
     const [showAddAdhocModal, setShowAddAdhocModal] = useState(false);
     const [adhocPosition, setAdhocPosition] = useState(1);
     const [adhocDate, setAdhocDate] = useState('');
@@ -397,16 +398,20 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
     /** Abre o modal de Gerar Parcelas — a checagem de parcelas pagas e a geração
      * de fato acontecem só ao confirmar (handleConfirmGenerateInstallments),
-     * depois de escolher o Tipo de Pagamento (periodicidade) e o Nº de Parcelas
-     * lá dentro. Nº de Parcelas parte do valor já salvo em formData.installments
-     * (campo que só é atualizado de fato ao confirmar a geração). */
+     * depois de escolher o Tipo de Pagamento (periodicidade), o Nº de Parcelas
+     * e a Data do 1º Pagamento lá dentro. Nº de Parcelas parte do valor já
+     * salvo em formData.installments; a data sugerida é a mesma que o campo
+     * "Data do 1º Pagamento" da aba já usa hoje (ou a Data Efetiva, se aquele
+     * campo nunca foi preenchido) — ambos só são atualizados de fato ao
+     * confirmar a geração. */
     const handleOpenGenerateModal = () => {
         setGenerateInstallmentType('MENSAL');
         setGenerateInstallmentCount(Math.max(1, Math.floor(Number(formData.installments) || 1)));
+        setGenerateFirstDueDate(formData.payment_due_date || formData.date || new Date().toISOString().split('T')[0]);
         setShowGenerateModal(true);
     };
 
-    const handleConfirmGenerateInstallments = async (installmentType: NonNullable<PaymentInstallment['installmentType']>, installmentCount: number) => {
+    const handleConfirmGenerateInstallments = async (installmentType: NonNullable<PaymentInstallment['installmentType']>, installmentCount: number, firstDueDate: string) => {
         if (formData.id) {
             setLoading(true);
             try {
@@ -476,19 +481,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 const isLast = i === count;
                 const value = isLast ? Number((per + remainder).toFixed(2)) : per;
 
-                let date: Date;
-                if (prev.payment_due_date) {
-                    // Data do 1º Pagamento ancora a parcela 1; as demais somam o
-                    // intervalo do Tipo de Pagamento a partir dela (não mais da Data
-                    // Efetiva). Meio-dia UTC evita o bug de fuso que retrocede 1 dia
-                    // em UTC-3.
-                    date = new Date(prev.payment_due_date + 'T12:00:00Z');
-                    date.setUTCMonth(date.getUTCMonth() + (i - 1) * intervalMonths);
-                } else {
-                    // Sem Data do 1º Pagamento definida: comportamento antigo.
-                    date = new Date(prev.date || Date.now());
-                    date.setMonth(date.getMonth() + i * intervalMonths);
-                }
+                // firstDueDate ancora a parcela 1 (vem do campo "Data do 1º Pagamento"
+                // do modal — sugerida pelo sistema, mas o usuário pode ter trocado); as
+                // demais somam o intervalo do Tipo de Pagamento a partir dela. Meio-dia
+                // UTC evita o bug de fuso que retrocede 1 dia em UTC-3.
+                const date = new Date(firstDueDate + 'T12:00:00Z');
+                date.setUTCMonth(date.getUTCMonth() + (i - 1) * intervalMonths);
                 newBlock.push({
                     id: `temp-${stamp}-${i}`,
                     description: `Parcela ${i}/${count}`,
@@ -502,6 +500,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             return {
                 ...prev,
                 installments: totalRegularCount,
+                payment_due_date: firstDueDate,
                 custom_installments: [...recalculatedOtherBlocks, ...newBlock, ...adhoc]
             };
         });
@@ -1890,16 +1889,30 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             </div>
 
                             <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
-                                <div>
-                                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Nº de Parcelas</label>
-                                    <input
-                                        type="number"
-                                        min="1" max="120"
-                                        value={generateInstallmentCount}
-                                        onChange={(e) => setGenerateInstallmentCount(parseInt(e.target.value) || 1)}
-                                        className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
-                                    />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Nº de Parcelas</label>
+                                        <input
+                                            type="number"
+                                            min="1" max="120"
+                                            value={generateInstallmentCount}
+                                            onChange={(e) => setGenerateInstallmentCount(parseInt(e.target.value) || 1)}
+                                            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Data do 1º Pagamento</label>
+                                        <input
+                                            type="date"
+                                            value={generateFirstDueDate}
+                                            onChange={(e) => setGenerateFirstDueDate(e.target.value)}
+                                            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
+                                        />
+                                    </div>
                                 </div>
+                                <p className="text-xs text-gray-400 -mt-2">
+                                    Data sugerida pelo sistema (o mesmo campo "Data do 1º Pagamento" da aba) — troque se quiser ancorar a série em outra data.
+                                </p>
 
                                 <div>
                                     <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Tipo de Pagamento</label>
@@ -1948,7 +1961,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 <button
                                     type="button"
                                     disabled={loading}
-                                    onClick={() => handleConfirmGenerateInstallments(generateInstallmentType, generateInstallmentCount)}
+                                    onClick={() => handleConfirmGenerateInstallments(generateInstallmentType, generateInstallmentCount, generateFirstDueDate)}
                                     className={`px-5 py-2.5 rounded-xl text-sm font-black text-white transition-colors ${loading ? 'bg-gray-300 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
                                 >
                                     {loading ? 'Verificando...' : 'Gerar Parcelas'}

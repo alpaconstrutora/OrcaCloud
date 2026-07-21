@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil } from 'lucide-react';
+import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile } from '../types';
 import { commercialService } from '../services/commercialService';
 import { clientService } from '../services/clientService';
@@ -17,6 +17,30 @@ import CreditAnalysisPanel from './CreditAnalysisPanel';
 import { useConfirm } from './ui/confirm';
 
 type TabId = 'cliente' | 'unidade' | 'pagamento' | 'partes' | 'contrato';
+
+/** Rótulos do Tipo de Pagamento (Plano de Pagamento) — mesma lista usada na
+ * Entrada, em cada parcela e no modal de Gerar Parcelas. */
+const INSTALLMENT_TYPE_LABELS: Record<NonNullable<PaymentInstallment['installmentType']>, string> = {
+    SINAL: 'Sinal',
+    MENSAL: 'Parcelas mensais',
+    TRIMESTRAL: 'Parcelas trimestrais',
+    SEMESTRAL: 'Parcelas semestrais',
+    ANUAL: 'Parcelas anuais',
+    AVULSA: 'Parcelas avulsas',
+};
+
+/** Intervalo (em meses) entre parcelas geradas para cada Tipo de Pagamento.
+ * SINAL e AVULSA não têm periodicidade própria (não geram série no modal de
+ * Gerar Parcelas — Sinal é a Entrada; Avulsa é criada uma a uma) — caem no
+ * fallback de 1 mês só por segurança de tipo, sem uso prático real. */
+const INSTALLMENT_TYPE_INTERVAL_MONTHS: Record<NonNullable<PaymentInstallment['installmentType']>, number> = {
+    SINAL: 1,
+    MENSAL: 1,
+    TRIMESTRAL: 3,
+    SEMESTRAL: 6,
+    ANUAL: 12,
+    AVULSA: 1,
+};
 
 /**
  * Edição em lote de desconto (Plano de Pagamento → seleção múltipla).
@@ -188,6 +212,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [selectedInstallmentIds, setSelectedInstallmentIds] = useState<Set<string>>(new Set());
     const [lastCheckedInstallmentIndex, setLastCheckedInstallmentIndex] = useState<number | null>(null);
     const [showInstallmentLoteModal, setShowInstallmentLoteModal] = useState(false);
+    const [showGenerateModal, setShowGenerateModal] = useState(false);
+    const [generateInstallmentType, setGenerateInstallmentType] = useState<NonNullable<PaymentInstallment['installmentType']>>('MENSAL');
 
     const handleInstallmentRowCheck = (id: string, index: number, checked: boolean, shiftKey: boolean) => {
         const rows = formData.custom_installments || [];
@@ -355,7 +381,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
     const recalcCommission = (value: number, pct: number) => +(value * (pct / 100)).toFixed(2);
 
-    const handleGenerateInstallments = async () => {
+    /** Abre o modal de Gerar Parcelas — a checagem de parcelas pagas e a geração
+     * de fato acontecem só ao confirmar (handleConfirmGenerateInstallments),
+     * depois de escolher o Tipo de Pagamento (periodicidade) lá dentro. */
+    const handleOpenGenerateModal = () => {
+        setGenerateInstallmentType('MENSAL');
+        setShowGenerateModal(true);
+    };
+
+    const handleConfirmGenerateInstallments = async (installmentType: NonNullable<PaymentInstallment['installmentType']>) => {
         if (formData.id) {
             setLoading(true);
             try {
@@ -374,37 +408,22 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         }
 
         // Gerar Parcelas SEMPRE recria um cronograma limpo com exatamente N parcelas
-        // IGUAIS (rateio de Valor − Entrada pelo Nº de Parcelas). Se já existe um
-        // plano montado, confirma antes de substituir.
+        // IGUAIS (rateio de Valor − Entrada pelo Nº de Parcelas), espaçadas pelo
+        // intervalo do Tipo de Pagamento escolhido no modal (mensal/trimestral/
+        // semestral/anual). Parcelas Avulsas não entram aqui — são criadas uma a
+        // uma via handleAddAdhocInstallment, sem mexer nas demais.
         //
-        // O comportamento antigo "reter índices que já existiam" gerava dois bugs:
-        //   (1) valores misturados — ao mudar o Nº de Parcelas e regerar, as parcelas
-        //       antigas ficavam com o valor do count antigo e as novas com o novo;
-        //   (2) parcelas "somem" — a parcela retida mantinha o id antigo; com
-        //       custom_installments agora sendo coluna real, ids repetidos/legados
-        //       viravam key duplicada no React e as linhas colapsavam (pedia 5, via 3).
-        // Recriar do zero com ids novos e únicos resolve ambos.
-        const existing = formData.custom_installments || [];
-        if (existing.length > 0) {
-            const ok = await confirm({
-                title: 'Recriar plano de pagamento?',
-                message: (
-                    <>
-                        Isto substitui as {existing.length} parcela(s) atuais por {Math.max(1, Math.floor(Number(formData.installments) || 1))} parcela(s)
-                        de valor igual, recalculadas a partir do Valor e da Entrada.
-                        <p className="mt-2 text-xs text-gray-500">
-                            Ajustes manuais (descontos, valores editados, tipo de pagamento e observações)
-                            das parcelas atuais serão perdidos.
-                        </p>
-                    </>
-                ),
-                variant: 'warning',
-                confirmLabel: 'Recriar parcelas',
-            });
-            if (!ok) return;
-        }
+        // Recriar do zero (em vez de reter parcelas por índice, como era antes)
+        // evita dois bugs já corrigidos: (1) valores misturados ao mudar o Nº de
+        // Parcelas e regerar; (2) ids antigos retidos colidindo como key
+        // duplicada no React (pedia 5, via 3).
+        const intervalMonths = INSTALLMENT_TYPE_INTERVAL_MONTHS[installmentType] ?? 1;
 
         setFormData(prev => {
+            // Parcelas Avulsas (adicionadas via handleAddAdhocInstallment) são fora
+            // da série regular — regenerar o cronograma não pode apagá-las.
+            const keptAdhoc = (prev.custom_installments || []).filter(i => i.installmentType === 'AVULSA');
+
             const downPayment = prev.down_payment || 0;
             const count = Math.max(1, Math.floor(Number(prev.installments) || 1));
             const baseValue = prev.value || 0;
@@ -424,15 +443,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                 let date: Date;
                 if (prev.payment_due_date) {
-                    // Data do 1º Pagamento ancora a parcela 1; as demais somam 1 mês
-                    // cada a partir dela (não mais da Data Efetiva). Meio-dia UTC
-                    // evita o bug de fuso que retrocede 1 dia em UTC-3.
+                    // Data do 1º Pagamento ancora a parcela 1; as demais somam o
+                    // intervalo do Tipo de Pagamento a partir dela (não mais da Data
+                    // Efetiva). Meio-dia UTC evita o bug de fuso que retrocede 1 dia
+                    // em UTC-3.
                     date = new Date(prev.payment_due_date + 'T12:00:00Z');
-                    date.setUTCMonth(date.getUTCMonth() + (i - 1));
+                    date.setUTCMonth(date.getUTCMonth() + (i - 1) * intervalMonths);
                 } else {
                     // Sem Data do 1º Pagamento definida: comportamento antigo.
                     date = new Date(prev.date || Date.now());
-                    date.setMonth(date.getMonth() + i);
+                    date.setMonth(date.getMonth() + i * intervalMonths);
                 }
                 newInstallments.push({
                     id: `temp-${stamp}-${i}`,
@@ -441,17 +461,48 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     value,
                     status: 'PENDING',
                     dealId: prev.id,
-                    // O gerador espaça 1 mês entre parcelas — default coerente com
-                    // isso; o usuário reclassifica linha a linha se o caso for outro
-                    // (trimestral, avulsa etc.).
-                    installmentType: 'MENSAL'
+                    installmentType
                 });
             }
-            return { ...prev, custom_installments: newInstallments };
+            return { ...prev, custom_installments: [...newInstallments, ...keptAdhoc] };
         });
         // Cronograma novo → limpa qualquer seleção de parcela (os ids mudaram).
         setSelectedInstallmentIds(new Set());
         setLastCheckedInstallmentIndex(null);
+        setShowGenerateModal(false);
+    };
+
+    /** Acrescenta UMA parcela avulsa ao cronograma, sem tocar nas demais — para o
+     * caso de um pagamento fora da série gerada (ex: reforço pontual combinado
+     * à parte). Data/valor ficam com o padrão e o usuário ajusta inline, igual
+     * às demais linhas do Plano de Pagamento. */
+    const handleAddAdhocInstallment = () => {
+        setFormData(prev => {
+            const existing = prev.custom_installments || [];
+            const newInst: PaymentInstallment = {
+                id: `temp-${Date.now()}-avulsa`,
+                description: 'Parcela Avulsa',
+                dueDate: new Date().toISOString().split('T')[0],
+                value: 0,
+                status: 'PENDING',
+                dealId: prev.id,
+                installmentType: 'AVULSA'
+            };
+            return { ...prev, custom_installments: [...existing, newInst] };
+        });
+    };
+
+    const handleRemoveInstallment = (id: string) => {
+        setFormData(prev => ({
+            ...prev,
+            custom_installments: (prev.custom_installments || []).filter(i => i.id !== id)
+        }));
+        setSelectedInstallmentIds(prev => {
+            if (!prev.has(id)) return prev;
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
     };
 
     /**
@@ -1087,14 +1138,24 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             )}
                                             <h4 className="text-xs font-black text-purple-600 uppercase tracking-widest">Plano de Pagamento</h4>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={handleGenerateInstallments}
-                                            disabled={loading}
-                                            className={`px-4 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${loading ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-purple-100 text-purple-700 hover:bg-purple-200 active:scale-95'}`}
-                                        >
-                                            {loading ? 'Verificando...' : 'Gerar Parcelas'}
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={handleAddAdhocInstallment}
+                                                className="flex items-center gap-1.5 px-4 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all bg-white text-purple-600 border border-purple-200 hover:bg-purple-50 active:scale-95"
+                                            >
+                                                <Plus className="w-3.5 h-3.5" />
+                                                Parcela Avulsa
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleOpenGenerateModal}
+                                                disabled={loading}
+                                                className={`px-4 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${loading ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-purple-100 text-purple-700 hover:bg-purple-200 active:scale-95'}`}
+                                            >
+                                                {loading ? 'Verificando...' : 'Gerar Parcelas'}
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {((formData.down_payment || 0) > 0 || (formData.custom_installments?.length ?? 0) > 0) && (
@@ -1129,12 +1190,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         onChange={(e) => setFormData({ ...formData, down_payment_installment_type: (e.target.value || undefined) as PaymentInstallment['installmentType'] })}
                                                         className="w-[150px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-white outline-none cursor-pointer"
                                                     >
-                                                        <option value="SINAL">Sinal</option>
-                                                        <option value="MENSAL">Parcelas mensais</option>
-                                                        <option value="TRIMESTRAL">Parcelas trimestrais</option>
-                                                        <option value="SEMESTRAL">Parcelas semestrais</option>
-                                                        <option value="ANUAL">Parcelas anuais</option>
-                                                        <option value="AVULSA">Parcelas avulsas</option>
+                                                        {Object.entries(INSTALLMENT_TYPE_LABELS).map(([value, label]) => (
+                                                            <option key={value} value={value}>{label}</option>
+                                                        ))}
                                                     </select>
 
                                                     <select
@@ -1230,12 +1288,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         className="w-[150px] shrink-0 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2 py-2 bg-gray-50 outline-none cursor-pointer"
                                                     >
                                                         <option value="">Tipo Pagto.</option>
-                                                        <option value="SINAL">Sinal</option>
-                                                        <option value="MENSAL">Parcelas mensais</option>
-                                                        <option value="TRIMESTRAL">Parcelas trimestrais</option>
-                                                        <option value="SEMESTRAL">Parcelas semestrais</option>
-                                                        <option value="ANUAL">Parcelas anuais</option>
-                                                        <option value="AVULSA">Parcelas avulsas</option>
+                                                        {Object.entries(INSTALLMENT_TYPE_LABELS).map(([value, label]) => (
+                                                            <option key={value} value={value}>{label}</option>
+                                                        ))}
                                                     </select>
 
                                                     <select
@@ -1275,6 +1330,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                             </span>
                                                         )}
                                                     </div>
+
+                                                    <button
+                                                        type="button"
+                                                        title="Remover parcela"
+                                                        onClick={() => handleRemoveInstallment(inst.id)}
+                                                        className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
                                                 </div>
                                             ))}
                                             {(() => {
@@ -1685,6 +1749,71 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         onClose={() => setShowInstallmentLoteModal(false)}
                         onSave={applyBulkInstallmentDiscount}
                     />
+                )}
+
+                {showGenerateModal && (
+                    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+                            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900">Gerar Parcelas</h2>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                        {Math.max(1, Math.floor(Number(formData.installments) || 1))} parcela(s) de valor igual, a partir do Valor e da Entrada.
+                                    </p>
+                                </div>
+                                <button onClick={() => setShowGenerateModal(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Tipo de Pagamento</label>
+                                    <select
+                                        value={generateInstallmentType}
+                                        onChange={(e) => setGenerateInstallmentType(e.target.value as NonNullable<PaymentInstallment['installmentType']>)}
+                                        className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
+                                    >
+                                        {Object.entries(INSTALLMENT_TYPE_LABELS).map(([value, label]) => (
+                                            <option key={value} value={value}>{label}</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        Define o espaçamento entre as parcelas geradas (ex: trimestral = 1 a cada 3 meses).
+                                    </p>
+                                </div>
+
+                                {(() => {
+                                    const regularCount = (formData.custom_installments || []).filter(i => i.installmentType !== 'AVULSA').length;
+                                    return regularCount > 0 && (
+                                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800">
+                                            Isto substitui as {regularCount} parcela(s) atuais. Ajustes manuais (descontos,
+                                            valores editados, tipo/forma de pagamento e observações) serão perdidos. Parcelas
+                                            Avulsas adicionadas à parte não são afetadas.
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowGenerateModal(false)}
+                                    className="px-4 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={loading}
+                                    onClick={() => handleConfirmGenerateInstallments(generateInstallmentType)}
+                                    className={`px-5 py-2.5 rounded-xl text-sm font-black text-white transition-colors ${loading ? 'bg-gray-300 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
+                                >
+                                    {loading ? 'Verificando...' : 'Gerar Parcelas'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>

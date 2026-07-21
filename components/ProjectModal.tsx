@@ -1728,25 +1728,50 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           </p>
                         </div>
                       )}
-                      {/* Organization selector — full-width row when multiple orgs exist */}
-                      {organizations.length > 1 && (
-                        <div className="col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
-                            <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-                            Organização
-                          </label>
-                          <select
-                            className="w-full rounded-lg border border-indigo-200 bg-indigo-50 p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-indigo-800 text-sm"
-                            value={selectedOrgId || ''}
-                            onChange={(e) => setSelectedOrgId(e.target.value || undefined)}
-                          >
-                            <option value="">Sem vínculo</option>
-                            {organizations.map(org => (
-                              <option key={org.id} value={org.id}>{org.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
+                      {/* Organização — quando há Obra/Orçamento vinculado (linkedProjectId),
+                          a organização é HERDADA do pai (regra de cascata: tudo abaixo do
+                          Empreendimento fica na mesma org). O seletor fica travado, exibindo
+                          a org herdada, para o usuário não escolher outra e criar mistura. */}
+                      {(() => {
+                        const linkedParent = projects.find(p => p.id === linkedProjectId);
+                        const inheritedOrgId = linkedParent?.organization_id || linkedParent?.settings?.organizationId;
+                        const inheritedOrgName = organizations.find(o => o.id === inheritedOrgId)?.name;
+                        if (linkedProjectId && inheritedOrgId) {
+                          return (
+                            <div className="col-span-2">
+                              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                                <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+                                Organização
+                              </label>
+                              <div className="w-full rounded-lg border border-indigo-200 bg-indigo-50/60 p-2.5 font-medium text-indigo-800 text-sm flex items-center justify-between">
+                                <span>{inheritedOrgName || 'Herdada da obra vinculada'}</span>
+                                <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wide">herdada da obra</span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        if (organizations.length > 1) {
+                          return (
+                            <div className="col-span-2">
+                              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                                <Building2 className="w-3.5 h-3.5 text-indigo-500" />
+                                Organização
+                              </label>
+                              <select
+                                className="w-full rounded-lg border border-indigo-200 bg-indigo-50 p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-indigo-800 text-sm"
+                                value={selectedOrgId || ''}
+                                onChange={(e) => setSelectedOrgId(e.target.value || undefined)}
+                              >
+                                <option value="">Sem vínculo</option>
+                                {organizations.map(org => (
+                                  <option key={org.id} value={org.id}>{org.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
 
                       {/* Empresa executora — visível quando há empresas do grupo */}
                       {companies.length > 0 && (

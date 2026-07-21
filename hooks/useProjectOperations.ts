@@ -70,10 +70,28 @@ export const useProjectOperations = ({
         organizationId: data.organizationId || organizations[0]?.id,
         ...(data.code ? { code: data.code } : {})
       } as ProjectSettings;
+
+      // Organização em cascata: um projeto vinculado a outro (Orçamento/Planejamento
+      // → Obra, via settings.linkedProjectId) SEMPRE herda a organização do pai —
+      // que remonta ao Empreendimento. Sem isto, o org vinha do seletor do modal
+      // (default = primeira org) e podia divergir da Obra, criando "mistura". Vale
+      // para create e edit, orçamento e planejamento. A trava do banco é a rede de
+      // segurança. `linkedProject` é reusado logo abaixo para o template de WBS.
+      let linkedProject: Awaited<ReturnType<typeof projectService.loadProject>> = null;
+      if (newSettings.linkedProjectId) {
+        try {
+          linkedProject = await projectService.loadProject(newSettings.linkedProjectId);
+          const parentOrg = (linkedProject as any)?.organization_id
+            || (linkedProject?.settings as any)?.organizationId;
+          if (parentOrg) newSettings.organizationId = parentOrg;
+        } catch {
+          // Non-critical: se não carregar o pai, mantém a org já resolvida.
+        }
+      }
+
       // Auto-populate WBS from tipo_obra template when creating an ORCAMENTO linked to an OBRA
       if (projectModalMode === 'create' && newSettings.classification === 'ORCAMENTO' && newSettings.linkedProjectId) {
         try {
-          const linkedProject = await projectService.loadProject(newSettings.linkedProjectId);
           const tipoObra = (linkedProject?.settings as any)?.tipoObra as TipoObra | undefined;
           if (tipoObra) {
             const tmpl = await projectTypeTemplatesService.getTemplate(tipoObra, newSettings.organizationId);

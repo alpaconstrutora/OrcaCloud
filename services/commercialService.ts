@@ -60,6 +60,26 @@ export const commercialService = {
             property.block = property.block.toUpperCase();
         }
 
+        // Organização em cascata: uma unidade (com parent_id = edifício) SEMPRE
+        // herda a organização do edifício-pai — que por sua vez veio do
+        // Empreendimento. O edifício é a raiz local do estoque; deixar a unidade
+        // pegar a org do seletor global do app é o que criava "mistura" (unidade
+        // numa org, edifício/empreendimento em outra) — origem do bug do Corretor
+        // vazio. Só deriva quando parent_id vem no payload (criação/movimentação de
+        // unidade); update de campo solto não mexe em org. A trava do banco
+        // (trigger BEFORE INSERT/UPDATE) é a rede de segurança contra qualquer
+        // caminho que escape daqui.
+        if (property.parent_id) {
+            const { data: parent } = await supabase
+                .from('commercial_properties')
+                .select('organization_id')
+                .eq('id', property.parent_id)
+                .single();
+            if (parent?.organization_id) {
+                property = { ...property, organization_id: parent.organization_id };
+            }
+        }
+
         if (property.id) {
             const { data, error } = await supabase
                 .from('commercial_properties')

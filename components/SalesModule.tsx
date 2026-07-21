@@ -190,7 +190,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
 
     const handleSaveProperty = async (data: PropertyFormData) => {
-        if (!organizationId && !data.organization_id) {
+        if (!effectiveOrganizationId && !data.organization_id) {
             notify('Erro: Nenhuma organização ativa selecionada. Por favor, selecione uma empresa no menu lateral.', 'error');
             return;
         }
@@ -198,10 +198,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         try {
             const { _bulkConfig, ...propertyData } = data;
 
-            // Garantir que a organização está vinculada ao criar novo imóvel
+            // Organização em cascata: usa effectiveOrganizationId (que prioriza a org
+            // do edifício aberto sobre o seletor do topo). Se o imóvel for uma unidade
+            // (tem parent_id), o commercialService.saveProperty ainda sobrescreve com a
+            // org do prédio-pai — esta linha só é autoritativa para edifício/avulso.
             const propertyToSave: Partial<Property> & { organization_id?: string } = {
                 ...propertyData,
-                organization_id: propertyData.organization_id || organizationId
+                organization_id: propertyData.organization_id || effectiveOrganizationId
             };
 
             if (propertyToSave.type === 'BUILDING' && _bulkConfig && _bulkConfig.matrix) {
@@ -444,7 +447,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     };
 
     const handleSaveBroker = async (data: Partial<BrokerProfile>) => {
-        const targetOrgId = organizationId || currentBuilding?.organization_id;
+        // Mesma cascata: corretor cadastrado dentro de um edifício fica na org DELE
+        // (do Empreendimento), não na do seletor do topo.
+        const targetOrgId = currentBuilding?.organization_id || organizationId;
 
         if (!targetOrgId) {
             notify('Erro: Selecione uma organização ou um empreendimento para cadastrar o corretor.', 'error');
@@ -558,9 +563,14 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
     const currentBuilding = selectedBuildingId ? properties.find(p => String(p.id).toLowerCase() === String(selectedBuildingId).toLowerCase()) : null;
 
-    // Com "Todas as organizações" o organizationId vem undefined; a org do
-    // empreendimento aberto é a fonte de verdade nesse caso.
-    const effectiveOrganizationId = organizationId || currentBuilding?.organization_id;
+    // Organização em cascata: quando há um edifício aberto (currentBuilding), a
+    // org DELE é a fonte de verdade — ele veio do Empreendimento, e tudo abaixo
+    // (unidades, negociações, corretores) deve ficar na mesma org. O seletor do
+    // topo do app é só o fallback quando não há edifício em contexto (ex: inventário
+    // geral, ou "Todas as organizações" com organizationId undefined). Antes a
+    // precedência era invertida (seletor > edifício), o que deixava criar unidade
+    // numa org e edifício em outra — origem da mistura entre as duas "Alpa".
+    const effectiveOrganizationId = currentBuilding?.organization_id || organizationId;
 
     const buildingDeals = selectedBuildingId ? deals.filter(deal => {
         const property = properties.find(p => p.id === deal.property_id);

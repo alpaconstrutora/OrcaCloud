@@ -49,34 +49,66 @@ const INSTALLMENT_TYPE_INTERVAL_MONTHS: Record<NonNullable<PaymentInstallment['i
 const GENERATOR_INSTALLMENT_TYPES: NonNullable<PaymentInstallment['installmentType']>[] =
     ['MENSAL', 'TRIMESTRAL', 'SEMESTRAL', 'ANUAL'];
 
+/** Sentinela de "não alterar este campo" nos selects de edição em lote —
+ * distinto de `''` (que, para Forma de Pagamento, significa limpar o campo).
+ * Sem isso não dá pra abrir o modal só pra mudar o Tipo de Pagamento sem
+ * também ser forçado a decidir algo pra Forma de Pagamento (e vice-versa). */
+const BULK_KEEP = '__KEEP__';
+
 /**
- * Edição em lote de desconto (Plano de Pagamento → seleção múltipla).
- * Modelo: `components/BankTxEdicaoEmLoteModal.tsx` (Financeiro → Extrato
- * Bancário) — modal dedicado em vez de controles inline na barra de seleção
- * (guia §10). Aplica o MESMO tipo+valor de desconto a todas as parcelas
- * selecionadas; cada uma recalcula seu valor final a partir da própria base
- * (originalValue ?? value), então parcelas com valores diferentes recebem
- * o desconto proporcional (%) ou o mesmo abatimento fixo (R$) corretamente.
+ * Edição em lote (Plano de Pagamento → seleção múltipla): desconto, Forma de
+ * Pagamento e Tipo de Pagamento. Modelo: `components/BankTxEdicaoEmLoteModal.tsx`
+ * (Financeiro → Extrato Bancário) — modal dedicado em vez de controles inline
+ * na barra de seleção (guia §10).
+ *
+ * Desconto sempre é aplicado (setando ou removendo — igual sempre foi); Forma
+ * de Pagamento e Tipo de Pagamento só são aplicados se o usuário efetivamente
+ * escolher algo diferente de "Não alterar" (`BULK_KEEP`), já que nem toda
+ * edição em lote quer mexer nesses dois campos.
+ *
+ * Desconto recalcula o valor final de cada parcela a partir da própria base
+ * (originalValue ?? value), então parcelas com valores diferentes recebem o
+ * desconto proporcional (%) ou o mesmo abatimento fixo (R$) corretamente.
  */
 interface InstallmentLoteModalProps {
     installments: PaymentInstallment[]; // selecionadas
     onClose: () => void;
-    onSave: (discountType: 'VALUE' | 'PERCENT' | null, discountAmount: number) => void;
+    onSave: (patch: {
+        discountType: 'VALUE' | 'PERCENT' | null;
+        discountAmount: number;
+        paymentType?: PaymentInstallment['paymentType'];
+        installmentType?: PaymentInstallment['installmentType'];
+    }) => void;
 }
 const InstallmentLoteDiscountModal: React.FC<InstallmentLoteModalProps> = ({ installments, onClose, onSave }) => {
     const [discountType, setDiscountType] = useState<'VALUE' | 'PERCENT' | ''>('');
     const [discountAmount, setDiscountAmount] = useState('');
+    const [bulkPaymentType, setBulkPaymentType] = useState(BULK_KEEP);
+    const [bulkInstallmentType, setBulkInstallmentType] = useState(BULK_KEEP);
 
     const totalBruto = installments.reduce((s, i) => s + (i.originalValue ?? i.value), 0);
     const amount = parseFloat(discountAmount.replace(',', '.')) || 0;
     const canSave = discountType === '' /* limpar desconto */ || amount > 0;
+
+    const handleSave = () => {
+        onSave({
+            discountType: discountType || null,
+            discountAmount: amount,
+            paymentType: bulkPaymentType === BULK_KEEP
+                ? undefined
+                : ((bulkPaymentType || undefined) as PaymentInstallment['paymentType']),
+            installmentType: bulkInstallmentType === BULK_KEEP
+                ? undefined
+                : ((bulkInstallmentType || undefined) as PaymentInstallment['installmentType']),
+        });
+    };
 
     return (
         <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
                 <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
                     <div>
-                        <h2 className="text-lg font-black text-gray-900">Editar Desconto em Lote</h2>
+                        <h2 className="text-lg font-black text-gray-900">Editar Parcelas em Lote</h2>
                         <p className="text-xs text-gray-400 mt-0.5">
                             {installments.length} parcela{installments.length !== 1 ? 's' : ''} selecionada{installments.length !== 1 ? 's' : ''} · {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBruto)} (bruto)
                         </p>
@@ -117,6 +149,39 @@ const InstallmentLoteDiscountModal: React.FC<InstallmentLoteModalProps> = ({ ins
                         </div>
                     )}
 
+                    <div>
+                        <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Forma de Pagamento</label>
+                        <select
+                            value={bulkPaymentType}
+                            onChange={(e) => setBulkPaymentType(e.target.value)}
+                            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
+                        >
+                            <option value={BULK_KEEP}>Não alterar</option>
+                            <option value="">Nenhuma (limpar de todas)</option>
+                            <option value="PIX">PIX</option>
+                            <option value="TED">TED</option>
+                            <option value="DOC">DOC</option>
+                            <option value="DINHEIRO">Dinheiro</option>
+                            <option value="CHEQUE">Cheque</option>
+                            <option value="PERMUTA">Permuta</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Tipo de Pagamento</label>
+                        <select
+                            value={bulkInstallmentType}
+                            onChange={(e) => setBulkInstallmentType(e.target.value)}
+                            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
+                        >
+                            <option value={BULK_KEEP}>Não alterar</option>
+                            <option value="">Nenhum (limpar de todas)</option>
+                            {Object.entries(INSTALLMENT_TYPE_LABELS).map(([value, label]) => (
+                                <option key={value} value={value}>{label}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div className="bg-gray-50 rounded-2xl border border-gray-100 divide-y divide-gray-100 max-h-40 overflow-y-auto">
                         {installments.map(i => (
                             <div key={i.id} className="flex items-center justify-between px-4 py-2 text-xs">
@@ -137,7 +202,7 @@ const InstallmentLoteDiscountModal: React.FC<InstallmentLoteModalProps> = ({ ins
                         Cancelar
                     </button>
                     <button
-                        onClick={() => onSave(discountType || null, amount)}
+                        onClick={handleSave}
                         disabled={!canSave}
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-purple-600 text-white font-bold text-button uppercase tracking-widest hover:bg-purple-700 transition-colors disabled:opacity-40 shadow-lg shadow-purple-900/20"
                     >
@@ -246,24 +311,35 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         }
     };
 
-    /** Aplica o mesmo tipo+valor de desconto a todas as parcelas selecionadas — cada
-     * uma recalcula seu próprio valor final a partir da sua base (originalValue ?? value). */
-    const applyBulkInstallmentDiscount = (discountType: 'VALUE' | 'PERCENT' | null, discountAmount: number) => {
+    /** Aplica em lote às parcelas selecionadas: desconto (sempre — setando ou
+     * removendo, igual sempre foi, recalculando o valor final de cada uma a
+     * partir da própria base) e, se informados, Forma de Pagamento e/ou Tipo
+     * de Pagamento (só quando o usuário escolheu algo além de "Não alterar"
+     * no modal — `undefined` aqui significa "não mexe nesse campo"). */
+    const applyBulkInstallmentEdit = (patch: {
+        discountType: 'VALUE' | 'PERCENT' | null;
+        discountAmount: number;
+        paymentType?: PaymentInstallment['paymentType'];
+        installmentType?: PaymentInstallment['installmentType'];
+    }) => {
         setFormData(prev => {
             const insts = (prev.custom_installments || []).map(inst => {
                 if (!selectedInstallmentIds.has(inst.id)) return inst;
                 const base = inst.originalValue ?? inst.value;
                 let finalValue = base;
-                if (discountType === 'PERCENT') finalValue = base - (base * discountAmount / 100);
-                else if (discountType === 'VALUE') finalValue = base - discountAmount;
+                if (patch.discountType === 'PERCENT') finalValue = base - (base * patch.discountAmount / 100);
+                else if (patch.discountType === 'VALUE') finalValue = base - patch.discountAmount;
                 finalValue = Math.max(0, finalValue);
-                return {
+                const updated: PaymentInstallment = {
                     ...inst,
                     originalValue: base,
-                    discountType: discountType ?? undefined,
-                    discountAmount: discountType ? discountAmount : undefined,
-                    value: Number(finalValue.toFixed(2))
+                    discountType: patch.discountType ?? undefined,
+                    discountAmount: patch.discountType ? patch.discountAmount : undefined,
+                    value: Number(finalValue.toFixed(2)),
                 };
+                if (patch.paymentType !== undefined) updated.paymentType = patch.paymentType || undefined;
+                if (patch.installmentType !== undefined) updated.installmentType = patch.installmentType || undefined;
+                return updated;
             });
             return { ...prev, custom_installments: insts };
         });
@@ -1874,7 +1950,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             className="flex items-center gap-2 px-3 py-2 bg-white text-blue-700 rounded-xl font-bold text-button uppercase tracking-widest hover:bg-blue-50 transition-colors"
                         >
                             <Pencil className="w-3.5 h-3.5" />
-                            Editar Desconto
+                            Editar em Lote
                         </button>
                         <button
                             onClick={() => setSelectedInstallmentIds(new Set())}
@@ -1890,7 +1966,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     <InstallmentLoteDiscountModal
                         installments={(formData.custom_installments || []).filter(i => selectedInstallmentIds.has(i.id))}
                         onClose={() => setShowInstallmentLoteModal(false)}
-                        onSave={applyBulkInstallmentDiscount}
+                        onSave={applyBulkInstallmentEdit}
                     />
                 )}
 

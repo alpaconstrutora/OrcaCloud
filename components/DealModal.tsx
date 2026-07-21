@@ -497,11 +497,32 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     installmentType
                 });
             }
+            // Recompõe preservando a ORDEM ORIGINAL do array — Avulsas e outros
+            // tipos ficam exatamente na posição em que já estavam (uma Avulsa
+            // inserida como "Parcela 1" continua sendo a 1ª depois de gerar outro
+            // tipo, não pula pro fim da lista). O bloco do tipo-alvo entra no
+            // lugar onde já aparecia (1ª ocorrência antiga); se o tipo nunca
+            // existiu, é anexado ao fim, por falta de posição de referência.
+            const recalculatedOtherById = new Map(recalculatedOtherBlocks.map(inst => [inst.id, inst]));
+            let targetInserted = false;
+            const merged: PaymentInstallment[] = [];
+            for (const inst of allExisting) {
+                if (inst.installmentType === installmentType) {
+                    if (!targetInserted) {
+                        merged.push(...newBlock);
+                        targetInserted = true;
+                    }
+                    continue; // demais ocorrências antigas do tipo-alvo já foram substituídas
+                }
+                merged.push(recalculatedOtherById.get(inst.id) ?? inst);
+            }
+            if (!targetInserted) merged.push(...newBlock);
+
             return {
                 ...prev,
                 installments: totalRegularCount,
                 payment_due_date: firstDueDate,
-                custom_installments: [...recalculatedOtherBlocks, ...newBlock, ...adhoc]
+                custom_installments: merged
             };
         });
         // Cronograma novo → limpa qualquer seleção de parcela (os ids mudaram).

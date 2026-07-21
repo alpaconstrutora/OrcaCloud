@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus } from 'lucide-react';
+import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile } from '../types';
 import { commercialService } from '../services/commercialService';
 import { clientService } from '../services/clientService';
@@ -226,6 +226,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [adhocPosition, setAdhocPosition] = useState(1);
     const [adhocDate, setAdhocDate] = useState('');
     const [adhocValue, setAdhocValue] = useState('');
+    const [showRecalcModal, setShowRecalcModal] = useState(false);
+    const [recalcSelectedTypes, setRecalcSelectedTypes] = useState<Set<NonNullable<PaymentInstallment['installmentType']>>>(new Set());
 
     const handleInstallmentRowCheck = (id: string, index: number, checked: boolean, shiftKey: boolean) => {
         const rows = formData.custom_installments || [];
@@ -544,6 +546,74 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             return { ...prev, custom_installments: updated };
         });
         setShowAddAdhocModal(false);
+    };
+
+    /** Abre o modal de Recalcular com nenhum tipo pré-selecionado — o usuário
+     * escolhe quais tipos absorvem o ajuste (ex: acrescentou uma Avulsa depois
+     * do plano já fechado e agora a soma passou do Valor Total; recalcular as
+     * mensais redistribui a diferença só nelas, sem tocar Entrada/Avulsas/
+     * outros tipos). */
+    const handleOpenRecalcModal = () => {
+        setRecalcSelectedTypes(new Set());
+        setShowRecalcModal(true);
+    };
+
+    const handleToggleRecalcType = (type: NonNullable<PaymentInstallment['installmentType']>) => {
+        setRecalcSelectedTypes(prev => {
+            const next = new Set(prev);
+            if (next.has(type)) next.delete(type); else next.add(type);
+            return next;
+        });
+    };
+
+    /**
+     * Recalcula só o VALOR das parcelas dos tipos marcados — não mexe em data,
+     * id, forma de pagamento ou observação, e não cria/remove parcela nenhuma
+     * (isso é papel de Gerar Parcelas / Parcela Avulsa). Entrada, Avulsas e
+     * qualquer tipo NÃO marcado são tratados como fixos: seus valores atuais
+     * saem do Valor Total antes de dividir o restante pelas parcelas marcadas.
+     *
+     *   pool = Valor Total − Entrada − (Avulsas + tipos não marcados)
+     *   valor por parcela marcada = pool / nº de parcelas marcadas
+     *
+     * A última parcela marcada absorve o resto do arredondamento, igual ao
+     * rateio de Gerar Parcelas — e reaplica desconto já existente na parcela,
+     * igual a updateInstallmentDiscount.
+     */
+    const handleConfirmRecalc = () => {
+        if (recalcSelectedTypes.size === 0) return;
+        setFormData(prev => {
+            const existing = prev.custom_installments || [];
+            const selectedRows = existing.filter(i => i.installmentType && recalcSelectedTypes.has(i.installmentType));
+            if (selectedRows.length === 0) return prev;
+
+            const fixedTotal = existing
+                .filter(i => !(i.installmentType && recalcSelectedTypes.has(i.installmentType)))
+                .reduce((sum, i) => sum + (i.originalValue ?? i.value), 0);
+
+            const downPayment = prev.down_payment || 0;
+            const baseValue = prev.value || 0;
+            const pool = Math.max(0, baseValue - downPayment - fixedTotal);
+            const per = Math.floor((pool / selectedRows.length) * 100) / 100;
+            const remainder = Number((pool - per * selectedRows.length).toFixed(2));
+
+            let seen = 0;
+            const updated = existing.map(inst => {
+                if (!inst.installmentType || !recalcSelectedTypes.has(inst.installmentType)) return inst;
+                seen++;
+                const isLast = seen === selectedRows.length;
+                const base = isLast ? Number((per + remainder).toFixed(2)) : per;
+                const discType = inst.discountType;
+                const discAmt = inst.discountAmount || 0;
+                let finalValue = base;
+                if (discType === 'PERCENT') finalValue = base - (base * discAmt / 100);
+                else if (discType === 'VALUE') finalValue = base - discAmt;
+                return { ...inst, originalValue: base, value: Number(Math.max(0, finalValue).toFixed(2)) };
+            });
+
+            return { ...prev, custom_installments: updated };
+        });
+        setShowRecalcModal(false);
     };
 
     const handleRemoveInstallment = (id: string) => {
@@ -1182,6 +1252,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             <h4 className="text-xs font-black text-purple-600 uppercase tracking-widest">Plano de Pagamento</h4>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                            {(formData.custom_installments || []).some(i => i.installmentType && i.installmentType !== 'AVULSA') && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleOpenRecalcModal}
+                                                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all bg-white text-amber-600 border border-amber-200 hover:bg-amber-50 active:scale-95"
+                                                >
+                                                    <RefreshCw className="w-3.5 h-3.5" />
+                                                    Recalcular
+                                                </button>
+                                            )}
                                             <button
                                                 type="button"
                                                 onClick={handleOpenAddAdhocModal}
@@ -1952,6 +2032,98 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     className="px-5 py-2.5 rounded-xl text-sm font-black text-white bg-purple-600 hover:bg-purple-700 transition-colors"
                                 >
                                     Criar Parcela
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {showRecalcModal && (
+                    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+                            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900">Recalcular Parcelas</h2>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                        Escolha quais tipos absorvem o ajuste — os demais (Entrada, Avulsas e tipos não marcados) ficam com o valor atual.
+                                    </p>
+                                </div>
+                                <button onClick={() => setShowRecalcModal(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+                                {(() => {
+                                    const existing = formData.custom_installments || [];
+                                    const typeGroups = new Map<NonNullable<PaymentInstallment['installmentType']>, { count: number; total: number }>();
+                                    existing.forEach(i => {
+                                        if (!i.installmentType || i.installmentType === 'AVULSA') return;
+                                        const g = typeGroups.get(i.installmentType) || { count: 0, total: 0 };
+                                        g.count++;
+                                        g.total += (i.originalValue ?? i.value);
+                                        typeGroups.set(i.installmentType, g);
+                                    });
+
+                                    return (
+                                        <div className="space-y-2">
+                                            {Array.from(typeGroups.entries()).map(([type, g]) => (
+                                                <label key={type} className="flex items-center justify-between gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors">
+                                                    <span className="flex items-center gap-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={recalcSelectedTypes.has(type)}
+                                                            onChange={() => handleToggleRecalcType(type)}
+                                                            className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                                                        />
+                                                        <span className="text-sm font-bold text-gray-700">{INSTALLMENT_TYPE_LABELS[type]}</span>
+                                                        <span className="text-xs text-gray-400">({g.count} parcela{g.count !== 1 ? 's' : ''})</span>
+                                                    </span>
+                                                    <span className="text-xs font-semibold text-gray-500">
+                                                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(g.total)}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
+
+                                {recalcSelectedTypes.size > 0 && (() => {
+                                    const existing = formData.custom_installments || [];
+                                    const selectedRows = existing.filter(i => i.installmentType && recalcSelectedTypes.has(i.installmentType));
+                                    const fixedTotal = existing
+                                        .filter(i => !(i.installmentType && recalcSelectedTypes.has(i.installmentType)))
+                                        .reduce((sum, i) => sum + (i.originalValue ?? i.value), 0);
+                                    const downPayment = formData.down_payment || 0;
+                                    const baseValue = formData.value || 0;
+                                    const pool = Math.max(0, baseValue - downPayment - fixedTotal);
+                                    const per = selectedRows.length > 0 ? Math.floor((pool / selectedRows.length) * 100) / 100 : 0;
+                                    const fmt = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+
+                                    return (
+                                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800 space-y-1">
+                                            <p>Valor da negociação {fmt(baseValue)} − Entrada {fmt(downPayment)} − Avulsas/outros tipos {fmt(fixedTotal)} = {fmt(pool)}</p>
+                                            <p className="font-black">{fmt(pool)} ÷ {selectedRows.length} parcela{selectedRows.length !== 1 ? 's' : ''} = {fmt(per)} cada</p>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowRecalcModal(false)}
+                                    className="px-4 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={recalcSelectedTypes.size === 0}
+                                    onClick={handleConfirmRecalc}
+                                    className={`px-5 py-2.5 rounded-xl text-sm font-black text-white transition-colors ${recalcSelectedTypes.size === 0 ? 'bg-gray-300 cursor-not-allowed' : 'bg-amber-600 hover:bg-amber-700'}`}
+                                >
+                                    Recalcular
                                 </button>
                             </div>
                         </div>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, Save, Search, AlertCircle, Download, FileDown, Upload, Hash } from 'lucide-react';
+import { Plus, Trash2, Save, Search, AlertCircle, Download, FileDown, Upload, Hash, ChevronRight, ChevronDown, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import Button from './ui/Button';
@@ -179,6 +179,61 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
             return a.code.localeCompare(b.code, 'pt-BR', { numeric: true });
         }), [items, searchTerm, advancedFilters.rules, advancedFilterFields, tableColumns.sortColumn, tableColumns.sortDirection]);
 
+    const isFiltering = searchTerm.trim() !== '' || advancedFilters.rules.length > 0;
+
+    // Hierarquia (accordion): pai é o código com o último segmento removido
+    // ("1.1.2" -> pai "1.1"). Agrupa por CÓDIGO (não por id), então se houver
+    // registros duplicados no banco (mesmo código repetido), os filhos
+    // aparecerão sob cada duplicata — sintoma visível do problema de dados,
+    // não bug da árvore em si.
+    const childrenByParentCode = useMemo(() => {
+        const map = new Map<string, RegistryItem[]>();
+        for (const item of filteredItems) {
+            if (!item.code) continue;
+            const segments = item.code.split('.');
+            if (segments.length <= 1) continue;
+            const parentCode = segments.slice(0, -1).join('.');
+            const arr = map.get(parentCode);
+            if (arr) arr.push(item); else map.set(parentCode, [item]);
+        }
+        return map;
+    }, [filteredItems]);
+
+    const knownCodes = useMemo(() => new Set(filteredItems.map(i => i.code).filter(Boolean) as string[]), [filteredItems]);
+
+    const isRoot = (item: RegistryItem) => {
+        if (!item.code) return true;
+        const segments = item.code.split('.');
+        if (segments.length <= 1) return true;
+        return !knownCodes.has(segments.slice(0, -1).join('.'));
+    };
+
+    const rootItems = useMemo(() => filteredItems.filter(isRoot), [filteredItems, knownCodes]);
+
+    const parentIds = useMemo(
+        () => filteredItems.filter(i => i.code && (childrenByParentCode.get(i.code)?.length ?? 0) > 0).map(i => i.id),
+        [filteredItems, childrenByParentCode]
+    );
+
+    const [expandedIds, setExpandedIds] = usePersistedState<Record<string, boolean>>(`financialRegistryTree:${title}`, {});
+    const toggleExpand = (id: string) => setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }));
+    const allExpanded = parentIds.length > 0 && parentIds.every(id => expandedIds[id]);
+    const toggleExpandAll = () => setExpandedIds(allExpanded ? {} : Object.fromEntries(parentIds.map(id => [id, true])));
+
+    interface VisibleRow { item: RegistryItem; hasChildren: boolean; }
+
+    const visibleRows = useMemo<VisibleRow[]>(() => {
+        if (isFiltering) return filteredItems.map(item => ({ item, hasChildren: false }));
+        const rows: VisibleRow[] = [];
+        const walk = (item: RegistryItem) => {
+            const children = item.code ? childrenByParentCode.get(item.code) || [] : [];
+            rows.push({ item, hasChildren: children.length > 0 });
+            if (children.length > 0 && expandedIds[item.id]) children.forEach(walk);
+        };
+        rootItems.forEach(walk);
+        return rows;
+    }, [isFiltering, filteredItems, rootItems, childrenByParentCode, expandedIds]);
+
     const getLevel = (code?: string) => code ? code.split('.').length : 0;
 
     // Hierarquia visual via cor/tamanho, nunca font-bold/font-black (ui_ux_standard_guide.md §7) —
@@ -261,6 +316,16 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                 )}
                             </div>
                         </>
+                    )}
+
+                    {parentIds.length > 0 && !isFiltering && (
+                        <button
+                            onClick={toggleExpandAll}
+                            title={allExpanded ? 'Recolher tudo' : 'Expandir tudo'}
+                            className="h-9 w-9 flex items-center justify-center text-gray-500 bg-white border border-gray-200 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95 shrink-0"
+                        >
+                            {allExpanded ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
+                        </button>
                     )}
 
                     <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
@@ -418,7 +483,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
-                            {filteredItems.length === 0 ? (
+                            {visibleRows.length === 0 ? (
                                 <tr>
                                     <td colSpan={4} className="px-6 py-12 text-center">
                                         <AlertCircle className="w-12 h-12 text-gray-200 mx-auto mb-4" />
@@ -427,8 +492,9 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                     </td>
                                 </tr>
                             ) : (
-                                filteredItems.map(item => {
+                                visibleRows.map(({ item, hasChildren }) => {
                                     const lvl = showCode ? getLevelStyle(item.code) : getLevelStyle(undefined);
+                                    const expanded = !!expandedIds[item.id];
                                     return (
                                     <tr key={item.id} className={`group hover:bg-blue-50/50 transition-colors ${lvl.rowCls}`}>
                                         {showCode && tableColumns.visibleColumns.includes('code') && (
@@ -440,10 +506,18 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                         )}
                                         {tableColumns.visibleColumns.includes('name') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                <div className="flex items-center gap-2.5" style={{ paddingLeft: showCode ? lvl.indent : 0 }}>
-                                                    <div className="w-6 h-6 rounded-lg bg-gray-50 flex items-center justify-center border border-transparent group-hover:border-blue-100 transition-all shrink-0">
-                                                        <Icon className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-500 transition-colors" />
-                                                    </div>
+                                                <div className="flex items-center gap-2 min-w-0" style={{ paddingLeft: showCode ? lvl.indent : 0 }}>
+                                                    {hasChildren ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => toggleExpand(item.id)}
+                                                            className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700 shrink-0 rounded transition-colors"
+                                                        >
+                                                            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="w-5 h-5 shrink-0" />
+                                                    )}
                                                     <span className={`truncate ${lvl.nameCls}`}>{item.name}</span>
                                                 </div>
                                             </td>

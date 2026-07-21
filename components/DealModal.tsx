@@ -222,6 +222,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [showGenerateModal, setShowGenerateModal] = useState(false);
     const [generateInstallmentType, setGenerateInstallmentType] = useState<NonNullable<PaymentInstallment['installmentType']>>('MENSAL');
     const [generateInstallmentCount, setGenerateInstallmentCount] = useState(1);
+    const [showAddAdhocModal, setShowAddAdhocModal] = useState(false);
+    const [adhocPosition, setAdhocPosition] = useState(1);
+    const [adhocDate, setAdhocDate] = useState('');
+    const [adhocValue, setAdhocValue] = useState('');
 
     const handleInstallmentRowCheck = (id: string, index: number, checked: boolean, shiftKey: boolean) => {
         const rows = formData.custom_installments || [];
@@ -423,7 +427,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         // BLOCO do Tipo escolhido (cria se não existir, resubstitui se já
         // existir) — os demais tipos ficam intactos. Parcelas Avulsas nunca
         // entram no rateio nem são tocadas aqui (são criadas uma a uma via
-        // handleAddAdhocInstallment).
+        // handleConfirmAddAdhocInstallment).
         //
         // Como todos os blocos regulares (mensal+trimestral+semestral+anual)
         // dividem o MESMO total (Valor − Entrada − Avulsas), acrescentar ou
@@ -505,24 +509,41 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         setShowGenerateModal(false);
     };
 
-    /** Acrescenta UMA parcela avulsa ao cronograma, sem tocar nas demais — para o
-     * caso de um pagamento fora da série gerada (ex: reforço pontual combinado
-     * à parte). Data/valor ficam com o padrão e o usuário ajusta inline, igual
-     * às demais linhas do Plano de Pagamento. */
-    const handleAddAdhocInstallment = () => {
+    /** Abre o modal de Parcela Avulsa. Posição parte do fim da lista atual
+     * (append) por padrão — o usuário escolhe outra posição (ex: "Parcela 1")
+     * se quiser inserir a avulsa no meio do cronograma. */
+    const handleOpenAddAdhocModal = () => {
+        const total = formData.custom_installments?.length ?? 0;
+        setAdhocPosition(total + 1);
+        setAdhocDate(new Date().toISOString().split('T')[0]);
+        setAdhocValue('');
+        setShowAddAdhocModal(true);
+    };
+
+    /** Insere UMA parcela avulsa na posição escolhida — as demais parcelas não
+     * têm data/valor/desconto alterados, só a posição delas na lista muda (o
+     * número "Parcela N" exibido em cada linha é a própria posição no array,
+     * então "atualiza" sozinho ao inserir no meio). Fora da série regular:
+     * não entra no rateio do gerador nem é afetada por ele (handleConfirm
+     * GenerateInstallments filtra installmentType==='AVULSA' à parte). */
+    const handleConfirmAddAdhocInstallment = () => {
         setFormData(prev => {
             const existing = prev.custom_installments || [];
+            const insertAt = Math.min(Math.max(1, Math.floor(adhocPosition) || 1), existing.length + 1) - 1;
             const newInst: PaymentInstallment = {
                 id: `temp-${Date.now()}-avulsa`,
-                description: 'Parcela Avulsa',
-                dueDate: new Date().toISOString().split('T')[0],
-                value: 0,
+                description: `Parcela Avulsa (posição ${insertAt + 1})`,
+                dueDate: adhocDate || new Date().toISOString().split('T')[0],
+                value: parseFloat(adhocValue) || 0,
                 status: 'PENDING',
                 dealId: prev.id,
                 installmentType: 'AVULSA'
             };
-            return { ...prev, custom_installments: [...existing, newInst] };
+            const updated = [...existing];
+            updated.splice(insertAt, 0, newInst);
+            return { ...prev, custom_installments: updated };
         });
+        setShowAddAdhocModal(false);
     };
 
     const handleRemoveInstallment = (id: string) => {
@@ -1163,7 +1184,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <div className="flex items-center gap-2">
                                             <button
                                                 type="button"
-                                                onClick={handleAddAdhocInstallment}
+                                                onClick={handleOpenAddAdhocModal}
                                                 className="flex items-center gap-1.5 px-4 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all bg-white text-purple-600 border border-purple-200 hover:bg-purple-50 active:scale-95"
                                             >
                                                 <Plus className="w-3.5 h-3.5" />
@@ -1851,6 +1872,86 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     className={`px-5 py-2.5 rounded-xl text-sm font-black text-white transition-colors ${loading ? 'bg-gray-300 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
                                 >
                                     {loading ? 'Verificando...' : 'Gerar Parcelas'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {showAddAdhocModal && (
+                    <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+                        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
+                            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900">Parcela Avulsa</h2>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                        Parcela fora da série regular, inserida na posição escolhida.
+                                    </p>
+                                </div>
+                                <button onClick={() => setShowAddAdhocModal(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Qual será a parcela</label>
+                                    <select
+                                        value={adhocPosition}
+                                        onChange={(e) => setAdhocPosition(parseInt(e.target.value) || 1)}
+                                        className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
+                                    >
+                                        {Array.from({ length: (formData.custom_installments?.length ?? 0) + 1 }, (_, idx) => idx + 1).map(n => (
+                                            <option key={n} value={n}>Parcela {n}</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                        As demais parcelas deslocam a posição a partir daqui — datas e valores delas não mudam.
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Data</label>
+                                        <input
+                                            type="date"
+                                            value={adhocDate}
+                                            onChange={(e) => setAdhocDate(e.target.value)}
+                                            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Valor (R$)</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={adhocValue}
+                                            onChange={(e) => setAdhocValue(e.target.value)}
+                                            placeholder="0,00"
+                                            className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-gray-400">
+                                    Forma de pagamento e descrição ficam editáveis na própria linha, depois de criada.
+                                </p>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAddAdhocModal(false)}
+                                    className="px-4 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleConfirmAddAdhocInstallment}
+                                    className="px-5 py-2.5 rounded-xl text-sm font-black text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+                                >
+                                    Criar Parcela
                                 </button>
                             </div>
                         </div>

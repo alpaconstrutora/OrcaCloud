@@ -1,6 +1,20 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Property, PropertyDeal, Client, Organization } from '../types';
+import { Property, PropertyDeal, Client, Organization, PaymentInstallment } from '../types';
+
+// Rótulos de Forma/Tipo de Pagamento — mesma lista usada no Plano de Pagamento
+// do DealModal (INSTALLMENT_TYPE_LABELS), duplicada aqui em vez de importada
+// porque aquele mapa vive dentro de um componente, e este service não deve
+// depender de componentes.
+const PAYMENT_TYPE_LABELS: Record<string, string> = {
+    PIX: 'PIX', TED: 'TED', DOC: 'DOC', DINHEIRO: 'Dinheiro', CHEQUE: 'Cheque', PERMUTA: 'Permuta',
+};
+const INSTALLMENT_TYPE_LABELS: Record<string, string> = {
+    SINAL: 'Sinal', MENSAL: 'Mensal', TRIMESTRAL: 'Trimestral', SEMESTRAL: 'Semestral', ANUAL: 'Anual', AVULSA: 'Avulsa',
+};
+
+const fmtCurrency = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n || 0);
+const fmtDate = (d?: string) => d ? new Date(d + 'T12:00:00Z').toLocaleDateString('pt-BR') : '-';
 
 export const propertyExportService = {
     generateProposalPDF: (deal: PropertyDeal, property: Property, client: Client | undefined, organization: Organization | null) => {
@@ -78,7 +92,59 @@ export const propertyExportService = {
             styles: { fontSize: 10 }
         });
 
-        currentY = (doc as any).lastAutoTable.finalY + 20;
+        currentY = (doc as any).lastAutoTable.finalY + 15;
+
+        // Section: Plano de Pagamento — Entrada + cada parcela (data, forma e tipo
+        // de pagamento, valor), na mesma ordem cronológica em que o cliente vai
+        // efetivamente pagar (independe da ordem de edição interna do Plano de
+        // Pagamento no app, que reflete posição de inserção, não data).
+        const hasPaymentPlan = (deal.down_payment || 0) > 0 || (deal.custom_installments?.length ?? 0) > 0;
+        if (hasPaymentPlan) {
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.text('PLANO DE PAGAMENTO', 14, currentY);
+            currentY += 5;
+
+            const rows: string[][] = [];
+            let runningTotal = 0;
+
+            if ((deal.down_payment || 0) > 0) {
+                rows.push([
+                    'Entrada',
+                    fmtDate(deal.date),
+                    PAYMENT_TYPE_LABELS[deal.down_payment_payment_type || ''] || '-',
+                    INSTALLMENT_TYPE_LABELS[deal.down_payment_installment_type || ''] || 'Sinal',
+                    fmtCurrency(deal.down_payment || 0),
+                ]);
+                runningTotal += deal.down_payment || 0;
+            }
+
+            const installments: PaymentInstallment[] = [...(deal.custom_installments || [])]
+                .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+            installments.forEach((inst, idx) => {
+                rows.push([
+                    inst.description || `Parcela ${idx + 1}`,
+                    fmtDate(inst.dueDate),
+                    PAYMENT_TYPE_LABELS[inst.paymentType || ''] || '-',
+                    INSTALLMENT_TYPE_LABELS[inst.installmentType || ''] || '-',
+                    fmtCurrency(inst.value),
+                ]);
+                runningTotal += inst.value;
+            });
+
+            autoTable(doc, {
+                startY: currentY,
+                head: [['Parcela', 'Vencimento', 'Forma de Pagto.', 'Tipo', 'Valor']],
+                body: rows,
+                foot: [['', '', '', 'Total', fmtCurrency(runningTotal)]],
+                theme: 'grid',
+                headStyles: { fillColor: [30, 41, 59] },
+                footStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },
+                styles: { fontSize: 9 },
+            });
+
+            currentY = (doc as any).lastAutoTable.finalY + 15;
+        }
 
         // Notes
         if (deal.notes) {

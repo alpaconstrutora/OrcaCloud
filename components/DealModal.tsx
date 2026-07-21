@@ -214,6 +214,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [showInstallmentLoteModal, setShowInstallmentLoteModal] = useState(false);
     const [showGenerateModal, setShowGenerateModal] = useState(false);
     const [generateInstallmentType, setGenerateInstallmentType] = useState<NonNullable<PaymentInstallment['installmentType']>>('MENSAL');
+    const [generateInstallmentCount, setGenerateInstallmentCount] = useState(1);
 
     const handleInstallmentRowCheck = (id: string, index: number, checked: boolean, shiftKey: boolean) => {
         const rows = formData.custom_installments || [];
@@ -383,13 +384,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
     /** Abre o modal de Gerar Parcelas — a checagem de parcelas pagas e a geração
      * de fato acontecem só ao confirmar (handleConfirmGenerateInstallments),
-     * depois de escolher o Tipo de Pagamento (periodicidade) lá dentro. */
+     * depois de escolher o Tipo de Pagamento (periodicidade) e o Nº de Parcelas
+     * lá dentro. Nº de Parcelas parte do valor já salvo em formData.installments
+     * (campo que só é atualizado de fato ao confirmar a geração). */
     const handleOpenGenerateModal = () => {
         setGenerateInstallmentType('MENSAL');
+        setGenerateInstallmentCount(Math.max(1, Math.floor(Number(formData.installments) || 1)));
         setShowGenerateModal(true);
     };
 
-    const handleConfirmGenerateInstallments = async (installmentType: NonNullable<PaymentInstallment['installmentType']>) => {
+    const handleConfirmGenerateInstallments = async (installmentType: NonNullable<PaymentInstallment['installmentType']>, installmentCount: number) => {
         if (formData.id) {
             setLoading(true);
             try {
@@ -418,6 +422,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         // Parcelas e regerar; (2) ids antigos retidos colidindo como key
         // duplicada no React (pedia 5, via 3).
         const intervalMonths = INSTALLMENT_TYPE_INTERVAL_MONTHS[installmentType] ?? 1;
+        const count = Math.max(1, Math.floor(Number(installmentCount) || 1));
 
         setFormData(prev => {
             // Parcelas Avulsas (adicionadas via handleAddAdhocInstallment) são fora
@@ -425,7 +430,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             const keptAdhoc = (prev.custom_installments || []).filter(i => i.installmentType === 'AVULSA');
 
             const downPayment = prev.down_payment || 0;
-            const count = Math.max(1, Math.floor(Number(prev.installments) || 1));
             const baseValue = prev.value || 0;
             const total = Math.max(0, baseValue - downPayment);
             // Rateio igual com centavos exatos: cada parcela recebe `per`, e a ÚLTIMA
@@ -464,7 +468,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     installmentType
                 });
             }
-            return { ...prev, custom_installments: [...newInstallments, ...keptAdhoc] };
+            return { ...prev, installments: count, custom_installments: [...newInstallments, ...keptAdhoc] };
         });
         // Cronograma novo → limpa qualquer seleção de parcela (os ids mudaram).
         setSelectedInstallmentIds(new Set());
@@ -986,9 +990,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     {activeTab === 'pagamento' && (
                         <div className="space-y-6">
                             {/* Campos compactos (não precisam de tela cheia) — Tipo, Valor, Datas,
-                                Forma de Pagamento, Entrada/Nº Parcelas. O Plano de Pagamento (abaixo,
-                                fora deste container) usa a largura toda: cada parcela + desconto
-                                cabe numa linha só. */}
+                                Forma de Pagamento, Entrada. Nº Parcelas mudou para dentro do modal
+                                de Gerar Parcelas (junto com Tipo de Pagamento). O Plano de Pagamento
+                                (abaixo, fora deste container) usa a largura toda: cada parcela +
+                                desconto cabe numa linha só. */}
                             <div className="max-w-3xl space-y-6">
                                 <div className="flex items-center gap-2 text-purple-600">
                                     <DollarSign className="w-5 h-5" />
@@ -1092,27 +1097,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
 
                                 {formData.payment_method === 'INSTALLMENTS' && (
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Entrada (BRL)</label>
-                                            <input
-                                                type="number"
-                                                value={formData.down_payment || ''}
-                                                onChange={(e) => setFormData({ ...formData, down_payment: parseFloat(e.target.value) || 0 })}
-                                                className="w-full px-4 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
-                                                placeholder="0,00"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Nº Parcelas</label>
-                                            <input
-                                                type="number"
-                                                min="1" max="120"
-                                                value={formData.installments}
-                                                onChange={(e) => setFormData({ ...formData, installments: parseInt(e.target.value) || 1 })}
-                                                className="w-full px-4 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
-                                            />
-                                        </div>
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Entrada (BRL)</label>
+                                        <input
+                                            type="number"
+                                            value={formData.down_payment || ''}
+                                            onChange={(e) => setFormData({ ...formData, down_payment: parseFloat(e.target.value) || 0 })}
+                                            className="w-full px-4 py-4 bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-2xl outline-none font-bold text-gray-700 transition-all shadow-inner text-sm"
+                                            placeholder="0,00"
+                                        />
                                     </div>
                                 )}
                             </div>
@@ -1758,7 +1751,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 <div>
                                     <h2 className="text-lg font-black text-gray-900">Gerar Parcelas</h2>
                                     <p className="text-xs text-gray-400 mt-0.5">
-                                        {Math.max(1, Math.floor(Number(formData.installments) || 1))} parcela(s) de valor igual, a partir do Valor e da Entrada.
+                                        Parcelas de valor igual, a partir do Valor e da Entrada.
                                     </p>
                                 </div>
                                 <button onClick={() => setShowGenerateModal(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
@@ -1767,6 +1760,17 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             </div>
 
                             <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Nº de Parcelas</label>
+                                    <input
+                                        type="number"
+                                        min="1" max="120"
+                                        value={generateInstallmentCount}
+                                        onChange={(e) => setGenerateInstallmentCount(parseInt(e.target.value) || 1)}
+                                        className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-purple-400"
+                                    />
+                                </div>
+
                                 <div>
                                     <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Tipo de Pagamento</label>
                                     <select
@@ -1806,7 +1810,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 <button
                                     type="button"
                                     disabled={loading}
-                                    onClick={() => handleConfirmGenerateInstallments(generateInstallmentType)}
+                                    onClick={() => handleConfirmGenerateInstallments(generateInstallmentType, generateInstallmentCount)}
                                     className={`px-5 py-2.5 rounded-xl text-sm font-black text-white transition-colors ${loading ? 'bg-gray-300 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
                                 >
                                     {loading ? 'Verificando...' : 'Gerar Parcelas'}

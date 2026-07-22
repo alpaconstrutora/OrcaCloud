@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useMemo } from 'react';
-import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, User, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X, Download, Share2 } from 'lucide-react';
+import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, User, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X, Download, Share2, ChevronDown, Bell, HelpCircle } from 'lucide-react';
 import { downloadProposalPdf } from '../services/proposalPdfService';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import BrokerProposalSimulator from './broker/BrokerProposalSimulator';
@@ -112,9 +112,29 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
     const [showMobilePreview, setShowMobilePreview] = useState(false);
     const [showTabConfig, setShowTabConfig] = useState(false);
 
+    // Menu de conta do portal público (link do corretor) — espelha o dropdown de perfil do sistema
+    const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+    const [showMyAccount, setShowMyAccount] = useState(false);
+    const accountMenuRef = React.useRef<HTMLDivElement>(null);
+    React.useEffect(() => {
+        if (!isAccountMenuOpen) return;
+        const handlePointerDown = (event: MouseEvent) => {
+            if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+                setIsAccountMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handlePointerDown);
+        return () => document.removeEventListener('mousedown', handlePointerDown);
+    }, [isAccountMenuOpen]);
+
     // Impersonação — apenas para admins
     const [allBrokers, setAllBrokers] = useState<BrokerProfile[]>([]);
     const [selectedAdminBroker, setSelectedAdminBroker] = useState<BrokerProfile | null>(initialBroker ?? null);
+
+    // Habilitação por empreendimento (broker_property_access). null = sem corretor
+    // efetivo no contexto (admin navegando livre) -> sem filtro. Modo token já vem
+    // filtrado pela RPC fn_broker_portal_get_units, não precisa repetir aqui.
+    const [enabledPropertyIds, setEnabledPropertyIds] = useState<string[] | null>(null);
 
     const effectiveBrokerEmail = (selectedAdminBroker ? selectedAdminBroker.email : profile?.email)?.toLowerCase();
 
@@ -168,6 +188,22 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
         if (!proposals || !effectiveBrokerEmail) return [];
         return proposals.filter(p => p.broker_email?.toLowerCase() === effectiveBrokerEmail);
     }, [proposals, effectiveBrokerEmail]);
+
+    // Carrega quais empreendimentos o corretor efetivo (impersonado ou logado
+    // direto) está habilitado a ver. Sem corretor efetivo (admin navegando sem
+    // impersonar ninguém) = sem filtro, mantém o estoque completo da org.
+    React.useEffect(() => {
+        if (portalToken || !effectiveBroker?.id) {
+            setEnabledPropertyIds(null);
+            return;
+        }
+        brokerService.listEnabledPropertyIds(effectiveBroker.id)
+            .then(setEnabledPropertyIds)
+            .catch(err => {
+                console.error('[BrokerPortal] Error loading enabled property ids:', err);
+                setEnabledPropertyIds([]);
+            });
+    }, [portalToken, effectiveBroker?.id]);
 
     // Carregar lista de corretores para impersonação (somente admin autenticado)
     React.useEffect(() => {
@@ -226,22 +262,36 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
 
     const formatCurrency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 
+    // Empreendimentos (prédios) e unidades avulsas que o corretor efetivo está
+    // habilitado a ver. enabledPropertyIds null = sem filtro (admin sem
+    // impersonar). Unidade avulsa (sem parent_id, não é BUILDING) não pertence a
+    // nenhum empreendimento — segue sempre visível, espelha a regra da RPC.
+    const visibleUnits = useMemo(() => {
+        if (!enabledPropertyIds) return units;
+        const allowed = new Set(enabledPropertyIds);
+        return units.filter(u => {
+            if (u.type !== 'BUILDING' && !u.parent_id) return true;
+            const buildingId = u.type === 'BUILDING' ? u.id : u.parent_id;
+            return buildingId ? allowed.has(buildingId) : true;
+        });
+    }, [units, enabledPropertyIds]);
+
     const stats = useMemo(() => ({
-        available: units.filter(u => u.status === PropertyStatus.AVAILABLE && u.type !== 'BUILDING').length,
+        available: visibleUnits.filter(u => u.status === PropertyStatus.AVAILABLE && u.type !== 'BUILDING').length,
         sent: myProposals.filter(p => p.status === 'ENVIADA').length,
         approved: myProposals.filter(p => p.status === 'APROVADA').length,
         totalCommission: myProposals.filter(p => p.status === 'APROVADA').reduce((acc, p) => acc + ((p.total_value || 0) * 0.05), 0),
-    }), [units, myProposals]);
+    }), [visibleUnits, myProposals]);
 
-    const buildings = useMemo(() => units.filter(u => u.type === 'BUILDING'), [units]);
+    const buildings = useMemo(() => visibleUnits.filter(u => u.type === 'BUILDING'), [visibleUnits]);
     const displayUnits = useMemo(() => {
         if (selectedBuildingId !== 'all') {
-            return units.filter(u => u.parent_id === selectedBuildingId);
+            return visibleUnits.filter(u => u.parent_id === selectedBuildingId);
         }
-        const childUnits = units.filter(u => u.type !== 'BUILDING');
+        const childUnits = visibleUnits.filter(u => u.type !== 'BUILDING');
         // Fallback: se não há unidades filhas, exibe os próprios empreendimentos
-        return childUnits.length > 0 ? childUnits : units.filter(u => u.type === 'BUILDING');
-    }, [units, selectedBuildingId]);
+        return childUnits.length > 0 ? childUnits : visibleUnits.filter(u => u.type === 'BUILDING');
+    }, [visibleUnits, selectedBuildingId]);
 
     const handleReserve = async (unit: BrokerUnit) => {
         const ok = await confirm({
@@ -329,11 +379,120 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                         <div className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-black uppercase tracking-wider">Broker Portal</div>
                         <h1 className="text-md font-bold text-gray-900 tracking-tight">Portal do Corretor</h1>
                     </div>
-                    <div className="flex items-center gap-3 text-xs bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
-                        <User className="w-3.5 h-3.5 text-indigo-600" />
-                        <span className="font-semibold text-gray-600">{brokerDisplayName} (CORRETOR)</span>
+                    <div className="relative" ref={accountMenuRef}>
+                        <button
+                            type="button"
+                            onClick={() => setIsAccountMenuOpen(o => !o)}
+                            className="flex items-center gap-2 text-xs bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 transition-colors"
+                            aria-haspopup="menu"
+                            aria-expanded={isAccountMenuOpen}
+                        >
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
+                                {brokerDisplayName.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="font-semibold text-gray-600">{brokerDisplayName} (CORRETOR)</span>
+                            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isAccountMenuOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isAccountMenuOpen && (
+                            <div className="absolute right-0 top-full z-[1000] mt-2 w-[280px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl" role="menu">
+                                <div className="border-b border-gray-100 px-4 py-3">
+                                    <div className="flex items-center gap-3">
+                                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white">
+                                            {brokerDisplayName.charAt(0).toUpperCase()}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate text-sm font-bold text-gray-900">{brokerDisplayName}</div>
+                                            <div className="truncate text-xs text-gray-500">{effectiveBrokerEmail}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="p-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setIsAccountMenuOpen(false); setShowMyAccount(true); }}
+                                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                        role="menuitem"
+                                    >
+                                        <User className="h-4 w-4 text-gray-400" />
+                                        <span className="flex-1">Minha conta</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setIsAccountMenuOpen(false); toast('Personalização de tema estará disponível em breve.'); }}
+                                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                        role="menuitem"
+                                    >
+                                        <Settings2 className="h-4 w-4 text-gray-400" />
+                                        <span className="flex-1">Preferências</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setIsAccountMenuOpen(false); toast('Central de notificações do corretor estará disponível em breve.'); }}
+                                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                        role="menuitem"
+                                    >
+                                        <Bell className="h-4 w-4 text-gray-400" />
+                                        <span className="flex-1">Notificações</span>
+                                    </button>
+                                </div>
+                                <div className="border-t border-gray-100 p-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setIsAccountMenuOpen(false); toast('Dúvidas? Fale com a incorporadora responsável por este empreendimento.'); }}
+                                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                        role="menuitem"
+                                    >
+                                        <HelpCircle className="h-4 w-4 text-gray-400" />
+                                        <span className="flex-1">Ajuda e comandos</span>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </header>
+            )}
+
+            {showMyAccount && (
+                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowMyAccount(false)}>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                    <div
+                        className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between p-8 border-b border-gray-100">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center">
+                                    <User className="w-5 h-5 text-indigo-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Minha Conta</h2>
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Dados cadastrais</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowMyAccount(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-4">
+                            {[
+                                ['Nome', brokerDisplayName],
+                                ['E-mail', effectiveBrokerEmail || '—'],
+                                ['Telefone', effectiveBroker?.phone || '—'],
+                                ['CRECI', effectiveBroker?.creci || '—'],
+                                ['Imobiliária', effectiveBroker?.agency_name || '—'],
+                            ].map(([label, value]) => (
+                                <div key={label}>
+                                    <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{label}</div>
+                                    <div className="text-sm font-semibold text-gray-800">{value}</div>
+                                </div>
+                            ))}
+                            <p className="text-xs text-gray-400 pt-3 border-t border-gray-100">
+                                Para alterar seus dados cadastrais, entre em contato com a incorporadora.
+                            </p>
+                        </div>
+                    </div>
+                </div>
             )}
             <div className={isStandalone ? 'flex flex-1 overflow-hidden' : ''}>
                 {isStandalone && (
@@ -446,7 +605,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
 
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Unidades Disponíveis" value={loading ? '…' : stats.available} subtext={loading ? '' : `de ${units.length} unidades`} icon={Building2} color="indigo" />
+                <StatCard title="Unidades Disponíveis" value={loading ? '…' : stats.available} subtext={loading ? '' : `de ${visibleUnits.length} unidades`} icon={Building2} color="indigo" />
                 <StatCard title="Propostas Enviadas" value={loading ? '…' : stats.sent} subtext="Aguardando análise" icon={Send} color="blue" />
                 <StatCard title="Propostas Aprovadas" value={loading ? '…' : stats.approved} subtext="Vendas confirmadas" icon={CheckCircle2} color="emerald" />
                 <StatCard title="Comissão Acumulada" value={loading ? '…' : formatCurrency(stats.totalCommission)} subtext="5% sobre aprovadas" icon={DollarSign} color="amber" />
@@ -610,7 +769,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             {currentTab === 'empreendimentos' && (
                 <BrokerDevelopments
                     buildings={buildings}
-                    units={units}
+                    units={visibleUnits}
                     portalToken={portalToken}
                     organizationId={initialOrgId || selectedOrgId}
                     onMakeProposal={handleMakeProposal}

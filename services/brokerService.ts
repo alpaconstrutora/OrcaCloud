@@ -100,6 +100,56 @@ export const brokerService = {
         return data as BrokerProfile;
     },
 
+    // --- Broker Property Access (habilitação de corretor por empreendimento) ---
+    // property_id é a linha commercial_properties tipo BUILDING selecionada nas
+    // abas Corretores de Venda de Ativos/Locações. Sem linha em
+    // broker_property_access = corretor NÃO vê aquele empreendimento no Portal
+    // (default enabled=false na tabela).
+    async listPropertyAccess(propertyId: string): Promise<Record<string, boolean>> {
+        if (!propertyId) return {};
+        const { data, error } = await supabase
+            .from('broker_property_access')
+            .select('broker_id, enabled')
+            .eq('property_id', propertyId);
+
+        if (error) {
+            console.error('[BROKER PROFILE SERVICE] Error listing property access:', error);
+            throw error;
+        }
+
+        return Object.fromEntries((data || []).map(row => [row.broker_id as string, row.enabled as boolean]));
+    },
+
+    async setPropertyAccess(brokerId: string, propertyId: string, enabled: boolean) {
+        const { error } = await supabase
+            .from('broker_property_access')
+            .upsert(
+                { broker_id: brokerId, property_id: propertyId, enabled, updated_at: new Date().toISOString() },
+                { onConflict: 'broker_id,property_id' }
+            );
+
+        if (error) {
+            console.error('[BROKER PROFILE SERVICE] Error setting property access:', error);
+            throw error;
+        }
+    },
+
+    async listEnabledPropertyIds(brokerId: string): Promise<string[]> {
+        if (!brokerId) return [];
+        const { data, error } = await supabase
+            .from('broker_property_access')
+            .select('property_id')
+            .eq('broker_id', brokerId)
+            .eq('enabled', true);
+
+        if (error) {
+            console.error('[BROKER PROFILE SERVICE] Error listing enabled property ids:', error);
+            throw error;
+        }
+
+        return (data || []).map(row => row.property_id as string);
+    },
+
     // --- Broker Proposals (Gestão de Propostas do Portal) ---
     async listProposals(organizationId: string, brokerEmail?: string) {
         let query = supabase

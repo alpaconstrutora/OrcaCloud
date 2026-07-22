@@ -91,6 +91,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     );
     const [properties, setProperties] = useState<Property[]>([]);
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
+    const [brokerAccess, setBrokerAccess] = useState<Record<string, boolean>>({});
 
     const [deals, setDeals] = useState<PropertyDeal[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -174,6 +175,26 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     useEffect(() => {
         loadData();
     }, [organizationId]);
+
+    // Habilitação de corretor por empreendimento (Portal do Corretor) — carrega
+    // só quando a aba Corretores está aberta num prédio específico.
+    useEffect(() => {
+        if (activeTab !== 'brokers' || !selectedBuildingId) return;
+        brokerService.listPropertyAccess(selectedBuildingId)
+            .then(setBrokerAccess)
+            .catch(err => console.error('[Commercial] Error loading broker access:', err));
+    }, [activeTab, selectedBuildingId]);
+
+    const handleToggleBrokerAccess = async (brokerId: string, enabled: boolean) => {
+        if (!selectedBuildingId) return;
+        setBrokerAccess(prev => ({ ...prev, [brokerId]: enabled }));
+        try {
+            await brokerService.setPropertyAccess(brokerId, selectedBuildingId, enabled);
+        } catch (err) {
+            console.error('[Commercial] Error toggling broker access:', err);
+            setBrokerAccess(prev => ({ ...prev, [brokerId]: !enabled }));
+        }
+    };
 
     // Persistência de estado da aba e edifício selecionado
     useEffect(() => {
@@ -1773,6 +1794,19 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                         <span className="text-xs text-gray-400">CRECI</span>
                                         <span className="text-sm font-medium text-gray-600">{broker.creci || '---'}</span>
                                     </div>
+                                </div>
+
+                                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id={`broker-access-${broker.id}`}
+                                        checked={!!brokerAccess[broker.id]}
+                                        onChange={e => handleToggleBrokerAccess(broker.id, e.target.checked)}
+                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                    />
+                                    <label htmlFor={`broker-access-${broker.id}`} className="text-xs font-medium text-gray-600 cursor-pointer">
+                                        Habilitado para ver este empreendimento no Portal
+                                    </label>
                                 </div>
                             </div>
                         ))}

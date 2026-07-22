@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, Briefcase } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
-import { Property, PropertyStatus, PropertyDeal, Client } from '../types';
+import { brokerService } from '../services/brokerService';
+import { Property, PropertyStatus, PropertyDeal, Client, BrokerProfile } from '../types';
 import { TowerMatrixConfig, GridCellConfig, TowerNumberingConfig } from '../types/imovib';
 import { usePersistedState } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
@@ -33,12 +34,14 @@ interface RentalsModuleProps {
 }
 
 const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
-    const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard'>(
-        (localStorage.getItem('rentals_active_tab') as 'inventory' | 'deals' | 'dashboard') || 'inventory'
+    const [activeTab, setActiveTab] = useState<'inventory' | 'deals' | 'dashboard' | 'brokers'>(
+        (localStorage.getItem('rentals_active_tab') as 'inventory' | 'deals' | 'dashboard' | 'brokers') || 'inventory'
     );
     const [properties, setProperties] = useState<Property[]>([]);
     const [deals, setDeals] = useState<PropertyDeal[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
+    const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
+    const [brokerAccess, setBrokerAccess] = useState<Record<string, boolean>>({});
     const [loading, setLoading] = useState(true);
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('rentalsModuleFilters:search', '');
@@ -69,14 +72,16 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         console.log('[Commercial] Loading data for organization:', organizationId);
         setLoading(true);
         try {
-            const [propsData, dealsData, clientsData] = await Promise.all([
+            const [propsData, dealsData, clientsData, brokersData] = await Promise.all([
                 commercialService.listProperties(organizationId),
                 commercialService.listDeals(),
-                clientService.listClients()
+                clientService.listClients(),
+                brokerService.listProfiles(organizationId)
             ]);
             setProperties(propsData.filter(p => !p.purpose || p.purpose === 'RENTAL' || p.purpose === 'BOTH'));
             setDeals(dealsData.filter(d => d.type === 'RENTAL'));
             setClients(clientsData);
+            setBrokers(brokersData);
         } catch (err) {
             console.error('[Commercial] Error loading data:', err);
         } finally {
@@ -87,6 +92,27 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     useEffect(() => {
         loadData();
     }, [organizationId]);
+
+    // Habilitação de corretor por empreendimento (Portal do Corretor) — carrega
+    // só quando a aba Corretores está aberta num prédio específico. Toggle
+    // independente do mesmo prédio em Venda de Ativos (eixo separado).
+    useEffect(() => {
+        if (activeTab !== 'brokers' || !selectedBuildingId) return;
+        brokerService.listPropertyAccess(selectedBuildingId)
+            .then(setBrokerAccess)
+            .catch(err => console.error('[Commercial] Error loading broker access:', err));
+    }, [activeTab, selectedBuildingId]);
+
+    const handleToggleBrokerAccess = async (brokerId: string, enabled: boolean) => {
+        if (!selectedBuildingId) return;
+        setBrokerAccess(prev => ({ ...prev, [brokerId]: enabled }));
+        try {
+            await brokerService.setPropertyAccess(brokerId, selectedBuildingId, enabled);
+        } catch (err) {
+            console.error('[Commercial] Error toggling broker access:', err);
+            setBrokerAccess(prev => ({ ...prev, [brokerId]: !enabled }));
+        }
+    };
 
     // Persistência de estado
     useEffect(() => {
@@ -603,29 +629,39 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 </div>
             </div>
 
-            {/* Tabs internas (só quando um edifício está selecionado) — vocabulário compacto §19 */}
+            {/* Tabs internas (só quando um edifício está selecionado) — trilho
+                bg-gray-50 + aba ativa bg-white text-blue-600 shadow-sm (§19; antes
+                era bg-blue-600 text-white sem trilho — cor de toggle de ação, não
+                de navegação — corrigido ao adicionar a aba Corretores). */}
             {selectedBuildingId && (
-                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 w-fit">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     <button
                         onClick={() => setActiveTab('inventory')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         <HomeIcon className="w-3.5 h-3.5" />
                         Unidades
                     </button>
                     <button
                         onClick={() => setActiveTab('deals')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'deals' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'deals' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         <Tag className="w-3.5 h-3.5" />
                         Contratos
                     </button>
                     <button
                         onClick={() => setActiveTab('dashboard')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                         <TrendingUp className="w-3.5 h-3.5" />
                         Resultados
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('brokers')}
+                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'brokers' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        <User className="w-3.5 h-3.5" />
+                        Corretores
                     </button>
                 </div>
             )}
@@ -1120,13 +1156,92 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
             {
                 activeTab === 'dashboard' && (
-                    <RentalsDashboard 
-                        selectedBuildingId={selectedBuildingId} 
+                    <RentalsDashboard
+                        selectedBuildingId={selectedBuildingId}
                         organizationId={currentBuilding?.organization_id || organizationId}
                     />
                 )
             }
 
+            {activeTab === 'brokers' && (
+                <div className="space-y-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                            <User className="w-5 h-5 text-blue-600" />
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900 tracking-tight">Gestão de corretores</h3>
+                                <p className="text-xs text-gray-400">Parceiros e comissionamento</p>
+                            </div>
+                        </div>
+                        <div className="h-9 flex items-center px-3 rounded-[6px] bg-amber-50 text-amber-700 text-xs font-medium">
+                            Cadastre em Minha Organização &gt; Fornecedores &gt; Corretor Imobiliário
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {brokers.filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase()) || b.email.toLowerCase().includes(searchTerm.toLowerCase())).map(broker => (
+                            <div key={broker.id} className="bg-white p-5 rounded-[10px] border border-gray-100 hover:border-blue-200 transition-all">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-12 h-12 bg-gray-100 rounded-[10px] flex items-center justify-center text-gray-400 font-bold text-lg shrink-0">
+                                        {broker.name.charAt(0)}
+                                    </div>
+                                    <div className="flex flex-col min-w-0">
+                                        <span className={`text-xs font-normal mb-0.5 ${broker.is_active ? 'text-emerald-600' : 'text-red-600'}`}>
+                                            {broker.is_active ? 'Ativo' : 'Inativo'}
+                                        </span>
+                                        <h4 className="text-sm font-bold text-gray-900 truncate">{broker.name}</h4>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2 text-gray-500">
+                                        <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                        <span className="text-sm font-normal truncate">{broker.email}</span>
+                                    </div>
+                                    {broker.phone && (
+                                        <div className="flex items-center gap-2 text-gray-500">
+                                            <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                            <span className="text-sm font-normal">{broker.phone}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex items-center gap-2 text-gray-500">
+                                        <Briefcase className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                        <span className="text-sm font-normal text-blue-600">{broker.agency_name || 'Autônomo'}</span>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <span className="text-xs text-gray-400">Comissão padrão</span>
+                                        <span className="text-lg font-bold text-gray-900">{broker.commission_rate}%</span>
+                                    </div>
+                                    <div className="flex flex-col items-end">
+                                        <span className="text-xs text-gray-400">CRECI</span>
+                                        <span className="text-sm font-medium text-gray-600">{broker.creci || '---'}</span>
+                                    </div>
+                                </div>
+
+                                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id={`rental-broker-access-${broker.id}`}
+                                        checked={!!brokerAccess[broker.id]}
+                                        onChange={e => handleToggleBrokerAccess(broker.id, e.target.checked)}
+                                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                    />
+                                    <label htmlFor={`rental-broker-access-${broker.id}`} className="text-xs font-medium text-gray-600 cursor-pointer">
+                                        Habilitado para ver este empreendimento no Portal
+                                    </label>
+                                </div>
+                            </div>
+                        ))}
+                        <div className="bg-amber-50/40 border-2 border-dashed border-amber-100 rounded-[10px] p-6 flex flex-col items-center justify-center min-h-[200px]">
+                            <span className="text-sm font-bold text-amber-700">Cadastro centralizado</span>
+                            <p className="text-xs text-amber-600 text-center mt-1 px-4">Novos corretores devem ser fornecedores na categoria Corretor Imobiliário.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <DealModal
                 isOpen={isDealModalOpen}

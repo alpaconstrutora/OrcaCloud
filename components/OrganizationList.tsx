@@ -106,15 +106,21 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     const [managingOrgId, setManagingOrgId] = useState<string | null>(null);
     const tableColumns = useTableColumns(ORG_LIST_COLUMNS, 'organizationListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'organizationListFilters:advanced');
-    const { activeOrganizationId, setActiveOrganizationId, companies, activeEmpresaId } = useStore();
-    // Header pode estar selecionado por EMPRESA (activeEmpresaId) sem que
-    // activeOrganizationId acompanhe — os dois seletores são independentes
-    // (setActiveEmpresaId nunca seta activeOrganizationId). Sem esse fallback,
-    // as telas de Registros Financeiros (Contas/Centros de Custo/Plano de
-    // Contas) buscavam sem filtro de organização nenhum, trazendo registros
-    // de TODAS as organizações misturados — pareciam duplicados, mas eram de
-    // organizações diferentes.
-    const empresaOrgId = companies.find(c => c.id === activeEmpresaId)?.org_id;
+    const { activeOrganizationId, setActiveOrganizationId } = useStore();
+
+    // Cadastros financeiros (Contas de Pagamento, Centros de Custo) são
+    // POR-ORGANIZAÇÃO — não podem ser mesclados entre orgs. Em "Todas as
+    // organizações" (activeOrganizationId null) buscar sem filtro trazia a
+    // árvore de TODAS as orgs de uma vez; como toda org tem o mesmo plano
+    // padrão (1.1.1 PIS, 1.1.2 COFINS...), o resultado parecia duplicado.
+    // Aqui escolhemos UMA org por vez: a ativa, se houver; senão a escolha
+    // salva no seletor da toolbar; senão a primeira org da lista. Nunca merge.
+    const [registryOrgOverride, setRegistryOrgOverride] = usePersistedState<string | null>('financialRegistryOrgFilter', null);
+    const validOverride = React.useMemo(
+        () => (organizations || []).some(o => o.id === registryOrgOverride) ? registryOrgOverride : null,
+        [organizations, registryOrgOverride]
+    );
+    const registryOrgId = activeOrganizationId || managingOrgId || validOverride || (organizations || [])[0]?.id || null;
 
     const handleResendInviteFromList = async (orgId: string, email: string, name: string, role: string) => {
         const { data, error } = await supabase.functions.invoke('invite-member', {
@@ -143,7 +149,8 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     const [showImportModal, setShowImportModal] = useState(false);
 
     const loadRegistries = React.useCallback(async () => {
-        const targetOrgId = activeOrganizationId || managingOrgId || empresaOrgId;
+        // chart_of_accounts (financial_categories) é global — ignora org de propósito.
+        const targetOrgId = registryOrgId;
         try {
             const [accs, centers, charts] = await Promise.all([
                 financialRegistryService.listPaymentAccounts(targetOrgId || undefined),
@@ -156,14 +163,14 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
         } catch (error) {
             console.error('Error loading registries:', error);
         }
-    }, [managingOrgId, activeOrganizationId, empresaOrgId]);
+    }, [registryOrgId]);
 
     React.useEffect(() => {
         // Load registries when tab changes to a financial one OR when org changes
         if (['accounts', 'cost_centers', 'chart_of_accounts'].includes(activeTab)) {
             loadRegistries();
         }
-    }, [activeTab, activeOrganizationId, managingOrgId, empresaOrgId, loadRegistries]);
+    }, [activeTab, loadRegistries]);
 
     // Reset managingOrgId whenever the user navigates away from the users tab
     // while in global context (no active org). This ensures the consolidated
@@ -584,7 +591,19 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                 {(activeTab === 'accounts' || activeTab === 'cost_centers' || activeTab === 'chart_of_accounts') && (
                     <FinancialRegistryManager
                         organizations={activeTab === 'accounts' ? organizations.map(o => ({ id: o.id, name: o.name })) : undefined}
-                        defaultOrganizationId={activeTab === 'accounts' ? (activeOrganizationId || managingOrgId || undefined) : undefined}
+                        defaultOrganizationId={activeTab === 'accounts' ? (registryOrgId || undefined) : undefined}
+                        // Seletor de organização: só nas abas por-org (accounts/cost_centers),
+                        // e só quando não há org fixada globalmente e existe mais de uma.
+                        // chart_of_accounts é global (financial_categories) — não recebe seletor.
+                        orgFilter={
+                            activeTab !== 'chart_of_accounts' && !activeOrganizationId && !managingOrgId && organizations.length > 1
+                                ? {
+                                    organizations: organizations.map(o => ({ id: o.id, name: o.name })),
+                                    value: registryOrgId,
+                                    onChange: setRegistryOrgOverride,
+                                }
+                                : undefined
+                        }
                         title={
                             activeTab === 'accounts' ? 'Contas de Pagamento' :
                             activeTab === 'cost_centers' ? 'Centros de Custo' : 'Plano de Contas'
@@ -606,7 +625,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         showBankDetails={activeTab === 'accounts'}
                         showCode={true}
                         onSave={async (item) => {
-                            const currentOrgId = item.organization_id || activeOrganizationId || managingOrgId || empresaOrgId;
+                            const currentOrgId = item.organization_id || registryOrgId;
                             if (!currentOrgId) return alert("Selecione uma organização para vincular a conta.");
 
                             // Remover apenas campos gerados pelo servidor (id, created_at)
@@ -639,9 +658,9 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                     />
                 )}
 
-                {showImportModal && (activeOrganizationId || managingOrgId || empresaOrgId) && (
+                {showImportModal && registryOrgId && (
                     <CostCenterImportModal
-                        organizationId={(activeOrganizationId || managingOrgId || empresaOrgId)!}
+                        organizationId={registryOrgId}
                         existingCostCenters={costCenters}
                         onClose={() => setShowImportModal(false)}
                         onSuccess={() => { loadRegistries(); setShowImportModal(false); }}

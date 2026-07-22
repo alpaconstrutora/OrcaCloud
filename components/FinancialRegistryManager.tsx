@@ -38,6 +38,14 @@ interface FinancialRegistryManagerProps {
     showBankDetails?: boolean;
     organizations?: OrgOption[];
     defaultOrganizationId?: string;
+    // Seletor de organização da toolbar — usado quando o contexto global está em
+    // "Todas as organizações": estes cadastros são por-org e não podem ser
+    // mesclados, então o usuário escolhe UMA org por vez aqui.
+    orgFilter?: {
+        organizations: OrgOption[];
+        value: string | null;
+        onChange: (id: string) => void;
+    };
 }
 
 const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
@@ -55,6 +63,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     showBankDetails = false,
     organizations,
     defaultOrganizationId,
+    orgFilter,
 }) => {
     const [isEditing, setIsEditing] = useState<string | null>(null);
     const [isAdding, setIsAdding] = useState(false);
@@ -277,6 +286,18 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                     conteúdo dividem um único card; a única linha visível entre os dois é o
                     border-b abaixo, sem duas bordas concêntricas. */}
                 <div className="flex flex-col md:flex-row gap-2.5 items-center p-4 border-b border-gray-100 bg-white">
+                    {orgFilter && (
+                        <select
+                            value={orgFilter.value || ''}
+                            onChange={(e) => orgFilter.onChange(e.target.value)}
+                            title="Organização — estes cadastros são por organização"
+                            className="h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shrink-0 w-full md:w-auto md:max-w-[220px]"
+                        >
+                            {orgFilter.organizations.map(org => (
+                                <option key={org.id} value={org.id}>{org.name}</option>
+                            ))}
+                        </select>
+                    )}
                     <div className="flex-1 relative w-full">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input

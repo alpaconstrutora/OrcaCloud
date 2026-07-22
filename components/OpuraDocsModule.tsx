@@ -237,6 +237,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [newDocDesc, setNewDocDesc] = React.useState('');
   const [newDocAutor, setNewDocAutor] = React.useState('');
   const [newDocType, setNewDocType] = React.useState('');
+  // Organização escolhida no modal quando o seletor global está em "Todas as
+  // Organizações" (activeOrganizationId nulo). Mesmo padrão de createFolderOrgId.
+  const [newDocOrgId, setNewDocOrgId] = React.useState('');
   const [newDocCategory, setNewDocCategory] = React.useState<OpuraDocumentCategoria>('engenharia');
   const [newDocEmissao, setNewDocEmissao] = React.useState('');
   const [newDocValidade, setNewDocValidade] = React.useState('');
@@ -1268,8 +1271,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   };
 
   const executeUpload = async (docTitle: string, fileToUpload: File) => {
-    if (!activeOrganizationId) return;
-    
+    const targetOrgId = activeOrganizationId || newDocOrgId;
+    if (!targetOrgId) {
+      notify('Selecione uma organização para o documento.', 'error');
+      return;
+    }
+
     setUploading(true);
     // Validar tipo de arquivo
     const allowedExtensions = ['pdf', 'docx', 'xlsx', 'dwg', 'jpg', 'png'];
@@ -1296,7 +1303,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
       await documentService.uploadNewDocument(
         {
-          organization_id: activeOrganizationId || '',
+          organization_id: targetOrgId,
           nome: docTitle || fileToUpload.name,
           descricao: newDocDesc || undefined,
             autor: newDocAutor || undefined,
@@ -1334,7 +1341,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       setNewDocSupplierId('');
       setNewDocClientId('');
       setNewDocInvestorId('');
-      
+      setNewDocOrgId('');
+
       setUploadModalOpen(false);
       fetchDocs();
     } catch (err: any) {
@@ -1347,14 +1355,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Submeter Upload de Novo Documento
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('[OpuraDocsModule] Iniciando submissão do documento:', {
-      nome: newDocName,
-      org: activeOrganizationId,
-      arquivo: newDocFile?.name
-    });
-    if (!activeOrganizationId) {
-      console.warn('[OpuraDocsModule] Erro: activeOrganizationId está nulo ou vazio ao submeter.');
-      notify('Sessão expirada ou organização não selecionada.', 'error');
+    if (!activeOrganizationId && !newDocOrgId) {
+      notify('Selecione uma organização para o documento.', 'error');
       return;
     }
     if (!newDocFile) {
@@ -1721,18 +1723,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 <FolderPlus className="w-[15px] h-[15px] text-blue-600" />
                 Nova pasta
               </button>
-              {/* O upload grava em uma org específica e handleUploadSubmit rejeita
-                  sem ela; ao contrário do modal de pasta, não há seletor de
-                  organização no formulário. Em "Todas as Organizações" o botão
-                  fica desabilitado (REGRA #5: nunca some, explica por quê). */}
+              {/* Em "Todas as Organizações" (activeOrganizationId nulo) o botão
+                  continua ativo: o próprio modal mostra um seletor de organização
+                  (igual ao "Nova pasta"), então dá pra criar sem trocar o seletor
+                  global antes. REGRA #5: leitura/criação nunca fica bloqueada. */}
               <button
                 onClick={() => {
                   setNewDocCategory(activeTab);
+                  setNewDocOrgId('');
                   setUploadModalOpen(true);
                 }}
-                disabled={!activeOrganizationId}
-                title={!activeOrganizationId ? 'Selecione uma organização para criar um documento' : undefined}
-                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 disabled:active:scale-100"
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
               >
                 <Plus className="w-[15px] h-[15px]" />
                 Novo documento
@@ -2478,6 +2479,26 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             </div>
 
             <form onSubmit={handleUploadSubmit} className="p-6 space-y-5">
+              {/* Seletor de organização — só quando o seletor global está em
+                  "Todas as Organizações". Sem ele, o upload não saberia em qual
+                  org gravar (mesmo padrão do modal de "Nova pasta"). */}
+              {!activeOrganizationId && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">Organização</label>
+                  <select
+                    value={newDocOrgId}
+                    onChange={(e) => setNewDocOrgId(e.target.value)}
+                    required
+                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  >
+                    <option value="">Selecione uma organização...</option>
+                    {organizations.map(org => (
+                      <option key={org.id} value={org.id}>{org.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Arquivo (Drag and Drop Simples) */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-500">Arquivo Físico (PDF, DOCX, XLSX, DWG, Imagens — Max 50MB)</label>

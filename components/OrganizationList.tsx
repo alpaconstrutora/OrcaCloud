@@ -106,7 +106,15 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     const [managingOrgId, setManagingOrgId] = useState<string | null>(null);
     const tableColumns = useTableColumns(ORG_LIST_COLUMNS, 'organizationListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'organizationListFilters:advanced');
-    const { activeOrganizationId, setActiveOrganizationId } = useStore();
+    const { activeOrganizationId, setActiveOrganizationId, companies, activeEmpresaId } = useStore();
+    // Header pode estar selecionado por EMPRESA (activeEmpresaId) sem que
+    // activeOrganizationId acompanhe — os dois seletores são independentes
+    // (setActiveEmpresaId nunca seta activeOrganizationId). Sem esse fallback,
+    // as telas de Registros Financeiros (Contas/Centros de Custo/Plano de
+    // Contas) buscavam sem filtro de organização nenhum, trazendo registros
+    // de TODAS as organizações misturados — pareciam duplicados, mas eram de
+    // organizações diferentes.
+    const empresaOrgId = companies.find(c => c.id === activeEmpresaId)?.org_id;
 
     const handleResendInviteFromList = async (orgId: string, email: string, name: string, role: string) => {
         const { data, error } = await supabase.functions.invoke('invite-member', {
@@ -135,7 +143,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     const [showImportModal, setShowImportModal] = useState(false);
 
     const loadRegistries = React.useCallback(async () => {
-        const targetOrgId = activeOrganizationId || managingOrgId;
+        const targetOrgId = activeOrganizationId || managingOrgId || empresaOrgId;
         try {
             const [accs, centers, charts] = await Promise.all([
                 financialRegistryService.listPaymentAccounts(targetOrgId || undefined),
@@ -148,14 +156,14 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
         } catch (error) {
             console.error('Error loading registries:', error);
         }
-    }, [managingOrgId, activeOrganizationId]);
+    }, [managingOrgId, activeOrganizationId, empresaOrgId]);
 
     React.useEffect(() => {
         // Load registries when tab changes to a financial one OR when org changes
         if (['accounts', 'cost_centers', 'chart_of_accounts'].includes(activeTab)) {
             loadRegistries();
         }
-    }, [activeTab, activeOrganizationId, managingOrgId, loadRegistries]);
+    }, [activeTab, activeOrganizationId, managingOrgId, empresaOrgId, loadRegistries]);
 
     // Reset managingOrgId whenever the user navigates away from the users tab
     // while in global context (no active org). This ensures the consolidated
@@ -598,7 +606,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         showBankDetails={activeTab === 'accounts'}
                         showCode={true}
                         onSave={async (item) => {
-                            const currentOrgId = item.organization_id || activeOrganizationId || managingOrgId;
+                            const currentOrgId = item.organization_id || activeOrganizationId || managingOrgId || empresaOrgId;
                             if (!currentOrgId) return alert("Selecione uma organização para vincular a conta.");
 
                             // Remover apenas campos gerados pelo servidor (id, created_at)
@@ -631,9 +639,9 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                     />
                 )}
 
-                {showImportModal && (activeOrganizationId || managingOrgId) && (
+                {showImportModal && (activeOrganizationId || managingOrgId || empresaOrgId) && (
                     <CostCenterImportModal
-                        organizationId={(activeOrganizationId || managingOrgId)!}
+                        organizationId={(activeOrganizationId || managingOrgId || empresaOrgId)!}
                         existingCostCenters={costCenters}
                         onClose={() => setShowImportModal(false)}
                         onSuccess={() => { loadRegistries(); setShowImportModal(false); }}

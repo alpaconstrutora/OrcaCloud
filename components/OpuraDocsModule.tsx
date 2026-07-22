@@ -1680,27 +1680,82 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* ─── HEADER ─── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50 p-6 rounded-[10px] border border-slate-100">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="p-2 bg-blue-50 text-blue-600 rounded-[10px]">
-              <FolderOpen className="w-6 h-6" />
-            </span>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Gestão de Documentos</h1>
-          </div>
-          <p className="text-slate-400 text-sm font-medium">
+      {/* ─── TÍTULO (§1: h1 solto, nunca dentro de card/hero) ─── */}
+      <div className="flex items-center gap-2">
+        <span className="p-2 bg-blue-50 text-blue-600 rounded-[10px]">
+          <FolderOpen className="w-6 h-6" />
+        </span>
+        <div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Gestão de Documentos</h1>
+          <p className="text-slate-400 text-sm mt-1.5 font-medium">
             Governança e centralização de documentos integrados ao ecossistema ÒPURA.
           </p>
         </div>
+      </div>
 
-        {/* Dropdown de Obras / Empreendimento (Feature 2) */}
-        <div className="flex flex-wrap items-center gap-3">
+      {/* ─── TOOLBAR DE ABAS (§3) — card branco + trilho bg-gray-50, flex-wrap (nunca overflow-x-auto) ─── */}
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+          {CATEGORIES.map((cat) => {
+            const isAllowed = canAccessTab(cat.id);
+            if (!isAllowed) return null; // Esconde abas proibidas pelo controle de acesso (Feature 3)
+
+            const isActive = activeTab === cat.id && !showMetrics;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => { setActiveTab(cat.id); setShowMetrics(false); }}
+                className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                  isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                {cat.label}
+              </button>
+            );
+          })}
+
+          <button
+            onClick={() => { setShowMetrics(true); setShowPendingOnly(false); }}
+            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+              showMetrics ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            📊 Saúde Documental
+          </button>
+
+          {isOrgAdmin && (
+            <button
+              onClick={() => setShowSettingsModal(true)}
+              className="px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all text-gray-400 hover:text-gray-600 flex items-center gap-1.5"
+            >
+              ⚙️ Ajustes do GED
+            </button>
+          )}
+        </div>
+
+        {pendingApprovals.length > 0 && (
+          <button
+            onClick={() => setShowPendingOnly(!showPendingOnly)}
+            className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium transition-all border shrink-0 ${
+              showPendingOnly
+                ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 animate-pulse'
+            }`}
+          >
+            <UserCheck className="w-4 h-4" />
+            Pendências ({pendingApprovals.length})
+          </button>
+        )}
+      </div>
+
+      {/* ─── TOOLBAR DE BOTÕES (§4) — escopo (Empreendimento/Obra) à esquerda, ação primária à direita ─── */}
+      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <select
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="appearance-none h-9 pl-9 pr-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 cursor-pointer"
+              className="appearance-none h-9 pl-9 pr-9 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
             >
               <option value="all">🏢 Todos os Empreendimentos</option>
               {obras.map((o) => (
@@ -1712,91 +1767,34 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
-
-          {/* Botões de Ações (Nova Pasta e Novo Documento) */}
-          {canAccessTab(activeTab) && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCreateFolderModalOpen(true)}
-                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
-              >
-                <FolderPlus className="w-[15px] h-[15px] text-blue-600" />
-                Nova pasta
-              </button>
-              {/* Em "Todas as Organizações" (activeOrganizationId nulo) o botão
-                  continua ativo: o próprio modal mostra um seletor de organização
-                  (igual ao "Nova pasta"), então dá pra criar sem trocar o seletor
-                  global antes. REGRA #5: leitura/criação nunca fica bloqueada. */}
-              <button
-                onClick={() => {
-                  setNewDocCategory(activeTab);
-                  setNewDocOrgId('');
-                  setUploadModalOpen(true);
-                }}
-                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-              >
-                <Plus className="w-[15px] h-[15px]" />
-                Novo documento
-              </button>
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* ─── CATEGORIAS / DIRETÓRIOS (Feature 2) — barra de abas local (§19: vocabulário compacto) ─── */}
-      <div className="flex items-center border-b border-slate-100 overflow-x-auto gap-2">
-        {CATEGORIES.map((cat) => {
-          const isAllowed = canAccessTab(cat.id);
-          if (!isAllowed) return null; // Esconde abas proibidas pelo controle de acesso (Feature 3)
-
-          const isActive = activeTab === cat.id && !showMetrics;
-          return (
+        {/* Botões de Ações (Nova Pasta e Novo Documento) */}
+        {canAccessTab(activeTab) && (
+          <div className="flex items-center gap-2 shrink-0">
             <button
-              key={cat.id}
-              onClick={() => { setActiveTab(cat.id); setShowMetrics(false); }}
-              className={`h-9 px-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
-                isActive
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-400 hover:text-slate-600'
-              }`}
+              onClick={() => setCreateFolderModalOpen(true)}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
             >
-              {cat.label}
+              <FolderPlus className="w-[15px] h-[15px] text-blue-600" />
+              Nova pasta
             </button>
-          );
-        })}
-
-        <button
-          onClick={() => { setShowMetrics(true); setShowPendingOnly(false); }}
-          className={`h-9 px-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
-            showMetrics
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-slate-400 hover:text-slate-600'
-          }`}
-        >
-          📊 Saúde Documental
-        </button>
-
-        {isOrgAdmin && (
-          <button
-            onClick={() => setShowSettingsModal(true)}
-            className="h-9 px-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-blue-600 hover:border-blue-600 transition-all whitespace-nowrap flex items-center gap-1.5"
-          >
-            ⚙️ Ajustes do GED
-          </button>
-        )}
-
-        {pendingApprovals.length > 0 && (
-          <button
-            onClick={() => setShowPendingOnly(!showPendingOnly)}
-            className={`ml-auto flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium transition-all border ${
-              showPendingOnly
-                ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
-                : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100 animate-pulse'
-            }`}
-          >
-            <UserCheck className="w-4 h-4" />
-            Pendências ({pendingApprovals.length})
-          </button>
+            {/* Em "Todas as Organizações" (activeOrganizationId nulo) o botão
+                continua ativo: o próprio modal mostra um seletor de organização
+                (igual ao "Nova pasta"), então dá pra criar sem trocar o seletor
+                global antes. REGRA #5: leitura/criação nunca fica bloqueada. */}
+            <button
+              onClick={() => {
+                setNewDocCategory(activeTab);
+                setNewDocOrgId('');
+                setUploadModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+            >
+              <Plus className="w-[15px] h-[15px]" />
+              Novo documento
+            </button>
+          </div>
         )}
       </div>
 

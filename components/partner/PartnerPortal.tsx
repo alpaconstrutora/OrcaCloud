@@ -23,13 +23,18 @@ import {
   Package,
   TrendingUp,
   Ruler,
-  ArrowLeft
+  ArrowLeft,
+  ChevronDown,
+  Bell,
+  HelpCircle,
+  Settings2
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
 import { partnerPortalTokenService } from '../../services/partnerPortalTokenService';
 import { contractService } from '../../services/contractService';
 import Button from '../ui/Button';
+import { usePersistedState } from '../ui/TableUtils';
 import {
   PartnerWorkspace,
   PartnerUser,
@@ -80,6 +85,23 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const [sharedDocs, setSharedDocs] = useState<PartnerSharedDocument[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [requests, setRequests] = useState<PartnerRequest[]>([]);
+
+  // Menu de conta do portal público (link do parceiro) — espelha o dropdown de perfil do sistema
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [showMyAccount, setShowMyAccount] = useState(false);
+  const [menuMsg, setMenuMsg] = useState<string | null>(null);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const showMenuToast = (m: string) => { setMenuMsg(m); setTimeout(() => setMenuMsg(null), 4000); };
+  useEffect(() => {
+    if (!isAccountMenuOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isAccountMenuOpen]);
 
   // Modais
   const [isNewRequestModalOpen, setIsNewRequestModalOpen] = useState(false);
@@ -191,7 +213,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const retentionValue = totalMeasured * ((Number(detailContract?.retention_rate) || 0) / 100);
   const saldoAFaturar = detailContract ? Number(detailContract.current_value) - totalMeasured : 0;
 
-  const [docSearchQuery, setDocSearchQuery] = useState('');
+  const [docSearchQuery, setDocSearchQuery] = usePersistedState('partnerPortalDocsFilters:search', '');
 
   // Documentos compartilhados, filtrados pela busca e agrupados por categoria (Onda 4)
   const docsByCategoria = React.useMemo(() => {
@@ -622,9 +644,76 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
             {workspace?.supplier_name}
           </h1>
         </div>
-        <div className="flex items-center gap-3 text-xs bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
-          <User className="w-3.5 h-3.5 text-orange-500" />
-          <span className="font-semibold text-gray-600">{partnerUser?.name} ({partnerUser?.role})</span>
+        <div className="relative" ref={accountMenuRef}>
+          <button
+            type="button"
+            onClick={() => setIsAccountMenuOpen(o => !o)}
+            className="flex items-center gap-2 text-xs bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 transition-colors"
+            aria-haspopup="menu"
+            aria-expanded={isAccountMenuOpen}
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-500 text-[11px] font-bold text-white">
+              {(partnerUser?.name || 'P').charAt(0).toUpperCase()}
+            </span>
+            <span className="font-semibold text-gray-600">{partnerUser?.name} ({partnerUser?.role})</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isAccountMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {isAccountMenuOpen && (
+            <div className="absolute right-0 top-full z-[1000] mt-2 w-[280px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl" role="menu">
+              <div className="border-b border-gray-100 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-500 text-sm font-bold text-white">
+                    {(partnerUser?.name || 'P').charAt(0).toUpperCase()}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold text-gray-900">{partnerUser?.name}</div>
+                    <div className="truncate text-xs text-gray-500">{partnerUser?.email || userEmail}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="p-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsAccountMenuOpen(false); setShowMyAccount(true); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                  role="menuitem"
+                >
+                  <User className="h-4 w-4 text-gray-400" />
+                  <span className="flex-1">Minha conta</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setIsAccountMenuOpen(false); showMenuToast('Personalização de tema estará disponível em breve.'); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                  role="menuitem"
+                >
+                  <Settings2 className="h-4 w-4 text-gray-400" />
+                  <span className="flex-1">Preferências</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setIsAccountMenuOpen(false); showMenuToast('Central de notificações do parceiro estará disponível em breve.'); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                  role="menuitem"
+                >
+                  <Bell className="h-4 w-4 text-gray-400" />
+                  <span className="flex-1">Notificações</span>
+                </button>
+              </div>
+              <div className="border-t border-gray-100 p-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsAccountMenuOpen(false); showMenuToast('Dúvidas? Fale com a construtora responsável por esta obra.'); }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                  role="menuitem"
+                >
+                  <HelpCircle className="h-4 w-4 text-gray-400" />
+                  <span className="flex-1">Ajuda e comandos</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
@@ -1424,6 +1513,54 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* MODAL: MINHA CONTA */}
+      {showMyAccount && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowMyAccount(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-8 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center">
+                  <User className="w-5 h-5 text-orange-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Minha Conta</h2>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Dados cadastrais</p>
+                </div>
+              </div>
+              <button onClick={() => setShowMyAccount(false)} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-8 space-y-4">
+              {[
+                ['Nome', partnerUser?.name || '—'],
+                ['E-mail', partnerUser?.email || userEmail || '—'],
+                ['Perfil', partnerUser?.role || '—'],
+                ['Empresa', workspace?.supplier_name || '—'],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{label}</div>
+                  <div className="text-sm font-semibold text-gray-800">{value}</div>
+                </div>
+              ))}
+              <p className="text-xs text-gray-400 pt-3 border-t border-gray-100">
+                Para alterar seus dados cadastrais, entre em contato com a construtora.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {menuMsg && (
+        <div className="fixed bottom-6 right-6 z-[300] flex items-center gap-2 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium bg-gray-900 text-white animate-in slide-in-from-bottom-4 duration-300">
+          <HelpCircle className="w-4 h-4 shrink-0" /> {menuMsg}
         </div>
       )}
 

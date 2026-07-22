@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
 import PreferencesSheet, { type ThemeMode } from './PreferencesSheet';
+import MyAccountSheet from './MyAccountSheet';
 import { notificationService } from '../services/notificationService';
 import { taskService } from '../services/taskService';
 import { viewUrl } from '../lib/tabRouter';
@@ -166,11 +167,12 @@ const Layout: React.FC<LayoutProps> = ({
   const [isEmpresaDropdownOpen, setIsEmpresaDropdownOpen] = React.useState(false);
   const [isHeaderEmpresaDropdownOpen, setIsHeaderEmpresaDropdownOpen] = React.useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = React.useState(false);
+  const [isMyAccountOpen, setIsMyAccountOpen] = React.useState(false);
   const profileMenuRef = React.useRef<HTMLDivElement>(null);
   const activeEmpresa = companies.find(c => c.id === activeEmpresaId) ?? null;
 
   // Obter organização e membros para calcular permissões dinâmicas
-  const { organizations, activeOrganizationId } = useStore();
+  const { organizations, activeOrganizationId, setOrganizations } = useStore();
   const activeOrg = organizations.find(o => o.id === activeOrganizationId);
   
   const currentMember = React.useMemo(() => {
@@ -193,6 +195,17 @@ const Layout: React.FC<LayoutProps> = ({
     : profile.group === 'DESENVOLVEDOR'
       ? 'Desenvolvedor'
       : profile.role;
+  const myAccountRoleLabel = currentMember?.customRoleId
+    ? (activeOrg?.customRoles?.find(r => r.id === currentMember.customRoleId)?.name ?? roleLabel)
+    : roleLabel;
+  const handleMyAccountSaved = React.useCallback((name: string) => {
+    if (!activeOrg || !currentMember) return;
+    setOrganizations(organizations.map(o => o.id === activeOrg.id
+      ? { ...o, members: (o.members || []).map(m => m.id === currentMember.id ? { ...m, name } : m) }
+      : o
+    ));
+    showMenuToast('Minha conta', 'Dados de cadastro atualizados com sucesso.');
+  }, [activeOrg, currentMember, organizations, setOrganizations]);
   const canManageOrganization = profile.group === 'DESENVOLVEDOR'
     || currentMember?.role === 'admin'
     || currentMember?.permissions?.canManageUsers
@@ -1452,7 +1465,7 @@ const Layout: React.FC<LayoutProps> = ({
                   <div className="border-b border-slate-100 p-2">
                     <button
                       type="button"
-                      onClick={() => showMenuToast('Minha conta', 'Tela dedicada de conta ainda nao esta disponivel.')}
+                      onClick={() => { setIsProfileMenuOpen(false); setIsMyAccountOpen(true); }}
                       className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
                       role="menuitem"
                     >
@@ -1659,6 +1672,16 @@ const Layout: React.FC<LayoutProps> = ({
         resolvedThemeMode={resolvedThemeMode}
         highContrast={highContrast}
         setHighContrast={setHighContrast}
+      />
+
+      <MyAccountSheet
+        open={isMyAccountOpen}
+        onClose={() => setIsMyAccountOpen(false)}
+        member={currentMember}
+        email={profile.email}
+        organizationName={activeOrg?.name}
+        roleLabel={myAccountRoleLabel}
+        onSaved={handleMyAccountSaved}
       />
     </div>
     </NavContext.Provider>

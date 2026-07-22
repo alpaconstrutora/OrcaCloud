@@ -352,5 +352,17 @@ export const organizationService = {
             .eq('email', email.toLowerCase());
 
         if (error) throw error;
+    },
+
+    // Autoatualização do próprio registro de cadastro (drawer "Minha conta").
+    // Só o nome é editável aqui: e-mail é a chave de login (auth.users) e
+    // cargo/permissões são geridos pelo admin em Configurações > Usuários.
+    async updateMemberSelf(memberId: string, updates: { name: string }): Promise<void> {
+        const { error } = await supabase
+            .from('organization_members')
+            .update({ name: updates.name })
+            .eq('id', memberId);
+
+        if (error) throw error;
     }
 };

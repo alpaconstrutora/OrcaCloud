@@ -55,10 +55,9 @@ import InvestorList from './InvestorList';
 import { SupplierList } from './SupplierList';
 import FinancialRegistryManager from './FinancialRegistryManager';
 import CompaniesModule from './CompaniesModule';
-import CostCenterImportModal from './CostCenterImportModal';
+import CostCenterModule from './CostCenterModule';
 import { financialRegistryService } from '../services/financialRegistryService';
-import { exportService } from '../services/exportService';
-import { PaymentAccount, CostCenter, ChartOfAccount } from '../types';
+import { PaymentAccount, ChartOfAccount } from '../types';
 
 interface OrganizationListProps {
     organizations: Organization[];
@@ -143,22 +142,20 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     };
 
     // Financial Registries State
+    // Centro de Custo tem tabela e tela própria agora (CostCenterModule +
+    // costCenterService, cost_centers_v2) — não passa mais por aqui.
     const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([]);
-    const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
     const [chartOfAccounts, setChartOfAccounts] = useState<ChartOfAccount[]>([]);
-    const [showImportModal, setShowImportModal] = useState(false);
 
     const loadRegistries = React.useCallback(async () => {
         // chart_of_accounts (financial_categories) é global — ignora org de propósito.
         const targetOrgId = registryOrgId;
         try {
-            const [accs, centers, charts] = await Promise.all([
+            const [accs, charts] = await Promise.all([
                 financialRegistryService.listPaymentAccounts(targetOrgId || undefined),
-                financialRegistryService.listCostCenters(targetOrgId || undefined),
                 financialRegistryService.listChartOfAccounts(targetOrgId || undefined)
             ]);
             setPaymentAccounts(accs);
-            setCostCenters(centers);
             setChartOfAccounts(charts);
         } catch (error) {
             console.error('Error loading registries:', error);
@@ -167,7 +164,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
 
     React.useEffect(() => {
         // Load registries when tab changes to a financial one OR when org changes
-        if (['accounts', 'cost_centers', 'chart_of_accounts'].includes(activeTab)) {
+        if (['accounts', 'chart_of_accounts'].includes(activeTab)) {
             loadRegistries();
         }
     }, [activeTab, loadRegistries]);
@@ -588,13 +585,13 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                     )
                 )}
 
-                {(activeTab === 'accounts' || activeTab === 'cost_centers' || activeTab === 'chart_of_accounts') && (
+                {(activeTab === 'accounts' || activeTab === 'chart_of_accounts') && (
                     <FinancialRegistryManager
                         organizations={activeTab === 'accounts' ? organizations.map(o => ({ id: o.id, name: o.name })) : undefined}
                         defaultOrganizationId={activeTab === 'accounts' ? (registryOrgId || undefined) : undefined}
-                        // Seletor de organização: só nas abas por-org (accounts/cost_centers),
-                        // e só quando não há org fixada globalmente e existe mais de uma.
-                        // chart_of_accounts é global (financial_categories) — não recebe seletor.
+                        // Seletor de organização: só na aba por-org (accounts), e só quando não
+                        // há org fixada globalmente e existe mais de uma. chart_of_accounts é
+                        // global (financial_categories) — não recebe seletor.
                         orgFilter={
                             activeTab !== 'chart_of_accounts' && !activeOrganizationId && !managingOrgId && organizations.length > 1
                                 ? {
@@ -604,23 +601,13 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                 }
                                 : undefined
                         }
-                        title={
-                            activeTab === 'accounts' ? 'Contas de Pagamento' :
-                            activeTab === 'cost_centers' ? 'Plano de Contas' : 'Plano de Contas'
-                        }
+                        title={activeTab === 'accounts' ? 'Contas de Pagamento' : 'Plano de Contas'}
                         description={
                             activeTab === 'accounts' ? 'Gerencie as contas bancárias para alocação de gastos' :
-                            activeTab === 'cost_centers' ? 'Estruture seu plano de contas para classificação' :
                             'Estruture seu plano de contas para relatórios detalhados'
                         }
-                        icon={
-                            activeTab === 'accounts' ? Building2 :
-                            activeTab === 'cost_centers' ? HandCoins : HandCoins
-                        }
-                        items={
-                            activeTab === 'accounts' ? paymentAccounts :
-                            activeTab === 'cost_centers' ? costCenters : chartOfAccounts
-                        }
+                        icon={activeTab === 'accounts' ? Building2 : HandCoins}
+                        items={activeTab === 'accounts' ? paymentAccounts : chartOfAccounts}
                         showDescription={activeTab === 'accounts'}
                         showBankDetails={activeTab === 'accounts'}
                         showCode={true}
@@ -636,10 +623,6 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                 const payload = { name: rest.name, description: rest.description, bank: rest.bank, branch: rest.branch, account_number: rest.account_number, code: rest.code || undefined };
                                 if (item.id) await financialRegistryService.updatePaymentAccount(item.id, { ...payload, organization_id: currentOrgId });
                                 else await financialRegistryService.createPaymentAccount({ ...payload, organization_id: currentOrgId });
-                            } else if (activeTab === 'cost_centers') {
-                                const payload = { name: rest.name, code: rest.code };
-                                if (item.id) await financialRegistryService.updateCostCenter(item.id, payload);
-                                else await financialRegistryService.createCostCenter({ ...payload, organization_id: currentOrgId });
                             } else {
                                 const payload = { name: rest.name, code: rest.code ?? '', accounting_nature: rest.accounting_nature };
                                 if (item.id) await financialRegistryService.updateChartOfAccount(item.id, payload);
@@ -649,22 +632,24 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         }}
                         onDelete={async (id) => {
                             if (activeTab === 'accounts') await financialRegistryService.deletePaymentAccount(id);
-                            else if (activeTab === 'cost_centers') await financialRegistryService.deleteCostCenter(id);
                             else await financialRegistryService.deleteChartOfAccount(id);
                             loadRegistries();
                         }}
-                        onExport={activeTab === 'cost_centers' ? () => exportService.exportCostCenters(costCenters) : undefined}
-                        onDownloadTemplate={activeTab === 'cost_centers' ? () => exportService.downloadCostCenterTemplate() : undefined}
-                        onImport={activeTab === 'cost_centers' ? () => setShowImportModal(true) : undefined}
                     />
                 )}
 
-                {showImportModal && registryOrgId && (
-                    <CostCenterImportModal
+                {activeTab === 'cost_centers' && (
+                    <CostCenterModule
                         organizationId={registryOrgId}
-                        existingCostCenters={costCenters}
-                        onClose={() => setShowImportModal(false)}
-                        onSuccess={() => { loadRegistries(); setShowImportModal(false); }}
+                        orgFilter={
+                            !activeOrganizationId && !managingOrgId && organizations.length > 1
+                                ? {
+                                    organizations: organizations.map(o => ({ id: o.id, name: o.name })),
+                                    value: registryOrgId,
+                                    onChange: setRegistryOrgOverride,
+                                }
+                                : undefined
+                        }
                     />
                 )}
 

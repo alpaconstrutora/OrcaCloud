@@ -145,6 +145,22 @@ export interface CostCenter {
     created_at?: string;
 }
 
+// Módulo "Centro de Custo" (Minha Organização) — tabela nova `cost_centers_v2`,
+// separada da CostCenter/`cost_centers` acima (ver migration
+// 20270822000001_create_cost_centers_v2.sql). 2 níveis reais via parent_id:
+// parent_id null = grupo; parent_id preenchido = subgrupo ("centro de custo").
+export interface CostCenterV2 {
+    id: string;
+    organization_id: string;
+    empresa_id?: string | null;
+    parent_id?: string | null;
+    code: string;
+    name: string;
+    description?: string | null;
+    created_at?: string;
+    updated_at?: string;
+}
+
 // Aposentado: mapeado agora para financial_categories (global, hierárquico, com dre_group).
 // Os campos organization_id, empresa_id, code e type são mantidos opcionais para
 // compatibilidade com dados históricos e callers existentes.

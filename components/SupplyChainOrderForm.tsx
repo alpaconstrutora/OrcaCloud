@@ -11,9 +11,11 @@ import { orderService } from '../services/orderService';
 import { sinapiService } from '../services/sinapiService';
 import { organizationService } from '../services/organizationService';
 import { financialRegistryService } from '../services/financialRegistryService';
+import { costCenterService } from '../services/costCenterService';
 import MaterialSelectionModal from './MaterialSelectionModal';
 import DatabasePickerModal from './DatabasePickerModal';
-import { Supplier, BudgetEntry, SinapiType, SinapiItem, PaymentAccount, CostCenter, ChartOfAccount, CompositionComponent } from '../types';
+import { Supplier, BudgetEntry, SinapiType, SinapiItem, PaymentAccount, ChartOfAccount, CompositionComponent } from '../types';
+import { CostCenterV2 } from '../types/financial';
 import { formatCurrency } from '../utils/financialMath';
 
 interface AvulsoItem { code: string; description: string; unit: string; quantity: number; unitPrice: number; }
@@ -47,7 +49,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [projects, setProjects] = React.useState<{ id: string; name: string; settings?: { classification?: string } }[]>([]);
     const [accounts, setAccounts] = React.useState<PaymentAccount[]>([]);
-    const [costCenters, setCostCenters] = React.useState<CostCenter[]>([]);
+    const [costCenters, setCostCenters] = React.useState<CostCenterV2[]>([]);
     const [coa, setCoa] = React.useState<ChartOfAccount[]>([]);
 
     const [selectedSupplierId, setSelectedSupplierId] = React.useState('');
@@ -59,7 +61,10 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const [paymentInstallments, setPaymentInstallments] = React.useState(1);
     const [notes, setNotes] = React.useState('');
     const [bankAccount, setBankAccount] = React.useState('');
-    const [costCenter, setCostCenter] = React.useState('');
+    // FK de verdade (cost_centers_v2) — costCenter (nome, texto legado) é
+    // derivado dela no submit, só para não quebrar telas que ainda leem o
+    // texto (FinancialOrderDetails, financialService).
+    const [costCenterId, setCostCenterId] = React.useState('');
     const [chartOfAccounts, setChartOfAccounts] = React.useState('');
     const [deliveryMethod, setDeliveryMethod] = React.useState('CIF - Entrega por conta do fornecedor');
     const [deliveryLocation, setDeliveryLocation] = React.useState('Canteiro de Obras');
@@ -101,7 +106,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     const orgId = orgs[0].id;
                     const [accs, centers, accounts_coa] = await Promise.all([
                         financialRegistryService.listPaymentAccounts(orgId),
-                        financialRegistryService.listCostCenters(orgId),
+                        costCenterService.list(orgId),
                         financialRegistryService.listChartOfAccounts(orgId)
                     ]);
                     if (cancelled) return;
@@ -137,7 +142,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     setPaymentInstallments(existingOrder.paymentInstallments || 1);
                     setNotes(existingOrder.notes || '');
                     setBankAccount(existingOrder.bankAccount || '');
-                    setCostCenter(existingOrder.costCenter || '');
+                    setCostCenterId(existingOrder.costCenterId || '');
                     setChartOfAccounts(existingOrder.chartOfAccounts || '');
                     // Separate avulso items from budget items
                     type OrderItemWithAvulso = typeof existingOrder.items[number] & { avulso?: boolean };
@@ -462,6 +467,11 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 return;
             }
 
+            // costCenter (texto) é derivado do id selecionado — mantém telas
+            // legadas (FinancialOrderDetails, financialService) funcionando
+            // enquanto cost_center_id (FK) é a fonte de verdade daqui pra frente.
+            const costCenterName = costCenters.find(c => c.id === costCenterId)?.name || '';
+
             if (isEditing && editingOrderId) {
                 await orderService.updateOrder(editingOrderId, {
                     projectId: selectedProjectId,
@@ -473,7 +483,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     paymentInstallments: paymentInstallments,
                     notes: notes,
                     bankAccount: bankAccount,
-                    costCenter: costCenter,
+                    costCenterId: costCenterId || undefined,
+                    costCenter: costCenterName,
                     chartOfAccounts: chartOfAccounts,
                     deliveryMethod: deliveryMethod,
                     deliveryLocation: deliveryLocation,
@@ -491,7 +502,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     status: 'Rascunho',
                     notes: notes,
                     bankAccount: bankAccount,
-                    costCenter: costCenter,
+                    costCenterId: costCenterId || undefined,
+                    costCenter: costCenterName,
                     chartOfAccounts: chartOfAccounts,
                     deliveryMethod: deliveryMethod,
                     deliveryLocation: deliveryLocation,
@@ -760,13 +772,12 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             </div>
                                         </div>
                                         <div className="space-y-3">
-                                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Plano de Contas</label>
+                                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Centro de custo</label>
                                             <HierarchicalSelect
                                                 items={costCenters}
-                                                value={costCenter}
-                                                onChange={setCostCenter}
-                                                valueField="name"
-                                                placeholder="Selecione o plano de contas..."
+                                                value={costCenterId}
+                                                onChange={setCostCenterId}
+                                                placeholder="Selecione o centro de custo..."
                                                 hoverCls="hover:bg-indigo-50"
                                             />
                                         </div>

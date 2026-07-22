@@ -1305,13 +1305,13 @@ export const payrollService = {
         }[];
     },
 
-    /** Lista centros de custo da organização */
+    /** Lista centros de custo da organização (cost_centers_v2 — módulo dedicado "Centro de Custo") */
     async listCostCenters(orgId: string) {
         const { data, error } = await supabase
-            .from('cost_centers')
+            .from('cost_centers_v2')
             .select('id, name, code')
             .eq('organization_id', orgId)
-            .order('name');
+            .order('code');
         if (error) throw error;
         return (data || []) as { id: string; name: string; code?: string }[];
     },

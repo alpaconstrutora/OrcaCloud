@@ -784,6 +784,61 @@ export const exportService = {
         saveAs(blob, `plano_de_contas_${date}.xlsx`);
     },
 
+    downloadCostCenterV2Template() {
+        const dataSheet = XLSX.utils.aoa_to_sheet([
+            ['Grupo', 'Centro de custo', 'Descrição'],
+            ['Administrativo', '', 'Grupo administrativo (deixe "Centro de custo" vazio para criar só o grupo)'],
+            ['Administrativo', 'Recursos Humanos', 'Departamento de RH'],
+            ['Obras', 'Torre A', ''],
+        ]);
+        dataSheet['!cols'] = [{ wch: 28 }, { wch: 28 }, { wch: 45 }];
+
+        ['A1', 'B1', 'C1'].forEach(cell => {
+            if (!dataSheet[cell]) return;
+            dataSheet[cell].s = { font: { bold: true }, fill: { fgColor: { rgb: 'DBEAFE' } } };
+        });
+
+        const instructionsSheet = XLSX.utils.aoa_to_sheet([
+            ['INSTRUÇÕES DE IMPORTAÇÃO — CENTRO DE CUSTO'],
+            [''],
+            ['• Não remova ou renomeie as colunas da aba "Centro de Custo".'],
+            ['• Preencha "Grupo" e deixe "Centro de custo" vazio para criar só o grupo (nível 1).'],
+            ['• Preencha os dois para criar um subgrupo dentro do grupo (nível 2).'],
+            ['• O código (001, 002...) é gerado automaticamente — não é preciso informar.'],
+            ['• Remova as linhas de exemplo antes de importar.'],
+            ['• Salve o arquivo no formato .xlsx ou .csv antes de importar.'],
+        ]);
+        instructionsSheet['!cols'] = [{ wch: 70 }];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, dataSheet, 'Centro de Custo');
+        XLSX.utils.book_append_sheet(wb, instructionsSheet, 'Instruções');
+
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+        saveAs(blob, 'template_centro_de_custo.xlsx');
+    },
+
+    exportCostCentersV2(items: { code: string; name: string; description?: string | null; groupName?: string }[]) {
+        const exportData = items.map(item => ({
+            'Código': item.code,
+            'Grupo': item.groupName || '',
+            'Centro de custo': item.groupName ? item.name : '',
+            'Descrição': item.description || '',
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        ws['!cols'] = [{ wch: 10 }, { wch: 28 }, { wch: 28 }, { wch: 45 }];
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Centro de Custo');
+
+        const date = new Date().toISOString().slice(0, 10);
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+        saveAs(blob, `centro_de_custo_${date}.xlsx`);
+    },
+
     async urlToBase64(url: string): Promise<string> {
         return new Promise((resolve, reject) => {
             const img = new Image();

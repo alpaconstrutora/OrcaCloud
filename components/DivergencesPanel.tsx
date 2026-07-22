@@ -115,7 +115,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                 .order('name', { ascending: true });
             if (organizationId) projectsQuery = projectsQuery.filter('settings->>organizationId', 'eq', organizationId);
 
-            let costCentersQuery = supabase.from('cost_centers').select('id, name').order('name', { ascending: true });
+            let costCentersQuery = supabase.from('cost_centers_v2').select('id, name').order('code', { ascending: true });
             if (organizationId) costCentersQuery = costCentersQuery.eq('organization_id', organizationId);
 
             let clientsQuery = supabase.from('clients').select('id, name').order('name', { ascending: true });

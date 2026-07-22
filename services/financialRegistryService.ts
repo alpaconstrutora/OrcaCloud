@@ -58,11 +58,19 @@ export const financialRegistryService = {
         if (error) throw error;
     },
 
-    // Cost Centers
+    // Cost Centers — fonte de verdade agora é cost_centers_v2 (módulo dedicado
+    // "Centro de Custo" em Minha Organização, ver components/CostCenterModule.tsx
+    // e services/costCenterService.ts). Este método continua sendo o ponto único
+    // consumido por Boletos/Contratos/Conciliação Bancária (BoletoFormModal,
+    // BoletoLoteModal, BoletoEdicaoEmLoteModal, BankTxEdicaoEmLoteModal,
+    // BankReconciliation, DivergencesPanel, ContractModal) — repontar aqui basta
+    // para reconectar todos eles, sem editar cada tela. Retorna no formato
+    // CostCenter (flat) para não quebrar esses consumidores; grupo/subgrupo vira
+    // "Grupo > Subgrupo" no name.
     async listCostCenters(organizationId?: string, empresaId?: string): Promise<CostCenter[]> {
         let query = supabase
-            .from('cost_centers')
-            .select('id, organization_id, empresa_id, name, code, created_at');
+            .from('cost_centers_v2')
+            .select('id, organization_id, empresa_id, parent_id, name, code, created_at');
 
         if (empresaId) {
             query = query.eq('empresa_id', empresaId);
@@ -70,67 +78,22 @@ export const financialRegistryService = {
             query = query.eq('organization_id', organizationId);
         }
 
-        const { data, error } = await query.order('name');
+        const { data, error } = await query.order('code');
 
         if (error) throw error;
-        return data || [];
-    },
 
-    async createCostCenter(center: Omit<CostCenter, 'id' | 'created_at'>): Promise<CostCenter> {
-        const { data, error } = await supabase
-            .from('cost_centers')
-            .insert(center)
-            .select()
-            .single();
+        type Row = { id: string; organization_id: string; empresa_id?: string; parent_id?: string | null; name: string; code: string; created_at?: string };
+        const rows = (data || []) as Row[];
+        const byId = new Map(rows.map(r => [r.id, r]));
 
-        if (error) throw error;
-        return data;
-    },
-
-    async updateCostCenter(id: string, center: Partial<CostCenter>): Promise<CostCenter> {
-        const { data, error } = await supabase
-            .from('cost_centers')
-            .update(center)
-            .eq('id', id)
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data;
-    },
-
-    async deleteCostCenter(id: string): Promise<void> {
-        const { error } = await supabase
-            .from('cost_centers')
-            .delete()
-            .eq('id', id);
-
-        if (error) throw error;
-    },
-
-    async upsertCostCenters(
-        organizationId: string,
-        rows: { name: string; code?: string; existingId?: string }[]
-    ): Promise<{ created: number; updated: number }> {
-        let created = 0;
-        let updated = 0;
-
-        for (const row of rows) {
-            if (row.existingId) {
-                await supabase
-                    .from('cost_centers')
-                    .update({ name: row.name, code: row.code || null })
-                    .eq('id', row.existingId);
-                updated++;
-            } else {
-                await supabase
-                    .from('cost_centers')
-                    .insert({ organization_id: organizationId, name: row.name, code: row.code || null });
-                created++;
-            }
-        }
-
-        return { created, updated };
+        return rows.map(r => ({
+            id: r.id,
+            organization_id: r.organization_id,
+            empresa_id: r.empresa_id,
+            code: r.code,
+            name: r.parent_id ? `${byId.get(r.parent_id)?.name ?? ''} > ${r.name}` : r.name,
+            created_at: r.created_at,
+        }));
     },
 
     // Categorias Financeiras (substitui chart_of_accounts — aposentado em jun/2026)

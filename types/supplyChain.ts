@@ -43,7 +43,12 @@ export interface PurchaseOrder {
         notes?: string;
         }[];
     bankAccount?: string;
+    // Legado: nome copiado em texto livre — mantido só para exibir pedidos
+    // antigos. Pedidos novos gravam costCenterId (FK para cost_centers_v2);
+    // o form também preenche este campo com o mesmo nome, para não quebrar
+    // telas que ainda leem o texto (FinancialOrderDetails, financialService).
     costCenter?: string;
+    costCenterId?: string;
     chartOfAccounts?: string;
     notes?: string;
     items: PurchaseOrderItem[];

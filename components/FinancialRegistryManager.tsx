@@ -16,7 +16,18 @@ interface RegistryItem {
     branch?: string;
     account_number?: string;
     organization_id?: string;
+    accounting_nature?: 'CREDORA' | 'DEVEDORA';
 }
+
+const NATURE_LABELS: Record<'CREDORA' | 'DEVEDORA', string> = {
+    CREDORA: 'Credora',
+    DEVEDORA: 'Devedora',
+};
+
+const NATURE_COLORS: Record<'CREDORA' | 'DEVEDORA', string> = {
+    CREDORA: 'text-emerald-700',
+    DEVEDORA: 'text-amber-800',
+};
 
 interface OrgOption {
     id: string;
@@ -36,6 +47,8 @@ interface FinancialRegistryManagerProps {
     showCode?: boolean;
     showDescription?: boolean;
     showBankDetails?: boolean;
+    // Natureza contábil (Credora/Devedora) — só faz sentido no Plano de Contas.
+    showNature?: boolean;
     organizations?: OrgOption[];
     defaultOrganizationId?: string;
     // Seletor de organização da toolbar — usado quando o contexto global está em
@@ -61,6 +74,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     showCode = false,
     showDescription = false,
     showBankDetails = false,
+    showNature = false,
     organizations,
     defaultOrganizationId,
     orgFilter,
@@ -87,8 +101,9 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
         cols.push({ key: 'name', label: 'Nome', sortable: true });
         // Detalhes = descrição + dados bancários combinados — sem valor único óbvio pra ordenar (§6.3).
         if (showDescription || showBankDetails) cols.push({ key: 'details', label: 'Detalhes', sortable: false });
+        if (showNature) cols.push({ key: 'accounting_nature', label: 'Natureza', sortable: true });
         return cols;
-    }, [showCode, showDescription, showBankDetails]);
+    }, [showCode, showDescription, showBankDetails, showNature]);
 
     const tableColumns = useTableColumns(registryColumns, 'financialRegistryColumns');
 
@@ -103,8 +118,14 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
             fields.push({ key: 'bank', label: 'Banco', type: 'text' });
             fields.push({ key: 'account_number', label: 'Conta', type: 'text' });
         }
+        if (showNature) {
+            fields.push({
+                key: 'accounting_nature', label: 'Natureza', type: 'select',
+                options: [{ value: 'CREDORA', label: 'Credora' }, { value: 'DEVEDORA', label: 'Devedora' }],
+            });
+        }
         return fields;
-    }, [showCode, showDescription, showBankDetails]);
+    }, [showCode, showDescription, showBankDetails, showNature]);
 
     const getAdvancedFilterValue = (item: RegistryItem, key: string): unknown => (item as any)[key] ?? null;
 
@@ -117,7 +138,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     };
 
     const handleAdd = () => {
-        setFormData({ name: '', code: '', description: '', organization_id: defaultOrganizationId });
+        setFormData({ name: '', code: '', description: '', organization_id: defaultOrganizationId, accounting_nature: undefined });
         setIsAdding(true);
         setIsEditing(null);
     };
@@ -180,6 +201,14 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                     if (!a.code) return 1 * dir;
                     if (!b.code) return -1 * dir;
                     return a.code.localeCompare(b.code, 'pt-BR', { numeric: true }) * dir;
+                }
+                if (col === 'accounting_nature') {
+                    const an = a.accounting_nature ? NATURE_LABELS[a.accounting_nature] : '';
+                    const bn = b.accounting_nature ? NATURE_LABELS[b.accounting_nature] : '';
+                    if (!an && !bn) return 0;
+                    if (!an) return 1 * dir;
+                    if (!bn) return -1 * dir;
+                    return an.localeCompare(bn, 'pt-BR') * dir;
                 }
             }
             if (!a.code && !b.code) return a.name.localeCompare(b.name, 'pt-BR');
@@ -399,6 +428,20 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                         />
                                     </div>
                                 )}
+                                {showNature && (
+                                    <div>
+                                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Natureza</label>
+                                        <select
+                                            value={formData.accounting_nature || ''}
+                                            onChange={(e) => setFormData({ ...formData, accounting_nature: (e.target.value || undefined) as 'CREDORA' | 'DEVEDORA' | undefined })}
+                                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold text-gray-700"
+                                        >
+                                            <option value="">Selecione…</option>
+                                            <option value="CREDORA">Credora</option>
+                                            <option value="DEVEDORA">Devedora</option>
+                                        </select>
+                                    </div>
+                                )}
                                 {showDescription && (
                                     <div className={showBankDetails ? '' : 'md:col-span-2'}>
                                         <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2 px-1">Descrição Adicional</label>
@@ -500,6 +543,9 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                 {(showDescription || showBankDetails) && tableColumns.visibleColumns.includes('details') && (
                                     <SortableHeader label="Detalhes" colKey="details" sortable={false} uppercase={false} className="px-6 py-2 border-r border-gray-100" />
                                 )}
+                                {showNature && tableColumns.visibleColumns.includes('accounting_nature') && (
+                                    <SortableHeader label="Natureza" colKey="accounting_nature" sortable={true} uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100 w-28" />
+                                )}
                                 <th className="px-6 py-2 text-right w-20 text-table-header font-semibold text-gray-500">Ações</th>
                             </tr>
                         </thead>
@@ -555,6 +601,13 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                                         </div>
                                                     )}
                                                 </div>
+                                            </td>
+                                        )}
+                                        {showNature && tableColumns.visibleColumns.includes('accounting_nature') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                                <span className={`text-sm font-normal ${item.accounting_nature ? NATURE_COLORS[item.accounting_nature] : 'text-gray-400'}`}>
+                                                    {item.accounting_nature ? NATURE_LABELS[item.accounting_nature] : '-'}
+                                                </span>
                                             </td>
                                         )}
                                         <td className="px-6 py-2.5 text-right">

@@ -158,6 +158,9 @@ export interface ChartOfAccount {
     parent_id?: string;
     dre_group?: string;
     nature?: string;
+    // Natureza contábil (Credora/Devedora) — lado da partida dobrada em que a
+    // conta normalmente aumenta. Independente do "nature" acima (grupo de DRE).
+    accounting_nature?: 'CREDORA' | 'DEVEDORA';
     sort_order?: number;
     created_at?: string;
 }

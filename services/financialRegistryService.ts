@@ -138,7 +138,7 @@ export const financialRegistryService = {
     async listChartOfAccounts(_organizationId?: string, _empresaId?: string): Promise<ChartOfAccount[]> {
         const { data, error } = await supabase
             .from('financial_categories')
-            .select('id, name, parent_id, dre_group, nature, sort_order')
+            .select('id, name, parent_id, dre_group, nature, accounting_nature, sort_order')
             .order('sort_order', { ascending: true, nullsFirst: false });
 
         if (error) throw error;
@@ -148,8 +148,8 @@ export const financialRegistryService = {
     async createChartOfAccount(account: Omit<ChartOfAccount, 'id' | 'created_at'>): Promise<ChartOfAccount> {
         const { data, error } = await supabase
             .from('financial_categories')
-            .insert({ name: account.name, parent_id: account.parent_id ?? null })
-            .select('id, name, parent_id, dre_group, nature, sort_order')
+            .insert({ name: account.name, parent_id: account.parent_id ?? null, accounting_nature: account.accounting_nature ?? null })
+            .select('id, name, parent_id, dre_group, nature, accounting_nature, sort_order')
             .single();
 
         if (error) throw error;
@@ -162,7 +162,7 @@ export const financialRegistryService = {
         const trimmed = name.trim();
         const { data: existing, error: findError } = await supabase
             .from('financial_categories')
-            .select('id, name, parent_id, dre_group, nature, sort_order')
+            .select('id, name, parent_id, dre_group, nature, accounting_nature, sort_order')
             .ilike('name', trimmed)
             .maybeSingle();
 
@@ -174,17 +174,18 @@ export const financialRegistryService = {
 
     async updateChartOfAccount(id: string, account: Partial<ChartOfAccount>): Promise<ChartOfAccount> {
         const payload: Record<string, unknown> = {};
-        if (account.name       !== undefined) payload.name       = account.name;
-        if (account.parent_id  !== undefined) payload.parent_id  = account.parent_id;
-        if (account.dre_group  !== undefined) payload.dre_group  = account.dre_group;
-        if (account.nature     !== undefined) payload.nature     = account.nature;
-        if (account.sort_order !== undefined) payload.sort_order = account.sort_order;
+        if (account.name              !== undefined) payload.name              = account.name;
+        if (account.parent_id         !== undefined) payload.parent_id         = account.parent_id;
+        if (account.dre_group         !== undefined) payload.dre_group         = account.dre_group;
+        if (account.nature            !== undefined) payload.nature            = account.nature;
+        if (account.accounting_nature !== undefined) payload.accounting_nature = account.accounting_nature;
+        if (account.sort_order        !== undefined) payload.sort_order        = account.sort_order;
 
         const { data, error } = await supabase
             .from('financial_categories')
             .update(payload)
             .eq('id', id)
-            .select('id, name, parent_id, dre_group, nature, sort_order')
+            .select('id, name, parent_id, dre_group, nature, accounting_nature, sort_order')
             .single();
 
         if (error) throw error;

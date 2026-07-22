@@ -624,12 +624,13 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         showDescription={activeTab === 'accounts'}
                         showBankDetails={activeTab === 'accounts'}
                         showCode={true}
+                        showNature={activeTab === 'chart_of_accounts'}
                         onSave={async (item) => {
                             const currentOrgId = item.organization_id || registryOrgId;
                             if (!currentOrgId) return alert("Selecione uma organização para vincular a conta.");
 
                             // Remover apenas campos gerados pelo servidor (id, created_at)
-                            const { id: _id, created_at: _ca, ...rest } = item as { id?: string; created_at?: string; name: string; description?: string; bank?: string; branch?: string; account_number?: string; code?: string; organization_id?: string };
+                            const { id: _id, created_at: _ca, ...rest } = item as { id?: string; created_at?: string; name: string; description?: string; bank?: string; branch?: string; account_number?: string; code?: string; organization_id?: string; accounting_nature?: 'CREDORA' | 'DEVEDORA' };
                             if (activeTab === 'accounts') {
                                 // code: em branco = auto-gerado pelo service (001/002/003...); preenchido = respeita a edição manual.
                                 const payload = { name: rest.name, description: rest.description, bank: rest.bank, branch: rest.branch, account_number: rest.account_number, code: rest.code || undefined };
@@ -640,7 +641,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                 if (item.id) await financialRegistryService.updateCostCenter(item.id, payload);
                                 else await financialRegistryService.createCostCenter({ ...payload, organization_id: currentOrgId });
                             } else {
-                                const payload = { name: rest.name, code: rest.code ?? '' };
+                                const payload = { name: rest.name, code: rest.code ?? '', accounting_nature: rest.accounting_nature };
                                 if (item.id) await financialRegistryService.updateChartOfAccount(item.id, payload);
                                 else await financialRegistryService.createChartOfAccount({ ...payload, organization_id: currentOrgId });
                             }

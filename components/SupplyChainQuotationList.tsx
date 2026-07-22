@@ -141,20 +141,9 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Cotações de Suprimentos</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie solicitações de preço e mapas comparativos com visão estratégica.</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={onCreateNew}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-                    >
-                        <Plus className="w-[15px] h-[15px]" />
-                        Nova cotação
-                    </button>
-                </div>
+            <div>
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Cotações de Suprimentos</h1>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie solicitações de preço e mapas comparativos com visão estratégica.</p>
             </div>
 
             {/* Dashboard Cards */}
@@ -163,6 +152,18 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                 <KpiCard shadow={false} size="sm" label="Abertas" value={requests.filter(r => r.status === 'Aberta').length} sub="Aguardando respostas" icon={<Clock className="w-4 h-4" />} color="amber" pulse />
                 <KpiCard shadow={false} size="sm" label="Em Análise" value={requests.filter(r => r.status === 'Em Análise').length} sub="Comparando propostas" icon={<Search className="w-4 h-4" />} color="indigo" />
                 <KpiCard shadow={false} size="sm" label="Concluídas" value={requests.filter(r => r.status === 'Concluída').length} sub="Pedidos gerados" icon={<Plus className="w-4 h-4" />} color="emerald" />
+            </div>
+
+            {/* Toolbar de botões (§4) — sem controles de escopo (conta/competência/período)
+                nesta tela, então só a ação primária, alinhada à direita. */}
+            <div className="flex items-center justify-end bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <button
+                    onClick={onCreateNew}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                >
+                    <Plus className="w-[15px] h-[15px]" />
+                    Nova cotação
+                </button>
             </div>
 
             {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e

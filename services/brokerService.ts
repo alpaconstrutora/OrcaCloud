@@ -37,6 +37,23 @@ export const brokerService = {
         return (data || []) as BrokerProfile[];
     },
 
+    // Igual a listProfiles, mas só devolve quem tem hoje um fornecedor
+    // categoria "Corretor Imobiliário" correspondente (mesma org + e-mail).
+    // broker_profiles acumula registros órfãos de um fluxo antigo de cadastro
+    // direto (removido da UI, nunca limpo do banco) — as abas Corretores de
+    // Venda de Ativos/Locações usam esta função para não misturar esse lixo
+    // com o cadastro centralizado em Fornecedores.
+    async listSupplierLinkedProfiles(organizationId?: string): Promise<BrokerProfile[]> {
+        const [profiles, brokerSuppliers] = await Promise.all([
+            this.listProfiles(organizationId),
+            supplierService.listRealEstateBrokers(organizationId),
+        ]);
+        const validEmails = new Set(
+            brokerSuppliers.map(s => (s.email || '').trim().toLowerCase()).filter(Boolean)
+        );
+        return profiles.filter(p => validEmails.has((p.email || '').trim().toLowerCase()));
+    },
+
     async saveProfile(profile: Partial<BrokerProfile>) {
         if (!profile.id && !profile.organization_id) {
             throw new Error('Nenhuma organização selecionada para cadastrar o corretor.');

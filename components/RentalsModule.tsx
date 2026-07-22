@@ -76,7 +76,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 commercialService.listProperties(organizationId),
                 commercialService.listDeals(),
                 clientService.listClients(),
-                brokerService.listProfiles(organizationId)
+                brokerService.listSupplierLinkedProfiles(organizationId)
             ]);
             setProperties(propsData.filter(p => !p.purpose || p.purpose === 'RENTAL' || p.purpose === 'BOTH'));
             setDeals(dealsData.filter(d => d.type === 'RENTAL'));

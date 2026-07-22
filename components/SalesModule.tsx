@@ -150,7 +150,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 commercialService.listDeals(),
                 clientService.listClients(),
                 projectService.listProjects(),
-                brokerService.listProfiles(organizationId)
+                brokerService.listSupplierLinkedProfiles(organizationId)
             ]);
             setProperties(propsData.filter(p => !p.purpose || p.purpose === 'SALE' || p.purpose === 'BOTH'));
             setDeals(dealsData.filter(d => d.type === 'SALE'));

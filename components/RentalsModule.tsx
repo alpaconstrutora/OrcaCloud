@@ -72,16 +72,14 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         console.log('[Commercial] Loading data for organization:', organizationId);
         setLoading(true);
         try {
-            const [propsData, dealsData, clientsData, brokersData] = await Promise.all([
+            const [propsData, dealsData, clientsData] = await Promise.all([
                 commercialService.listProperties(organizationId),
                 commercialService.listDeals(),
                 clientService.listClients(),
-                brokerService.listSupplierLinkedProfiles(organizationId)
             ]);
             setProperties(propsData.filter(p => !p.purpose || p.purpose === 'RENTAL' || p.purpose === 'BOTH'));
             setDeals(dealsData.filter(d => d.type === 'RENTAL'));
             setClients(clientsData);
-            setBrokers(brokersData);
         } catch (err) {
             console.error('[Commercial] Error loading data:', err);
         } finally {
@@ -379,6 +377,19 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     }, [properties, searchTerm, selectedBuildingId, sortConfig]);
 
     const currentBuilding = selectedBuildingId ? properties.find(p => String(p.id).toLowerCase() === String(selectedBuildingId).toLowerCase()) : null;
+
+    // Organização em cascata (mesmo padrão do SalesModule): quando há um edifício
+    // aberto, a org DELE é a fonte de verdade para corretores — um fornecedor
+    // "Todas as organizações" é materializado em broker_profiles UMA VEZ POR
+    // ORGANIZAÇÃO, então sem esse escopo os corretores apareciam repetidos, um
+    // por organização que o usuário gerencia.
+    const effectiveOrganizationId = currentBuilding?.organization_id || organizationId;
+
+    useEffect(() => {
+        brokerService.listSupplierLinkedProfiles(effectiveOrganizationId)
+            .then(setBrokers)
+            .catch(err => console.error('[Commercial] Error loading brokers:', err));
+    }, [effectiveOrganizationId]);
 
     const stats = useMemo(() => {
         const totalValue = properties.reduce((acc, p) => acc + (p.price || 0), 0);
@@ -1158,7 +1169,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 activeTab === 'dashboard' && (
                     <RentalsDashboard
                         selectedBuildingId={selectedBuildingId}
-                        organizationId={currentBuilding?.organization_id || organizationId}
+                        organizationId={effectiveOrganizationId}
                     />
                 )
             }

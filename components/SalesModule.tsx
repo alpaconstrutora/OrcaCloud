@@ -145,18 +145,16 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         console.log('[Commercial] Loading data for organization:', organizationId);
         setLoading(true);
         try {
-            const [propsData, dealsData, clientsData, projectsData, brokersData] = await Promise.all([
+            const [propsData, dealsData, clientsData, projectsData] = await Promise.all([
                 commercialService.listProperties(organizationId),
                 commercialService.listDeals(),
                 clientService.listClients(),
                 projectService.listProjects(),
-                brokerService.listSupplierLinkedProfiles(organizationId)
             ]);
             setProperties(propsData.filter(p => !p.purpose || p.purpose === 'SALE' || p.purpose === 'BOTH'));
             setDeals(dealsData.filter(d => d.type === 'SALE'));
             setClients(clientsData);
             setProjects(projectsData.map(proj => ({ ...proj, budget: [] })));
-            setBrokers(brokersData);
 
         } catch (err) {
             console.error('[Commercial] Error loading data:', err);
@@ -592,6 +590,17 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     // precedência era invertida (seletor > edifício), o que deixava criar unidade
     // numa org e edifício em outra — origem da mistura entre as duas "Alpa".
     const effectiveOrganizationId = currentBuilding?.organization_id || organizationId;
+
+    // Corretores seguem a mesma cascata: um fornecedor "Todas as organizações" é
+    // materializado em broker_profiles UMA VEZ POR ORGANIZAÇÃO (ver
+    // supplierService.syncRealEstateBrokerProfile) — sem escopar pela org do
+    // edifício aberto, as linhas de cada organização apareciam juntas na lista
+    // (mesmo corretor "triplicado" quando o usuário gerencia 3 organizações).
+    useEffect(() => {
+        brokerService.listSupplierLinkedProfiles(effectiveOrganizationId)
+            .then(setBrokers)
+            .catch(err => console.error('[Commercial] Error loading brokers:', err));
+    }, [effectiveOrganizationId]);
 
     const buildingDeals = selectedBuildingId ? deals.filter(deal => {
         const property = properties.find(p => p.id === deal.property_id);

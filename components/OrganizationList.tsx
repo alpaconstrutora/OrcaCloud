@@ -606,16 +606,16 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         }
                         title={
                             activeTab === 'accounts' ? 'Contas de Pagamento' :
-                            activeTab === 'cost_centers' ? 'Centros de Custo' : 'Plano de Contas'
+                            activeTab === 'cost_centers' ? 'Plano de Contas' : 'Plano de Contas'
                         }
                         description={
                             activeTab === 'accounts' ? 'Gerencie as contas bancárias para alocação de gastos' :
-                            activeTab === 'cost_centers' ? 'Defina os centros de custo para classificação' :
+                            activeTab === 'cost_centers' ? 'Estruture seu plano de contas para classificação' :
                             'Estruture seu plano de contas para relatórios detalhados'
                         }
                         icon={
                             activeTab === 'accounts' ? Building2 :
-                            activeTab === 'cost_centers' ? Filter : HandCoins
+                            activeTab === 'cost_centers' ? HandCoins : HandCoins
                         }
                         items={
                             activeTab === 'accounts' ? paymentAccounts :

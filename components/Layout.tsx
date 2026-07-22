@@ -898,7 +898,7 @@ const Layout: React.FC<LayoutProps> = ({
                   { id: 'suppliers', label: 'Fornecedores', icon: Truck },
                   { id: 'users', label: 'Usuários', icon: Users },
                   { id: 'accounts', label: 'Contas', icon: DollarSign },
-                  { id: 'cost_centers', label: 'Centros', icon: Filter },
+                  { id: 'cost_centers', label: 'Plano de Contas', icon: Layers },
                 ] as const).map(tab => (
                   <DropdownItem
                     key={tab.id}

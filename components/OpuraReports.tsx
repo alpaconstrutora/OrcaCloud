@@ -34,7 +34,7 @@ const DIMENSIONS: { value: OpuraDimension; label: string }[] = [
     { value: 'client',          label: 'Cliente' },
     { value: 'contract',        label: 'Contrato' },
     { value: 'purchase_order',  label: 'Pedido de Compra' },
-    { value: 'cost_center',     label: 'Centro de Custo' },
+    { value: 'cost_center',     label: 'Plano de Contas' },
     { value: 'category',        label: 'Categoria' },
     { value: 'category_parent', label: 'Subcategoria (pai)' },
     { value: 'account',         label: 'Conta Bancária' },

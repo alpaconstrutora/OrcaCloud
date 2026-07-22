@@ -303,23 +303,12 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
                             </div>
                         </div>
                         <div className="space-y-3">
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Centro de Custo</label>
+                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Plano de Contas</label>
                             <HierarchicalSelect
                                 items={costCenters}
                                 value={costCenter}
                                 onChange={setCostCenter}
                                 valueField="name"
-                                placeholder="Selecione o centro de custo..."
-                                hoverCls="hover:bg-indigo-50"
-                            />
-                        </div>
-                        <div className="space-y-3">
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Plano de Contas</label>
-                            <HierarchicalSelect
-                                items={coa}
-                                value={chartOfAccounts}
-                                onChange={setChartOfAccounts}
-                                valueField="code"
                                 placeholder="Selecione o plano de contas..."
                                 hoverCls="hover:bg-indigo-50"
                             />

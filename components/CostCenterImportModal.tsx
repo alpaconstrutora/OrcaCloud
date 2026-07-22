@@ -147,7 +147,7 @@ const CostCenterImportModal: React.FC<Props> = ({
                 <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100">
                     <div>
                         <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">
-                            Importar Centros de Custo
+                            Importar Plano de Contas
                         </h2>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">
                             {step === 'upload' && 'Selecione um arquivo .xlsx ou .csv'}
@@ -270,7 +270,7 @@ const CostCenterImportModal: React.FC<Props> = ({
                             </div>
                             <div>
                                 <h3 className="text-lg font-black text-gray-900">Importação concluída</h3>
-                                <p className="text-sm text-gray-500 mt-1">Os centros de custo foram processados com sucesso.</p>
+                                <p className="text-sm text-gray-500 mt-1">Os registros do plano de contas foram processados com sucesso.</p>
                             </div>
                             <div className="flex gap-4">
                                 <div className="px-6 py-4 bg-emerald-50 rounded-2xl text-center border border-emerald-100">

@@ -747,9 +747,9 @@ export const exportService = {
         });
 
         const instructionsSheet = XLSX.utils.aoa_to_sheet([
-            ['INSTRUÇÕES DE IMPORTAÇÃO — CENTROS DE CUSTO'],
+            ['INSTRUÇÕES DE IMPORTAÇÃO — PLANO DE CONTAS'],
             [''],
-            ['• Não remova ou renomeie as colunas da aba "Centros de Custo".'],
+            ['• Não remova ou renomeie as colunas da aba "Plano de Contas".'],
             ['• A coluna "Nome" é obrigatória.'],
             ['• A coluna "Código" é opcional, mas recomendada para identificação única.'],
             ['• Remova as linhas de exemplo antes de importar.'],
@@ -758,12 +758,12 @@ export const exportService = {
         instructionsSheet['!cols'] = [{ wch: 70 }];
 
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, dataSheet, 'Centros de Custo');
+        XLSX.utils.book_append_sheet(wb, dataSheet, 'Plano de Contas');
         XLSX.utils.book_append_sheet(wb, instructionsSheet, 'Instruções');
 
         const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
         const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
-        saveAs(blob, 'template_centros_de_custo.xlsx');
+        saveAs(blob, 'template_plano_de_contas.xlsx');
     },
 
     exportCostCenters(items: { name: string; code?: string }[]) {
@@ -776,12 +776,12 @@ export const exportService = {
         ws['!cols'] = [{ wch: 15 }, { wch: 45 }];
 
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Centros de Custo');
+        XLSX.utils.book_append_sheet(wb, ws, 'Plano de Contas');
 
         const date = new Date().toISOString().slice(0, 10);
         const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
         const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
-        saveAs(blob, `centros_de_custo_${date}.xlsx`);
+        saveAs(blob, `plano_de_contas_${date}.xlsx`);
     },
 
     async urlToBase64(url: string): Promise<string> {

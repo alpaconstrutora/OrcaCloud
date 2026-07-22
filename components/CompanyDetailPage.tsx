@@ -730,7 +730,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company, companies, onBack, onSave
                     </Section>
 
                     <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl text-form-input text-blue-600">
-                        <p className="font-black uppercase tracking-wide mb-1">Plano de Contas e Centro de Custo Padrão</p>
+                        <p className="font-black uppercase tracking-wide mb-1">Plano de Contas Padrão</p>
                         <p>Configuração disponível após o módulo Financeiro ser ativado para esta empresa.</p>
                     </div>
 

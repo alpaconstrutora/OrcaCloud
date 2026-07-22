@@ -158,7 +158,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
             </div>
 
             {/* Dashboard Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
                 <KpiCard shadow={false} size="sm" label="Total" value={requests.length} sub="Cotações registradas" icon={<FileText className="w-4 h-4" />} color="blue" />
                 <KpiCard shadow={false} size="sm" label="Abertas" value={requests.filter(r => r.status === 'Aberta').length} sub="Aguardando respostas" icon={<Clock className="w-4 h-4" />} color="amber" pulse />
                 <KpiCard shadow={false} size="sm" label="Em Análise" value={requests.filter(r => r.status === 'Em Análise').length} sub="Comparando propostas" icon={<Search className="w-4 h-4" />} color="indigo" />
@@ -276,7 +276,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                                         {tableColumns.visibleColumns.includes('title') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 <div className="flex flex-col">
-                                                    <span className="text-sm font-normal text-gray-900">{req.title}</span>
+                                                    <span className="text-sm font-normal text-gray-700">{req.title}</span>
                                                     <span className="text-xs font-normal text-gray-400">{req.projectName}</span>
                                                 </div>
                                             </td>

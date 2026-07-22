@@ -4,13 +4,29 @@ import { supplierService } from './supplierService';
 
 export const brokerService = {
     // --- Broker Profiles (Gestão de Corretores) ---
-    async listProfiles(organizationId?: string) {
-        if (organizationId) await supplierService.syncRealEstateBrokerProfiles(organizationId);
+    // organizationId aceita uma org (string) OU uma lista de orgs (string[]).
+    // A lista serve para a negociação enxergar corretores de TODAS as
+    // organizações do usuário (ex: corretor cadastrado na "Alpa Construtora"
+    // aparece nas negociações das SPEs de cada empreendimento — decisão do
+    // usuário 2026-07-21). Sem filtro nenhum, a RLS (is_org_member) já escopa às
+    // orgs do usuário; a lista explícita é defesa em profundidade.
+    async listProfiles(organizationId?: string | string[]) {
+        const orgIds = Array.isArray(organizationId)
+            ? organizationId.filter(Boolean)
+            : (organizationId ? [organizationId] : []);
+
+        // syncRealEstateBrokerProfiles materializa corretores a partir de
+        // fornecedores-corretores de cada org — roda para todas as orgs pedidas.
+        for (const orgId of orgIds) {
+            await supplierService.syncRealEstateBrokerProfiles(orgId);
+        }
+
         let query = supabase
             .from('broker_profiles')
             .select('id, email, name, phone, cpf, creci, agency_name, organization_id, commission_rate, is_active, settings, created_at, updated_at')
             .order('name');
-        if (organizationId) query = query.eq('organization_id', organizationId);
+        if (orgIds.length === 1) query = query.eq('organization_id', orgIds[0]);
+        else if (orgIds.length > 1) query = query.in('organization_id', orgIds);
         const { data, error } = await query;
 
         if (error) {

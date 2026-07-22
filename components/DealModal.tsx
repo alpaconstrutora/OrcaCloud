@@ -15,6 +15,7 @@ import { DealWorkflowStatus } from '../lib/dealWorkflow';
 import DealSignaturePanel from './DealSignaturePanel';
 import CreditAnalysisPanel from './CreditAnalysisPanel';
 import { useConfirm } from './ui/confirm';
+import { useStore } from '../store/useStore';
 
 type TabId = 'cliente' | 'unidade' | 'pagamento' | 'partes' | 'contrato';
 
@@ -229,6 +230,10 @@ interface DealModalProps {
 const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onSave, defaultType, organizationId, buildingId }) => {
     const [activeTab, setActiveTab] = useState<TabId>('cliente');
     const confirm = useConfirm();
+    // Organizações do usuário — para listar corretores de TODAS elas (um corretor
+    // cadastrado na Alpa Construtora aparece nas negociações das SPEs de cada
+    // empreendimento), não só da org da própria negociação.
+    const userOrganizations = useStore(s => s.organizations);
 
     const [formData, setFormData] = useState<Partial<PropertyDeal>>({
         type: defaultType || 'SALE',
@@ -446,16 +451,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     if (!formData.id && !formData.organization_id) {
                         setFormData(prev => ({ ...prev, organization_id: o[0].id }));
                     }
-                    // A org da PRÓPRIA negociação (initialData, não a state formData —
-                    // esta closure roda antes do efeito que reseta formData a partir de
-                    // initialData aplicar, então formData.organization_id ainda estaria
-                    // com o valor da negociação anterior) vem primeiro; organizationId
-                    // (seletor global do app) só serve de fallback para negociação nova.
-                    // Sem isso, abrir uma negociação de uma org diferente da selecionada
-                    // no topo (ou com "Todas as organizações" ativo) filtrava o corretor
-                    // certo pra fora da lista, e o campo Corretor aparecia vazio mesmo
-                    // com broker_id preenchido.
-                    const brokerData = await brokerService.listProfiles(initialData?.organization_id || organizationId);
+                    // Corretores de TODAS as organizações do usuário — não só a da
+                    // negociação. Um empreendimento vira uma org-SPE própria (ex:
+                    // "Garden Cambuhy SPE"), mas os corretores costumam estar
+                    // cadastrados na org do grupo (ex: "Alpa Construtora"); filtrar só
+                    // pela org da negociação (a SPE) deixava o dropdown vazio. A RLS de
+                    // broker_profiles (is_org_member) já garante que só vêm corretores
+                    // das orgs que o usuário participa. Fallback para a org da própria
+                    // negociação se a lista de orgs do store ainda não carregou.
+                    const orgIdsForBrokers = userOrganizations.length > 0
+                        ? userOrganizations.map(org => org.id)
+                        : (initialData?.organization_id || organizationId);
+                    const brokerData = await brokerService.listProfiles(orgIdsForBrokers);
                     setBrokers(brokerData);
                 }
             } catch (err) {
@@ -463,7 +470,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             }
         };
         if (isOpen) load();
-    }, [isOpen, buildingId]);
+    }, [isOpen, buildingId, userOrganizations.length]);
 
     const selectedProperty = properties.find(p => p.id === formData.property_id);
     const selectedClient = clients.find(c => c.id === formData.client_id);

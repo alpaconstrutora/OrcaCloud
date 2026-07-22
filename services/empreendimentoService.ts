@@ -383,6 +383,7 @@ export const empreendimentoService = {
                     parkingSpaces: unit.parking_spaces,
                     bedrooms: unit.bedrooms,
                     bathrooms: unit.bathrooms,
+                    suites: unit.suites,
                     ...(unit.floor_tipo ? { floorTipo: unit.floor_tipo } : {}),
                 },
             } as any);
@@ -582,6 +583,7 @@ export const empreendimentoService = {
                     parkingSpaces: unit.parking_spaces,
                     bedrooms: unit.bedrooms,
                     bathrooms: unit.bathrooms,
+                    suites: unit.suites,
                     ...(unit.floor_tipo ? { floorTipo: unit.floor_tipo } : {}),
                 },
             } as any);

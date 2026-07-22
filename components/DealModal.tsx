@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw } from 'lucide-react';
+import { X, DollarSign, Calendar, FileText, Briefcase, User, Info, Building, Check, AlertCircle, TrendingUp, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile } from '../types';
 import { commercialService } from '../services/commercialService';
 import { clientService } from '../services/clientService';
@@ -1212,6 +1212,34 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
                                     </div>
                                 )}
+
+                                {selectedProperty && (() => {
+                                    const posLabel: Record<string, string> = { FRONT: 'Frente', LATERAL: 'Lateral', BACK: 'Fundos' };
+                                    const sunLabel: Record<string, string> = { NORTH: 'Norte', SOUTH: 'Sul', EAST: 'Leste', WEST: 'Oeste' };
+                                    const specs = [
+                                        { label: 'Pavimento', icon: <Layers className="w-3.5 h-3.5" />, value: selectedProperty.floor ?? '—' },
+                                        { label: 'Área Privativa', icon: <Maximize2 className="w-3.5 h-3.5" />, value: selectedProperty.private_area ? `${selectedProperty.private_area} m²` : '—' },
+                                        { label: 'Dormitórios', icon: <BedDouble className="w-3.5 h-3.5" />, value: selectedProperty.specs?.bedrooms ?? '—' },
+                                        { label: 'Banheiros', icon: <Bath className="w-3.5 h-3.5" />, value: selectedProperty.specs?.bathrooms ?? '—' },
+                                        { label: 'Suítes', icon: <DoorClosed className="w-3.5 h-3.5" />, value: selectedProperty.specs?.suites ?? '—' },
+                                        { label: 'Vagas', icon: <Car className="w-3.5 h-3.5" />, value: selectedProperty.specs?.parkingSpaces ?? '—' },
+                                        { label: 'Posição', icon: <Building className="w-3.5 h-3.5" />, value: selectedProperty.position_type ? (posLabel[selectedProperty.position_type] || selectedProperty.position_type) : '—' },
+                                        { label: 'Orientação', icon: <Compass className="w-3.5 h-3.5" />, value: selectedProperty.sun_orientation ? (sunLabel[selectedProperty.sun_orientation] || selectedProperty.sun_orientation) : '—' },
+                                    ];
+                                    return (
+                                        <div className="grid grid-cols-4 gap-3 animate-in slide-in-from-left-4 duration-500">
+                                            {specs.map((s) => (
+                                                <div key={s.label} className="p-3 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col gap-1">
+                                                    <div className="flex items-center gap-1.5 text-gray-400">
+                                                        {s.icon}
+                                                        <label className="text-[8px] font-black uppercase tracking-widest">{s.label}</label>
+                                                    </div>
+                                                    <span className="text-sm font-black text-gray-700 truncate">{s.value}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     )}

@@ -40,6 +40,7 @@ export interface Property {
     specs: {
         bedrooms?: number;
         bathrooms?: number;
+        suites?: number;
         parkingSpaces?: number;
         floor?: number;
         typology?: string;

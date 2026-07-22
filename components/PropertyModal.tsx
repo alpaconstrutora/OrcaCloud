@@ -47,6 +47,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
         specs: {
             bedrooms: 0,
             bathrooms: 0,
+            suites: 0,
             parkingSpaces: 0,
             floor: 0
         },
@@ -222,7 +223,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                 area: 0,
                 price: 0,
                 status: PropertyStatus.AVAILABLE,
-                specs: { bedrooms: 0, bathrooms: 0, parkingSpaces: 0, floor: 0 },
+                specs: { bedrooms: 0, bathrooms: 0, suites: 0, parkingSpaces: 0, floor: 0 },
                 street: '',
                 number: '',
                 neighborhood: '',
@@ -1127,7 +1128,7 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                 <Layers className="w-4 h-4" />
                                 <h3 className="font-black uppercase tracking-widest text-xs">Atributos Internos</h3>
                             </div>
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-4 gap-2">
                                 <div className="bg-gray-50 p-2.5 rounded-xl flex flex-col items-center gap-0.5 border border-transparent hover:border-blue-200 transition-colors">
                                     <label className="text-[8px] font-black text-gray-400 uppercase">Dorm</label>
                                     <input
@@ -1143,6 +1144,15 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                                         type="number"
                                         value={formData.specs?.bathrooms}
                                         onChange={(e) => update({ specs: { ...formData.specs, bathrooms: parseInt(e.target.value) } })}
+                                        className="bg-transparent text-base font-black text-gray-700 text-center outline-none w-full"
+                                    />
+                                </div>
+                                <div className="bg-gray-50 p-2.5 rounded-xl flex flex-col items-center gap-0.5 border border-transparent hover:border-blue-200 transition-colors">
+                                    <label className="text-[8px] font-black text-gray-400 uppercase">Suítes</label>
+                                    <input
+                                        type="number"
+                                        value={formData.specs?.suites}
+                                        onChange={(e) => update({ specs: { ...formData.specs, suites: parseInt(e.target.value) } })}
                                         className="bg-transparent text-base font-black text-gray-700 text-center outline-none w-full"
                                     />
                                 </div>

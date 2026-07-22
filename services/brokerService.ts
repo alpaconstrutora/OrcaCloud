@@ -138,12 +138,17 @@ export const brokerService = {
     },
 
     async setPropertyAccess(brokerId: string, propertyId: string, enabled: boolean) {
-        const { error } = await supabase
-            .from('broker_property_access')
-            .upsert(
-                { broker_id: brokerId, property_id: propertyId, enabled, updated_at: new Date().toISOString() },
-                { onConflict: 'broker_id,property_id' }
-            );
+        // Corretor "Todas as organizações" tem uma linha de broker_profiles por
+        // organização (mesmo e-mail) — a leitura do link público
+        // (fn_broker_portal_get_units) libera acesso casando por e-mail, então a
+        // escrita precisa aplicar o mesmo enabled a TODAS as linhas do e-mail,
+        // senão uma linha antiga habilitada noutra organização mantém o
+        // empreendimento visível mesmo depois de desabilitar na tela atual.
+        const { error } = await supabase.rpc('fn_set_broker_property_access', {
+            p_broker_id: brokerId,
+            p_property_id: propertyId,
+            p_enabled: enabled,
+        });
 
         if (error) {
             console.error('[BROKER PROFILE SERVICE] Error setting property access:', error);

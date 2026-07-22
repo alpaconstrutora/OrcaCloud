@@ -56,6 +56,7 @@ import { SupplierList } from './SupplierList';
 import FinancialRegistryManager from './FinancialRegistryManager';
 import CompaniesModule from './CompaniesModule';
 import CostCenterModule from './CostCenterModule';
+import PlanoDeContasModule from './PlanoDeContasModule';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { PaymentAccount, ChartOfAccount } from '../types';
 
@@ -68,7 +69,7 @@ interface OrganizationListProps {
     onSelect: (org: Organization) => void;
     
     // Management Props
-    activeTab: 'organizations' | 'empresas_grupo' | 'projects' | 'clients' | 'investors' | 'suppliers' | 'users' | 'accounts' | 'cost_centers' | 'chart_of_accounts' | 'settings';
+    activeTab: 'organizations' | 'empresas_grupo' | 'projects' | 'clients' | 'investors' | 'suppliers' | 'users' | 'accounts' | 'cost_centers' | 'chart_of_accounts' | 'plano_contas' | 'settings';
     onTabChange: (tab: string) => void;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     projects: { id: string; name: string; organizationId?: string; organization_id?: string; settings?: any }[];
@@ -146,6 +147,8 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     // costCenterService, cost_centers_v2) — não passa mais por aqui.
     const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([]);
     const [chartOfAccounts, setChartOfAccounts] = useState<ChartOfAccount[]>([]);
+    // Plano de Contas tem módulo próprio (PlanoDeContasModule, tabela
+    // `plano_de_contas`) — carrega os próprios dados, não passa por aqui.
 
     const loadRegistries = React.useCallback(async () => {
         // chart_of_accounts (financial_categories) é global — ignora org de propósito.
@@ -640,6 +643,21 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
 
                 {activeTab === 'cost_centers' && (
                     <CostCenterModule
+                        organizationId={registryOrgId}
+                        orgFilter={
+                            !activeOrganizationId && !managingOrgId && organizations.length > 1
+                                ? {
+                                    organizations: organizations.map(o => ({ id: o.id, name: o.name })),
+                                    value: registryOrgId,
+                                    onChange: setRegistryOrgOverride,
+                                }
+                                : undefined
+                        }
+                    />
+                )}
+
+                {activeTab === 'plano_contas' && (
+                    <PlanoDeContasModule
                         organizationId={registryOrgId}
                         orgFilter={
                             !activeOrganizationId && !managingOrgId && organizations.length > 1

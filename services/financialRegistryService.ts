@@ -96,6 +96,97 @@ export const financialRegistryService = {
         }));
     },
 
+    // ── Plano de Contas (Minha Organização) ─────────────────────────────────
+    // Cadastro contábil hierárquico por organização (tabela `plano_de_contas`,
+    // restaurada de cost_centers_legacy — ver migration 20270822000013). É uma
+    // dimensão DIFERENTE de Centro de Custo (cost_centers_v2, métodos
+    // listCostCenters acima). Não misturar: estes métodos só tocam
+    // `plano_de_contas`. Campo `accounting_nature` = Natureza (Credora/Devedora).
+    async listPlanoContas(organizationId?: string, empresaId?: string): Promise<CostCenter[]> {
+        let query = supabase
+            .from('plano_de_contas')
+            .select('id, organization_id, empresa_id, name, code, accounting_nature, created_at');
+
+        if (empresaId) {
+            query = query.eq('empresa_id', empresaId);
+        } else if (organizationId) {
+            query = query.eq('organization_id', organizationId);
+        }
+
+        const { data, error } = await query.order('code');
+
+        if (error) throw error;
+        return (data || []) as CostCenter[];
+    },
+
+    async createPlanoConta(item: Omit<CostCenter, 'id' | 'created_at'>): Promise<CostCenter> {
+        const { data, error } = await supabase
+            .from('plano_de_contas')
+            .insert({
+                organization_id: item.organization_id,
+                empresa_id: item.empresa_id ?? null,
+                name: item.name,
+                code: item.code || null,
+                accounting_nature: item.accounting_nature ?? null,
+            })
+            .select('id, organization_id, empresa_id, name, code, accounting_nature, created_at')
+            .single();
+
+        if (error) throw error;
+        return data as CostCenter;
+    },
+
+    async updatePlanoConta(id: string, item: Partial<CostCenter>): Promise<CostCenter> {
+        const payload: Record<string, unknown> = {};
+        if (item.name              !== undefined) payload.name              = item.name;
+        if (item.code              !== undefined) payload.code              = item.code || null;
+        if (item.accounting_nature !== undefined) payload.accounting_nature = item.accounting_nature ?? null;
+
+        const { data, error } = await supabase
+            .from('plano_de_contas')
+            .update(payload)
+            .eq('id', id)
+            .select('id, organization_id, empresa_id, name, code, accounting_nature, created_at')
+            .single();
+
+        if (error) throw error;
+        return data as CostCenter;
+    },
+
+    async deletePlanoConta(id: string): Promise<void> {
+        const { error } = await supabase
+            .from('plano_de_contas')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
+    async upsertPlanoContas(
+        organizationId: string,
+        rows: { name: string; code?: string; existingId?: string }[]
+    ): Promise<{ created: number; updated: number }> {
+        let created = 0;
+        let updated = 0;
+
+        for (const row of rows) {
+            if (row.existingId) {
+                await supabase
+                    .from('plano_de_contas')
+                    .update({ name: row.name, code: row.code || null })
+                    .eq('id', row.existingId);
+                updated++;
+            } else {
+                await supabase
+                    .from('plano_de_contas')
+                    .insert({ organization_id: organizationId, name: row.name, code: row.code || null });
+                created++;
+            }
+        }
+
+        return { created, updated };
+    },
+
     // Categorias Financeiras (substitui chart_of_accounts — aposentado em jun/2026)
     // Os parâmetros organizationId/empresaId são ignorados; financial_categories é global.
     async listChartOfAccounts(_organizationId?: string, _empresaId?: string): Promise<ChartOfAccount[]> {

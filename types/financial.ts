@@ -136,12 +136,17 @@ export interface PaymentAccount {
     created_at?: string;
 }
 
+// Usada tanto pela dimensão Centro de Custo (leitura via listCostCenters, hoje
+// sobre cost_centers_v2) quanto pelo cadastro Plano de Contas (tabela
+// `plano_de_contas`, métodos *PlanoConta* abaixo). `accounting_nature` só se
+// aplica ao Plano de Contas (Credora/Devedora).
 export interface CostCenter {
     id: string;
     organization_id: string;
     empresa_id?: string;
     name: string;
     code?: string;
+    accounting_nature?: 'CREDORA' | 'DEVEDORA';
     created_at?: string;
 }
 

@@ -205,13 +205,20 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             });
     }, [portalToken, effectiveBroker?.id]);
 
-    // Carregar lista de corretores para impersonação (somente admin autenticado)
+    // Carregar lista de corretores para impersonação (somente admin autenticado).
+    // Todas as orgs do admin, não só a selecionada — um corretor cadastrado na
+    // organização "holding" (ex: Alpa) atua em negociações de SPEs de
+    // empreendimento (mesma decisão já aplicada em brokerService.listProfiles/
+    // DealModal, 2026-07-21). Restringir por selectedOrgId aqui escondia o
+    // corretor do seletor de impersonação sempre que o admin estava navegando
+    // dentro da SPE do empreendimento em vez da organização onde o corretor foi
+    // cadastrado.
     React.useEffect(() => {
-        if (!isAdmin || !selectedOrgId) return;
-        brokerService.listProfiles(selectedOrgId)
+        if (!isAdmin || organizations.length === 0) return;
+        brokerService.listProfiles(organizations.map(o => o.id))
             .then(setAllBrokers)
             .catch(err => console.error("Erro ao carregar lista de corretores:", err));
-    }, [isAdmin, selectedOrgId]);
+    }, [isAdmin, organizations]);
 
     // Carregar estoque: via token (anon) ou via serviço autenticado
     React.useEffect(() => {
@@ -233,8 +240,15 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
                 } else {
                     const orgId = selectedOrgId;
                     if (!orgId) return;
+                    // Com corretor efetivo em contexto (impersonação ou login direto), o
+                    // estoque não fica preso à org selecionada no portal: o empreendimento
+                    // habilitado pode estar numa SPE diferente da org onde o corretor foi
+                    // cadastrado (ex: corretor na org "holding", prédio na SPE do
+                    // empreendimento). visibleUnits já filtra pelo que está habilitado —
+                    // aqui só evita cortar cross-org antes desse filtro rodar.
+                    const propertiesOrgId = effectiveBroker?.id ? undefined : orgId;
                     const [propertiesRes, proposalsRes, dealsRes] = await Promise.allSettled([
-                        commercialService.listProperties(orgId, undefined, selectedPurpose),
+                        commercialService.listProperties(propertiesOrgId, undefined, selectedPurpose),
                         brokerService.listProposals(orgId),
                         commercialService.listDeals()
                     ]);
@@ -252,7 +266,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'estoq
             }
         };
         fetchStock();
-    }, [selectedOrgId, selectedPurpose, portalToken]);
+    }, [selectedOrgId, selectedPurpose, portalToken, effectiveBroker?.id]);
 
     React.useEffect(() => {
         if (!selectedOrgId && organizations.length > 0) {

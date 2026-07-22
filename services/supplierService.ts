@@ -299,8 +299,18 @@ export const supplierService = {
         const brokers = await supplierService.listRealEstateBrokers(organizationId);
         await Promise.all(
             brokers
-                .filter(supplier => supplier.organization_id && supplier.email)
-                .map(syncRealEstateBrokerProfile)
+                .filter(supplier => supplier.email)
+                // Corretor "Todas as organizações" (organization_id nulo) só materializa
+                // em TODAS as orgs do usuário no momento em que o fornecedor é salvo
+                // (ver syncRealEstateBrokerProfile). Se uma organização for adicionada
+                // depois (nova SPE), o corretor nunca ganha linha nela até o fornecedor
+                // ser salvo de novo — aqui, ao listar corretores de UMA org específica,
+                // garantimos a linha dessa org também, sem esperar o re-save.
+                .map(supplier => syncRealEstateBrokerProfile(
+                    supplier.organization_id || !organizationId
+                        ? supplier
+                        : { ...supplier, organization_id: organizationId }
+                ))
         );
     },
 

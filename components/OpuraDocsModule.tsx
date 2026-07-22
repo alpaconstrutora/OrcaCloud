@@ -409,11 +409,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
-  // Buscar membros da organização ativa
-  const fetchOrgMembers = async () => {
-    if (!activeOrganizationId) return;
+  // Buscar membros da organização ativa (ou da organização do documento aberto,
+  // quando o seletor global está em "Todas as organizações")
+  const fetchOrgMembers = async (orgId?: string) => {
+    const effectiveOrgId = orgId || activeOrganizationId;
+    if (!effectiveOrgId) return;
     try {
-      const data = await documentService.listOrganizationMembers(activeOrganizationId);
+      const data = await documentService.listOrganizationMembers(effectiveOrgId);
       setOrgMembers(data);
     } catch (err) {
       console.error('[OpuraDocsModule] Erro ao buscar membros da organização:', err);
@@ -534,6 +536,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               setSelectedDocForVersions(doc);
               loadApprovalsForDoc(doc.id);
               loadAuditLogsForDoc(doc.id);
+              fetchOrgMembers(doc.organization_id);
               // Registrar visualização (Onda 4)
               if (activeOrganizationId && currentProfile?.email) {
                 documentService.logDocumentAction(
@@ -1062,21 +1065,21 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     setDocAlreadySharedWithPortal([]);
     setShareModalOpen(true);
 
-    if (partnerWorkspaces.length === 0 && activeOrganizationId) {
+    if (partnerWorkspaces.length === 0) {
       try {
-        const wss = await partnerService.listWorkspaces(activeOrganizationId);
+        const wss = await partnerService.listWorkspaces(activeOrganizationId ?? undefined);
         setPartnerWorkspaces(wss.filter((w) => w.is_active));
       } catch (err) {
         console.error('[OpuraDocsModule] Erro ao carregar parceiros habilitados:', err);
       }
     }
-    if (portalShareClients.length === 0 && activeOrganizationId) {
-      clientService.listClients(activeOrganizationId)
+    if (portalShareClients.length === 0) {
+      clientService.listClients(activeOrganizationId ?? undefined)
         .then((clients: any[]) => setPortalShareClients(clients.map((c) => ({ id: c.id, name: c.name }))))
         .catch((err) => console.error('[OpuraDocsModule] Erro ao carregar clientes:', err));
     }
-    if (portalShareEmployees.length === 0 && activeOrganizationId) {
-      laborService.listEmployees(activeOrganizationId)
+    if (portalShareEmployees.length === 0) {
+      laborService.listEmployees(activeOrganizationId ?? undefined)
         .then((emps: any[]) => setPortalShareEmployees(emps.map((e) => ({ id: e.id, name: e.name }))))
         .catch((err) => console.error('[OpuraDocsModule] Erro ao carregar colaboradores:', err));
     }
@@ -2325,7 +2328,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             onClick={async () => {
                               const fullDoc = await documentService.getDocumentById(doc.id);
                               if (!fullDoc) return;
-                              setSelectedDocForVersions(fullDoc); loadApprovalsForDoc(fullDoc.id); loadAuditLogsForDoc(fullDoc.id);
+                              setSelectedDocForVersions(fullDoc); loadApprovalsForDoc(fullDoc.id); loadAuditLogsForDoc(fullDoc.id); fetchOrgMembers(fullDoc.organization_id);
                             }}
                           >
                             {tableColumns.visibleColumns.includes('nome') && (

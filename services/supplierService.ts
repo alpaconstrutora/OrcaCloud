@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { Supplier, SupplierCnaeActivity, SupplierPartner, SupplierStateRegistration } from '../types';
 import { isRealEstateBrokerCategory, REAL_ESTATE_BROKER_CATEGORY } from '../constants/supplierCategories';
 import { assertDocumentNotDuplicated } from './documentDuplicateCheck';
+import { organizationService } from './organizationService';
 
 const CNPJA_COLUMNS = 'cnpj_status, cnpj_status_date, cnpj_updated_at, cnpj_founded_at, cnpj_legal_nature, cnpj_company_size, cnpj_main_activity_code, cnpj_main_activity_text, cnpj_side_activities, cnpj_partners, cnpj_simples_optant, cnpj_simples_since, cnpj_simei_optant, cnpj_simei_since, cnpj_state_registrations';
 const SUPPLIER_SELECT = `id, code, name, nickname, contact_name, email, phone, document, type, category, address, street, number, neighborhood, city, state, zip_code, organization_id, created_at, ${CNPJA_COLUMNS}`;
@@ -202,19 +203,22 @@ async function syncRealEstateBrokerProfile(supplier: Partial<Supplier>): Promise
     const email = normalizeEmail(supplier.email);
     const organizationId = supplier.organization_id || null;
 
-    if (!email || !organizationId) return;
+    if (!email) return;
 
     if (!isRealEstateBrokerCategory(supplier.category)) {
-        await supabase
+        // organizationId nulo = fornecedor "Todas as organizações": pode ter
+        // sincronizado em várias orgs antes (ver ramo abaixo) — desativa em
+        // todas, não só numa.
+        let query = supabase
             .from('broker_profiles')
             .update({ is_active: false, updated_at: new Date().toISOString() })
-            .eq('organization_id', organizationId)
             .eq('email', email);
+        if (organizationId) query = query.eq('organization_id', organizationId);
+        await query;
         return;
     }
 
-    const profile = {
-        organization_id: organizationId,
+    const baseProfile = {
         email,
         name: supplier.contact_name || supplier.name || email,
         phone: supplier.phone || null,
@@ -225,9 +229,23 @@ async function syncRealEstateBrokerProfile(supplier: Partial<Supplier>): Promise
         updated_at: new Date().toISOString(),
     };
 
+    // Fornecedor "Todas as organizações" (organization_id nulo): broker_profiles
+    // exige uma org por linha (RLS é escopada por organização) — em vez de
+    // falhar silenciosamente, materializa um perfil em CADA organização que o
+    // usuário atual gerencia, para o corretor aparecer nas abas Corretores e
+    // ser habilitável por empreendimento em qualquer uma delas.
+    const targetOrgIds = organizationId
+        ? [organizationId]
+        : (await organizationService.listOrganizations()).map(org => org.id);
+
+    if (targetOrgIds.length === 0) return;
+
     const { error } = await supabase
         .from('broker_profiles')
-        .upsert(profile, { onConflict: 'organization_id,email' });
+        .upsert(
+            targetOrgIds.map(orgId => ({ ...baseProfile, organization_id: orgId })),
+            { onConflict: 'organization_id,email' }
+        );
 
     if (error) {
         console.error('[SUPPLIER SERVICE] Error syncing supplier broker profile:', error);
@@ -467,12 +485,16 @@ export const supplierService = {
 
         if (error) throw error;
 
-        if (existing?.organization_id && existing.email && isRealEstateBrokerCategory(existing.category)) {
-            await supabase
+        if (existing?.email && isRealEstateBrokerCategory(existing.category)) {
+            // organization_id nulo = fornecedor "Todas as organizações", que pode
+            // ter sincronizado em várias orgs (syncRealEstateBrokerProfile) —
+            // desativa em todas, não só na org do fornecedor.
+            let query = supabase
                 .from('broker_profiles')
                 .update({ is_active: false, updated_at: new Date().toISOString() })
-                .eq('organization_id', existing.organization_id)
                 .eq('email', normalizeEmail(existing.email));
+            if (existing.organization_id) query = query.eq('organization_id', existing.organization_id);
+            await query;
         }
     }
 };

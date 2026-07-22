@@ -203,16 +203,12 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isSubmitting) return;
-        // Corretor Imobiliário: e-mail + organização são obrigatórios para conectar ao Portal do Corretor
-        if (isBroker) {
-            if (!(formData.email || '').trim()) {
-                alert('Para conectar ao Portal do Corretor, informe o e-mail do corretor (será o login dele no portal).');
-                return;
-            }
-            if (!formData.organization_id) {
-                alert('Para conectar ao Portal do Corretor, selecione uma organização específica (não "Todas").');
-                return;
-            }
+        // Corretor Imobiliário: e-mail é obrigatório para conectar ao Portal do Corretor.
+        // Organização pode ser "Todas" — nesse caso sincroniza em cada organização
+        // que o usuário gerencia (supplierService.syncRealEstateBrokerProfile).
+        if (isBroker && !(formData.email || '').trim()) {
+            alert('Para conectar ao Portal do Corretor, informe o e-mail do corretor (será o login dele no portal).');
+            return;
         }
         setIsSubmitting(true);
         try {
@@ -443,7 +439,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                             </div>
                         </div>
                         <div>
-                            <label className={labelCls}>Organização{isBroker ? ' *' : ''}</label>
+                            <label className={labelCls}>Organização</label>
                             <div className="relative">
                                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                 <select
@@ -451,7 +447,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                                     value={formData.organization_id || ''}
                                     onChange={e => set({ organization_id: e.target.value || null })}
                                 >
-                                    <option value="" disabled={isBroker}>🌐 Todas</option>
+                                    <option value="">🌐 Todas</option>
                                     {organizations.map(org => (
                                         <option key={org.id} value={org.id}>{org.name}</option>
                                     ))}
@@ -465,8 +461,11 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({ isOpen, onClose, o
                         <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5">
                             <Briefcase className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
                             <p className="text-xs font-medium text-blue-700 leading-snug">
-                                Este fornecedor será conectado automaticamente ao <strong>Portal do Corretor</strong>.
-                                Para isso, <strong>e-mail</strong> e <strong>organização</strong> são obrigatórios — o e-mail será o login do corretor no portal.
+                                Este fornecedor será conectado automaticamente ao <strong>Portal do Corretor</strong> — o
+                                <strong> e-mail</strong> é obrigatório e será o login do corretor no portal.
+                                {formData.organization_id
+                                    ? ' Ele ficará disponível na aba Corretores desta organização.'
+                                    : ' Com "Todas as organizações", ele fica disponível na aba Corretores de cada organização que você gerencia — depois é só habilitá-lo por empreendimento.'}
                             </p>
                         </div>
                     )}

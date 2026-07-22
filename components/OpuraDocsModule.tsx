@@ -49,6 +49,8 @@ import {
   OpuraDmsNamingPattern
 } from '../services/documentService';
 import { partnerService } from '../services/partnerService';
+import { clientService } from '../services/clientService';
+import { laborService } from '../services/laborService';
 import { supabase } from '../lib/supabase';
 import { DocumentMarkupViewer } from './ui/DocumentMarkupViewer';
 import { validateFileNameAgainstMask, extractTokenFromFileName, generateFileNameFromMask, extractMaskTokens, getNextSequentialNumber, getInitialRevision } from '../utils/dmsUtils';
@@ -62,6 +64,7 @@ import {
   OpuraDocumentApproval,
   OpuraDocumentApprovalStatus,
   OpuraDocumentAuditLog,
+  OpuraDocumentPortalShare,
   PartnerWorkspace,
   UserPermissions,
 } from '../types';
@@ -205,6 +208,19 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const [selectedShareWorkspaceId, setSelectedShareWorkspaceId] = React.useState('');
   const [sharingSubmitting, setSharingSubmitting] = React.useState(false);
   const [docAlreadySharedWith, setDocAlreadySharedWith] = React.useState<{ partner_workspace_id: string; supplier_name: string }[]>([]);
+
+  // Estados locais — Compartilhamento com Portal do Cliente / Portal do Colaborador
+  // (GED vira a fonte única desses portais — ver migration 20270821000008)
+  const [shareAudience, setShareAudience] = React.useState<'parceiro' | 'cliente' | 'colaborador'>('parceiro');
+  const [portalShareClients, setPortalShareClients] = React.useState<{ id: string; name: string }[]>([]);
+  const [portalShareEmployees, setPortalShareEmployees] = React.useState<{ id: string; name: string }[]>([]);
+  const [selectedShareClientId, setSelectedShareClientId] = React.useState('');
+  const [selectedShareEmployeeId, setSelectedShareEmployeeId] = React.useState('');
+  const [docAlreadySharedWithPortal, setDocAlreadySharedWithPortal] = React.useState<OpuraDocumentPortalShare[]>([]);
+
+  // Estados locais — Bloqueio para edição (trava)
+  const [lockModalDoc, setLockModalDoc] = React.useState<OpuraDocument | null>(null);
+  const [lockSubmitting, setLockSubmitting] = React.useState(false);
 
   // Buscar histórico de auditoria do documento (Onda 4)
   const loadAuditLogsForDoc = async (docId: string) => {
@@ -1035,24 +1051,14 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       return;
     }
     setShareDocIds(docIds);
+    setShareAudience('parceiro');
     setSelectedShareWorkspaceId('');
+    setSelectedShareClientId('');
+    setSelectedShareEmployeeId('');
     setDocAlreadySharedWith([]);
+    setDocAlreadySharedWithPortal([]);
     setShareModalOpen(true);
 
-    try {
-      if (docIds.length === 1) {
-        const { data: sharings, error } = await supabase
-          .from('partner_shared_documents')
-          .select('*, workspace:opura_partner_workspaces(supplier_name)')
-          .eq('document_id', docIds[0]);
-
-        if (error) throw error;
-        setDocAlreadySharedWith(sharings);
-      }
-    } catch (err) {
-      console.error('[OpuraDocsModule] Erro ao carregar compartilhamentos existentes do documento:', err);
-    }
-    
     if (partnerWorkspaces.length === 0 && activeOrganizationId) {
       try {
         const wss = await partnerService.listWorkspaces(activeOrganizationId);
@@ -1061,11 +1067,23 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         console.error('[OpuraDocsModule] Erro ao carregar parceiros habilitados:', err);
       }
     }
+    if (portalShareClients.length === 0 && activeOrganizationId) {
+      clientService.listClients(activeOrganizationId)
+        .then((clients: any[]) => setPortalShareClients(clients.map((c) => ({ id: c.id, name: c.name }))))
+        .catch((err) => console.error('[OpuraDocsModule] Erro ao carregar clientes:', err));
+    }
+    if (portalShareEmployees.length === 0 && activeOrganizationId) {
+      laborService.listEmployees(activeOrganizationId)
+        .then((emps: any[]) => setPortalShareEmployees(emps.map((e) => ({ id: e.id, name: e.name }))))
+        .catch((err) => console.error('[OpuraDocsModule] Erro ao carregar colaboradores:', err));
+    }
     try {
       if (docIds.length === 1) {
-          const sharings = await partnerService.listSharingsForDocument(docIds[0]);
-          setDocAlreadySharedWith(sharings);
-        }
+        const sharings = await partnerService.listSharingsForDocument(docIds[0]);
+        setDocAlreadySharedWith(sharings);
+        const portalSharings = await documentService.listPortalSharingsForDocument(docIds[0]);
+        setDocAlreadySharedWithPortal(portalSharings);
+      }
     } catch (err) {
       console.error('[OpuraDocsModule] Erro ao carregar compartilhamentos existentes do documento:', err);
     }
@@ -1097,7 +1115,37 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
+  // Compartilhar o(s) documento(s) selecionado(s) com um cliente ou colaborador — vira
+  // visível na aba Documentos do respectivo portal (ver Parte 3 do plano de bloqueio+portais).
+  const handleShareWithPortal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (shareDocIds.length === 0) return;
+    if (shareAudience === 'cliente' && !selectedShareClientId) return;
+    if (shareAudience === 'colaborador' && !selectedShareEmployeeId) return;
 
+    setSharingSubmitting(true);
+    try {
+      await documentService.sharePortalDocumentsBatch(
+        shareDocIds,
+        {
+          audience: shareAudience as 'cliente' | 'colaborador',
+          clientId: selectedShareClientId || undefined,
+          employeeId: selectedShareEmployeeId || undefined,
+        },
+        currentProfile?.email || 'sistema'
+      );
+      setShareModalOpen(false);
+      setShareDocIds([]);
+      const targetName = shareAudience === 'cliente'
+        ? portalShareClients.find((c) => c.id === selectedShareClientId)?.name
+        : portalShareEmployees.find((e) => e.id === selectedShareEmployeeId)?.name;
+      notify(`${shareDocIds.length} documento(s) compartilhado(s) com ${targetName || 'o portal'} com sucesso.`);
+    } catch (err: any) {
+      notify(err.message || 'Erro ao compartilhar documento com o portal.', 'error');
+    } finally {
+      setSharingSubmitting(false);
+    }
+  };
 
   // Só obras — ver utils/projectClassification.ts
   const obras = React.useMemo(() => {
@@ -1384,6 +1432,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const handleUploadVersionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDocForVersions || !newVersionFile || !activeOrganizationId) return;
+    if (isLockedByOther(selectedDocForVersions)) {
+      notify(`Documento bloqueado para edição por ${selectedDocForVersions.locked_by_name || selectedDocForVersions.locked_by}.`, 'error');
+      return;
+    }
 
     setUploadingVersion(true);
     try {
@@ -1413,8 +1465,60 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   };
 
+  // Bloquear/Desbloquear documento para edição (trava real — ver migration 20270821000007)
+  const currentUserDisplayName = orgMembers.find(m => m.email === currentProfile?.email)?.name || currentProfile?.email || 'Usuário';
+
+  const handleConfirmLockDoc = async () => {
+    if (!lockModalDoc || !currentProfile?.email) return;
+    setLockSubmitting(true);
+    try {
+      await documentService.lockDocument(lockModalDoc.id, currentProfile.email, currentUserDisplayName);
+      notify('Documento bloqueado para edição.');
+      setLockModalDoc(null);
+      fetchDocs();
+      if (selectedDocForVersions?.id === lockModalDoc.id) {
+        const updatedDoc = await documentService.getDocumentById(lockModalDoc.id);
+        setSelectedDocForVersions(updatedDoc);
+      }
+    } catch (err: any) {
+      notify(err.message || 'Erro ao bloquear documento.', 'error');
+    } finally {
+      setLockSubmitting(false);
+    }
+  };
+
+  const handleUnlockDoc = async (doc: OpuraDocument) => {
+    if (!currentProfile?.email) return;
+    const ok = await confirm({
+      title: 'Desbloquear documento',
+      message: `Desbloquear "${doc.nome}"? Outros usuários voltarão a poder editá-lo.`,
+      variant: 'warning',
+      confirmLabel: 'Desbloquear',
+    });
+    if (!ok) return;
+    try {
+      await documentService.unlockDocument(doc.id, currentProfile.email, isOrgAdmin);
+      notify('Documento desbloqueado.');
+      fetchDocs();
+      if (selectedDocForVersions?.id === doc.id) {
+        const updatedDoc = await documentService.getDocumentById(doc.id);
+        setSelectedDocForVersions(updatedDoc);
+      }
+    } catch (err: any) {
+      notify(err.message || 'Erro ao desbloquear documento.', 'error');
+    }
+  };
+
+  // true quando o usuário atual NÃO pode editar/subir versão porque outra pessoa detém o lock
+  const isLockedByOther = (doc: OpuraDocument | null | undefined): boolean =>
+    !!doc?.locked_by && doc.locked_by !== currentProfile?.email && !isOrgAdmin;
+
   // Iniciar Edição do Documento
   const handleStartEditDoc = (doc: OpuraDocument) => {
+    if (isLockedByOther(doc)) {
+      notify(`Documento bloqueado para edição por ${doc.locked_by_name || doc.locked_by} (V${doc.locked_version}).`, 'error');
+      return;
+    }
     setEditingDoc(doc);
     setEditDocName(doc.nome);
     
@@ -1620,19 +1724,19 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               {/* O upload grava em uma org específica e handleUploadSubmit rejeita
                   sem ela; ao contrário do modal de pasta, não há seletor de
                   organização no formulário. Em "Todas as Organizações" o botão
-                  sairia oferecendo uma ação que sempre falha. */}
-              {activeOrganizationId && (
-                <button
-                  onClick={() => {
-                    setNewDocCategory(activeTab);
-                    setUploadModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-                >
-                  <Plus className="w-[15px] h-[15px]" />
-                  Novo documento
-                </button>
-              )}
+                  fica desabilitado (REGRA #5: nunca some, explica por quê). */}
+              <button
+                onClick={() => {
+                  setNewDocCategory(activeTab);
+                  setUploadModalOpen(true);
+                }}
+                disabled={!activeOrganizationId}
+                title={!activeOrganizationId ? 'Selecione uma organização para criar um documento' : undefined}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 disabled:active:scale-100"
+              >
+                <Plus className="w-[15px] h-[15px]" />
+                Novo documento
+              </button>
             </div>
           )}
         </div>
@@ -2234,6 +2338,12 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                   <div className="min-w-0">
                                     <span className="font-medium text-gray-900 block truncate">{doc.nome}</span>
                                     {doc.descricao && <span className="text-xs text-gray-400 block truncate mt-0.5">{doc.descricao}</span>}
+                                    {doc.locked_by && (
+                                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-orange-600 mt-0.5">
+                                        <Lock className="w-3 h-3" />
+                                        Em edição por {doc.locked_by_name || doc.locked_by} — V{doc.locked_version}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </td>
@@ -2298,7 +2408,23 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                   {!doc.is_integrated && (
                                     <>
                                       {/* Sempre visíveis: Editar + (Download acima) */}
-                                      <ActionIconButton kind="settings" onClick={() => handleStartEditDoc(doc)} />
+                                      <ActionIconButton
+                                        kind="settings"
+                                        onClick={() => handleStartEditDoc(doc)}
+                                        disabled={isLockedByOther(doc)}
+                                        title={isLockedByOther(doc) ? `Bloqueado por ${doc.locked_by_name || doc.locked_by}` : undefined}
+                                      />
+                                      {/* Bloqueio para edição: informa quem está editando e trava edição/nova versão para os demais */}
+                                      {doc.locked_by ? (
+                                        <ActionIconButton
+                                          kind="unlock"
+                                          disabled={isLockedByOther(doc)}
+                                          title={isLockedByOther(doc) ? `Bloqueado por ${doc.locked_by_name || doc.locked_by} — apenas quem bloqueou ou um admin pode desbloquear` : 'Desbloquear'}
+                                          onClick={() => handleUnlockDoc(doc)}
+                                        />
+                                      ) : (
+                                        <ActionIconButton kind="lock" onClick={() => setLockModalDoc(doc)} />
+                                      )}
                                       {/* Ações secundárias — bandeja horizontal (abre para a esquerda) */}
                                       <InlineActionTray>
                                         {isOrgAdmin && !doc.is_integrated && (
@@ -2567,13 +2693,37 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <p className="text-xs text-slate-400 font-bold">{selectedDocForVersions.nome}</p>
                 </div>
               </div>
-              <button
-                onClick={() => setSelectedDocForVersions(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedDocForVersions.locked_by ? (
+                  <ActionIconButton
+                    kind="unlock"
+                    disabled={isLockedByOther(selectedDocForVersions)}
+                    title={
+                      isLockedByOther(selectedDocForVersions)
+                        ? `Bloqueado por ${selectedDocForVersions.locked_by_name || selectedDocForVersions.locked_by}`
+                        : 'Desbloquear'
+                    }
+                    onClick={() => handleUnlockDoc(selectedDocForVersions)}
+                  />
+                ) : (
+                  <ActionIconButton kind="lock" onClick={() => setLockModalDoc(selectedDocForVersions)} />
+                )}
+                <button
+                  onClick={() => setSelectedDocForVersions(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
+
+            {selectedDocForVersions.locked_by && (
+              <div className="mx-6 mt-4 flex items-center gap-2 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-100 rounded-[8px] px-3 py-2">
+                <Lock className="w-3.5 h-3.5" />
+                Em edição por {selectedDocForVersions.locked_by_name || selectedDocForVersions.locked_by} — V{selectedDocForVersions.locked_version}
+                {selectedDocForVersions.locked_at && ` desde ${new Date(selectedDocForVersions.locked_at).toLocaleString()}`}
+              </div>
+            )}
 
             <div className="p-6 space-y-6">
               {/* Form para Upload de Nova Versão / Renovação */}
@@ -2583,17 +2733,24 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <Upload className="w-4 h-4" />
                     Subir nova versão ou renovação
                   </h4>
+                  {isLockedByOther(selectedDocForVersions) && (
+                    <p className="text-xs font-medium text-orange-600 flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5" />
+                      Bloqueado por {selectedDocForVersions.locked_by_name || selectedDocForVersions.locked_by} — desbloqueie para subir uma nova versão.
+                    </p>
+                  )}
                   <div className="flex flex-col sm:flex-row gap-3">
                     <div className="relative flex-grow border border-slate-200 rounded-[6px] bg-white p-3 hover:border-blue-400 transition-colors">
                       <input
                         type="file"
                         required
+                        disabled={isLockedByOther(selectedDocForVersions)}
                         onChange={(e) => {
                           if (e.target.files && e.target.files[0]) {
                             setNewVersionFile(e.target.files[0]);
                           }
                         }}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
                       />
                       <p className="text-xs font-bold text-slate-600 text-center truncate">
                         {newVersionFile ? newVersionFile.name : 'Selecionar novo arquivo...'}
@@ -2601,7 +2758,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     </div>
                     <button
                       type="submit"
-                      disabled={uploadingVersion || !newVersionFile}
+                      disabled={uploadingVersion || !newVersionFile || isLockedByOther(selectedDocForVersions)}
                       className="h-9 px-3.5 bg-blue-600 text-white font-medium text-[13px] rounded-[6px] hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5"
                     >
                       {uploadingVersion ? (
@@ -2990,7 +3147,64 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         </div>
       )}
 
-      {/* Modal de Compartilhamento com Portal do Parceiro */}
+      {/* Modal de Bloqueio para Edição (trava) */}
+      {lockModalDoc && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-md border border-slate-100 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <Lock className="w-5 h-5 text-orange-500" />
+                <h3 className="font-black text-slate-800 text-sm">Bloquear para Edição</h3>
+              </div>
+              <button
+                onClick={() => setLockModalDoc(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-600">
+                Isso informa aos demais usuários que <span className="font-semibold text-slate-800">{lockModalDoc.nome}</span> está
+                em edição e impede que outra pessoa edite os metadados ou suba uma nova versão até você desbloquear.
+              </p>
+
+              <div className="bg-slate-50 border border-slate-100 rounded-[10px] p-4 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-semibold">Usuário</span>
+                  <span className="font-medium text-slate-800">{currentUserDisplayName}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-semibold">Versão atual</span>
+                  <span className="font-medium text-slate-800">V{lockModalDoc.active_version?.version_number || 1}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setLockModalDoc(null)}
+                  className="px-4 py-2.5 border border-slate-200 text-slate-500 font-medium rounded-[6px] hover:bg-slate-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={lockSubmitting}
+                  onClick={handleConfirmLockDoc}
+                  className="h-9 px-3.5 bg-orange-500 text-white font-medium text-[13px] rounded-[6px] hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {lockSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                  Bloquear
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Compartilhamento — Portal do Parceiro / Cliente / Colaborador */}
       {shareModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-md border border-slate-100 overflow-hidden">
@@ -2998,7 +3212,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               <div className="flex items-center gap-2">
                 <Share2 className="w-5 h-5 text-orange-500" />
                 <h3 className="font-black text-slate-800 text-sm">
-                    Compartilhar com Parceiro {shareDocIds.length > 1 && `(${shareDocIds.length} arquivos)`}
+                    Compartilhar {shareDocIds.length > 1 && `(${shareDocIds.length} arquivos)`}
                   </h3>
                 </div>
                 <button
@@ -3012,63 +3226,170 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleShareWithPartner} className="p-6 space-y-4">
-              {docAlreadySharedWith.length > 0 && (
-                <div className="bg-blue-50 border border-blue-100 rounded-[6px] px-3.5 py-2.5">
-                  <p className="text-xs font-semibold text-blue-700 mb-1">Já compartilhado com:</p>
-                  <p className="text-xs text-blue-600">
-                    {docAlreadySharedWith.map((s) => s.supplier_name).join(', ')}
-                  </p>
-                </div>
-              )}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-500">Parceiro / Fornecedor Habilitado</label>
-                <select
-                  required
-                  value={selectedShareWorkspaceId}
-                  onChange={(e) => setSelectedShareWorkspaceId(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
-                >
-                  <option value="">Selecione um parceiro...</option>
-                  {sortedShareWorkspaces.map((ws) => {
-                    const alreadyShared = docAlreadySharedWith.some((s) => s.partner_workspace_id === ws.id);
-                    return (
-                      <option key={ws.id} value={ws.id} disabled={alreadyShared}>
-                        {ws.supplier_id === shareTargetSupplierId ? '★ ' : ''}{ws.supplier_name}{alreadyShared ? ' (já compartilhado)' : ''}
-                      </option>
-                    );
-                  })}
-                </select>
-                {shareTargetSupplierId && sortedShareWorkspaces.some((ws) => ws.supplier_id === shareTargetSupplierId) && (
-                  <p className="text-xs text-slate-400 pt-1">★ = fornecedor já vinculado a este documento.</p>
-                )}
-                {partnerWorkspaces.length === 0 && (
-                  <p className="text-xs text-slate-400 pt-1">
-                    Nenhum parceiro habilitado. Ative um workspace em Suprimentos → Parceiros.
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            {/* Alvo do compartilhamento */}
+            <div className="flex items-center gap-1.5 px-6 pt-4">
+              {([
+                { id: 'parceiro', label: 'Parceiro' },
+                { id: 'cliente', label: 'Portal do Cliente' },
+                { id: 'colaborador', label: 'Portal do Colaborador' },
+              ] as const).map((tab) => (
                 <button
+                  key={tab.id}
                   type="button"
-                  onClick={() => {
-                    setShareModalOpen(false);
-                    setShareDocIds([]);
-                  }}
-                  className="px-4 py-2.5 border border-slate-200 text-slate-500 font-medium rounded-[6px] hover:bg-slate-50 transition-colors"
+                  onClick={() => setShareAudience(tab.id)}
+                  className={`px-3 py-1.5 rounded-[6px] text-xs font-semibold transition-colors ${
+                    shareAudience === tab.id
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
                 >
-                  Cancelar
+                  {tab.label}
                 </button>
-                <button
-                  type="submit"
-                  disabled={sharingSubmitting || !selectedShareWorkspaceId}
-                  className="h-9 px-3.5 bg-orange-500 text-white font-medium text-[13px] rounded-[6px] hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {sharingSubmitting ? 'Compartilhando...' : 'Compartilhar'}
-                </button>
-              </div>
-            </form>
+              ))}
+            </div>
+
+            {shareAudience === 'parceiro' && (
+              <form onSubmit={handleShareWithPartner} className="p-6 space-y-4">
+                {docAlreadySharedWith.length > 0 && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-[6px] px-3.5 py-2.5">
+                    <p className="text-xs font-semibold text-blue-700 mb-1">Já compartilhado com:</p>
+                    <p className="text-xs text-blue-600">
+                      {docAlreadySharedWith.map((s) => s.supplier_name).join(', ')}
+                    </p>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">Parceiro / Fornecedor Habilitado</label>
+                  <select
+                    required
+                    value={selectedShareWorkspaceId}
+                    onChange={(e) => setSelectedShareWorkspaceId(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  >
+                    <option value="">Selecione um parceiro...</option>
+                    {sortedShareWorkspaces.map((ws) => {
+                      const alreadyShared = docAlreadySharedWith.some((s) => s.partner_workspace_id === ws.id);
+                      return (
+                        <option key={ws.id} value={ws.id} disabled={alreadyShared}>
+                          {ws.supplier_id === shareTargetSupplierId ? '★ ' : ''}{ws.supplier_name}{alreadyShared ? ' (já compartilhado)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {shareTargetSupplierId && sortedShareWorkspaces.some((ws) => ws.supplier_id === shareTargetSupplierId) && (
+                    <p className="text-xs text-slate-400 pt-1">★ = fornecedor já vinculado a este documento.</p>
+                  )}
+                  {partnerWorkspaces.length === 0 && (
+                    <p className="text-xs text-slate-400 pt-1">
+                      Nenhum parceiro habilitado. Ative um workspace em Suprimentos → Parceiros.
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShareModalOpen(false);
+                      setShareDocIds([]);
+                    }}
+                    className="px-4 py-2.5 border border-slate-200 text-slate-500 font-medium rounded-[6px] hover:bg-slate-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={sharingSubmitting || !selectedShareWorkspaceId}
+                    className="h-9 px-3.5 bg-orange-500 text-white font-medium text-[13px] rounded-[6px] hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {sharingSubmitting ? 'Compartilhando...' : 'Compartilhar'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {(shareAudience === 'cliente' || shareAudience === 'colaborador') && (
+              <form onSubmit={handleShareWithPortal} className="p-6 space-y-4">
+                {docAlreadySharedWithPortal.filter((s) => s.audience === shareAudience).length > 0 && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-[6px] px-3.5 py-2.5">
+                    <p className="text-xs font-semibold text-blue-700 mb-1">Já compartilhado com:</p>
+                    <p className="text-xs text-blue-600">
+                      {docAlreadySharedWithPortal
+                        .filter((s) => s.audience === shareAudience)
+                        .map((s) => (s.audience === 'cliente' ? s.client?.name : s.employee?.name) || '—')
+                        .join(', ')}
+                    </p>
+                  </div>
+                )}
+                {shareAudience === 'cliente' ? (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">Cliente</label>
+                    <select
+                      required
+                      value={selectedShareClientId}
+                      onChange={(e) => setSelectedShareClientId(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    >
+                      <option value="">Selecione um cliente...</option>
+                      {portalShareClients.map((c) => {
+                        const alreadyShared = docAlreadySharedWithPortal.some((s) => s.audience === 'cliente' && s.client_id === c.id);
+                        return (
+                          <option key={c.id} value={c.id} disabled={alreadyShared}>
+                            {c.name}{alreadyShared ? ' (já compartilhado)' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {portalShareClients.length === 0 && (
+                      <p className="text-xs text-slate-400 pt-1">Nenhum cliente cadastrado nesta organização.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">Colaborador</label>
+                    <select
+                      required
+                      value={selectedShareEmployeeId}
+                      onChange={(e) => setSelectedShareEmployeeId(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    >
+                      <option value="">Selecione um colaborador...</option>
+                      {portalShareEmployees.map((emp) => {
+                        const alreadyShared = docAlreadySharedWithPortal.some((s) => s.audience === 'colaborador' && s.employee_id === emp.id);
+                        return (
+                          <option key={emp.id} value={emp.id} disabled={alreadyShared}>
+                            {emp.name}{alreadyShared ? ' (já compartilhado)' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {portalShareEmployees.length === 0 && (
+                      <p className="text-xs text-slate-400 pt-1">Nenhum colaborador cadastrado nesta organização.</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShareModalOpen(false);
+                      setShareDocIds([]);
+                    }}
+                    className="px-4 py-2.5 border border-slate-200 text-slate-500 font-medium rounded-[6px] hover:bg-slate-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={sharingSubmitting || (shareAudience === 'cliente' ? !selectedShareClientId : !selectedShareEmployeeId)}
+                    className="h-9 px-3.5 bg-orange-500 text-white font-medium text-[13px] rounded-[6px] hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {sharingSubmitting ? 'Compartilhando...' : 'Compartilhar'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

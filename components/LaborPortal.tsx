@@ -62,12 +62,30 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
         enabled: activeSection === 'treino',
     });
 
+    // GED (opura_documents) é a fonte única da aba Documentos — substitui o antigo
+    // employee_documents; só aparece aqui o que foi compartilhado via botão
+    // "Compartilhar" do módulo Gestão de Documentos (ver migration 20270821000010).
     const { data: documents = [] } = useQuery({
         queryKey: ['portal', 'docs', employeeId],
-        queryFn: () => portalRpc<any>('portal_get_documents', employeeId),
+        queryFn: () => portalRpc<any>('portal_get_ged_documents', employeeId),
         staleTime: STALE.normal,
         enabled: activeSection === 'docs',
     });
+
+    const handleDownloadDoc = async (storagePath?: string) => {
+        if (!storagePath) return;
+        try {
+            const { data, error } = await supabase.functions.invoke('labor-portal-ged-download', {
+                body: { employeeId, storagePath },
+            });
+            if (error) throw error;
+            if (!data?.signedUrl) throw new Error(data?.error || 'Erro ao gerar link de download.');
+            window.open(data.signedUrl, '_blank');
+        } catch (err: any) {
+            console.error('[LaborPortal] Erro ao baixar documento:', err);
+            alert(err.message || 'Erro ao baixar o documento.');
+        }
+    };
 
     const { data: folhaRuns = [] } = useQuery<Array<PayrollRun & { net: number }>>({
         queryKey: ['portal', 'folha', employeeId],
@@ -252,15 +270,18 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                         ) : (
                             documents.map(d => {
                                 const today = new Date().toISOString().split('T')[0];
-                                const expired = d.expiry_date && d.expiry_date < today;
+                                const expired = d.data_validade && d.data_validade < today;
                                 return (
                                     <div key={d.id} className={`flex items-center gap-3 p-3 rounded-xl border ${expired ? 'border-rose-200 bg-rose-50' : 'border-slate-100 bg-white'}`}>
                                         <FileText className={`w-4 h-4 shrink-0 ${expired ? 'text-rose-500' : 'text-indigo-500'}`} />
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-bold text-slate-800 truncate">{d.title}</p>
-                                            <p className="text-xs text-slate-400">{d.category}{d.expiry_date ? ` · vence ${d.expiry_date}` : ''}</p>
+                                            <p className="text-sm font-bold text-slate-800 truncate">{d.nome}</p>
+                                            <p className="text-xs text-slate-400">{d.categoria}{d.data_validade ? ` · vence ${d.data_validade}` : ''}</p>
                                         </div>
                                         {expired && <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />}
+                                        {d.storage_path && (
+                                            <ActionIconButton kind="download" size="sm" className="shrink-0" onClick={() => handleDownloadDoc(d.storage_path)} />
+                                        )}
                                     </div>
                                 );
                             })

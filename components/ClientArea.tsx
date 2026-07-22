@@ -64,10 +64,10 @@ import { clientMessagesService, ClientPortalMessage } from '../services/clientMe
 import { exportService } from '../services/exportService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { contractService } from '../services/contractService';
-import { clientPortalService } from '../services/clientPortalService';
+import { clientPortalService, PortalGedDocument } from '../services/clientPortalService';
+import { documentService } from '../services/documentService';
 import { projectService } from '../services/projectService';
 import { orderService } from '../services/orderService';
-import { storageService } from '../services/storageService';
 import { PurchaseOrder } from '../types';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import { useConfirm } from './ui/confirm';
@@ -115,7 +115,6 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         valAnual: 0,
         startDate: new Date().toISOString().split('T')[0]
     });
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
     // Na prévia mobile, renderiza exatamente o que o cliente vê (sem permissões de admin).
     const isAdmin = !isPreview && (profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER || profile?.group === 'DESENVOLVEDOR');
 
@@ -140,6 +139,13 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [showNotifications, setShowNotifications] = React.useState(false);
     const [showMoreSheet, setShowMoreSheet] = React.useState(false);
     const [mobileFinTab, setMobileFinTab] = React.useState<'detalhe' | 'historico'>('detalhe');
+
+    // Aba Documentos — GED (opura_documents) é a fonte única (ver migration 20270821000008/9);
+    // substitui o antigo array JSON `clientDocuments`. Formato normalizado entre o caminho
+    // anon (token, via RPC) e o preview autenticado do admin (via RLS direta).
+    interface PortalGedDocView { id: string; shareId?: string; nome: string; descricao?: string; categoria: string; storage_path?: string; mime_type?: string; data_validade?: string }
+    const [gedDocuments, setGedDocuments] = React.useState<PortalGedDocView[]>([]);
+    const [gedDocsLoading, setGedDocsLoading] = React.useState(false);
 
     // Configuração de abas do portal precisa ser lida/gravada no projeto OBRA
     // vinculado ao cliente (settings.clientId), não no projeto que porventura
@@ -195,6 +201,22 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 ? clientRequestsService.getRequestsByToken(portalToken)
                 : (clientProfile && orgId ? clientRequestsService.listRequests(orgId, clientProfile.id) : Promise.resolve([]));
             load.then(setClientRequests).catch(console.error).finally(() => setRequestsLoading(false));
+        }
+        // Aba Documentos: GED (opura_documents) compartilhados com este cliente.
+        if (activeTab === 'documentos') {
+            setGedDocsLoading(true);
+            const loadGedDocs = portalToken
+                ? clientPortalService.getGedDocumentsByToken(portalToken).then((docs: PortalGedDocument[]) => docs.map((d) => ({
+                    id: d.id, nome: d.nome, descricao: d.descricao, categoria: d.categoria,
+                    storage_path: d.storage_path, mime_type: d.mime_type, data_validade: d.data_validade,
+                })))
+                : (clientProfile
+                    ? documentService.listSharedWithClient(clientProfile.id).then((rows) => rows.map((r) => ({
+                        id: r.document.id, shareId: r.shareId, nome: r.document.nome, descricao: r.document.descricao, categoria: r.document.categoria,
+                        storage_path: r.document.active_version?.storage_path, mime_type: r.document.active_version?.mime_type, data_validade: r.document.data_validade,
+                    })))
+                    : Promise.resolve([]));
+            loadGedDocs.then(setGedDocuments).catch(console.error).finally(() => setGedDocsLoading(false));
         }
         // Dashboard de Locação/Serviços precisa dos contratos
         if (activeTab === 'dashboard' && (clientCategory === 'Locação' || clientCategory === 'Serviços') && clientProfile) {
@@ -260,49 +282,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         fetchOrders();
     }, [settings.id, settings.linkedProjectId]);
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file && (clientProfile || settings.id)) {
-            try {
-                // Upload real para o Supabase Storage
-                const bucket = 'documents';
-                const folder = clientProfile ? `client-docs/${clientProfile.id}` : `project-docs/${settings.id}`;
-                const fileName = `${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
-                const path = `${folder}/${fileName}`;
-
-                await storageService.uploadFile(bucket, path, file);
-                const publicUrl = storageService.getPublicUrl(bucket, path);
-
-                const newDoc = {
-                    name: file.name,
-                    category: 'PDF ORIGINAL',
-                    url: publicUrl,
-                    date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                };
-
-                if (clientProfile && onClientSelect) {
-                    const newDocs = [...(clientProfile.clientDocuments || []), newDoc];
-                    updateClientData({ clientDocuments: newDocs });
-                } else if (onUpdateSettings) {
-                    const newDocs = [...(settings.clientDocuments || []), newDoc];
-                    onUpdateSettings({ ...settings, clientDocuments: newDocs });
-                }
-            } catch (error) {
-                console.error("Error uploading file:", error);
-                alert("Falha ao subir arquivo. Verifique se o bucket 'documents' existe no Supabase.");
-            } finally {
-                if (fileInputRef.current) fileInputRef.current.value = '';
-            }
-        }
-    };
-
     React.useEffect(() => {
         if (initialTab) {
             setActiveTab(initialTab);
         }
     }, [initialTab]);
 
-    const currentClientDocs = clientProfile?.clientDocuments || settings.clientDocuments || [];
     const currentFinancialInfo = clientProfile?.financialInfo || settings.financialInfo;
     const currentDiaryEntries = clientProfile?.diaryEntries || settings.diaryEntries || [];
 
@@ -2906,34 +2891,41 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     };
 
     const renderDocumentos = () => {
-        type ClientDoc = { name: string; category: string; url?: string; disabled?: boolean; isDummy?: boolean; date?: string };
-        const displayDocs = currentClientDocs as ClientDoc[];
-        const handleDownload = (doc: ClientDoc) => {
-            if (!doc.url) {
-                alert('Arquivo físico não encontrado no servidor. Verifique se o documento foi enviado corretamente.');
+        const displayDocs = gedDocuments;
+
+        // Fonte do link muda conforme o acesso: portal anon (token) precisa da Edge
+        // Function (bucket privado); preview autenticado do admin usa signed URL direta.
+        const handleDownload = async (doc: PortalGedDocView) => {
+            if (!doc.storage_path) {
+                alert('Arquivo físico não encontrado no servidor.');
                 return;
             }
-            
-            // Força o download criando um link temporário
-            const link = document.createElement('a');
-            link.href = doc.url;
-            link.setAttribute('download', doc.name);
-            link.setAttribute('target', '_blank');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            try {
+                const url = portalToken
+                    ? await clientPortalService.getGedDownloadUrl(portalToken, doc.storage_path)
+                    : await documentService.generateDownloadUrl(doc.storage_path);
+                window.open(url, '_blank');
+            } catch (err: any) {
+                console.error('[ClientArea] Erro ao gerar link de download:', err);
+                alert(err.message || 'Erro ao baixar o documento.');
+            }
+        };
+
+        // Remove o documento SÓ deste portal (unshare) — o documento em si continua
+        // no GED. Só disponível no preview autenticado do admin (tem shareId).
+        const handleRemoveFromPortal = async (doc: PortalGedDocView) => {
+            if (!doc.shareId) return;
+            if (!(await confirm({ title: 'Remover este documento do portal?', message: 'O documento continua no GED — só deixa de aparecer para o cliente.', variant: 'danger', confirmLabel: 'Remover' }))) return;
+            try {
+                await documentService.unsharePortalDocument(doc.shareId);
+                setGedDocuments((docs) => docs.filter((d) => d.shareId !== doc.shareId));
+            } catch (err: any) {
+                alert(err.message || 'Erro ao remover documento do portal.');
+            }
         };
 
         return (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Hidden File Input */}
-                <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    onChange={handleFileUpload}
-                />
-
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden -mx-4">
                     {/* Mini hero */}
@@ -2943,29 +2935,25 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     </div>
                     {/* Lista */}
                     <div className="px-4 -mt-3 pb-6 space-y-2">
-                        {isAdmin && (
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest mb-3 active:scale-95 transition-transform"
-                            >
-                                <Plus className="w-4 h-4" /> Adicionar Documento
-                            </button>
-                        )}
-                        {displayDocs.length === 0 ? (
+                        {gedDocsLoading ? (
+                            <div className="text-center py-10">
+                                <p className="text-sm text-gray-400">Carregando...</p>
+                            </div>
+                        ) : displayDocs.length === 0 ? (
                             <div className="flex flex-col items-center text-center py-10">
                                 <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-400 mb-3"><FileText className="w-7 h-7" /></div>
                                 <p className="text-sm font-black text-gray-700 uppercase tracking-tight">Nenhum documento ainda</p>
                                 <p className="text-xs text-gray-400 font-medium mt-1">Os arquivos compartilhados pelo gestor aparecerão aqui.</p>
                             </div>
                         ) : (
-                            displayDocs.map((doc, i) => (
-                                <div key={i} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
+                            displayDocs.map((doc) => (
+                                <div key={doc.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3">
                                     <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500 shrink-0">
                                         <FileText className="w-5 h-5" />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-black text-gray-900 truncate">{doc.name}</p>
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">{doc.category || 'Documento'}</span>
+                                        <p className="text-sm font-black text-gray-900 truncate">{doc.nome}</p>
+                                        <span className="text-xs font-normal text-blue-600">{doc.categoria || 'Documento'}</span>
                                     </div>
                                     <ActionIconButton kind="download" className="shrink-0" onClick={() => handleDownload(doc)} />
                                 </div>
@@ -3003,65 +2991,29 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     </button>
                                 </div>
                             </div>
-                            <p className="text-sm font-bold text-gray-400 uppercase tracking-wider">Abaixo estão os documentos e propostas compartilhados pelo gestor.</p>
+                            <p className="text-sm font-bold text-gray-400 uppercase tracking-wider">
+                                Abaixo estão os documentos compartilhados pelo gestor. {isAdmin && 'Para adicionar ou editar, use Gestão de Documentos → Compartilhar.'}
+                            </p>
                         </div>
-                        {isAdmin && (
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="flex items-center gap-3 px-8 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-black uppercase tracking-[0.15em] hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95"
-                            >
-                                <Plus className="w-4 h-4" />
-                                Adicionar Documento
-                            </button>
-                        )}
                     </div>
 
                     {viewMode === 'grid' ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
                             {displayDocs.length > 0 ? (
-                                displayDocs.map((doc, i) => (
-                                    <div key={i}
+                                displayDocs.map((doc) => (
+                                    <div key={doc.id}
                                         onClick={() => handleDownload(doc)}
-                                        className={`group flex flex-col items-center p-8 rounded-[2rem] border border-gray-50 bg-gray-50/30 hover:bg-white hover:border-indigo-100 hover:shadow-2xl hover:shadow-indigo-100/30 transition-all cursor-pointer relative ${doc.disabled ? 'opacity-50' : ''}`}
+                                        className="group flex flex-col items-center p-8 rounded-[2rem] border border-gray-50 bg-gray-50/30 hover:bg-white hover:border-indigo-100 hover:shadow-2xl hover:shadow-indigo-100/30 transition-all cursor-pointer relative"
                                     >
-                                        {isAdmin && !doc.isDummy && (
-                                            <div className="absolute top-4 right-4 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all z-20">
-                                                <ActionIconButton
-                                                    kind="edit"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        const newName = prompt('Novo nome:', doc.name);
-                                                        const newCat = prompt('Nova categoria:', doc.category);
-                                                        if ((newName || newCat) && onUpdateSettings) {
-                                                            const newDocs = currentClientDocs.map((d) =>
-                                                                d === doc ? {
-                                                                    ...d,
-                                                                    name: newName || d.name,
-                                                                    category: newCat || d.category,
-                                                                    date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                                                                } : d
-                                                            );
-                                                            if (clientProfile) {
-                                                                updateClientData({ clientDocuments: newDocs });
-                                                            } else {
-                                                                onUpdateSettings({ ...settings, clientDocuments: newDocs });
-                                                            }
-                                                        }
-                                                    }}
-                                                />
+                                        {isAdmin && doc.shareId && (
+                                            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-all z-20">
                                                 <ActionIconButton
                                                     kind="delete"
                                                     icon={<X className="w-3.5 h-3.5" />}
-                                                    onClick={async (e) => {
+                                                    title="Remover do portal"
+                                                    onClick={(e) => {
                                                         e.stopPropagation();
-                                                        if (await confirm({ title: 'Remover este documento?', variant: 'danger', confirmLabel: 'Remover' })) {
-                                                            const newDocs = currentClientDocs.filter((d) => d !== doc);
-                                                            if (clientProfile) {
-                                                                updateClientData({ clientDocuments: newDocs });
-                                                            } else {
-                                                                onUpdateSettings?.({ ...settings, clientDocuments: newDocs });
-                                                            }
-                                                        }
+                                                        handleRemoveFromPortal(doc);
                                                     }}
                                                 />
                                             </div>
@@ -3072,28 +3024,25 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             <div className="p-5 bg-white rounded-2xl shadow-sm text-blue-500">
                                                 <FileText className="w-10 h-10" />
                                             </div>
-                                            {!doc.disabled && (
-                                                <div className="absolute -bottom-2 -right-2 bg-indigo-600 p-2.5 rounded-2xl shadow-lg border-4 border-white text-white group-hover:rotate-12 transition-transform">
-                                                    <Download className="w-3.5 h-3.5" />
-                                                </div>
-                                            )}
+                                            <div className="absolute -bottom-2 -right-2 bg-indigo-600 p-2.5 rounded-2xl shadow-lg border-4 border-white text-white group-hover:rotate-12 transition-transform">
+                                                <Download className="w-3.5 h-3.5" />
+                                            </div>
                                         </div>
 
                                         <div className="text-center w-full px-2">
-                                            <div className="text-sm font-black text-gray-900 tracking-tight mb-1 truncate uppercase">{doc.name}</div>
-                                            <div className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-full inline-block mb-2 ${doc.disabled ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors'}`}>
-                                                {doc.category || 'DOCUMENTO'}
+                                            <div className="text-sm font-black text-gray-900 tracking-tight mb-1 truncate uppercase">{doc.nome}</div>
+                                            <div className="text-xs font-normal mb-2 text-gray-400 group-hover:text-blue-500 transition-colors">
+                                                {doc.categoria || 'Documento'}
                                             </div>
-                                            {doc.date && (
-                                                <div className="text-[8px] font-bold text-gray-300 uppercase tracking-widest">Atualizado: {doc.date}</div>
-                                            )}
                                         </div>
                                     </div>
                                 ))
                             ) : (
                                 <div className="col-span-full flex flex-col items-center justify-center py-20 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-100">
                                     <FileText className="w-16 h-16 text-gray-200 mb-6" />
-                                    <p className="text-lg font-black text-gray-400 uppercase tracking-widest text-center">Nenhum documento compartilhado</p>
+                                    <p className="text-lg font-black text-gray-400 uppercase tracking-widest text-center">
+                                        {gedDocsLoading ? 'Carregando...' : 'Nenhum documento compartilhado'}
+                                    </p>
                                 </div>
                             )}
                         </div>
@@ -3104,72 +3053,36 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <tr className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">
                                         <th className="px-8 py-5">Nome do Arquivo</th>
                                         <th className="px-8 py-5">Categoria</th>
-                                        <th className="px-8 py-5">Data de Atualização</th>
                                         <th className="px-8 py-5 text-right">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {displayDocs.length > 0 ? (
-                                        displayDocs.map((doc, i) => (
-                                            <tr key={i} className="hover:bg-indigo-50/30 transition-colors group">
+                                        displayDocs.map((doc) => (
+                                            <tr key={doc.id} className="hover:bg-indigo-50/30 transition-colors group">
                                                 <td className="px-8 py-4">
                                                     <div className="flex items-center gap-4">
                                                         <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600">
                                                             <FileText className="w-5 h-5" />
                                                         </div>
-                                                        <span className="text-sm font-bold text-gray-900 uppercase tracking-tight">{doc.name}</span>
+                                                        <span className="text-sm font-normal text-gray-900">{doc.nome}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-8 py-4">
-                                                    <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-                                                        {doc.category || 'DOCUMENTO'}
+                                                    <span className="text-sm font-normal text-indigo-600">
+                                                        {doc.categoria || 'Documento'}
                                                     </span>
-                                                </td>
-                                                <td className="px-8 py-4 text-table-body font-bold text-gray-400 tabular-nums">
-                                                    {doc.date || '--'}
                                                 </td>
                                                 <td className="px-8 py-4 text-right">
                                                     <div className="flex justify-end gap-1.5">
                                                         <ActionIconButton kind="download" onClick={() => handleDownload(doc)} />
-                                                        {isAdmin && !doc.isDummy && (
-                                                            <>
-                                                                <ActionIconButton
-                                                                    kind="edit"
-                                                                    onClick={(e) => {
-                                                                        const newName = prompt('Novo nome:', doc.name);
-                                                                        const newCat = prompt('Nova categoria:', doc.category);
-                                                                        if ((newName || newCat)) {
-                                                                            const newDocs = currentClientDocs.map((d) =>
-                                                                                d === doc ? {
-                                                                                    ...d,
-                                                                                    name: newName || d.name,
-                                                                                    category: newCat || d.category,
-                                                                                    date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                                                                                } : d
-                                                                            );
-                                                                            if (clientProfile) {
-                                                                                updateClientData({ clientDocuments: newDocs });
-                                                                            } else if (onUpdateSettings) {
-                                                                                onUpdateSettings({ ...settings, clientDocuments: newDocs });
-                                                                            }
-                                                                        }
-                                                                    }}
-                                                                />
-                                                                <ActionIconButton
-                                                                    kind="delete"
-                                                                    icon={<X className="w-4 h-4" />}
-                                                                    onClick={async () => {
-                                                                        if (await confirm({ title: 'Remover este documento?', variant: 'danger', confirmLabel: 'Remover' })) {
-                                                                            const newDocs = currentClientDocs.filter((d) => d !== doc);
-                                                                            if (clientProfile) {
-                                                                                updateClientData({ clientDocuments: newDocs });
-                                                                            } else if (onUpdateSettings) {
-                                                                                onUpdateSettings({ ...settings, clientDocuments: newDocs });
-                                                                            }
-                                                                        }
-                                                                    }}
-                                                                />
-                                                            </>
+                                                        {isAdmin && doc.shareId && (
+                                                            <ActionIconButton
+                                                                kind="delete"
+                                                                icon={<X className="w-4 h-4" />}
+                                                                title="Remover do portal"
+                                                                onClick={() => handleRemoveFromPortal(doc)}
+                                                            />
                                                         )}
                                                     </div>
                                                 </td>
@@ -3177,8 +3090,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan={4} className="py-10 text-center">
-                                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Nenhum documento compartilhado</p>
+                                            <td colSpan={3} className="py-10 text-center">
+                                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                                                    {gedDocsLoading ? 'Carregando...' : 'Nenhum documento compartilhado'}
+                                                </p>
                                             </td>
                                         </tr>
                                     )}

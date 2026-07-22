@@ -12,6 +12,8 @@ import {
   OpuraDocumentApprovalStatus,
   OpuraDocumentAuditLog,
   OpuraDocumentMarkup,
+  OpuraDocumentPortalShare,
+  OpuraDocumentPortalAudience,
   UserPermissions,
 } from '../types';
 import { notificationService } from './notificationService';
@@ -827,6 +829,146 @@ export const documentService = {
     return data as OpuraDocument;
   },
 
+  // ─── BLOQUEIO PARA EDIÇÃO (TRAVA) ────────────────────────────
+  // A trava de fato mora nas RPCs SECURITY DEFINER abaixo + um trigger no
+  // banco (migration 20270821000007) que rejeita UPDATE de conteúdo por
+  // quem não é o dono do lock nem admin — não depende só da UI desabilitar
+  // o botão.
+  async lockDocument(documentId: string, userEmail: string, userName: string): Promise<OpuraDocument> {
+    const { data, error } = await supabase.rpc('fn_lock_opura_document', {
+      p_document_id: documentId,
+      p_user_email: userEmail,
+      p_user_name: userName,
+    });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao bloquear documento:', error);
+      throw new Error(error.message || 'Erro ao bloquear documento para edição.');
+    }
+
+    await this.logDocumentAction(
+      data.organization_id,
+      documentId,
+      userEmail,
+      'bloqueado_edicao',
+      `Documento bloqueado para edição por ${userName} (V${data.locked_version})`
+    );
+
+    return data as OpuraDocument;
+  },
+
+  async unlockDocument(documentId: string, userEmail: string, isOrgAdmin: boolean = false): Promise<OpuraDocument> {
+    const { data, error } = await supabase.rpc('fn_unlock_opura_document', {
+      p_document_id: documentId,
+      p_user_email: userEmail,
+      p_is_org_admin: isOrgAdmin,
+    });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao desbloquear documento:', error);
+      throw new Error(error.message || 'Erro ao desbloquear documento.');
+    }
+
+    await this.logDocumentAction(
+      data.organization_id,
+      documentId,
+      userEmail,
+      'desbloqueado_edicao',
+      'Documento desbloqueado para edição'
+    );
+
+    return data as OpuraDocument;
+  },
+
+  // ─── COMPARTILHAMENTO COM PORTAIS (Cliente / Colaborador) ────
+  // Espelha partnerService.shareDocumentsBatch/unshareDocument/listSharingsForDocument
+  // (mesma tabela-irmã, `opura_document_portal_shares`, migration 20270821000008).
+  // GED vira a fonte única dos portais: um documento só aparece no Portal do
+  // Cliente/Colaborador depois de compartilhado manualmente por aqui.
+  async listPortalSharingsForDocument(documentId: string): Promise<OpuraDocumentPortalShare[]> {
+    const { data, error } = await supabase
+      .from('opura_document_portal_shares')
+      .select('*, client:clients(name), employee:employees(name)')
+      .eq('document_id', documentId);
+
+    if (error) {
+      console.error('[DocumentService] Erro ao listar compartilhamentos de portal:', error);
+      throw error;
+    }
+
+    return (data || []) as OpuraDocumentPortalShare[];
+  },
+
+  async sharePortalDocumentsBatch(
+    documentIds: string[],
+    target: { audience: OpuraDocumentPortalAudience; clientId?: string; employeeId?: string },
+    sharedBy: string
+  ): Promise<void> {
+    if (documentIds.length === 0) return;
+    if (target.audience === 'cliente' && !target.clientId) throw new Error('Selecione um cliente.');
+    if (target.audience === 'colaborador' && !target.employeeId) throw new Error('Selecione um colaborador.');
+
+    const payloads = documentIds.map((docId) => ({
+      document_id: docId,
+      audience: target.audience,
+      client_id: target.audience === 'cliente' ? target.clientId : null,
+      employee_id: target.audience === 'colaborador' ? target.employeeId : null,
+      shared_by: sharedBy,
+    }));
+
+    const onConflict = target.audience === 'cliente' ? 'document_id,client_id' : 'document_id,employee_id';
+    const { error } = await supabase
+      .from('opura_document_portal_shares')
+      .upsert(payloads, { onConflict, ignoreDuplicates: true });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao compartilhar documentos com o portal:', error);
+      throw error;
+    }
+
+    for (const docId of documentIds) {
+      const { data: doc } = await supabase.from('opura_documents').select('organization_id').eq('id', docId).maybeSingle();
+      if (doc?.organization_id) {
+        this.logDocumentAction(
+          doc.organization_id,
+          docId,
+          sharedBy,
+          'compartilhado_portal',
+          `Documento compartilhado com o Portal do ${target.audience === 'cliente' ? 'Cliente' : 'Colaborador'}`
+        ).catch((err) => console.error('[DocumentService] Erro ao registrar auditoria de compartilhamento com portal:', err));
+      }
+    }
+  },
+
+  // Preview do admin (autenticado, sem token) na aba Documentos do Portal do Cliente —
+  // mesma fonte que fn_portal_get_ged_documents, mas via RLS normal (authenticated já
+  // é membro da org do documento, não precisa de RPC SECURITY DEFINER). Devolve o
+  // shareId junto (não só o documento) para permitir "remover deste portal" (unshare)
+  // sem afetar o documento nas outras telas do GED.
+  async listSharedWithClient(clientId: string): Promise<{ shareId: string; document: OpuraDocument }[]> {
+    const { data, error } = await supabase
+      .from('opura_document_portal_shares')
+      .select('id, shared_at, document:opura_documents!inner(*, active_version:opura_document_versions!fk_active_version(*))')
+      .eq('audience', 'cliente')
+      .eq('client_id', clientId)
+      .order('shared_at', { ascending: false });
+
+    if (error) {
+      console.error('[DocumentService] Erro ao listar documentos compartilhados com o cliente:', error);
+      throw error;
+    }
+
+    return (data || []).map((row: any) => ({ shareId: row.id, document: row.document })) as { shareId: string; document: OpuraDocument }[];
+  },
+
+  async unsharePortalDocument(shareId: string): Promise<void> {
+    const { error } = await supabase.from('opura_document_portal_shares').delete().eq('id', shareId);
+    if (error) {
+      console.error('[DocumentService] Erro ao remover compartilhamento de portal:', error);
+      throw error;
+    }
+  },
+
   // ─── DELETAR DOCUMENTO COMPLETO (BANCO + STORAGE) ────────────
   async deleteDocument(id: string, organizationId: string): Promise<void> {
     // 1. Obter todas as versões existentes para saber os caminhos no Storage
@@ -1285,7 +1427,7 @@ export const documentService = {
     organizationId: string,
     documentId: string,
     email: string,
-    action: 'criado' | 'versao_enviada' | 'download' | 'visualizado' | 'movido_pasta' | 'status_alterado' | 'compartilhado_parceiro',
+    action: 'criado' | 'versao_enviada' | 'download' | 'visualizado' | 'movido_pasta' | 'status_alterado' | 'compartilhado_parceiro' | 'bloqueado_edicao' | 'desbloqueado_edicao' | 'compartilhado_portal',
     details?: string
   ): Promise<void> {
     const { error } = await supabase

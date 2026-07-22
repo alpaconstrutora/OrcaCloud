@@ -10,6 +10,8 @@ import {
   CornerDownRight,
   Copy,
   Settings,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 
 export type ActionKind =
@@ -23,7 +25,9 @@ export type ActionKind =
   | 'qrcode'
   | 'move'
   | 'duplicate'
-  | 'annotate';
+  | 'annotate'
+  | 'lock'
+  | 'unlock';
 
 type Tone = 'neutral' | 'attention' | 'danger';
 type Size = 'md' | 'sm';
@@ -40,6 +44,8 @@ const KIND_DEFAULTS: Record<ActionKind, { Icon: React.ComponentType<{ className?
   move:      { Icon: CornerDownRight,  title: 'Mover',         tone: 'neutral' },
   duplicate: { Icon: Copy,             title: 'Duplicar',      tone: 'neutral' },
   annotate:  { Icon: Pencil,           title: 'Anotar',        tone: 'neutral' },
+  lock:      { Icon: Lock,             title: 'Bloquear para edição', tone: 'attention' },
+  unlock:    { Icon: Unlock,           title: 'Desbloquear',   tone: 'neutral' },
 };
 
 const TONE_CLASSES: Record<Tone, string> = {

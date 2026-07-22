@@ -57,6 +57,20 @@ export interface PortalPlanning {
     financialEnabled?: boolean;
 }
 
+export interface PortalGedDocument {
+    id: string;
+    nome: string;
+    descricao?: string;
+    categoria: string;
+    tipo_documento: string;
+    data_validade?: string;
+    storage_path?: string;
+    mime_type?: string;
+    tamanho?: number;
+    version_number?: number;
+    shared_at: string;
+}
+
 export const clientPortalService = {
     async generateToken(clientId: string, orgId: string): Promise<string> {
         const { data, error } = await supabase.rpc('client_portal_generate_token', {
@@ -84,6 +98,26 @@ export const clientPortalService = {
         if (error) throw error;
         const res = data as { valid: boolean; data: any[] | null };
         return res.valid ? (res.data ?? []) : [];
+    },
+
+    // Aba "Documentos" — GED (opura_documents) compartilhados com o cliente do token,
+    // ver migration 20270821000008/9 e o botão "Compartilhar" do módulo Gestão de Documentos.
+    async getGedDocumentsByToken(token: string): Promise<PortalGedDocument[]> {
+        const { data, error } = await supabase.rpc('fn_portal_get_ged_documents', { p_token: token });
+        if (error) { console.error('[clientPortalService] getGedDocumentsByToken:', error); return []; }
+        const res = data as { valid: boolean; data: PortalGedDocument[] | null };
+        return res?.valid ? (res.data ?? []) : [];
+    },
+
+    // Link assinado para baixar um documento do GED compartilhado — via Edge Function
+    // (service_role), porque o bucket 'opura-docs' é privado e o portal é anon.
+    async getGedDownloadUrl(token: string, storagePath: string): Promise<string> {
+        const { data, error } = await supabase.functions.invoke('portal-ged-download', {
+            body: { token, storagePath },
+        });
+        if (error) throw error;
+        if (!data?.signedUrl) throw new Error(data?.error || 'Erro ao gerar link de download.');
+        return data.signedUrl as string;
     },
 
     // Portal por token (anon): lê o realizado das POs de um projeto via RPC

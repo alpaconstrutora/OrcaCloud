@@ -31,6 +31,13 @@ export interface OpuraDocument {
   is_integrated?: boolean;
   approval_status?: OpuraDocumentApprovalStatus;
 
+  // Bloqueio para edição (trava): enquanto preenchido, só locked_by ou admin
+  // podem editar o documento ou subir nova versão.
+  locked_by?: string | null;
+  locked_by_name?: string | null;
+  locked_at?: string | null;
+  locked_version?: number | null;
+
   // Joins opcionais carregados pelo service
   active_version?: OpuraDocumentVersion;
   versions?: OpuraDocumentVersion[];
@@ -103,9 +110,24 @@ export interface OpuraDocumentAuditLog {
   organization_id: string;
   document_id: string;
   user_email: string;
-  action: 'criado' | 'versao_enviada' | 'download' | 'visualizado' | 'movido_pasta' | 'status_alterado';
+  action: 'criado' | 'versao_enviada' | 'download' | 'visualizado' | 'movido_pasta' | 'status_alterado' | 'compartilhado_parceiro' | 'bloqueado_edicao' | 'desbloqueado_edicao' | 'compartilhado_portal';
   details?: string;
   created_at: string;
+}
+
+export type OpuraDocumentPortalAudience = 'cliente' | 'colaborador';
+
+export interface OpuraDocumentPortalShare {
+  id: string;
+  document_id: string;
+  audience: OpuraDocumentPortalAudience;
+  client_id?: string | null;
+  employee_id?: string | null;
+  shared_by: string;
+  shared_at: string;
+  document?: OpuraDocument; // Carregado via join
+  client?: { name: string }; // Carregado via join (listPortalSharingsForDocument)
+  employee?: { name: string }; // Carregado via join (listPortalSharingsForDocument)
 }
 
 export interface OpuraDocumentMarkup {

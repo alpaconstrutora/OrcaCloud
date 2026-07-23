@@ -1,7 +1,7 @@
 import React from 'react';
 import { supabase } from '../lib/supabase';
 import { MOCK_SINAPI_DB } from '../constants';
-import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw, ChevronRight, Layers, Percent } from 'lucide-react';
+import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw, ChevronRight, Layers, Percent, Landmark } from 'lucide-react';
 import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
 import { useConfirm } from './ui/confirm';
@@ -11,12 +11,13 @@ import FinancialCategoriesManager from './FinancialCategoriesManager';
 import ContractTypesSettings from './ContractTypesSettings';
 import EmpreendimentoTypesSettings from './EmpreendimentoTypesSettings';
 import ContractIndexManager from './ContractIndexManager';
+import TaxSettingsManager from './TaxSettingsManager';
 
 type SettingsLeafId =
     | 'geral'
     | 'cat-clientes' | 'cat-fornecedores' | 'cat-contratos'
     | 'cat-empreendimentos' | 'cat-financeiro'
-    | 'indices' | 'whatsapp' | 'email' | 'database';
+    | 'indices' | 'tributos' | 'whatsapp' | 'email' | 'database';
 
 interface SettingsNavLeaf { id: SettingsLeafId; label: string; }
 interface SettingsNavNode {
@@ -37,6 +38,7 @@ const SETTINGS_NAV: SettingsNavNode[] = [
         { id: 'cat-financeiro', label: 'Financeiro' },
     ]},
     { id: 'indices', label: 'Índices de Reajuste', icon: Percent, leafId: 'indices' },
+    { id: 'tributos', label: 'Tributos e Impostos', icon: Landmark, leafId: 'tributos' },
     { id: 'whatsapp', label: 'WhatsApp & Integrações', icon: MessageCircle, leafId: 'whatsapp' },
     { id: 'email', label: 'Templates de E-mail', icon: Mail, leafId: 'email' },
     { id: 'database', label: 'Banco de Dados', icon: Database, leafId: 'database' },
@@ -489,6 +491,8 @@ const Settings: React.FC = () => {
                     <ContractIndexManager />
                 </div>
             )}
+
+            {activeLeaf === 'tributos' && <TaxSettingsManager />}
                 </div>
             </div>
         </div>

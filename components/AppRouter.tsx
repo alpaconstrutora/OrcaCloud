@@ -365,7 +365,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   }
   if (currentProfile.group === ProfileGroup.SUPPLIER) {
     const supplierTab = activeView === 'supplier-area' ? 'negotiations' : (activeView === 'orders' ? 'orders' : 'overview');
-    return <SupplierDashboard profile={currentProfile} supplierProfile={supplierProfile} onNavigate={handleNavigate} activeTab={supplierTab as 'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents' | 'profile'} />;
+    return <SupplierDashboard profile={currentProfile} supplierProfile={supplierProfile} onNavigate={handleNavigate} activeTab={supplierTab as 'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents'} />;
   }
   if (currentProfile.group === ProfileGroup.BROKER) {
     const tabMap: Record<string, string> = {

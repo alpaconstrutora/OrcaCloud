@@ -55,7 +55,7 @@ import { usePersistedState } from './ui/TableUtils';
 interface SupplierDashboardProps {
     supplierProfile?: Supplier | null;
     profile?: { group: string; role: string };
-    activeTab?: 'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents' | 'profile';
+    activeTab?: 'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents';
     initialOrderId?: string | null;
     initialOrderViewMode?: 'details' | 'logistics';
     onNavigate?: (link: string) => void;
@@ -84,7 +84,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         profile?.group === 'DESENVOLVEDOR'
     );
 
-    const [activeTab, setActiveTab] = React.useState<'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents' | 'profile'>(initialTab || 'overview');
+    const [activeTab, setActiveTab] = React.useState<'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents'>(initialTab || 'overview');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplierDashboard:viewMode', 'list');
     const [searchNegotiations, setSearchNegotiations] = usePersistedState<string>('supplierDashboard:searchNegotiations', '');
     const [insights, setInsights] = React.useState<SupplierAIInsight[]>([]);
@@ -1086,7 +1086,6 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         quotations: { title: 'Solicitações de Cotação', subtitle: 'Responda às solicitações de orçamento das construtoras.' },
         orders: { title: 'Gestão de Pedidos', subtitle: 'Acompanhe o ciclo de vida e logística dos suprimentos.' },
         documents: { title: 'Central de Documentos', subtitle: 'Gerencie suas Notas Fiscais, XMLs e comprovantes de entrega.' },
-        profile: { title: 'Perfil', subtitle: 'Dados cadastrais e configurações da conta.' },
     };
 
     const TABS: { id: typeof activeTab; label: string; icon: React.ElementType }[] = [
@@ -1095,7 +1094,6 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         { id: 'quotations', label: 'Cotações', icon: History },
         { id: 'orders', label: 'Pedidos', icon: Package },
         { id: 'documents', label: 'Docs', icon: FileCheck },
-        { id: 'profile', label: 'Perfil', icon: User },
     ];
 
     // Abas visíveis por fornecedor (guia §3, mesmo padrão do Portal do Corretor) —
@@ -1321,11 +1319,6 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 {activeTab === 'quotations' && renderQuotations()}
                 {activeTab === 'orders' && renderOrders()}
                 {activeTab === 'documents' && renderDocuments()}
-                {activeTab === 'profile' && (
-                    <div className="flex flex-col items-center justify-center h-64 bg-white rounded-[10px] border border-gray-100 text-gray-400 text-sm font-medium">
-                        Módulo de Perfil em Manutenção
-                    </div>
-                )}
             </main>
 
             {/* Toast de notificação (§13) */}

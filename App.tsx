@@ -152,10 +152,12 @@ import { clientPortalService } from './services/clientPortalService';
 import { brokerPortalService } from './services/brokerPortalService';
 import { investorPortalTokenService } from './services/investorPortalTokenService';
 import { partnerPortalTokenService } from './services/partnerPortalTokenService';
+import { supplierPortalTokenService } from './services/supplierPortalTokenService';
 const ClientArea = React.lazy(() => import('./components/ClientArea').then(m => ({ default: m.ClientArea })));
 const BrokerPortal = React.lazy(() => import('./components/BrokerPortal'));
 const InvestorDashboardPublic = React.lazy(() => import('./components/InvestorDashboard'));
 const PartnerPortalPublic = React.lazy(() => import('./components/partner/PartnerPortal').then(m => ({ default: m.PartnerPortal })));
+const SupplierDashboardPublic = React.lazy(() => import('./components/SupplierDashboard'));
 
 // Portal do Investidor via token público
 const InvestorPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
@@ -292,6 +294,53 @@ const PartnerPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
     <React.Suspense fallback={<div className="h-screen flex items-center justify-center bg-[#141414]"><div className="w-6 h-6 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" /></div>}>
       <PartnerPortalPublic userEmail="" portalToken={token} />
     </React.Suspense>
+  );
+};
+
+// Portal do Fornecedor via token público — mesmo formato do Portal do Parceiro,
+// reaproveitando o próprio SupplierDashboard (que já roda em modo token via `portalToken`).
+const SupplierPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
+  const [state, setState] = React.useState<'loading' | 'ok' | 'error'>('loading');
+  const [supplier, setSupplier] = React.useState<import('./types').Supplier | null>(null);
+
+  React.useEffect(() => {
+    supplierPortalTokenService.getPortalData(token)
+      .then(res => {
+        if (res.valid && res.supplier) {
+          setSupplier(res.supplier);
+          setState('ok');
+        } else {
+          setState('error');
+        }
+      })
+      .catch(() => setState('error'));
+  }, [token]);
+
+  if (state === 'loading') return (
+    <div className="h-screen flex items-center justify-center bg-[#F8FAFC]">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm font-black text-blue-700 uppercase tracking-widest">Carregando portal...</p>
+      </div>
+    </div>
+  );
+
+  if (state === 'error') return (
+    <div className="h-screen flex items-center justify-center bg-slate-50">
+      <div className="text-center space-y-3 p-8">
+        <p className="text-4xl">🔒</p>
+        <p className="text-lg font-black text-slate-800">Link inválido ou expirado</p>
+        <p className="text-sm text-slate-500">Solicite um novo link à construtora.</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8">
+      <React.Suspense fallback={<div className="h-screen flex items-center justify-center"><div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
+        <SupplierDashboardPublic supplierProfile={supplier} portalToken={token} />
+      </React.Suspense>
+    </div>
   );
 };
 import { ContractModal } from './components/ContractModal';
@@ -529,6 +578,13 @@ const App: React.FC = () => {
     return null;
   }, []);
 
+  const supplierPortalToken = React.useMemo(() => {
+    if (window.location.pathname === '/portal-fornecedor') {
+      return new URLSearchParams(window.location.search).get('token');
+    }
+    return null;
+  }, []);
+
   const orderShareToken = React.useMemo(() => {
     const match = window.location.pathname.match(/^\/pedido\/([0-9a-f-]{36})$/i);
     return match ? match[1] : null;
@@ -576,6 +632,7 @@ const App: React.FC = () => {
   if (brokerPortalToken) return <BrokerPortalTokenGate token={brokerPortalToken} />;
   if (investorPortalToken) return <InvestorPortalTokenGate token={investorPortalToken} />;
   if (partnerPortalToken) return <PartnerPortalTokenGate token={partnerPortalToken} />;
+  if (supplierPortalToken) return <SupplierPortalTokenGate token={supplierPortalToken} />;
   if (orderShareToken) return <PublicOrderView token={orderShareToken} />;
   if (proposalShareToken) return <PublicProposalView token={proposalShareToken} />;
   if (officesShareProjectId) return <PublicEspecificacoesView projetoId={officesShareProjectId} />;

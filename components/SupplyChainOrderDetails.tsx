@@ -18,6 +18,7 @@ import { storageService } from '../services/storageService';
 import { profileService } from '../services/profileService';
 import NegotiationHub from './NegotiationHub';
 import { webhookService } from '../services/webhookService';
+import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
 
 interface SupplyChainOrderDetailsProps {
     orderId: string;
@@ -25,6 +26,14 @@ interface SupplyChainOrderDetailsProps {
     onEdit?: (orderId: string) => void;
     initialView?: 'details' | 'logistics';
     currentUser?: { email: string; name: string };
+    /**
+     * Acesso via link público (sem login) — mesmo padrão do Portal do Parceiro.
+     * Nesse modo, ações administrativas (excluir/duplicar pedido, editar item,
+     * automação, WhatsApp, chat interno, três vias) ficam indisponíveis — só o
+     * que é fluxo do próprio fornecedor (ver pedido, confirmar/negociar,
+     * anexar NFe) passa pelo token.
+     */
+    portalToken?: string;
 }
 
 const getStatusStyles = (status: string) => {
@@ -42,7 +51,7 @@ const getStatusStyles = (status: string) => {
     }
 };
 
-const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ orderId, onBack, onEdit, initialView = 'details', currentUser: propUser }) => {
+const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ orderId, onBack, onEdit, initialView = 'details', currentUser: propUser, portalToken }) => {
     const [showReceiptModal, setShowReceiptModal] = React.useState(false);
     const [viewMode, setViewMode] = React.useState<'details' | 'logistics'>(initialView);
     const [order, setOrder] = React.useState<PurchaseOrder | null>(null);
@@ -84,7 +93,11 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const handleUpdateStatus = async (newStatus: PurchaseOrder['status']) => {
         try {
             setLoading(true);
-            await orderService.updateOrder(orderId, { status: newStatus }, order?.version);
+            if (portalToken) {
+                await supplierPortalTokenService.updateOrderLogistics(portalToken, orderId, { status: newStatus });
+            } else {
+                await orderService.updateOrder(orderId, { status: newStatus }, order?.version);
+            }
             await loadOrderData();
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
@@ -160,6 +173,22 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         (async () => {
             try {
                 setLoading(true);
+
+                if (portalToken) {
+                    // Modo link público: só o que é fluxo do fornecedor (pedido + notas
+                    // fiscais vinculadas) carrega por aqui — sem recibos/divergências/logs,
+                    // que são ferramentas internas de compras (ver comentário no prop).
+                    const res = await supplierPortalTokenService.getOrderDetail(portalToken, orderId);
+                    if (cancelled) return;
+                    if (res.valid && res.order) {
+                        setOrder(res.order);
+                        setInvoices(res.invoices);
+                        setSupplierName(propUser?.name || 'Fornecedor');
+                        setSupplierEmail(propUser?.email || '');
+                    }
+                    return;
+                }
+
                 const allOrders = await orderService.listOrders();
                 if (cancelled) return;
                 const foundOrder = allOrders.find(o => o.id === orderId);
@@ -210,7 +239,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             }
         })();
         return () => { cancelled = true; };
-    }, [orderId]);
+    }, [orderId, portalToken]);
 
     // Resolve signed URLs (15min) para as fotos dos comprovantes (bucket privado).
     const resolveReceiptPhotos = async (list: PurchaseReceipt[]) => {
@@ -230,6 +259,14 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
     const loadOrderData = async (): Promise<PurchaseOrder | null> => {
         try {
+            if (portalToken) {
+                const res = await supplierPortalTokenService.getOrderDetail(portalToken, orderId);
+                if (!res.valid || !res.order) return null;
+                setOrder(res.order);
+                setInvoices(res.invoices);
+                return res.order;
+            }
+
             const [allOrders, linkedInvoices, orderReceipts, orderDiscrepancies, orderNotifLogs] = await Promise.all([
                 orderService.listOrders(),
                 invoiceService.listInvoicesByOrder(orderId),
@@ -312,7 +349,11 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
         try {
             setIsUploadingInvoice(true);
-            await invoiceService.uploadInvoice(order.supplierId, file, undefined, order.id);
+            if (portalToken) {
+                await supplierPortalTokenService.uploadInvoice(portalToken, file, order.id);
+            } else {
+                await invoiceService.uploadInvoice(order.supplierId, file, undefined, order.id);
+            }
             await loadOrderData();
             if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (err) {
@@ -320,6 +361,22 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             notify("Erro ao anexar nota fiscal.", "error");
         } finally {
             setIsUploadingInvoice(false);
+        }
+    };
+
+    // Visualizar NFe = abrir link assinado; via token, a assinatura passa pela Edge
+    // Function (sessão anon não tem RLS de storage para o bucket privado `invoices`).
+    const handleViewInvoice = async (filePath: string) => {
+        try {
+            if (portalToken) {
+                const url = await supplierPortalTokenService.getInvoiceDownloadUrl(portalToken, filePath);
+                window.open(url, '_blank', 'noreferrer');
+            } else {
+                await invoiceService.openInvoice(filePath);
+            }
+        } catch (err) {
+            console.error("Error opening invoice:", err);
+            notify("Erro ao gerar link de acesso ao documento.", "error");
         }
     };
 
@@ -576,7 +633,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         </button>
                     )}
 
-                    {order.status === 'Entregue' && currentUser?.email !== supplierEmail && (
+                    {!portalToken && order.status === 'Entregue' && currentUser?.email !== supplierEmail && (
                         <button
                             onClick={() => setShowReceiptModal(true)}
                             className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-2xl text-button font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 active:scale-95"
@@ -594,15 +651,21 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         Negociar
                     </button>
 
-                    <button
-                        onClick={handleSendWebhook}
-                        disabled={loading}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 text-button font-black uppercase tracking-widest disabled:opacity-50 active:scale-95"
-                        title="Enviar para Automação (Make.com)"
-                    >
-                        <Zap className="w-4 h-4" />
-                        Enviar Automação
-                    </button>
+                    {/* Automação, duplicar, excluir e WhatsApp são ferramentas administrativas do
+                        time de compras — indisponíveis no link público (§ mesma razão de excluir/
+                        duplicar já combinada: ação destrutiva/administrativa não pertence a um link
+                        copiável por qualquer um). */}
+                    {!portalToken && (
+                        <button
+                            onClick={handleSendWebhook}
+                            disabled={loading}
+                            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 text-button font-black uppercase tracking-widest disabled:opacity-50 active:scale-95"
+                            title="Enviar para Automação (Make.com)"
+                        >
+                            <Zap className="w-4 h-4" />
+                            Enviar Automação
+                        </button>
+                    )}
 
                     <button
                         onClick={() => window.print()}
@@ -612,26 +675,30 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         <Printer className="w-5 h-5" />
                     </button>
 
-                    <ActionIconButton kind="duplicate" title="Duplicar Pedido" onClick={handleDuplicateOrder} />
+                    {!portalToken && (
+                        <>
+                            <ActionIconButton kind="duplicate" title="Duplicar Pedido" onClick={handleDuplicateOrder} />
 
-                    <ActionIconButton
-                        kind="delete"
-                        disabled={!canDeleteOrder(order.status)}
-                        title={canDeleteOrder(order.status) ? 'Excluir Pedido' : `Pedido "${order.status}" não pode ser excluído`}
-                        onClick={handleDeleteOrder}
-                    />
+                            <ActionIconButton
+                                kind="delete"
+                                disabled={!canDeleteOrder(order.status)}
+                                title={canDeleteOrder(order.status) ? 'Excluir Pedido' : `Pedido "${order.status}" não pode ser excluído`}
+                                onClick={handleDeleteOrder}
+                            />
 
-                    <button
-                        onClick={handleWhatsAppShare}
-                        disabled={isSendingWhatsApp}
-                        className="p-3 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 rounded-2xl transition-all shadow-sm active:scale-95 disabled:opacity-50"
-                        title={whatsappService.isConfigured() ? 'Enviar WhatsApp (API Oficial)' : 'Compartilhar via WhatsApp'}
-                    >
-                        {isSendingWhatsApp
-                            ? <Loader2 className="w-5 h-5 animate-spin" />
-                            : <MessageCircle className="w-5 h-5 fill-current" />
-                        }
-                    </button>
+                            <button
+                                onClick={handleWhatsAppShare}
+                                disabled={isSendingWhatsApp}
+                                className="p-3 bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 rounded-2xl transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                                title={whatsappService.isConfigured() ? 'Enviar WhatsApp (API Oficial)' : 'Compartilhar via WhatsApp'}
+                            >
+                                {isSendingWhatsApp
+                                    ? <Loader2 className="w-5 h-5 animate-spin" />
+                                    : <MessageCircle className="w-5 h-5 fill-current" />
+                                }
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -819,12 +886,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                                 <X className="w-4 h-4" />
                                                             </button>
                                                         </>
-                                                    ) : (
+                                                    ) : !portalToken ? (
                                                         <>
                                                             <ActionIconButton kind="edit" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleStartEdit(idx, item)} />
                                                             <ActionIconButton kind="delete" size="sm" className="opacity-0 group-hover:opacity-100" onClick={() => handleDeleteItem(idx)} />
                                                         </>
-                                                    )}
+                                                    ) : null}
                                                 </div>
                                             </td>
                                         </tr>
@@ -860,8 +927,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         </div>
                     </div>
 
-                    {/* 3-Way Match */}
-                    <ThreeWayMatchPanel orderId={order.id} />
+                    {/* 3-Way Match — ferramenta interna de conferência (compra × NFe × recebimento),
+                        fora do escopo do link público */}
+                    {!portalToken && <ThreeWayMatchPanel orderId={order.id} />}
 
                     {/* Receipts from purchase_receipts table */}
                     {receipts.length > 0 && (
@@ -1165,7 +1233,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                         </div>
                                         <a
                                             href="#"
-                                            onClick={(e) => { e.preventDefault(); invoiceService.openInvoice(inv.filePath); }}
+                                            onClick={(e) => { e.preventDefault(); handleViewInvoice(inv.filePath); }}
                                             className="p-2 text-gray-400 hover:text-amber-600 hover:bg-white rounded-xl shadow-sm transition-all"
                                             title="Ver Documento"
                                         >
@@ -1228,8 +1296,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         </div>
                     )}
 
-                    {/* Chat Section */}
-                    {currentUser && (
+                    {/* Chat Section — canal interno de compras, fora do escopo do link público
+                        (exige sessão authenticated; sem RPC de token para isto ainda) */}
+                    {!portalToken && currentUser && (
                         <div className="mt-6">
                             <OrderChat
                                 orderId={orderId}
@@ -1260,6 +1329,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             }
                             onClose={() => setShowNegotiation(false)}
                             onUpdate={() => loadOrderData()}
+                            portalToken={portalToken}
                         />
                     </div>
                 </div>

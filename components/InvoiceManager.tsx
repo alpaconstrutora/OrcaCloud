@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { invoiceService } from '../services/invoiceService';
 import { orderService } from '../services/orderService';
+import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
 import { Invoice, Supplier, PurchaseOrder } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
@@ -39,9 +40,11 @@ const StatusLabel: React.FC<{ status: string }> = ({ status }) => {
 
 interface InvoiceManagerProps {
     supplier: Supplier;
+    /** Acesso via link público (sem login) — mesmo padrão do Portal do Parceiro. */
+    portalToken?: string;
 }
 
-const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
+const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier, portalToken }) => {
     const confirm = useConfirm();
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [orders, setOrders] = useState<PurchaseOrder[]>([]);
@@ -56,15 +59,21 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
 
     useEffect(() => {
         loadData();
-    }, [supplier.id]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [supplier.id, portalToken]);
 
     const loadData = async () => {
         try {
             setLoading(true);
-            const [invoiceData, orderData] = await Promise.all([
-                invoiceService.listInvoices(supplier.id),
-                orderService.listOrders(undefined, supplier.id, supplier.email)
-            ]);
+            const [invoiceData, orderData] = portalToken
+                ? await Promise.all([
+                    supplierPortalTokenService.getInvoices(portalToken),
+                    supplierPortalTokenService.getOrders(portalToken)
+                ])
+                : await Promise.all([
+                    invoiceService.listInvoices(supplier.id),
+                    orderService.listOrders(undefined, supplier.id, supplier.email)
+                ]);
             setInvoices(invoiceData);
             setOrders(orderData);
         } catch (err) {
@@ -95,7 +104,9 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
 
     const loadInvoices = async () => {
         try {
-            const data = await invoiceService.listInvoices(supplier.id);
+            const data = portalToken
+                ? await supplierPortalTokenService.getInvoices(portalToken)
+                : await invoiceService.listInvoices(supplier.id);
             setInvoices(data);
         } catch (err) {
             console.error("Error loading invoices:", err);
@@ -121,12 +132,16 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
         try {
             setUploading(true);
             setError(null);
-            await invoiceService.uploadInvoice(
-                supplier.id,
-                file,
-                undefined,
-                selectedOrderId === "" ? undefined : selectedOrderId
-            );
+            if (portalToken) {
+                await supplierPortalTokenService.uploadInvoice(portalToken, file, selectedOrderId === "" ? undefined : selectedOrderId);
+            } else {
+                await invoiceService.uploadInvoice(
+                    supplier.id,
+                    file,
+                    undefined,
+                    selectedOrderId === "" ? undefined : selectedOrderId
+                );
+            }
             await loadInvoices();
             // Clear order selection after upload if needed, or keep for batch upload
         } catch (err: any) {
@@ -173,7 +188,11 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
         if (!ok) return;
 
         try {
-            await invoiceService.deleteInvoice(invoice.id, invoice.filePath);
+            if (portalToken) {
+                await supplierPortalTokenService.deleteInvoice(portalToken, invoice.id);
+            } else {
+                await invoiceService.deleteInvoice(invoice.id, invoice.filePath);
+            }
             setInvoices(prev => prev.filter(i => i.id !== invoice.id));
         } catch (err) {
             console.error("Error deleting invoice:", err);
@@ -183,13 +202,33 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
 
     const handleLinkOrder = async (invoiceId: string, orderId: string) => {
         try {
-            await invoiceService.updateInvoiceOrder(invoiceId, orderId === "" ? null : orderId);
+            if (portalToken) {
+                await supplierPortalTokenService.linkInvoiceOrder(portalToken, invoiceId, orderId === "" ? null : orderId);
+            } else {
+                await invoiceService.updateInvoiceOrder(invoiceId, orderId === "" ? null : orderId);
+            }
             setInvoices(prev => prev.map(inv =>
                 inv.id === invoiceId ? { ...inv, orderId: orderId === "" ? undefined : orderId } : inv
             ));
         } catch (err) {
             console.error("Error linking order:", err);
             setError("Erro ao vincular pedido.");
+        }
+    };
+
+    // Visualizar = abrir link assinado; via token, a assinatura passa pela Edge Function
+    // (sessão anon não tem RLS de storage para o bucket privado `invoices`).
+    const handleView = async (filePath: string) => {
+        try {
+            if (portalToken) {
+                const url = await supplierPortalTokenService.getInvoiceDownloadUrl(portalToken, filePath);
+                window.open(url, '_blank', 'noreferrer');
+            } else {
+                await invoiceService.openInvoice(filePath);
+            }
+        } catch (err) {
+            console.error("Error opening invoice:", err);
+            setError("Erro ao gerar link de acesso ao documento.");
         }
     };
 
@@ -368,7 +407,7 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
                                                 <td className="px-6 py-2.5 text-right">
                                                     <div className="flex items-center justify-end gap-1.5">
                                                         <button
-                                                            onClick={() => invoiceService.openInvoice(invoice.filePath)}
+                                                            onClick={() => handleView(invoice.filePath)}
                                                             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                             title="Visualizar"
                                                         >
@@ -425,7 +464,7 @@ const InvoiceManager: React.FC<InvoiceManagerProps> = ({ supplier }) => {
 
                                     <div className="flex items-center gap-1.5 pt-3 border-t border-gray-100">
                                         <button
-                                            onClick={() => invoiceService.openInvoice(invoice.filePath)}
+                                            onClick={() => handleView(invoice.filePath)}
                                             className="flex-1 flex items-center justify-center gap-1.5 h-9 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-all"
                                         >
                                             <Eye className="w-4 h-4" /> Visualizar

@@ -11,12 +11,14 @@ import {
   ArrowLeft,
   Building2,
   AlertCircle,
+  X,
 } from 'lucide-react';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
 import { supabase } from '../../lib/supabase';
 import { supplierService, getSupplierDisplayName } from '../../services/supplierService';
 import { appSettingsService } from '../../services/appSettingsService';
+import { supplierPortalTokenService, SupplierPortalToken } from '../../services/supplierPortalTokenService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
@@ -60,6 +62,12 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
   const [enableEmail, setEnableEmail] = useState('');
   const [savingAccess, setSavingAccess] = useState(false);
 
+  // Link de acesso público (sem login) — mesmo formato do Portal do Parceiro
+  const [portalToken, setPortalToken] = useState<SupplierPortalToken | null>(null);
+  const [tokenModalOpen, setTokenModalOpen] = useState(false);
+  const [tokenLoading, setTokenLoading] = useState(false);
+  const [tokenCopied, setTokenCopied] = useState(false);
+
   const refreshSuppliers = async () => {
     setLoading(true);
     try {
@@ -76,6 +84,22 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
     refreshSuppliers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
+
+  // Carrega o link de acesso já gerado (se houver) ao selecionar um fornecedor
+  useEffect(() => {
+    if (!selectedSupplier) {
+      setPortalToken(null);
+      return;
+    }
+    (async () => {
+      try {
+        const tok = await supplierPortalTokenService.getTokenForSupplier(selectedSupplier.id);
+        setPortalToken(tok);
+      } catch (err) {
+        console.error('Erro ao carregar link de acesso:', err);
+      }
+    })();
+  }, [selectedSupplier]);
 
   // Contagens por fornecedor (pedidos / cotações respondidas / documentos) para a tabela e os KPIs
   useEffect(() => {
@@ -207,18 +231,83 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
     }
   };
 
+  // Gerar/regenerar o link de acesso público do fornecedor selecionado
+  const handleGenerateToken = async () => {
+    if (!selectedSupplier) return;
+    // Mesma lógica do Portal do Parceiro: gerar/revogar o link é permissão de
+    // organização (quem administra o link), diferente da visibilidade do
+    // fornecedor em si — por isso, mesmo para um fornecedor global, precisa
+    // de uma organização específica selecionada para administrar o token.
+    const tokenOrgId = organizationId || selectedSupplier.organization_id;
+    if (!tokenOrgId) {
+      showToast('Selecione uma organização específica no topo do sistema para gerar o link deste fornecedor global.', 'error');
+      return;
+    }
+    setTokenLoading(true);
+    try {
+      await supplierPortalTokenService.generateToken(selectedSupplier.id, tokenOrgId);
+      const tok = await supplierPortalTokenService.getTokenForSupplier(selectedSupplier.id);
+      setPortalToken(tok);
+    } catch (err) {
+      console.error('Erro ao gerar link do portal:', err);
+      showToast('Erro ao gerar o link de acesso.', 'error');
+    } finally {
+      setTokenLoading(false);
+    }
+  };
+
+  const handleCopyPortalLink = async () => {
+    if (!portalToken) return;
+    const url = supplierPortalTokenService.buildPortalUrl(portalToken.token);
+    await navigator.clipboard.writeText(url);
+    setTokenCopied(true);
+    setTimeout(() => setTokenCopied(false), 2000);
+  };
+
+  const handleRevokeToken = async () => {
+    if (!selectedSupplier || !portalToken) return;
+    const ok = await confirm({
+      title: 'Revogar acesso ao portal?',
+      message: 'O fornecedor perderá o acesso via link imediatamente.',
+      variant: 'warning',
+      confirmLabel: 'Revogar',
+    });
+    if (!ok) return;
+    setTokenLoading(true);
+    try {
+      // Usa o org_id já gravado no próprio token (quem gerou), em vez do filtro de
+      // organização atual da tela — evita falhar quando se está em "Todas as organizações".
+      await supplierPortalTokenService.revokeToken(selectedSupplier.id, portalToken.org_id);
+      setPortalToken(null);
+    } catch (err) {
+      console.error('Erro ao revogar link:', err);
+      showToast('Erro ao revogar o link.', 'error');
+    } finally {
+      setTokenLoading(false);
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-4rem)] overflow-y-auto bg-[#F8FAFC] text-gray-800 font-sans">
       <main className="p-6 flex flex-col gap-6">
         {selectedSupplier ? (
           <>
-            <button
-              onClick={() => setSelectedSupplier(null)}
-              className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-900 transition-all w-fit"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Voltar para Fornecedores
-            </button>
+            <div className="flex items-center justify-between gap-4">
+              <button
+                onClick={() => setSelectedSupplier(null)}
+                className="flex items-center gap-1.5 text-xs font-bold text-gray-500 hover:text-gray-900 transition-all w-fit"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Voltar para Fornecedores
+              </button>
+              <button
+                onClick={() => setTokenModalOpen(true)}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-purple-50 text-purple-600 border border-purple-200 rounded-[6px] hover:bg-purple-100 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+              >
+                <Link2 className="w-[15px] h-[15px]" />
+                Link de Acesso
+              </button>
+            </div>
 
             <Suspense fallback={<div className="text-center py-12 text-sm text-gray-400">Carregando portal...</div>}>
               <SupplierDashboard
@@ -409,6 +498,12 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
                               {/* Gerenciar = clique na linha (ação dominante, §9.1). Ações aqui são só o que sobra. */}
                               <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                 <ActionIconButton
+                                  kind="share"
+                                  icon={<Link2 className="w-4 h-4" />}
+                                  title="Link de Acesso"
+                                  onClick={() => { setSelectedSupplier(s); setTokenModalOpen(true); }}
+                                />
+                                <ActionIconButton
                                   kind="edit"
                                   icon={<Mail className="w-4 h-4" />}
                                   title={hasAccess ? 'Alterar e-mail de acesso' : 'Definir e-mail de acesso'}
@@ -489,6 +584,63 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: LINK DE ACESSO PÚBLICO (SEM LOGIN) — mesmo formato do Portal do Parceiro */}
+      {tokenModalOpen && selectedSupplier && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white border border-gray-200 max-w-lg w-full p-6 rounded-2xl flex flex-col gap-4 shadow-2xl relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-md font-bold text-gray-900">Link de Acesso ao Portal</h3>
+                <p className="text-sm text-gray-400 font-medium mt-0.5">
+                  {getSupplierDisplayName(selectedSupplier, appSettingsService.get().supplierNameDisplay)}
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setTokenModalOpen(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Compartilhe este link com o fornecedor para que ele acesse o portal direto, sem
+              precisar de senha ou cadastro prévio — com as mesmas 6 abas do acesso logado
+              (Estatísticas, Lances, Cotações, Pedidos, Docs e Perfil). Por segurança, excluir e
+              duplicar pedido ficam disponíveis só no acesso logado.
+            </p>
+
+            {tokenLoading ? (
+              <div className="text-center py-6 text-xs text-gray-400">Carregando...</div>
+            ) : portalToken && portalToken.is_active ? (
+              <>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-col gap-1">
+                  <p className="text-xs font-mono text-gray-700 break-all">
+                    {supplierPortalTokenService.buildPortalUrl(portalToken.token)}
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    Expira em: {new Date(portalToken.expires_at).toLocaleDateString('pt-BR')}
+                    {portalToken.last_used_at && ` · Último acesso: ${new Date(portalToken.last_used_at).toLocaleDateString('pt-BR')}`}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleCopyPortalLink} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white">
+                    {tokenCopied ? 'Copiado!' : 'Copiar Link'}
+                  </Button>
+                  <Button variant="secondary" onClick={handleGenerateToken} title="Gerar um novo link (invalida o atual)">
+                    Regenerar
+                  </Button>
+                  <Button variant="ghost" onClick={handleRevokeToken} className="text-red-500 hover:bg-red-50" title="Revogar acesso">
+                    Revogar
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <Button onClick={handleGenerateToken} className="bg-orange-500 hover:bg-orange-600 text-white">
+                Gerar Link de Acesso
+              </Button>
+            )}
           </div>
         </div>
       )}

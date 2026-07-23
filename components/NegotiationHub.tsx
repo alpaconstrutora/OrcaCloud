@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Gavel, User, Send, Calendar, Tag, CheckCircle2, History, X } from 'lucide-react';
 import { PurchaseOrder, PurchaseOrderItem } from '../types';
 import { negotiationService, NegotiationProposal } from '../services/negotiationService';
+import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
 
 interface NegotiationHubProps {
     order: PurchaseOrder;
@@ -9,9 +10,11 @@ interface NegotiationHubProps {
     currentUserRole: 'buyer' | 'supplier';
     onClose?: () => void;
     onUpdate?: () => void;
+    /** Acesso via link público (sem login) — mesmo padrão do Portal do Parceiro. */
+    portalToken?: string;
 }
 
-const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail, currentUserRole, onClose, onUpdate }) => {
+const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail, currentUserRole, onClose, onUpdate, portalToken }) => {
     const [proposals, setProposals] = useState<NegotiationProposal[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -35,7 +38,9 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
 
     const loadProposals = async () => {
         try {
-            const data = await negotiationService.listProposals(order.id);
+            const data = portalToken
+                ? await supplierPortalTokenService.getNegotiationProposals(portalToken, order.id)
+                : await negotiationService.listProposals(order.id);
             setProposals(data);
         } catch (error) {
             console.error('Error loading proposals:', error);
@@ -62,18 +67,30 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
         if (submitting) return;
         setSubmitting(true);
         try {
-            await negotiationService.createProposal({
-                orderId: order.id,
-                senderEmail: currentUserEmail,
-                senderRole: currentUserRole,
-                deliveryDate: proposedDate,
-                items: proposedItems,
-                paymentMethod: proposedPaymentMethod,
-                paymentTermType: proposedTermType,
-                paymentDays: proposedDays,
-                paymentInstallments: proposedInstallments,
-                message: message.trim()
-            });
+            if (portalToken) {
+                await supplierPortalTokenService.createNegotiationProposal(portalToken, order.id, {
+                    deliveryDate: proposedDate,
+                    items: proposedItems,
+                    paymentMethod: proposedPaymentMethod,
+                    paymentTermType: proposedTermType,
+                    paymentDays: proposedDays,
+                    paymentInstallments: proposedInstallments,
+                    message: message.trim()
+                });
+            } else {
+                await negotiationService.createProposal({
+                    orderId: order.id,
+                    senderEmail: currentUserEmail,
+                    senderRole: currentUserRole,
+                    deliveryDate: proposedDate,
+                    items: proposedItems,
+                    paymentMethod: proposedPaymentMethod,
+                    paymentTermType: proposedTermType,
+                    paymentDays: proposedDays,
+                    paymentInstallments: proposedInstallments,
+                    message: message.trim()
+                });
+            }
             setMessage('');
             await loadProposals();
             onUpdate?.();
@@ -88,7 +105,11 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
     const handleAccept = async (proposalId: string) => {
         if (!confirm('Deseja aceitar esta contraproposta? Isso atualizará o pedido final.')) return;
         try {
-            await negotiationService.acceptProposal(proposalId, order.id);
+            if (portalToken) {
+                await supplierPortalTokenService.acceptNegotiationProposal(portalToken, proposalId, order.id);
+            } else {
+                await negotiationService.acceptProposal(proposalId, order.id);
+            }
             await loadProposals();
             onUpdate?.();
             onClose?.();

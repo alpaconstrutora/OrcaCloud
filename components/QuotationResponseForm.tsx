@@ -2,15 +2,18 @@ import React from 'react';
 import { ArrowLeft, Send, DollarSign, Calendar, Clock, HandCoins, AlertCircle, CheckCircle2, TrendingDown, XCircle } from 'lucide-react';
 import { QuotationRequest, QuotationResponse, QuotationRequestItem } from '../types';
 import { quotationService } from '../services/quotationService';
+import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
 
 interface QuotationResponseFormProps {
     request: QuotationRequest;
     supplierId: string;
     onBack: () => void;
     onSave: () => void;
+    /** Acesso via link público (sem login) — mesmo padrão do Portal do Parceiro. */
+    portalToken?: string;
 }
 
-const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, supplierId, onBack, onSave }) => {
+const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, supplierId, onBack, onSave, portalToken }) => {
     const [loading, setLoading] = React.useState(false);
     const [existingResponse, setExistingResponse] = React.useState<QuotationResponse | null>(null);
     const [formData, setFormData] = React.useState<Omit<QuotationResponse, 'id' | 'created_at'>>({
@@ -39,8 +42,9 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
     React.useEffect(() => {
         const fetchExisting = async () => {
             try {
-                const resps = await quotationService.listResponses(request.id);
-                const mine = resps.find(r => r.supplierId === supplierId);
+                const mine = portalToken
+                    ? await supplierPortalTokenService.getQuotationResponse(portalToken, request.id)
+                    : (await quotationService.listResponses(request.id)).find(r => r.supplierId === supplierId);
                 if (mine) {
                     setExistingResponse(mine);
 
@@ -80,7 +84,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
             }
         };
         fetchExisting();
-    }, [request.id, supplierId]);
+    }, [request.id, supplierId, portalToken]);
 
     const handleUpdatePrice = (index: number, price: number) => {
         setFormData(prev => {
@@ -98,7 +102,11 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
         e.preventDefault();
         setLoading(true);
         try {
-            await quotationService.submitResponse(formData);
+            if (portalToken) {
+                await supplierPortalTokenService.submitQuotationResponse(portalToken, request.id, formData);
+            } else {
+                await quotationService.submitResponse(formData);
+            }
             onSave();
         } catch (err) {
             console.error("Error submitting response:", err);
@@ -114,7 +122,11 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
 
         setLoading(true);
         try {
-            await quotationService.respondToCounterProposal(existingResponse.id, accept);
+            if (portalToken) {
+                await supplierPortalTokenService.respondToCounterProposal(portalToken, existingResponse.id, accept);
+            } else {
+                await quotationService.respondToCounterProposal(existingResponse.id, accept);
+            }
             alert(accept ? "Contraproposta aceita!" : "Contraproposta recusada.");
             onSave();
         } catch (err) {
@@ -131,7 +143,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
 
         setLoading(true);
         try {
-            await quotationService.sendCounterProposal(existingResponse.id, {
+            const counterProposal = {
                 items: formData.items,
                 deliveryDate: formData.deliveryDate,
                 deliveryMethod: formData.deliveryMethod,
@@ -140,7 +152,12 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({ request, 
                 paymentDays: formData.paymentDays,
                 paymentInstallments: formData.paymentInstallments,
                 notes: formData.notes
-            }, 'Fornecedor');
+            };
+            if (portalToken) {
+                await supplierPortalTokenService.sendCounterProposal(portalToken, existingResponse.id, counterProposal);
+            } else {
+                await quotationService.sendCounterProposal(existingResponse.id, counterProposal, 'Fornecedor');
+            }
 
             alert("Sua contraproposta foi enviada com sucesso!");
             onSave();

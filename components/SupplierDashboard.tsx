@@ -40,6 +40,7 @@ import NegotiationHub from './NegotiationHub';
 import InvoiceManager from './InvoiceManager';
 import SupplyChainOrderDetails from './SupplyChainOrderDetails';
 import { invoiceService } from '../services/invoiceService';
+import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
 import { useToast } from '../hooks/useToast';
@@ -53,6 +54,8 @@ interface SupplierDashboardProps {
     initialOrderId?: string | null;
     initialOrderViewMode?: 'details' | 'logistics';
     onNavigate?: (link: string) => void;
+    /** Acesso via link público (sem login), mesmo padrão do Portal do Parceiro/Cliente/Investidor. */
+    portalToken?: string;
 }
 
 const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
@@ -61,7 +64,8 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     activeTab: initialTab,
     initialOrderId,
     initialOrderViewMode,
-    onNavigate
+    onNavigate,
+    portalToken
 }) => {
     const { localToast, showToast } = useToast();
     const [activeTab, setActiveTab] = React.useState<'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents' | 'profile'>(initialTab || 'overview');
@@ -112,11 +116,17 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         setLoadingOrders(true);
         setLoadingQuotations(true);
         try {
-            const [orderData, invoiceData, quotationData] = await Promise.all([
-                orderService.listOrders(undefined, effectiveSupplier.id, effectiveSupplier.email),
-                invoiceService.listInvoices(effectiveSupplier.id),
-                quotationService.listRequestsForSupplier(effectiveSupplier.id)
-            ]);
+            const [orderData, invoiceData, quotationData] = portalToken
+                ? await Promise.all([
+                    supplierPortalTokenService.getOrders(portalToken),
+                    supplierPortalTokenService.getInvoices(portalToken),
+                    supplierPortalTokenService.getQuotations(portalToken)
+                ])
+                : await Promise.all([
+                    orderService.listOrders(undefined, effectiveSupplier.id, effectiveSupplier.email),
+                    invoiceService.listInvoices(effectiveSupplier.id),
+                    quotationService.listRequestsForSupplier(effectiveSupplier.id)
+                ]);
             setOrders(orderData);
             setInvoices(invoiceData);
             setQuotations(quotationData);
@@ -175,13 +185,23 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     const handleSaveLogistics = async () => {
         if (!activeOrderId) return;
         try {
-            await orderService.updateOrder(activeOrderId, {
-                status: editingStatus as PurchaseOrder['status'],
-                deliveryDate: editingDeliveryDate,
-                separationDate: editingSeparationDate,
-                shippedDate: editingShippedDate,
-                actualDeliveryDate: editingActualDeliveryDate
-            });
+            if (portalToken) {
+                await supplierPortalTokenService.updateOrderLogistics(portalToken, activeOrderId, {
+                    status: editingStatus,
+                    deliveryDate: editingDeliveryDate,
+                    separationDate: editingSeparationDate,
+                    shippedDate: editingShippedDate,
+                    actualDeliveryDate: editingActualDeliveryDate
+                });
+            } else {
+                await orderService.updateOrder(activeOrderId, {
+                    status: editingStatus as PurchaseOrder['status'],
+                    deliveryDate: editingDeliveryDate,
+                    separationDate: editingSeparationDate,
+                    shippedDate: editingShippedDate,
+                    actualDeliveryDate: editingActualDeliveryDate
+                });
+            }
             await loadOrders();
             setIsEditingLogistics(false);
             showToast('Logística atualizada com sucesso!', 'success');
@@ -350,6 +370,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                             currentUserRole="supplier"
                             onClose={() => setActiveNegotiationId(null)}
                             onUpdate={() => loadOrders()}
+                            portalToken={portalToken}
                         />
                     ) : (
                         <div className="text-center py-12 bg-white rounded-[10px] border border-dashed border-gray-200">
@@ -545,6 +566,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 setOrderViewMode('list');
                             }}
                             currentUser={effectiveSupplier ? { email: effectiveSupplier.email || '', name: effectiveSupplier.name } : undefined}
+                            portalToken={portalToken}
                         />
                     </div>
                 );
@@ -904,6 +926,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                     <QuotationResponseForm
                         request={quotation}
                         supplierId={effectiveSupplier.id}
+                        portalToken={portalToken}
                         onBack={() => setActiveQuotationId(null)}
                         onSave={() => {
                             setActiveQuotationId(null);
@@ -1000,7 +1023,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     const renderDocuments = () => (
         <div className="space-y-6 animate-in fade-in duration-500">
             {effectiveSupplier ? (
-                <InvoiceManager supplier={effectiveSupplier} />
+                <InvoiceManager supplier={effectiveSupplier} portalToken={portalToken} />
             ) : (
                 <div className="text-center py-12 bg-white rounded-[10px] border border-dashed border-gray-200">
                     <Shield className="w-12 h-12 text-amber-500 mx-auto mb-4" />

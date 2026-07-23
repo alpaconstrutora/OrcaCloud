@@ -685,13 +685,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     // -- Document Types Handlers --
     const handleCreateDocTypeSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!activeOrganizationId || !newDocTypeName) return;
+      if (!activeOrganizationId) {
+        notify('Selecione uma organização para cadastrar o tipo de documento.', 'error');
+        return;
+      }
+      if (!newDocTypeName) return;
       try {
         await documentService.createDocumentType(activeOrganizationId, newDocTypeName);
         setNewDocTypeName('');
         fetchDmsSettings();
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        notify('Erro ao criar tipo de documento: ' + err.message, 'error');
       }
     };
 
@@ -706,8 +710,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       try {
         await documentService.deleteDocumentType(id);
         fetchDmsSettings();
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        notify('Erro ao excluir tipo de documento: ' + err.message, 'error');
       }
     };
 
@@ -716,8 +720,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         await documentService.updateDocumentType(id, editDocTypeName);
         setEditDocTypeId(null);
         fetchDmsSettings();
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        notify('Erro ao salvar tipo de documento: ' + err.message, 'error');
       }
     };
 
@@ -727,8 +731,8 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         await documentService.updateDiscipline(id, editDiscCode, editDiscName);
         setEditDiscId(null);
         fetchDmsSettings();
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        notify('Erro ao salvar disciplina: ' + err.message, 'error');
       }
     };
 
@@ -738,15 +742,19 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         await documentService.updateNamingPattern(id, editPatternName, editPatternMask);
         setEditPatternId(null);
         fetchDmsSettings();
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        notify('Erro ao salvar padrão de nomenclatura: ' + err.message, 'error');
       }
     };
 
     const handleCreateDisciplineSubmit = async (e: React.FormEvent) => {
 
     e.preventDefault();
-    if (!activeOrganizationId || !newDiscCode || !newDiscName) return;
+    if (!activeOrganizationId) {
+      notify('Selecione uma organização para cadastrar a disciplina.', 'error');
+      return;
+    }
+    if (!newDiscCode || !newDiscName) return;
     try {
       await documentService.createDiscipline(activeOrganizationId, newDiscCode, newDiscName);
       setNewDiscCode('');
@@ -777,7 +785,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Criar novo padrão de nomenclatura
   const handleCreateNamingPatternSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOrganizationId || !newPatName || !newPatMask) return;
+    if (!activeOrganizationId) {
+      notify('Selecione uma organização para cadastrar o padrão de nomenclatura.', 'error');
+      return;
+    }
+    if (!newPatName || !newPatMask) return;
     try {
       await documentService.createNamingPattern(activeOrganizationId, newPatName, newPatMask);
       setNewPatName('');
@@ -4203,8 +4215,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         </div>
       )}
 
+      {/* z-[10000]: precisa ficar ACIMA dos modais do módulo (todos em z-[9999], ex: "Gestão de
+          Disciplinas") — com z-[300] o toast de erro renderizava atrás do backdrop do modal aberto
+          e ficava invisível, dando a impressão de que o botão que disparou o erro não fazia nada. */}
       {notification && (
-        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+        <div className={`fixed bottom-6 right-6 z-[10000] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
           notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
         }`}>
           <AlertCircle className="w-4 h-4 shrink-0" />

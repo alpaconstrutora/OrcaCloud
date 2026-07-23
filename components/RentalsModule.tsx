@@ -678,40 +678,43 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.totalValue)} icon={<Home className="w-4 h-4" />} color="amber" />
             </div>
 
-            {/* Tabs internas (só quando um edifício está selecionado) — trilho
-                bg-gray-50 + aba ativa bg-white text-blue-600 shadow-sm (§19; antes
-                era bg-blue-600 text-white sem trilho — cor de toggle de ação, não
-                de navegação — corrigido ao adicionar a aba Corretores). */}
+            {/* Toolbar de abas — UI UX tabela.md §3 / ui_ux_standard_guide.md §19.1:
+                card branco externo (mesmo peso visual da toolbar de botões abaixo)
+                envolvendo o trilho cinza interno onde ficam os botões das abas.
+                Antes só existia o trilho, sem o card — abas ficavam "soltas" na
+                página, sem o mesmo contorno da toolbar de botões logo abaixo. */}
             {selectedBuildingId && (
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full mb-3">
-                    <button
-                        onClick={() => setActiveTab('inventory')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        <HomeIcon className="w-3.5 h-3.5" />
-                        Unidades
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('deals')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'deals' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        <Tag className="w-3.5 h-3.5" />
-                        Contratos
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('dashboard')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        <TrendingUp className="w-3.5 h-3.5" />
-                        Resultados
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('brokers')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'brokers' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                        <User className="w-3.5 h-3.5" />
-                        Corretores
-                    </button>
+                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                    <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                        <button
+                            onClick={() => setActiveTab('inventory')}
+                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            <HomeIcon className="w-3.5 h-3.5" />
+                            Unidades
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('deals')}
+                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'deals' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            <Tag className="w-3.5 h-3.5" />
+                            Contratos
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('dashboard')}
+                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            <TrendingUp className="w-3.5 h-3.5" />
+                            Resultados
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('brokers')}
+                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'brokers' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                        >
+                            <User className="w-3.5 h-3.5" />
+                            Corretores
+                        </button>
+                    </div>
                 </div>
             )}
 

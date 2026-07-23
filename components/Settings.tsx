@@ -1,7 +1,7 @@
 import React from 'react';
 import { supabase } from '../lib/supabase';
 import { MOCK_SINAPI_DB } from '../constants';
-import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw } from 'lucide-react';
+import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw, ChevronRight, Layers, Percent } from 'lucide-react';
 import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
 import { useConfirm } from './ui/confirm';
@@ -12,10 +12,41 @@ import ContractTypesSettings from './ContractTypesSettings';
 import EmpreendimentoTypesSettings from './EmpreendimentoTypesSettings';
 import ContractIndexManager from './ContractIndexManager';
 
+type SettingsLeafId =
+    | 'geral'
+    | 'cat-clientes' | 'cat-fornecedores' | 'cat-contratos'
+    | 'cat-empreendimentos' | 'cat-financeiro'
+    | 'indices' | 'whatsapp' | 'email' | 'database';
+
+interface SettingsNavLeaf { id: SettingsLeafId; label: string; }
+interface SettingsNavNode {
+    id: string;
+    label: string;
+    icon: React.ElementType;
+    children?: SettingsNavLeaf[];
+    leafId?: SettingsLeafId;
+}
+
+const SETTINGS_NAV: SettingsNavNode[] = [
+    { id: 'geral', label: 'Nomenclatura', icon: Hash, leafId: 'geral' },
+    { id: 'categorias', label: 'Categorias Gerais', icon: Layers, children: [
+        { id: 'cat-clientes', label: 'Clientes' },
+        { id: 'cat-fornecedores', label: 'Fornecedores' },
+        { id: 'cat-contratos', label: 'Tipos de Contrato' },
+        { id: 'cat-empreendimentos', label: 'Tipos de Empreendimento' },
+        { id: 'cat-financeiro', label: 'Financeiro' },
+    ]},
+    { id: 'indices', label: 'Índices de Reajuste', icon: Percent, leafId: 'indices' },
+    { id: 'whatsapp', label: 'WhatsApp & Integrações', icon: MessageCircle, leafId: 'whatsapp' },
+    { id: 'email', label: 'Templates de E-mail', icon: Mail, leafId: 'email' },
+    { id: 'database', label: 'Banco de Dados', icon: Database, leafId: 'database' },
+];
+
 const Settings: React.FC = () => {
     const confirm = useConfirm();
-    const [activeTab, setActiveTab] = React.useState<'geral' | 'categorias' | 'indices' | 'whatsapp' | 'email' | 'database'>('geral');
-    
+    const [activeLeaf, setActiveLeaf] = React.useState<SettingsLeafId>('geral');
+    const [isCategoriasOpen, setIsCategoriasOpen] = React.useState(false);
+
     const [status, setStatus] = React.useState<'IDLE' | 'MIGRATING' | 'SUCCESS' | 'ERROR'>('IDLE');
     const [message, setMessage] = React.useState('');
 
@@ -124,46 +155,49 @@ const Settings: React.FC = () => {
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie todas as configurações de sistema, categorias, integrações e banco de dados.</p>
             </div>
 
-            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full mb-3">
-                <button
-                    onClick={() => setActiveTab('geral')}
-                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'geral' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                    Nomenclatura
-                </button>
-                <button
-                    onClick={() => setActiveTab('categorias')}
-                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'categorias' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                    Categorias Gerais
-                </button>
-                <button
-                    onClick={() => setActiveTab('indices')}
-                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'indices' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                    Índices de Reajuste
-                </button>
-                <button
-                    onClick={() => setActiveTab('whatsapp')}
-                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'whatsapp' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                    WhatsApp & Integrações
-                </button>
-                <button
-                    onClick={() => setActiveTab('email')}
-                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'email' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                    Templates de E-mail
-                </button>
-                <button
-                    onClick={() => setActiveTab('database')}
-                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === 'database' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                    Banco de Dados
-                </button>
-            </div>
+            <div className="flex gap-6 items-start">
+                <aside className="w-64 shrink-0 bg-gray-50 border border-gray-100 rounded-[10px] p-2 flex flex-col gap-0.5">
+                    {SETTINGS_NAV.map(node => node.children ? (
+                        <div key={node.id}>
+                            <button
+                                onClick={() => setIsCategoriasOpen(v => !v)}
+                                className={`flex items-center w-full px-3 h-9 rounded-[6px] text-sm font-medium justify-between transition-all ${
+                                    node.children.some(c => c.id === activeLeaf) ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
+                                }`}
+                            >
+                                <span className="flex items-center gap-2.5"><node.icon className="w-4 h-4" />{node.label}</span>
+                                <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isCategoriasOpen ? 'rotate-90' : ''}`} />
+                            </button>
+                            {isCategoriasOpen && (
+                                <div className="mt-0.5 ml-4 pl-4 border-l border-gray-200 flex flex-col gap-0.5">
+                                    {node.children.map(leaf => (
+                                        <button
+                                            key={leaf.id}
+                                            onClick={() => setActiveLeaf(leaf.id)}
+                                            className={`px-3 h-8 rounded-[6px] text-sm font-medium text-left transition-all ${
+                                                activeLeaf === leaf.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                                            }`}
+                                        >{leaf.label}</button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <button
+                            key={node.id}
+                            onClick={() => setActiveLeaf(node.leafId!)}
+                            className={`flex items-center gap-2.5 w-full px-3 h-9 rounded-[6px] text-sm font-medium transition-all ${
+                                activeLeaf === node.leafId ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
+                            }`}
+                        >
+                            <node.icon className="w-4 h-4" />{node.label}
+                        </button>
+                    ))}
+                </aside>
 
-            {activeTab === 'database' && (
+                <div className="flex-1 min-w-0 space-y-6">
+
+            {activeLeaf === 'database' && (
                 <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start gap-4">
                     <div className="p-3 bg-blue-50 rounded-lg">
@@ -203,7 +237,7 @@ const Settings: React.FC = () => {
             </div>
             )}
 
-            {activeTab === 'geral' && (
+            {activeLeaf === 'geral' && (
                 <div className="space-y-6">
                     {/* Numeração de Pedidos */}
                     <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
@@ -255,7 +289,7 @@ const Settings: React.FC = () => {
                 </div>
             )}
 
-            {activeTab === 'email' && (
+            {activeLeaf === 'email' && (
             <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
@@ -306,7 +340,7 @@ const Settings: React.FC = () => {
             </div>
             )}
 
-            {activeTab === 'whatsapp' && (
+            {activeLeaf === 'whatsapp' && (
                 <div className="space-y-6">
             <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start gap-4">
@@ -444,25 +478,24 @@ const Settings: React.FC = () => {
                 </div>
             )}
 
-            {activeTab === 'categorias' && (
-                <div className="space-y-6">
-                    <ClientCategoriesSettings />
-                    <SupplierCategoriesSettings />
-                    <ContractTypesSettings />
-                    <EmpreendimentoTypesSettings />
-
-                    {/* Para separar visualmente sem destoar, envolvemos num container branco parecido */}
-                    <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
-                        <FinancialCategoriesManager />
-                    </div>
+            {activeLeaf === 'cat-clientes' && <ClientCategoriesSettings />}
+            {activeLeaf === 'cat-fornecedores' && <SupplierCategoriesSettings />}
+            {activeLeaf === 'cat-contratos' && <ContractTypesSettings />}
+            {activeLeaf === 'cat-empreendimentos' && <EmpreendimentoTypesSettings />}
+            {activeLeaf === 'cat-financeiro' && (
+                // Para separar visualmente sem destoar, envolvemos num container branco parecido
+                <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
+                    <FinancialCategoriesManager />
                 </div>
             )}
 
-            {activeTab === 'indices' && (
+            {activeLeaf === 'indices' && (
                 <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
                     <ContractIndexManager />
                 </div>
             )}
+                </div>
+            </div>
         </div>
     );
 };

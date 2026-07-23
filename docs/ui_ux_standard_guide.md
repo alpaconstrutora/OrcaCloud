@@ -1425,6 +1425,73 @@ esta é a forma canônica. **Referência: `components/BankReconciliation.tsx`**
 > `VIEW_HEADERS` em `BankReconciliation.tsx`. Aba que troca o conteúdo inteiro
 > sem trocar o título deixa o `<h1>` mentindo sobre o que está na tela.
 
+### 19.2 Árvore lateral dentro de uma tela (2 níveis, sem tocar no sidebar global)
+
+Quando uma tela tem **muitas seções irmãs e pelo menos um grupo com
+sub-seções próprias** (ex: `components/Settings.tsx` — 6 seções de nível 1,
+uma delas, "Categorias Gerais", reagrupando 5 sub-telas que antes ficavam
+empilhadas sem navegação própria), a barra de abas horizontal do §19.1 deixa
+de caber bem (quebra em várias linhas, ou esconde a hierarquia entre pai e
+filhos). Nesse caso, use uma coluna de navegação à esquerda **dentro do
+conteúdo da própria tela** — não confundir com o sidebar global do app
+(`components/Layout.tsx`) nem com o §19 ("abas → sidebar"): aqui a árvore é
+sub-navegação de uma única tela, não navegação entre módulos do app, então o
+racional do §18/§19 (não duplicar o que o shell já mostra) não se aplica —
+o sidebar global não sabe nada sobre as sub-seções internas de Configurações,
+só sabe que você está em "Configurações".
+
+Referência: `components/Settings.tsx` (2026-07). Estrutura:
+
+```tsx
+<div className="flex gap-6 items-start">
+  <aside className="w-64 shrink-0 bg-gray-50 border border-gray-100 rounded-[10px] p-2 flex flex-col gap-0.5">
+    {/* nó de raiz (folha navegável) */}
+    <button className={`flex items-center gap-2.5 w-full px-3 h-9 rounded-[6px] text-sm font-medium transition-all ${
+      isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
+    }`}>
+      <Icon className="w-4 h-4" /> {label}
+    </button>
+
+    {/* nó de grupo (toggle, nunca navega sozinho) */}
+    <button className={`flex items-center w-full px-3 h-9 rounded-[6px] text-sm font-medium justify-between transition-all ${
+      hasActiveChild ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
+    }`}>
+      <span className="flex items-center gap-2.5"><Icon className="w-4 h-4" />{label}</span>
+      <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
+    </button>
+    {isOpen && (
+      <div className="mt-0.5 ml-4 pl-4 border-l border-gray-200 flex flex-col gap-0.5">
+        {/* folha filha */}
+        <button className={`px-3 h-8 rounded-[6px] text-sm font-medium text-left transition-all ${
+          isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+        }`}>{label}</button>
+      </div>
+    )}
+  </aside>
+
+  <div className="flex-1 min-w-0 space-y-6">{/* conteúdo da folha ativa */}</div>
+</div>
+```
+
+> ✅ Folha ativa (raiz ou filha) sempre `bg-white text-blue-600 shadow-sm` —
+> a mesma cor de "ativo" do §19.1, para não criar uma 3ª paleta de estado
+> ativo no app (a do `BrokerPortal`/`PartnerPortal`, indigo/laranja, é de
+> portal externo com identidade própria — não usar aqui).
+> ✅ Nó de grupo nunca ganha `bg-white`/`shadow-sm` — só o texto vira
+> `text-blue-600` quando algum filho está ativo (`hasActiveChild`), o mesmo
+> conceito do `NavDropdown` de `Layout.tsx`, adaptado à paleta clara do
+> canvas de conteúdo (lá é tema escuro do sidebar).
+> ✅ Indentação/chevron do grupo reaproveitam literalmente o vocabulário de
+> `NavDropdown` (`Layout.tsx`): `ml-4 pl-4 border-l`, `ChevronRight` que gira
+> `rotate-90` quando aberto — não inventar uma 2ª convenção de "expandido".
+> ⚠️ **Quando usar isto vs. §19.1 (abas horizontais) vs. sidebar global:**
+> abas horizontais (§19.1) quando as seções são poucas (até ~6) e **planas**
+> (sem sub-grupo); árvore lateral (esta seção) quando há uma hierarquia de 2
+> níveis dentro da mesma tela; sidebar global (§19) quando a navegação é
+> entre **módulos** do app, não sub-seções de uma única tela — não promover
+> uma árvore lateral de tela para o sidebar global sem decisão de produto
+> explícita (é mudança de arquitetura de navegação, não de estilo).
+
 ---
 
 ## 20. CABEÇALHO DE TELA (título + subtítulo + KPIs)

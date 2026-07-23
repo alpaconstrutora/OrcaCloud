@@ -363,10 +363,16 @@ export function BatchUploadSheet({
 
   const requestClose = async () => {
     if (sending) return; // envio em andamento não fecha — evita perder o acompanhamento de progresso
-    if (items.some((i) => i.status === 'pronto' || i.status === 'enviado')) {
+    // Só o que ainda NÃO chegou ao servidor seria perdido — 'pronto' (nunca tentado) e
+    // 'erro' (tentado e falhou, não persistiu). 'enviado' já está salvo, fechar não perde nada.
+    const pending = items.filter((i) => i.status === 'pronto' || i.status === 'erro');
+    if (pending.length > 0) {
+      const message = pending.length === 1
+        ? '1 arquivo ainda não foi enviado e será descartado ao fechar.'
+        : `${pending.length} arquivos ainda não foram enviados e serão descartados ao fechar.`;
       const ok = await confirm({
         title: 'Fechar upload em lote?',
-        message: 'Os arquivos ainda não enviados desta lista serão descartados.',
+        message,
         variant: 'warning',
         confirmLabel: 'Fechar mesmo assim',
       });

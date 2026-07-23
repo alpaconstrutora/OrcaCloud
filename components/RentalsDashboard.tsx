@@ -70,42 +70,40 @@ export function RentalsDashboard({ selectedBuildingId, organizationId: propOrgan
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* 1. PAINEL EXECUTIVO (TOPO) */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h2 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-          <TrendingUp className="w-6 h-6 text-purple-600" /> 
-          Painel de Performance (Locações)
+      {/* 1. PAINEL EXECUTIVO (TOPO) — toolbar de botões (§4 do UI UX tabela.md):
+          escopo (período) à direita do título, controles compactos h-9/rounded-[6px].
+          Os cards de KPI e gráficos abaixo mantêm a linguagem de analytics/dashboard
+          (mesmo precedente do BIDashboard/CashFlowDashboard, §20) — fora de escopo. */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
+        <h2 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
+          <TrendingUp className="w-5 h-5 text-purple-600" />
+          Painel de performance (locações)
         </h2>
-        
-        <div className="flex flex-wrap items-center gap-4 bg-white px-5 py-2.5 rounded-[1.5rem] border border-gray-100 shadow-sm">
-          <div className="flex items-center gap-3">
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px]">
             <Clock className="w-4 h-4 text-gray-400" />
-            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Início:</span>
-            <input 
+            <span className="text-sm font-medium text-gray-500">Início</span>
+            <input
               type="month"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="text-sm font-black text-purple-600 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
+              className="text-sm font-medium text-gray-900 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
             />
           </div>
 
-          <div className="w-px h-6 bg-gray-100 mx-2 hidden md:block" />
-
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Ciclo:</span>
-            <select 
-              value={periodMonths}
-              onChange={(e) => setPeriodMonths(Number(e.target.value))}
-              className="text-sm font-black text-purple-600 bg-transparent border-none focus:ring-0 cursor-pointer p-0"
-            >
-              <option value={6}>6 Meses</option>
-              <option value={12}>12 Meses</option>
-              <option value={18}>18 Meses</option>
-              <option value={24}>24 Meses</option>
-              <option value={36}>36 Meses</option>
-              <option value={48}>48 Meses</option>
-            </select>
-          </div>
+          <select
+            value={periodMonths}
+            onChange={(e) => setPeriodMonths(Number(e.target.value))}
+            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+          >
+            <option value={6}>6 meses</option>
+            <option value={12}>12 meses</option>
+            <option value={18}>18 meses</option>
+            <option value={24}>24 meses</option>
+            <option value={36}>36 meses</option>
+            <option value={48}>48 meses</option>
+          </select>
         </div>
       </div>
 

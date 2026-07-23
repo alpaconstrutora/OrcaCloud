@@ -5,7 +5,7 @@ import { commercialService } from '../services/commercialService';
 import { brokerService } from '../services/brokerService';
 import { Property, PropertyStatus, PropertyDeal, Client, BrokerProfile } from '../types';
 import { TowerMatrixConfig, GridCellConfig, TowerNumberingConfig } from '../types/imovib';
-import { usePersistedState } from './ui/TableUtils';
+import { usePersistedState, SortableHeader } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 
@@ -52,6 +52,14 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         return (saved && saved !== 'undefined') ? saved : null;
     });
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+    // Liga o cabeçalho clicável (SortableHeader) ao sortConfig — §6.3.
+    const handleSort = (key: string) => {
+        setSortConfig(prev => prev?.key === key ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' });
+    };
+    const [dealSortConfig, setDealSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
+    const handleDealSort = (key: string) => {
+        setDealSortConfig(prev => prev?.key === key ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: 'asc' });
+    };
 
     // Modals Control
     const [isPropertyModalOpen, setIsPropertyModalOpen] = useState(false);
@@ -376,6 +384,27 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         return result;
     }, [properties, searchTerm, selectedBuildingId, sortConfig]);
 
+    // Contratos ordenáveis (§6.3) — Imóvel/Cliente não são campos diretos do
+    // negócio, então resolvemos o nome uma vez antes de comparar.
+    const sortedDeals = useMemo(() => {
+        const withLookup = deals.map(d => ({
+            ...d,
+            _propertyName: properties.find(p => p.id === d.property_id)?.name || '',
+            _clientName: clients.find(c => c.id === d.client_id)?.name || '',
+        }));
+        if (!dealSortConfig) return withLookup;
+        const { key, direction } = dealSortConfig;
+        return [...withLookup].sort((a: any, b: any) => {
+            let aValue = a[key];
+            let bValue = b[key];
+            if (aValue === null || aValue === undefined) aValue = direction === 'asc' ? Infinity : -Infinity;
+            if (bValue === null || bValue === undefined) bValue = direction === 'asc' ? Infinity : -Infinity;
+            if (aValue < bValue) return direction === 'asc' ? -1 : 1;
+            if (aValue > bValue) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [deals, properties, clients, dealSortConfig]);
+
     const currentBuilding = selectedBuildingId ? properties.find(p => String(p.id).toLowerCase() === String(selectedBuildingId).toLowerCase()) : null;
 
     // Organização em cascata (mesmo padrão do SalesModule): quando há um edifício
@@ -458,6 +487,20 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         );
     };
 
+    // Seleção de intervalo com Shift+clique (§10.1) — só existe hoje na visão em
+    // grade, onde o checkbox de seleção em lote mora.
+    const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
+    const handleRowCheck = (id: string, index: number, shiftKey: boolean) => {
+        if (shiftKey && lastCheckedIndex !== null) {
+            const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
+            const rangeIds = filteredProperties.slice(start, end + 1).map(p => p.id);
+            setSelectedProperties(prev => Array.from(new Set([...prev, ...rangeIds])));
+        } else {
+            handleSelectProperty(id);
+            setLastCheckedIndex(index);
+        }
+    };
+
 
 
     const PropertyCard: React.FC<{
@@ -468,7 +511,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         getStatusColor: (s: PropertyStatus) => string,
         getStatusLabel: (s: PropertyStatus) => string,
         selected?: boolean,
-        onSelect?: () => void,
+        onSelect?: (shiftKey: boolean) => void,
         compact?: boolean
     }> = ({ property, onEdit, onDelete, onRegisterDeal, getStatusColor, getStatusLabel, selected, onSelect, compact }) => (
         <div 
@@ -484,7 +527,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     <input
                         type="checkbox"
                         checked={selected}
-                        onChange={(e) => { e.stopPropagation(); onSelect?.(); }}
+                        title="Dica: segure Shift e clique para selecionar um intervalo"
+                        onChange={(e) => { e.stopPropagation(); onSelect?.((e.nativeEvent as MouseEvent).shiftKey); }}
                         className="w-6 h-6 rounded-lg border-white/20 bg-white/10 backdrop-blur-md text-blue-600 focus:ring-blue-500 cursor-pointer shadow-xl transition-all accent-blue-600"
                     />
                 </div>
@@ -640,6 +684,18 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 </div>
             </div>
 
+            {/* KPIs — §20/Anatomia (UI UX tabela.md): sempre logo após o título, ANTES
+                das abas. Antes desta correção, a grade de KPI só existia dentro da
+                subaba "Unidades" e vinha depois da barra de abas — a mesma classe de
+                bug do FiscalModule (abas/botões do pai antes do KPI do filho, §3.2). */}
+            <div className={`grid grid-cols-2 md:grid-cols-5 gap-4 ${selectedBuildingId ? 'mb-3' : ''}`}>
+                <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={stats.activeAssets} icon={<Building2 className="w-4 h-4" />} color="blue" />
+                <KpiCard shadow={false} size="sm" label="Receita mensal" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.monthlyRevenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
+                <KpiCard shadow={false} size="sm" label="Yield mensal" value={`${stats.monthlyYield}%`} icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
+                <KpiCard shadow={false} size="sm" label="Taxa de ocupação" value={`${stats.occupancyRate}%`} icon={<Key className="w-4 h-4" />} color="purple" />
+                <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.totalValue)} icon={<Home className="w-4 h-4" />} color="amber" />
+            </div>
+
             {/* Tabs internas (só quando um edifício está selecionado) — trilho
                 bg-gray-50 + aba ativa bg-white text-blue-600 shadow-sm (§19; antes
                 era bg-blue-600 text-white sem trilho — cor de toggle de ação, não
@@ -680,15 +736,6 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             {/* Content */}
             {(!selectedBuildingId || activeTab === 'inventory') && (
                 <div className="space-y-6">
-                    {/* Stats Summary Row */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={stats.activeAssets} icon={<Building2 className="w-4 h-4" />} color="blue" />
-                        <KpiCard shadow={false} size="sm" label="Receita mensal" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.monthlyRevenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                        <KpiCard shadow={false} size="sm" label="Yield mensal" value={`${stats.monthlyYield}%`} icon={<TrendingUp className="w-4 h-4" />} color="indigo" />
-                        <KpiCard shadow={false} size="sm" label="Taxa de ocupação" value={`${stats.occupancyRate}%`} icon={<Key className="w-4 h-4" />} color="purple" />
-                        <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.totalValue)} icon={<Home className="w-4 h-4" />} color="amber" />
-                    </div>
-
                     {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
                         conteúdo dividem um único card (border/rounded/shadow só no container
                         pai); a costura visível entre os dois é o border-b da toolbar. */}
@@ -729,12 +776,12 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                         <>
                             {viewMode === 'grid' && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 p-4">
-                                    {filteredProperties.map((property) => (
+                                    {filteredProperties.map((property, index) => (
                                         <PropertyCard
                                             key={property.id}
                                             property={property}
                                             selected={selectedProperties.includes(property.id)}
-                                            onSelect={() => handleSelectProperty(property.id)}
+                                            onSelect={(shiftKey) => handleRowCheck(property.id, index, shiftKey)}
                                             onEdit={() => { setEditingProperty(property); setIsPropertyModalOpen(true); }}
                                             onDelete={() => handleDeleteProperty(property.id)}
                                             onRegisterDeal={() => {
@@ -749,27 +796,31 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             )}
 
                             {viewMode === 'list' && (
-                                <div className="overflow-x-auto">
+                                <div className="overflow-auto max-h-[70vh]">
                                     <table className="w-full text-left border-collapse">
-                                        {/* thead em sentence case (§6.2) — escala compacta */}
+                                        {/* thead em sentence case (§6.2) — escala compacta; colunas ordenáveis
+                                            ligadas ao sortConfig que já filtrava filteredProperties (§6.3) */}
                                         <thead>
-                                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                                <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Imóvel</th>
+                                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                <SortableHeader colKey="name" label="Imóvel" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
                                                 {!selectedBuildingId ? (
                                                     <>
-                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Endereço / referência</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right">Patrimônio</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center">Ocupação</th>
+                                                        <SortableHeader colKey="address" label="Endereço / referência" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                                        <SortableHeader colKey="price" label="Patrimônio" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right" />
+                                                        {/* Ocupação é agregado das unidades filhas — sem campo único no
+                                                            registro do edifício; mesma exceção do §6.3 usada em "Contato"
+                                                            (SupplierList.tsx): coluna composta, não decisão por preguiça. */}
+                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center text-sm font-semibold text-gray-500">Ocupação</th>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center">Bloco</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center">Pav.</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap">Á. priv.</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap">Aluguel base</th>
+                                                        <SortableHeader colKey="block" label="Bloco" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />
+                                                        <SortableHeader colKey="floor" label="Pav." uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />
+                                                        <SortableHeader colKey="private_area" label="Á. priv." uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center whitespace-nowrap" />
+                                                        <SortableHeader colKey="price" label="Aluguel base" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-right whitespace-nowrap" />
                                                     </>
                                                 )}
-                                                <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center">Status</th>
+                                                <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={sortConfig?.key ?? null} sortDirection={sortConfig?.direction ?? 'asc'} onSort={handleSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-center" />
                                                 <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                             </tr>
                                         </thead>
@@ -941,12 +992,12 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     {/* Modal de Edição em Lote (§10) */}
                     {isBulkEditOpen && (
                         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm" onClick={() => setIsBulkEditOpen(false)}>
-                            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-100" onClick={(e) => e.stopPropagation()}>
+                            <div className="bg-white rounded-[10px] shadow-2xl max-w-md w-full p-6 border border-gray-100" onClick={(e) => e.stopPropagation()}>
                                 <h3 className="text-lg font-bold text-gray-900 mb-1">Editar {selectedProperties.length} imóve{selectedProperties.length !== 1 ? 'is' : 'l'} em lote</h3>
                                 <p className="text-sm text-gray-500 mb-5">Escolha uma ação para aplicar a todos os imóveis selecionados.</p>
 
                                 <div className="space-y-2 mb-5">
-                                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Alterar status para</span>
+                                    <span className="text-xs font-semibold text-gray-500">Alterar status para</span>
                                     <div className="flex flex-wrap gap-2">
                                         <button
                                             onClick={() => { handleBulkUpdate({ status: PropertyStatus.AVAILABLE }); setIsBulkEditOpen(false); }}
@@ -970,7 +1021,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Mudar preço sugerido para</label>
+                                    <label className="text-xs font-semibold text-gray-500">Mudar preço sugerido para</label>
                                     <div className="flex gap-2">
                                         <input
                                             type="number"
@@ -1024,7 +1075,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
                         {viewMode === 'grid' ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {deals.map(deal => {
+                                {sortedDeals.map(deal => {
                                     const property = properties.find(p => p.id === deal.property_id);
                                     return (
                                         <div key={deal.id} className="bg-white p-6 rounded-[10px] border border-gray-100 hover:border-blue-200 transition-colors relative group">
@@ -1093,23 +1144,23 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             </div>
                         ) : (
                             <div className="bg-white border border-gray-100 rounded-[10px] overflow-hidden">
-                                <div className="overflow-x-auto">
+                                <div className="overflow-auto max-h-[70vh]">
                                 <table className="w-full text-left border-collapse">
-                                    {/* thead em sentence case (§6.2) — escala compacta */}
+                                    {/* thead em sentence case (§6.2) — escala compacta; ordenável (§6.3) */}
                                     <thead>
-                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">ID</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Imóvel</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Cliente</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Tipo</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Valor</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Data</th>
-                                            <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Status</th>
+                                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <SortableHeader colKey="id" label="ID" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                            <SortableHeader colKey="_propertyName" label="Imóvel" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                            <SortableHeader colKey="_clientName" label="Cliente" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                            <SortableHeader colKey="type" label="Tipo" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                            <SortableHeader colKey="value" label="Valor" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                            <SortableHeader colKey="date" label="Data" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
+                                            <SortableHeader colKey="status" label="Status" uppercase={false} sortColumn={dealSortConfig?.key ?? null} sortDirection={dealSortConfig?.direction ?? 'asc'} onSort={handleDealSort} className="px-6 py-2 border-r border-gray-100 last:border-r-0" />
                                             <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
-                                        {deals.map(deal => {
+                                        {sortedDeals.map(deal => {
                                             const property = properties.find(p => p.id === deal.property_id);
                                             const client = clients.find(c => c.id === deal.client_id);
                                             return (

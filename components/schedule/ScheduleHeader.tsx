@@ -186,6 +186,23 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
             </div>
         </div>
 
+        {/* Toolbar de abas — UI UX tabela.md §3 */}
+        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
+            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                {VIEW_TABS.map(({ key, label }) => (
+                    <button
+                        key={key}
+                        onClick={() => setViewMode(key)}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            viewMode === key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                        }`}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+        </div>
+
         {/* Toolbar de botões — UI UX tabela.md §4 (escopo à esquerda, ações à direita) */}
         <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
             {/* Escopo: escala de tempo (só Tabela/Gantt) + período do planejamento */}
@@ -328,23 +345,6 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     <Wand2 className="w-[15px] h-[15px]" />
                     Auto Programar
                 </button>
-            </div>
-        </div>
-
-        {/* Toolbar de abas — UI UX tabela.md §3 */}
-        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
-            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                {VIEW_TABS.map(({ key, label }) => (
-                    <button
-                        key={key}
-                        onClick={() => setViewMode(key)}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                            viewMode === key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
-                        }`}
-                    >
-                        {label}
-                    </button>
-                ))}
             </div>
         </div>
         </div>

@@ -305,7 +305,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         </div>
 
                         <div
-                            className="shrink-0 truncate px-4 py-2 text-xs text-gray-600 border-r border-gray-100 flex items-center gap-1.5"
+                            className="shrink-0 truncate px-4 py-2 text-xs font-normal text-gray-600 border-r border-gray-100 flex items-center gap-1.5"
                             title={item.sinapiItem.description}
                             data-gantt-sidebar
                             style={{ paddingLeft: `${(node.level * 20) + 16}px`, width: `${sidebarWidth}px` }}
@@ -794,7 +794,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         <div data-gantt-col="gId" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-400" style={getGanttColStyle('gId')}>{node.uid}</div>
                         <div data-gantt-col="gWbs" className="shrink-0 border-r border-gray-200 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gWbs')}>{node.wbsCode || ''}</div>
                         <div
-                            className={`shrink-0 font-medium ${node.type === 'subphase' ? 'text-gray-700' : 'text-gray-800'} py-1.5 px-4 border-r border-gray-200 flex items-center gap-2`}
+                            className={`shrink-0 text-xs font-medium ${node.type === 'subphase' ? 'text-gray-700' : 'text-gray-800'} py-1.5 px-4 border-r border-gray-200 flex items-center gap-2`}
                             data-gantt-sidebar
                             style={{ paddingLeft: `${(node.level * 20) + 16}px`, width: `${sidebarWidth}px` }}
                         >

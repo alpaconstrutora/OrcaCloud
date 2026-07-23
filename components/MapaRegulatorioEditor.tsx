@@ -64,6 +64,7 @@ export const MapaRegulatorioEditor: React.FC<Props> = ({ empreendimentoId, organ
     return (
         <>
             <RegulatoryZoneTable
+                tableId="empreendimentoZonas"
                 title="Mapa Regulatório"
                 subtitle="Todos os parâmetros urbanísticos por zona, no empreendimento — compartilhado com Viabilidade e Planta. Editar aqui edita em todos."
                 zones={zones}

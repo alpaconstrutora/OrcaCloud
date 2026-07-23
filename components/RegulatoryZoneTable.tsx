@@ -6,9 +6,10 @@
 // (empreendimento_regulatory_zones × regulatory_map_zones) mas o mesmo shape de 21 campos —
 // este componente não sabe de onde vêm os dados, só recebe callbacks.
 import React from 'react';
-import { Plus, Loader2, Map } from 'lucide-react';
+import { Plus, Loader2, Map, Search } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
 export type ZoneField =
     | 'macroarea' | 'zona' | 'ca_minimo' | 'ca_basico' | 'ca_maximo'
@@ -57,10 +58,35 @@ export const ZONE_COLUMNS: ColDef[] = [
     { key: 'observacoes',                label: 'Observações',         width: 'w-56', type: 'text' },
 ];
 
+// §2 do guia: mesmas colunas, só na forma que useTableColumns/ColumnConfigButton esperam.
+const COLUMNS_FOR_CONFIG: ColumnConfig[] = ZONE_COLUMNS.map(c => ({ key: c.key, label: c.label, sortable: true }));
+
+// Busca por texto — campos onde faz sentido localizar uma zona rapidamente entre muitas.
+const SEARCHABLE_FIELDS: ZoneField[] = ['macroarea', 'zona', 'uso_permitido', 'lei_referencia', 'documento_fonte'];
+
+function parseNumeric(value?: string): number | null {
+    if (!value) return null;
+    const norm = value.trim().toLowerCase();
+    if (!norm || norm === 'n.a.') return null;
+    const n = parseFloat(norm.replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+}
+
+// Ordem numérica quando os dois valores são comparáveis como número (C.A., recuos, vagas…);
+// senão cai para ordem alfabética (pt-BR) — cobre tanto colunas numéricas quanto de texto livre.
+function compareZoneValues<T extends ZoneLike>(a: T, b: T, key: ZoneField, direction: 'asc' | 'desc'): number {
+    const rawA = (a[key] as string) ?? '';
+    const rawB = (b[key] as string) ?? '';
+    const numA = parseNumeric(rawA);
+    const numB = parseNumeric(rawB);
+    const cmp = (numA !== null && numB !== null) ? numA - numB : rawA.localeCompare(rawB, 'pt-BR');
+    return direction === 'asc' ? cmp : -cmp;
+}
+
 const SelectCell: React.FC<{ value?: string; options: readonly string[]; onChange: (v: string) => void; saving: boolean }> =
     ({ value, options, onChange, saving }) => (
     <select value={value || ''} onChange={(e) => onChange(e.target.value)} disabled={saving}
-        className="w-full bg-transparent border-none focus:ring-0 text-sm font-normal text-slate-700 cursor-pointer py-0.5 disabled:opacity-50">
+        className="w-full bg-transparent border-none focus:ring-0 text-sm font-normal text-gray-700 cursor-pointer py-0.5 disabled:opacity-50">
         <option value="">—</option>
         {options.map(o => <option key={o} value={o}>{o}</option>)}
     </select>
@@ -70,10 +96,12 @@ const TextCell: React.FC<{ value?: string; onCommit: (v: string) => void; saving
     ({ value, onCommit, saving, placeholder }) => (
     <input type="text" defaultValue={value ?? ''} placeholder={placeholder} disabled={saving}
         onBlur={(e) => { if ((e.target.value ?? '') !== (value ?? '')) onCommit(e.target.value); }}
-        className="w-full bg-transparent border-none focus:ring-1 focus:ring-indigo-400 rounded text-sm font-normal text-slate-700 py-0.5 disabled:opacity-50" />
+        className="w-full bg-transparent border-none focus:ring-1 focus:ring-blue-400 rounded text-sm font-normal text-gray-700 py-0.5 disabled:opacity-50" />
 );
 
 interface Props<T extends ZoneLike> {
+    /** Identificador único desta tabela na tela (chave de localStorage para busca/colunas/ordenação — §3). */
+    tableId: string;
     title: string;
     subtitle: string;
     zones: T[];
@@ -89,9 +117,11 @@ interface Props<T extends ZoneLike> {
 }
 
 export function RegulatoryZoneTable<T extends ZoneLike>({
-    title, subtitle, zones, loading, adding, savingId, onAdd, onUpdate, onDelete, headerActions, emptyLabel,
+    tableId, title, subtitle, zones, loading, adding, savingId, onAdd, onUpdate, onDelete, headerActions, emptyLabel,
 }: Props<T>) {
     const confirm = useConfirm();
+    const [search, setSearch] = usePersistedState<string>(`${tableId}:search`, '');
+    const tableColumns = useTableColumns(COLUMNS_FOR_CONFIG, `${tableId}Columns`);
 
     const handleDelete = async (id: string) => {
         const ok = await confirm({
@@ -103,53 +133,115 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
         onDelete(id);
     };
 
+    const filteredZones = React.useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return zones;
+        return zones.filter(z => SEARCHABLE_FIELDS.some(f => (z[f] as string | undefined)?.toLowerCase().includes(q)));
+    }, [zones, search]);
+
+    // Sem coluna selecionada, mantém a ordem recebida (sort_order — reflete a ordem do
+    // documento legal da prefeitura, não é decorativa; ver §6.3/§6.4 do guia).
+    const visibleZones = React.useMemo(() => {
+        if (!tableColumns.sortColumn) return filteredZones;
+        const key = tableColumns.sortColumn as ZoneField;
+        return [...filteredZones].sort((a, b) => compareZoneValues(a, b, key, tableColumns.sortDirection));
+    }, [filteredZones, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    const visibleColumnDefs = ZONE_COLUMNS.filter(c => tableColumns.visibleColumns.includes(c.key));
+
     if (loading) {
         return (
-            <div className="flex items-center justify-center p-12 bg-white rounded-3xl border border-slate-100 shadow-sm">
-                <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm">
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-500">Carregando zonas...</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
+        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <div>
-                    <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <Map className="w-5 h-5 text-indigo-500" /> {title}
+                    <h2 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
+                        <Map className="w-4 h-4 text-indigo-500" /> {title}
                     </h2>
-                    <p className="text-slate-500 text-sm mt-1 font-medium">{subtitle}</p>
+                    <p className="text-gray-500 text-xs mt-1 font-medium">{subtitle}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                     {headerActions}
-                    <button onClick={onAdd} disabled={adding}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-sm transition-all shadow-sm disabled:opacity-60">
-                        {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                        Nova Zona
+                    <button
+                        onClick={onAdd}
+                        disabled={adding}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60"
+                    >
+                        {adding ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Plus className="w-[15px] h-[15px]" />}
+                        Nova zona
                     </button>
                 </div>
             </div>
 
+            <div className="flex flex-col md:flex-row gap-2.5 items-center px-4 py-3 border-b border-gray-100">
+                <div className="flex-1 relative w-full">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Buscar por macroárea, zona, uso permitido ou lei..."
+                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                    />
+                </div>
+                <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                    <ColumnConfigButton
+                        columns={COLUMNS_FOR_CONFIG}
+                        visibleColumns={tableColumns.visibleColumns}
+                        showColumnConfig={tableColumns.showColumnConfig}
+                        onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
+                        onToggleColumn={tableColumns.toggleColumn}
+                        onReset={tableColumns.resetColumns}
+                    />
+                </div>
+            </div>
+
             {zones.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-                    <Map className="w-10 h-10 mb-3 opacity-30" />
-                    <p className="font-bold text-sm">Nenhuma zona cadastrada</p>
-                    <p className="text-xs mt-1">{emptyLabel || 'Clique em "Nova Zona" para adicionar'}</p>
+                <div className="text-center py-12">
+                    <Map className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma zona cadastrada</h3>
+                    <p className="text-sm text-gray-500">{emptyLabel || 'Clique em "Nova Zona" para adicionar'}</p>
+                </div>
+            ) : visibleZones.length === 0 ? (
+                <div className="text-center py-12">
+                    <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma zona encontrada</h3>
+                    <p className="text-sm text-gray-500">Tente ajustar sua busca.</p>
                 </div>
             ) : (
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left min-w-max">
+                <div className="overflow-auto max-h-[70vh]">
+                    <table className="text-left border-collapse min-w-max">
                         <thead>
-                            <tr className="bg-slate-50 text-xs font-black tracking-widest uppercase text-slate-400 border-b border-slate-100">
-                                {ZONE_COLUMNS.map(col => <th key={col.key} className={`px-4 py-3 ${col.width}`}>{col.label}</th>)}
-                                <th className="px-4 py-3 w-12" />
+                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                {visibleColumnDefs.map(col => (
+                                    <SortableHeader
+                                        key={col.key}
+                                        colKey={col.key}
+                                        label={col.label}
+                                        uppercase={false}
+                                        sortColumn={tableColumns.sortColumn}
+                                        sortDirection={tableColumns.sortDirection}
+                                        onSort={tableColumns.handleColumnSort}
+                                        className={`px-6 py-2 border-r border-gray-100 ${col.width}`}
+                                    />
+                                ))}
+                                <th className="px-6 py-2 w-12 text-right text-sm font-semibold text-gray-500">Ações</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-50">
-                            {zones.map(zone => (
-                                <tr key={zone.id} className={`group hover:bg-slate-50/60 transition-colors ${savingId === zone.id ? 'opacity-60' : ''}`}>
-                                    {ZONE_COLUMNS.map(col => (
-                                        <td key={col.key} className={`px-4 py-2.5 ${col.width}`}>
+                        <tbody className="divide-y divide-gray-200">
+                            {visibleZones.map(zone => (
+                                <tr key={zone.id} className={`hover:bg-blue-50/50 transition-colors ${savingId === zone.id ? 'opacity-60' : ''}`}>
+                                    {visibleColumnDefs.map(col => (
+                                        <td key={col.key} className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${col.width}`}>
                                             {col.type === 'select' ? (
                                                 <SelectCell
                                                     value={zone[col.key] as string | undefined}
@@ -167,8 +259,10 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                                             )}
                                         </td>
                                     ))}
-                                    <td className="px-4 py-2.5 text-right">
-                                        <ActionIconButton kind="delete" className="opacity-0 group-hover:opacity-100" title="Excluir zona" onClick={() => handleDelete(zone.id)} />
+                                    <td className="px-6 py-2.5 text-right">
+                                        <div onClick={(e) => e.stopPropagation()}>
+                                            <ActionIconButton kind="delete" title="Excluir zona" onClick={() => handleDelete(zone.id)} />
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
